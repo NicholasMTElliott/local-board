@@ -1,0 +1,17 @@
+{
+  "name": "local-board",
+  "version": "0.1.0",
+  "description": "Repo-native Markdown ticket board for local agent workflows.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "local-board": "./bin/local-board.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "validate": "node ./bin/local-board.js validate"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

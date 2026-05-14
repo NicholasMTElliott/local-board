@@ -1,0 +1,21 @@
+.DS_Store
+Thumbs.db
+.env
+.env.*
+!.env.example
+
+# Agent/runtime scratch
+.aiboard/
+.local-board/tmp/
+.local-board/runs/
+
+# Build outputs
+bin/
+obj/
+dist/
+build/
+node_modules/
+
+# Python
+__pycache__/
+*.py[cod]
