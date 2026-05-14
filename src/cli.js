@@ -1,14 +1,23 @@
 import {
   appendTicketComment,
+  blockTicket,
   createTicket,
   discover,
+  linkParent,
   moveTicket,
   nextTicket,
   parseScalar,
+  queryNext,
+  queryTicket,
   setTicketField,
+  setTicketSection,
+  stateReport,
   ticketRecord,
+  unblockTicket,
+  unlinkParent,
   validate,
 } from "./tickets.js";
+import { initProject } from "./scaffold.js";
 
 export async function main(argv) {
   const args = [...argv];
@@ -25,8 +34,20 @@ export async function main(argv) {
     if (command === "next") {
       return await commandNext(root, args);
     }
+    if (command === "query-next") {
+      return await commandQueryNext(root, args);
+    }
+    if (command === "query-ticket") {
+      return await commandQueryTicket(root, args);
+    }
+    if (command === "state-report" || command === "report") {
+      return await commandStateReport(root, args);
+    }
     if (command === "create") {
       return await commandCreate(root, args);
+    }
+    if (command === "init") {
+      return await commandInit(root, args);
     }
     if (command === "move") {
       return await commandMove(root, args);
@@ -36,6 +57,24 @@ export async function main(argv) {
     }
     if (command === "comment") {
       return await commandComment(root, args);
+    }
+    if (command === "section" || command === "set-section") {
+      return await commandSection(root, args);
+    }
+    if (command === "link-parent") {
+      return await commandLinkParent(root, args);
+    }
+    if (command === "link-child") {
+      return await commandLinkChild(root, args);
+    }
+    if (command === "unlink-parent") {
+      return await commandUnlinkParent(root, args);
+    }
+    if (command === "block") {
+      return await commandBlock(root, args);
+    }
+    if (command === "unblock") {
+      return await commandUnblock(root, args);
     }
 
     printUsage();
@@ -109,6 +148,61 @@ async function commandNext(root, args) {
   return 0;
 }
 
+async function commandQueryNext(root, args) {
+  const asJson = takeFlag(args, "--json");
+  ensureNoArgs(args);
+
+  const result = await queryNext(root);
+  if (result === null) {
+    console.log(asJson ? "null" : "No eligible ticket");
+    return 1;
+  }
+
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`${result.path}: ${result.action}`);
+  }
+
+  return 0;
+}
+
+async function commandQueryTicket(root, args) {
+  const asJson = takeFlag(args, "--json");
+  const ticketId = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined) {
+    throw new Error("query-ticket requires: <ticket-id>");
+  }
+
+  const result = await queryTicket(root, ticketId);
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`${result.path}: ${result.action ?? "no-action"}`);
+  }
+  return 0;
+}
+
+async function commandStateReport(root, args) {
+  const asJson = takeFlag(args, "--json");
+  ensureNoArgs(args);
+
+  const report = await stateReport(root);
+  if (asJson) {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    console.log(`Tickets: ${report.total}`);
+    console.log(`Eligible: ${report.eligible}`);
+    console.log(`Valid: ${report.ok ? "yes" : "no"}`);
+    if (report.next !== null) {
+      console.log(`Next: ${report.next.path}: ${report.next.action}`);
+    }
+  }
+  return report.ok ? 0 : 1;
+}
+
 async function commandCreate(root, args) {
   const status = takeOption(args, "--status") ?? "backlog";
   const priority = takeOption(args, "--priority") ?? "P2";
@@ -123,6 +217,21 @@ async function commandCreate(root, args) {
 
   const ticketPath = await createTicket(root, ticketType, title, { status, priority, parent });
   console.log(ticketPath);
+  return 0;
+}
+
+async function commandInit(root, args) {
+  const overwrite = takeFlag(args, "--overwrite");
+  const asJson = takeFlag(args, "--json");
+  ensureNoArgs(args);
+
+  const result = await initProject(root, { overwrite });
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`Initialized local-board at ${result.root}`);
+    console.log(`Created ${result.created.length} file(s); skipped ${result.skipped.length} existing file(s).`);
+  }
   return 0;
 }
 
@@ -169,6 +278,90 @@ async function commandComment(root, args) {
   return 0;
 }
 
+async function commandSection(root, args) {
+  const section = takeOption(args, "--section");
+  const ticketId = args.shift();
+  const text = args.join(" ").trim();
+
+  if (ticketId === undefined || section === undefined || text === "") {
+    throw new Error("section requires: <ticket-id> <text> --section <section>");
+  }
+
+  const ticketPath = await setTicketSection(root, ticketId, section, text);
+  console.log(ticketPath);
+  return 0;
+}
+
+async function commandLinkParent(root, args) {
+  const childId = args.shift();
+  const parentId = args.shift();
+  ensureNoArgs(args);
+
+  if (childId === undefined || parentId === undefined) {
+    throw new Error("link-parent requires: <child-ticket-id> <parent-ticket-id>");
+  }
+
+  const result = await linkParent(root, childId, parentId);
+  console.log(`${result.childPath}\n${result.parentPath}`);
+  return 0;
+}
+
+async function commandLinkChild(root, args) {
+  const parentId = args.shift();
+  const childId = args.shift();
+  ensureNoArgs(args);
+
+  if (parentId === undefined || childId === undefined) {
+    throw new Error("link-child requires: <parent-ticket-id> <child-ticket-id>");
+  }
+
+  const result = await linkParent(root, childId, parentId);
+  console.log(`${result.parentPath}\n${result.childPath}`);
+  return 0;
+}
+
+async function commandUnlinkParent(root, args) {
+  const childId = args.shift();
+  const parentId = args.shift();
+  ensureNoArgs(args);
+
+  if (childId === undefined || parentId === undefined) {
+    throw new Error("unlink-parent requires: <child-ticket-id> <parent-ticket-id>");
+  }
+
+  const result = await unlinkParent(root, childId, parentId);
+  console.log(`${result.childPath}\n${result.parentPath}`);
+  return 0;
+}
+
+async function commandBlock(root, args) {
+  const ticketId = args.shift();
+  const dependencyId = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined || dependencyId === undefined) {
+    throw new Error("block requires: <ticket-id> <dependency-ticket-id>");
+  }
+
+  const result = await blockTicket(root, ticketId, dependencyId);
+  console.log(`${result.ticketPath}\n${result.dependencyPath}`);
+  return 0;
+}
+
+async function commandUnblock(root, args) {
+  const ticketId = args.shift();
+  const dependencyId = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined || dependencyId === undefined) {
+    throw new Error("unblock requires: <ticket-id> <dependency-ticket-id>");
+  }
+
+  const result = await unblockTicket(root, ticketId, dependencyId);
+  console.log(`${result.ticketPath}\n${result.dependencyPath}`);
+  return 0;
+}
+
 function takeFlag(args, name) {
   const index = args.indexOf(name);
   if (index === -1) {
@@ -202,8 +395,18 @@ function printUsage() {
   local-board [--root <path>] validate [--json]
   local-board [--root <path>] list [--status <status>] [--json]
   local-board [--root <path>] next [--json]
+  local-board [--root <path>] query-next [--json]
+  local-board [--root <path>] query-ticket <ticket-id> [--json]
+  local-board [--root <path>] state-report [--json]
+  local-board [--root <path>] init [--overwrite] [--json]
   local-board [--root <path>] create <type> <title> [--status <status>] [--priority <priority>] [--parent <id>]
   local-board [--root <path>] move <ticket-id> <status>
   local-board [--root <path>] set <ticket-id> <field> <value>
-  local-board [--root <path>] comment <ticket-id> <text> [--section <section>]`);
+  local-board [--root <path>] comment <ticket-id> <text> [--section <section>]
+  local-board [--root <path>] section <ticket-id> <text> --section <section>
+  local-board [--root <path>] link-parent <child-ticket-id> <parent-ticket-id>
+  local-board [--root <path>] link-child <parent-ticket-id> <child-ticket-id>
+  local-board [--root <path>] unlink-parent <child-ticket-id> <parent-ticket-id>
+  local-board [--root <path>] block <ticket-id> <dependency-ticket-id>
+  local-board [--root <path>] unblock <ticket-id> <dependency-ticket-id>`);
 }

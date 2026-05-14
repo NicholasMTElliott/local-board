@@ -1,0 +1,57 @@
+{
+  // Config schema version. Keep this at 1 until a future migration says otherwise.
+  "version": 1,
+
+  // Workflow dispatch controls which ready statuses are eligible and what action they request.
+  "workflow": {
+    // Tie-break order after priority. Earlier entries are considered closer to completion.
+    // Available statuses: ready_for_decomposition, ready_for_design, ready_for_implementation,
+    // ready_for_review, ready_for_test, ready_for_docs.
+    "pipelineOrder": [
+      "ready_for_docs",
+      "ready_for_test",
+      "ready_for_review",
+      "ready_for_implementation",
+      "ready_for_design",
+      "ready_for_decomposition"
+    ],
+
+    // Maps ticket status to the action returned by query-next/query-ticket.
+    // Available actions: decompose, design, implement, review, test, document.
+    "statusActions": {
+      "ready_for_decomposition": "decompose",
+      "ready_for_design": "design",
+      "ready_for_implementation": "implement",
+      "ready_for_review": "review",
+      "ready_for_test": "test",
+      "ready_for_docs": "document"
+    },
+
+    // Prompt file loaded for each action. Project-local paths are preferred by the skill.
+    "actionPrompts": {
+      "decompose": "plans/prompts/steps/decompose.md",
+      "design": "plans/prompts/steps/design.md",
+      "implement": "plans/prompts/roles/implementer.md",
+      "review": "plans/prompts/roles/code_reviewer.md",
+      "test": "plans/prompts/steps/test.md",
+      "document": "plans/prompts/steps/document.md"
+    }
+  },
+
+  // Agent routing is interpreted by the orchestration skill, not by the validator.
+  // Available values: inline, claude-subagent, codex-task:read-only, codex-task:workspace-write.
+  "agents": {
+    "decompose": "claude-subagent",
+    "design": "claude-subagent",
+    "implement": "claude-subagent",
+    "review": "codex-task:read-only",
+    "test": "claude-subagent",
+    "document": "codex-task:workspace-write"
+  },
+
+  // Conservative git policy defaults. The orchestrator may still ask before git operations.
+  "git": {
+    "commitPlanningChanges": true,
+    "autoMerge": false
+  }
+}

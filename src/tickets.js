@@ -1,6 +1,8 @@
 import { mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { loadConfig } from "./config.js";
+
 export const PREFIX_TYPES = new Map([
   ["E", "epic"],
   ["S", "story"],
@@ -313,6 +315,86 @@ export async function appendTicketComment(root, ticketId, section, text, options
   return ticket.path;
 }
 
+export async function setTicketSection(root, ticketId, section, text, options = {}) {
+  const { ticket } = await findTicket(root, ticketId);
+  const body = replaceSection(ticket.body, section, text.trim());
+  const frontMatter = withUpdated({ ...ticket.frontMatter }, options.now);
+  await writeFile(ticket.path, renderMarkdownTicket(frontMatter, body), "utf8");
+  return ticket.path;
+}
+
+export async function linkParent(root, childId, parentId, options = {}) {
+  const { child, parent } = await findTicketPair(root, childId, parentId, "parent");
+  const now = options.now ?? new Date();
+
+  await writeTicketUpdate(child, {
+    ...child.frontMatter,
+    parent: parent.id,
+    updated: formatIsoSeconds(now),
+  });
+  await writeTicketUpdate(parent, {
+    ...parent.frontMatter,
+    children: addUnique(asList(parent.frontMatter.children), child.id),
+    updated: formatIsoSeconds(now),
+  });
+
+  return { childPath: child.path, parentPath: parent.path };
+}
+
+export async function unlinkParent(root, childId, parentId, options = {}) {
+  const { child, parent } = await findTicketPair(root, childId, parentId, "parent");
+  const now = options.now ?? new Date();
+
+  await writeTicketUpdate(child, {
+    ...child.frontMatter,
+    parent: child.frontMatter.parent === parent.id ? null : child.frontMatter.parent,
+    updated: formatIsoSeconds(now),
+  });
+  await writeTicketUpdate(parent, {
+    ...parent.frontMatter,
+    children: removeValue(asList(parent.frontMatter.children), child.id),
+    updated: formatIsoSeconds(now),
+  });
+
+  return { childPath: child.path, parentPath: parent.path };
+}
+
+export async function blockTicket(root, ticketId, dependencyId, options = {}) {
+  const { child: ticket, parent: dependency } = await findTicketPair(root, ticketId, dependencyId, "dependency");
+  const now = options.now ?? new Date();
+
+  await writeTicketUpdate(ticket, {
+    ...ticket.frontMatter,
+    blockedBy: addUnique(asList(ticket.frontMatter.blockedBy), dependency.id),
+    updated: formatIsoSeconds(now),
+  });
+  await writeTicketUpdate(dependency, {
+    ...dependency.frontMatter,
+    blocks: addUnique(asList(dependency.frontMatter.blocks), ticket.id),
+    updated: formatIsoSeconds(now),
+  });
+
+  return { ticketPath: ticket.path, dependencyPath: dependency.path };
+}
+
+export async function unblockTicket(root, ticketId, dependencyId, options = {}) {
+  const { child: ticket, parent: dependency } = await findTicketPair(root, ticketId, dependencyId, "dependency");
+  const now = options.now ?? new Date();
+
+  await writeTicketUpdate(ticket, {
+    ...ticket.frontMatter,
+    blockedBy: removeValue(asList(ticket.frontMatter.blockedBy), dependency.id),
+    updated: formatIsoSeconds(now),
+  });
+  await writeTicketUpdate(dependency, {
+    ...dependency.frontMatter,
+    blocks: removeValue(asList(dependency.frontMatter.blocks), ticket.id),
+    updated: formatIsoSeconds(now),
+  });
+
+  return { ticketPath: ticket.path, dependencyPath: dependency.path };
+}
+
 export function byTicketId(board) {
   const byId = new Map();
   for (const ticket of board.tickets) {
@@ -461,6 +543,70 @@ export function nextTicket(board) {
   return eligible[0] ?? null;
 }
 
+export async function queryNext(root = ".") {
+  const [board, config] = await Promise.all([discover(root), loadConfig(root)]);
+  const issues = validate(board);
+  if (issues.length > 0) {
+    throw new Error(`ticket validation failed:\n${issues.join("\n")}`);
+  }
+
+  const byId = byTicketId(board);
+  const eligible = board.tickets.filter((ticket) => isEligibleForConfig(ticket, byId, config));
+  eligible.sort((left, right) => compareTicketsForConfig(left, right, config));
+  const ticket = eligible[0] ?? null;
+  if (ticket === null) {
+    return null;
+  }
+
+  return actionRecord(board.root, ticket, config, byId);
+}
+
+export async function queryTicket(root = ".", ticketId) {
+  const [board, config] = await Promise.all([discover(root), loadConfig(root)]);
+  const issues = validate(board);
+  if (issues.length > 0) {
+    throw new Error(`ticket validation failed:\n${issues.join("\n")}`);
+  }
+
+  const byId = byTicketId(board);
+  const ticket = byId.get(ticketId);
+  if (ticket === undefined) {
+    throw new Error(`ticket ${ticketId} not found`);
+  }
+  return actionRecord(board.root, ticket, config, byId);
+}
+
+export async function stateReport(root = ".") {
+  const [board, config] = await Promise.all([discover(root), loadConfig(root)]);
+  const issues = validate(board);
+  const byId = byTicketId(board);
+  const byStatus = {};
+  const byType = {};
+  const byAction = {};
+  let eligible = 0;
+
+  for (const ticket of board.tickets) {
+    byStatus[ticket.status] = (byStatus[ticket.status] ?? 0) + 1;
+    byType[ticket.type] = (byType[ticket.type] ?? 0) + 1;
+    const action = config.workflow.statusActions[ticket.status] ?? "none";
+    byAction[action] = (byAction[action] ?? 0) + 1;
+    if (isEligibleForConfig(ticket, byId, config)) {
+      eligible += 1;
+    }
+  }
+
+  return {
+    ok: issues.length === 0,
+    issues,
+    total: board.tickets.length,
+    eligible,
+    byStatus,
+    byType,
+    byAction,
+    next: issues.length === 0 ? await queryNext(root) : null,
+  };
+}
+
 export function isEligible(ticket, byId) {
   if (!TRIGGER_STATUSES.has(ticket.status)) {
     return false;
@@ -476,12 +622,57 @@ export function isEligible(ticket, byId) {
   return true;
 }
 
+function isEligibleForConfig(ticket, byId, config) {
+  if (!Object.hasOwn(config.workflow.statusActions, ticket.status)) {
+    return false;
+  }
+
+  for (const dependencyId of asList(ticket.frontMatter.blockedBy)) {
+    const dependency = byId.get(dependencyId);
+    if (dependency === undefined || dependency.status !== "done") {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function actionRecord(root, ticket, config, byId) {
+  const action = config.workflow.statusActions[ticket.status] ?? null;
+  return {
+    ticket: ticket.id,
+    type: ticket.type,
+    status: ticket.status,
+    priority: ticket.priority,
+    path: path.relative(root, ticket.path),
+    title: ticket.title,
+    action,
+    prompt: action === null ? null : config.workflow.actionPrompts[action] ?? null,
+    agent: action === null ? null : config.agents[action] ?? config.agents.default ?? "inline",
+    eligible: action === null ? false : isEligibleForConfig(ticket, byId, config),
+  };
+}
+
 function compareTicketsForSelection(left, right) {
   return (
     priorityRank(left) - priorityRank(right) ||
     parseDate(left.frontMatter.created) - parseDate(right.frontMatter.created) ||
     left.id.localeCompare(right.id)
   );
+}
+
+function compareTicketsForConfig(left, right, config) {
+  return (
+    priorityRank(left) - priorityRank(right) ||
+    pipelineRank(left, config) - pipelineRank(right, config) ||
+    parseDate(left.frontMatter.created) - parseDate(right.frontMatter.created) ||
+    left.id.localeCompare(right.id)
+  );
+}
+
+function pipelineRank(ticket, config) {
+  const index = config.workflow.pipelineOrder.indexOf(ticket.status);
+  return index === -1 ? config.workflow.pipelineOrder.length : index;
 }
 
 function priorityRank(ticket) {
@@ -505,11 +696,12 @@ export async function createTicket(root, ticketType, title, options = {}) {
     throw new Error(`priority must be one of ${PRIORITIES.join(", ")}`);
   }
 
-  const ticketId = `${TYPE_PREFIXES.get(ticketType)}${formatTicketTimestamp(now)}`;
+  const timestamp = await nextAvailableTimestamp(root, ticketType, now);
+  const ticketId = `${TYPE_PREFIXES.get(ticketType)}${formatTicketTimestamp(timestamp)}`;
   const slug = slugify(title);
   const folder = path.resolve(root, "plans", "tickets", STATUS_FOLDERS.get(status));
   const ticketPath = path.join(folder, `${ticketId}_${slug}.md`);
-  const created = formatIsoSeconds(now);
+  const created = formatIsoSeconds(timestamp);
 
   await mkdir(folder, { recursive: true });
   await writeFile(ticketPath, renderTicket(ticketId, ticketType, status, priority, parent, created, title), {
@@ -518,6 +710,17 @@ export async function createTicket(root, ticketType, title, options = {}) {
   });
 
   return ticketPath;
+}
+
+async function nextAvailableTimestamp(root, ticketType, start) {
+  const prefix = TYPE_PREFIXES.get(ticketType);
+  let timestamp = new Date(start);
+  const board = await discover(root);
+  const usedIds = new Set(board.tickets.map((ticket) => ticket.id));
+  while (usedIds.has(`${prefix}${formatTicketTimestamp(timestamp)}`)) {
+    timestamp = new Date(timestamp.getTime() + 60_000);
+  }
+  return timestamp;
 }
 
 export function renderTicket(ticketId, ticketType, status, priority, parent, created, title) {
@@ -628,8 +831,57 @@ function appendToSection(body, section, line) {
   return `${before}${line}\n${after}`;
 }
 
+function replaceSection(body, section, text) {
+  const sectionRe = new RegExp(`(^## ${escapeRegExp(section)}\\s*$)`, "m");
+  const match = body.match(sectionRe);
+  if (match === null || match.index === undefined) {
+    throw new Error(`section "${section}" not found`);
+  }
+
+  const sectionStart = match.index + match[0].length;
+  const nextSection = body.slice(sectionStart).search(/\n## /);
+  const insertAt = nextSection === -1 ? body.length : sectionStart + nextSection;
+  const before = body.slice(0, sectionStart).replace(/\s*$/, "");
+  const after = body.slice(insertAt).replace(/^\n*/, "");
+  const sectionBody = text === "" ? "" : `\n\n${text}`;
+  return after === "" ? `${before}${sectionBody}\n` : `${before}${sectionBody}\n\n${after}`;
+}
+
 function withUpdated(frontMatter, now = new Date()) {
   return { ...frontMatter, updated: formatIsoSeconds(now) };
+}
+
+async function findTicketPair(root, leftId, rightId, rightLabel) {
+  if (leftId === rightId) {
+    throw new Error(`ticket cannot be linked to itself as ${rightLabel}`);
+  }
+
+  const board = await discover(root);
+  if (board.loadErrors.length > 0) {
+    throw new Error(board.loadErrors.join("\n"));
+  }
+  const byId = byTicketId(board);
+  const child = byId.get(leftId);
+  const parent = byId.get(rightId);
+  if (child === undefined) {
+    throw new Error(`ticket ${leftId} not found`);
+  }
+  if (parent === undefined) {
+    throw new Error(`ticket ${rightId} not found`);
+  }
+  return { board, child, parent };
+}
+
+async function writeTicketUpdate(ticket, frontMatter) {
+  await writeFile(ticket.path, renderMarkdownTicket(frontMatter, ticket.body), "utf8");
+}
+
+function addUnique(values, value) {
+  return values.includes(value) ? values : [...values, value];
+}
+
+function removeValue(values, value) {
+  return values.filter((item) => item !== value);
 }
 
 function formatScalar(value) {

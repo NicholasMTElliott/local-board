@@ -18,9 +18,12 @@ plans/tickets/        local ticket board
 plans/prompts/roles/  durable role instructions
 plans/prompts/steps/  durable step instructions
 plans/templates/      ticket templates
+plans/local-board.config.jsonc workflow and routing config
 src/                  parser, validator, writer, priority picker, CLI
 bin/                  executable CLI entrypoint
 test/                 node:test unit tests
+install.mjs           cross-harness installer
+SKILL.md              installable orchestration skill template
 ```
 
 ## Constraints
@@ -30,7 +33,11 @@ test/                 node:test unit tests
 - Preserve portability across Windows/macOS/Linux.
 
 ## Open Decisions
-- Whether to implement a Claude Code skill first.
 - Exact transition validator shape.
 - Branch/commit/merge automation policy.
 - Test strategy for generated workflow steps.
+
+## Verification
+- `npm run check`
+- `npm test`
+- `npm run validate`

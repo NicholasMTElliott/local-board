@@ -7,11 +7,21 @@
 Claude Code orchestrator
   -> reads plans/tickets/**/*.md
   -> validates front matter + dependencies with local-board CLI
-  -> chooses next eligible ticket with local-board CLI
+  -> queries next eligible action with local-board CLI
   -> delegates role/step prompts to agents
   -> updates ticket sections/status with local-board CLI mutation commands
   -> performs deterministic git operations by policy
 ```
+
+## Config
+Project workflow config lives at `plans/local-board.config.jsonc`.
+
+It defines:
+- `workflow.pipelineOrder`
+- `workflow.statusActions`
+- `workflow.actionPrompts`
+- `agents`
+- basic git policy flags
 
 ## Ticket Types
 | Prefix | Type | Children |
@@ -84,10 +94,15 @@ Step prompts live in `plans/prompts/steps/`.
 
 Skills should be orchestration entrypoints. Step behavior should live in prompt files and deterministic scripts where possible.
 
+The installable `local-board-orchestrator` skill is the portable entrypoint. Project-local prompts override bundled fallback prompts.
+
 ## Safety Pattern
 LLMs write designs, code, reviews, tests, docs, and questions. Deterministic tooling validates ticket schema, dependency eligibility, status transitions, branch names, and commits.
 
 ## MVP CLI
-Use `node ./bin/local-board.js validate`, `list`, `next`, `create`, `move`, `set`, and `comment`.
+Use `node ./bin/local-board.js validate`, `list`, `query-next`, `query-ticket`, `state-report`, `create`, `move`, `set`, `section`, `comment`, `link-parent`, `link-child`, `block`, `unblock`, and `init`.
 
-`move` changes status and relocates the ticket. `set` updates mutable front matter fields. `comment` appends timestamped notes to a ticket section.
+`move` changes status and relocates the ticket. `set` updates mutable front matter fields. `section` replaces section content. `comment` appends timestamped notes to a ticket section.
+
+## Test Coverage
+`npm test` covers parser/validator behavior, ticket creation, priority and pipeline selection, null next-ticket state, action queries, state reports, front matter and section rewrites, relationship commands, init idempotency, and CLI command-surface flows.

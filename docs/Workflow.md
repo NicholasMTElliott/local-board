@@ -4,7 +4,25 @@ The local board mimics a kanban pipeline using ticket status and folders.
 
 ## Priority Selection
 
-The orchestrator reads all tickets and picks the highest-priority eligible ticket.
+The orchestrator asks the CLI for deterministic dispatch:
+
+```sh
+node ./bin/local-board.js query-next --json
+```
+
+For a specific ticket:
+
+```sh
+node ./bin/local-board.js query-ticket T20260514T1234Z --json
+```
+
+The result includes the ticket path, action, prompt, configured agent, and eligibility.
+
+For a board-level state summary:
+
+```sh
+node ./bin/local-board.js state-report --json
+```
 
 A ticket is eligible when:
 
@@ -24,7 +42,9 @@ Current trigger statuses are:
 
 `backlog` is not selected by `next`; move a ticket to a ready status when it should enter the automation queue.
 
-Priority order is `P0`, `P1`, `P2`, `P3`, then `P4`. Ties use oldest `created`, then ticket ID.
+Priority order is `P0`, `P1`, `P2`, `P3`, then `P4`. Ties use configured pipeline order, then oldest `created`, then ticket ID.
+
+Pipeline order and action dispatch live in `plans/local-board.config.jsonc`. Comments and trailing commas are allowed.
 
 ## Decomposition
 
@@ -64,7 +84,21 @@ node ./bin/local-board.js next
 node ./bin/local-board.js create story "Ticket parser" --status backlog --priority P2
 node ./bin/local-board.js move T20260514T1234Z ready_for_design
 node ./bin/local-board.js set T20260514T1234Z branch feature/T20260514T1234Z-ticket-parser
+node ./bin/local-board.js section T20260514T1234Z "Use the existing parser." --section "Technical Design"
 node ./bin/local-board.js comment T20260514T1234Z "Design pass complete." --section "Run Log"
+node ./bin/local-board.js link-child E20260514T1234Z S20260514T1235Z
+node ./bin/local-board.js block T20260514T1237Z T20260514T1236Z
 ```
 
 Use `move` for status transitions. Do not use `set status`; it delegates to the same move behavior so folder placement stays consistent.
+
+## Agent Routing
+
+`plans/local-board.config.jsonc` maps actions to agents. Supported values are conventions interpreted by the orchestration skill:
+
+- `inline`
+- `claude-subagent`
+- `codex-task:read-only`
+- `codex-task:workspace-write`
+
+If a configured agent is unavailable, the orchestrator should explain the fallback and continue inline unless doing so would be risky.

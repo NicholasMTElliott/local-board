@@ -4,7 +4,23 @@ import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { appendTicketComment, createTicket, discover, moveTicket, nextTicket, setTicketField, validate } from "../src/tickets.js";
+import {
+  appendTicketComment,
+  blockTicket,
+  createTicket,
+  discover,
+  linkParent,
+  moveTicket,
+  nextTicket,
+  queryNext,
+  queryTicket,
+  setTicketField,
+  setTicketSection,
+  stateReport,
+  unblockTicket,
+  validate,
+} from "../src/tickets.js";
+import { initProject } from "../src/scaffold.js";
 
 async function withBoard(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "local-board-"));
@@ -24,6 +40,21 @@ test("create and validate ticket", async () => {
     });
 
     assert.equal(path.basename(ticketPath), "T20260514T2056Z_implement-validator.md");
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+test("create advances timestamp to keep ticket ids unique", async () => {
+  await withBoard(async (root) => {
+    const first = await createTicket(root, "story", "First story", {
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const second = await createTicket(root, "story", "Second story", {
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+
+    assert.equal(path.basename(first), "S20260514T2056Z_first-story.md");
+    assert.equal(path.basename(second), "S20260514T2057Z_second-story.md");
     assert.deepEqual(validate(await discover(root)), []);
   });
 });
@@ -159,6 +190,184 @@ test("appendTicketComment adds timestamped section entry and updates front matte
     const text = await readFile(ticketPath, "utf8");
     assert.match(text, /^updated: 2026-05-14T21:02:00Z$/m);
     assert.match(text, /## Run Log\n\n- 2026-05-14T21:02:00Z: Checked the ticket\./);
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+test("setTicketSection replaces section content and updates front matter", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Section target", {
+      status: "backlog",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await setTicketSection(root, ticketId, "Requirement", "A clear requirement.", {
+      now: new Date("2026-05-14T21:06:00Z"),
+    });
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^updated: 2026-05-14T21:06:00Z$/m);
+    assert.match(text, /## Requirement\n\nA clear requirement\.\n\n## Acceptance Criteria/);
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+test("queryNext returns configured action and prefers closest pipeline phase after priority", async () => {
+  await withBoard(async (root) => {
+    await createTicket(root, "task", "Needs design", {
+      status: "ready_for_design",
+      priority: "P1",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const docs = await createTicket(root, "task", "Needs docs", {
+      status: "ready_for_docs",
+      priority: "P1",
+      now: new Date("2026-05-14T20:57:00Z"),
+    });
+
+    const result = await queryNext(root);
+
+    assert.equal(result?.ticket, path.basename(docs).split("_", 1)[0]);
+    assert.equal(result?.action, "document");
+    assert.equal(result?.prompt, "plans/prompts/steps/document.md");
+    assert.equal(result?.agent, "inline");
+  });
+});
+
+test("queryNext prioritizes priority before pipeline closeness", async () => {
+  await withBoard(async (root) => {
+    const design = await createTicket(root, "task", "Higher priority design", {
+      status: "ready_for_design",
+      priority: "P0",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await createTicket(root, "task", "Lower priority docs", {
+      status: "ready_for_docs",
+      priority: "P1",
+      now: new Date("2026-05-14T20:57:00Z"),
+    });
+
+    const result = await queryNext(root);
+
+    assert.equal(result?.ticket, path.basename(design).split("_", 1)[0]);
+    assert.equal(result?.action, "design");
+  });
+});
+
+test("queryNext reports null when no actionable tickets remain", async () => {
+  await withBoard(async (root) => {
+    await createTicket(root, "task", "Finished", {
+      status: "done",
+      priority: "P0",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+
+    assert.equal(await queryNext(root), null);
+  });
+});
+
+test("queryTicket returns action bundle for a specific ticket", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Specific ticket", {
+      status: "ready_for_review",
+      priority: "P2",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const result = await queryTicket(root, ticketId);
+
+    assert.equal(result.ticket, ticketId);
+    assert.equal(result.action, "review");
+    assert.equal(result.prompt, "plans/prompts/roles/code_reviewer.md");
+    assert.equal(result.eligible, true);
+  });
+});
+
+test("linkParent updates reciprocal parent and child fields", async () => {
+  await withBoard(async (root) => {
+    const parent = await createTicket(root, "epic", "Parent", {
+      status: "ready_for_decomposition",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const child = await createTicket(root, "story", "Child", {
+      status: "ready_for_decomposition",
+      now: new Date("2026-05-14T20:57:00Z"),
+    });
+    const parentId = path.basename(parent).split("_", 1)[0];
+    const childId = path.basename(child).split("_", 1)[0];
+
+    await linkParent(root, childId, parentId, { now: new Date("2026-05-14T21:03:00Z") });
+
+    const parentText = await readFile(parent, "utf8");
+    const childText = await readFile(child, "utf8");
+    assert.match(parentText, new RegExp(`^children: \\[${childId}\\]$`, "m"));
+    assert.match(childText, new RegExp(`^parent: ${parentId}$`, "m"));
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+test("block and unblock update reciprocal dependency fields", async () => {
+  await withBoard(async (root) => {
+    const dependency = await createTicket(root, "task", "Dependency", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticket = await createTicket(root, "task", "Blocked ticket", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:57:00Z"),
+    });
+    const dependencyId = path.basename(dependency).split("_", 1)[0];
+    const ticketId = path.basename(ticket).split("_", 1)[0];
+
+    await blockTicket(root, ticketId, dependencyId, { now: new Date("2026-05-14T21:04:00Z") });
+    assert.match(await readFile(ticket, "utf8"), new RegExp(`^blockedBy: \\[${dependencyId}\\]$`, "m"));
+    assert.match(await readFile(dependency, "utf8"), new RegExp(`^blocks: \\[${ticketId}\\]$`, "m"));
+
+    await unblockTicket(root, ticketId, dependencyId, { now: new Date("2026-05-14T21:05:00Z") });
+    assert.match(await readFile(ticket, "utf8"), /^blockedBy: \[\]$/m);
+    assert.match(await readFile(dependency, "utf8"), /^blocks: \[\]$/m);
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+test("stateReport summarizes ticket state and next action", async () => {
+  await withBoard(async (root) => {
+    await createTicket(root, "task", "Ready design", {
+      status: "ready_for_design",
+      priority: "P2",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await createTicket(root, "bug", "Done bug", {
+      status: "done",
+      priority: "P0",
+      now: new Date("2026-05-14T20:57:00Z"),
+    });
+
+    const report = await stateReport(root);
+
+    assert.equal(report.ok, true);
+    assert.equal(report.total, 2);
+    assert.equal(report.eligible, 1);
+    assert.equal(report.byStatus.ready_for_design, 1);
+    assert.equal(report.byStatus.done, 1);
+    assert.equal(report.byType.task, 1);
+    assert.equal(report.byType.bug, 1);
+    assert.equal(report.byAction.design, 1);
+    assert.equal(report.byAction.none, 1);
+    assert.equal(report.next?.action, "design");
+  });
+});
+
+test("initProject scaffolds a new local-board project idempotently", async () => {
+  await withBoard(async (root) => {
+    const first = await initProject(root);
+    const second = await initProject(root);
+
+    assert.equal(first.created.includes(path.join(root, "plans", "local-board.config.jsonc")), true);
+    assert.equal(second.created.length, 0);
+    assert.equal(second.skipped.length > 0, true);
     assert.deepEqual(validate(await discover(root)), []);
   });
 });

@@ -1,18 +1,17 @@
 ---
 id: E20260514T2056Z
 type: epic
-status: ready_for_decomposition
+status: done
 priority: P1
 parent: null
-children: []
+children: [S20260514T2228Z, S20260514T2229Z, S20260514T2230Z, S20260514T2231Z]
 blockedBy: []
 blocks: []
 branch: null
 estimate: null
 created: 2026-05-14T20:56:00+00:00
-updated: 2026-05-14T20:56:00+00:00
+updated: 2026-05-14T22:28:52Z
 ---
-
 # Local Ticket Kernel MVP
 
 ## Requirement
@@ -41,7 +40,7 @@ Use a dependency-free Node.js ESM CLI package. Keep the canonical state in Markd
 
 ## Implementation Notes
 
-Initial implementation lives in `src/` with the executable entrypoint in `bin/`. The CLI supports validation, listing, next-ticket selection, creation, status moves, field updates, and timestamped comments.
+Decomposed into configured workflow dispatch, relationship primitives, project bootstrap/installable skill, and ticket content editing stories with supporting tasks.
 
 ## Review Findings
 
@@ -49,7 +48,7 @@ None yet.
 
 ## Test Evidence
 
-None yet.
+- Created child stories and tasks using local-board CLI. - Linked all child tickets with reciprocal parent/children fields. - Verified with `npm test`, `npm run check`, and `npm run validate` before closeout.
 
 ## Documentation Updates
 
@@ -62,3 +61,5 @@ None.
 ## Run Log
 
 - 2026-05-14: Created as the first MVP epic.
+
+- 2026-05-14T22:28:52Z: Decomposition completed through local-board CLI primitives.

@@ -115,9 +115,14 @@ Use the CLI for state changes that affect canonical front matter:
 ```sh
 node ./bin/local-board.js move T20260514T1234Z implementing
 node ./bin/local-board.js set T20260514T1234Z priority P1
+node ./bin/local-board.js section T20260514T1234Z "A clear requirement." --section Requirement
 node ./bin/local-board.js update-field T20260514T1234Z blockedBy "[T20260514T1200Z]"
+node ./bin/local-board.js link-parent S20260514T1235Z E20260514T1234Z
+node ./bin/local-board.js block T20260514T1236Z T20260514T1235Z
 ```
 
 `move` updates `status`, rewrites `updated`, and relocates the file to the mapped status folder. `set` and `update-field` are aliases for front matter updates. `id`, `type`, `created`, and `updated` are managed fields and cannot be set directly.
 
-The writer emits required fields in canonical order and preserves the Markdown body.
+The writer emits required fields in canonical order and preserves the Markdown body. `section` replaces one Markdown section body by heading name.
+
+`link-parent` and `link-child` update reciprocal `parent`/`children` fields. `block` and `unblock` update reciprocal `blockedBy`/`blocks` fields.

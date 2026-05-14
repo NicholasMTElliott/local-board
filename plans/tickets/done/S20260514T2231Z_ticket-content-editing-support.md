@@ -1,0 +1,39 @@
+---
+id: S20260514T2231Z
+type: story
+status: done
+priority: P1
+parent: E20260514T2056Z
+children: [T20260514T2234Z]
+blockedBy: []
+blocks: []
+branch: null
+estimate: null
+created: 2026-05-14T22:31:51Z
+updated: 2026-05-14T22:28:51Z
+---
+# Ticket content editing support
+
+## Requirement
+
+Allow orchestrators to populate ticket sections without hand-editing Markdown.
+
+## Acceptance Criteria
+
+- `section` replaces a named Markdown section. - Front matter `updated` changes when a section changes. - Tests cover section replacement.
+
+## Related Tickets
+
+## Technical Design
+
+## Implementation Notes
+
+## Review Findings
+
+## Test Evidence
+
+## Documentation Updates
+
+## Questions
+
+## Run Log
