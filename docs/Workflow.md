@@ -62,4 +62,9 @@ node ./bin/local-board.js validate
 node ./bin/local-board.js list
 node ./bin/local-board.js next
 node ./bin/local-board.js create story "Ticket parser" --status backlog --priority P2
+node ./bin/local-board.js move T20260514T1234Z ready_for_design
+node ./bin/local-board.js set T20260514T1234Z branch feature/T20260514T1234Z-ticket-parser
+node ./bin/local-board.js comment T20260514T1234Z "Design pass complete." --section "Run Log"
 ```
+
+Use `move` for status transitions. Do not use `set status`; it delegates to the same move behavior so folder placement stays consistent.

@@ -9,7 +9,7 @@ Claude Code orchestrator
   -> validates front matter + dependencies with local-board CLI
   -> chooses next eligible ticket with local-board CLI
   -> delegates role/step prompts to agents
-  -> updates ticket sections/status
+  -> updates ticket sections/status with local-board CLI mutation commands
   -> performs deterministic git operations by policy
 ```
 
@@ -88,4 +88,6 @@ Skills should be orchestration entrypoints. Step behavior should live in prompt 
 LLMs write designs, code, reviews, tests, docs, and questions. Deterministic tooling validates ticket schema, dependency eligibility, status transitions, branch names, and commits.
 
 ## MVP CLI
-Use `node ./bin/local-board.js validate`, `list`, `next`, and `create`.
+Use `node ./bin/local-board.js validate`, `list`, `next`, `create`, `move`, `set`, and `comment`.
+
+`move` changes status and relocates the ticket. `set` updates mutable front matter fields. `comment` appends timestamped notes to a ticket section.

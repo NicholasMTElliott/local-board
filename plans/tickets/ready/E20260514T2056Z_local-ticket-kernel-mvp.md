@@ -26,6 +26,9 @@ Build the first deterministic kernel for repo-native tickets.
 - Tickets can be listed.
 - The highest-priority eligible ticket can be selected.
 - New tickets can be created from the standard template.
+- Ticket front matter can be rewritten deterministically.
+- Ticket status can be moved with matching folder relocation.
+- Timestamped comments can be added to standard sections.
 - The ticket contract is documented.
 
 ## Related Tickets
@@ -38,7 +41,7 @@ Use a dependency-free Node.js ESM CLI package. Keep the canonical state in Markd
 
 ## Implementation Notes
 
-Initial implementation lives in `src/` with the executable entrypoint in `bin/`.
+Initial implementation lives in `src/` with the executable entrypoint in `bin/`. The CLI supports validation, listing, next-ticket selection, creation, status moves, field updates, and timestamped comments.
 
 ## Review Findings
 

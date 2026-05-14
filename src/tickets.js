@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export const PREFIX_TYPES = new Map([
@@ -72,6 +72,7 @@ const REQUIRED_FIELDS = [
   "updated",
 ];
 
+const IMMUTABLE_FIELDS = new Set(["id", "type", "created", "updated"]);
 const LIST_FIELDS = ["children", "blockedBy", "blocks"];
 const NULLABLE_FIELDS = ["parent", "branch", "estimate"];
 const STANDARD_SECTIONS = [
@@ -187,7 +188,7 @@ export function parseFrontMatter(lines) {
   return values;
 }
 
-function parseScalar(value) {
+export function parseScalar(value) {
   if (value === "" || ["null", "Null", "NULL", "~"].includes(value)) {
     return null;
   }
@@ -238,6 +239,78 @@ export function validate(board) {
   }
 
   return issues;
+}
+
+export async function findTicket(root, ticketId) {
+  const board = await discover(root);
+  if (board.loadErrors.length > 0) {
+    throw new Error(board.loadErrors.join("\n"));
+  }
+
+  const matches = board.tickets.filter((ticket) => ticket.id === ticketId);
+  if (matches.length === 0) {
+    throw new Error(`ticket ${ticketId} not found`);
+  }
+  if (matches.length > 1) {
+    throw new Error(`ticket ${ticketId} is duplicated`);
+  }
+  return { board, ticket: matches[0] };
+}
+
+export async function moveTicket(root, ticketId, status, options = {}) {
+  if (!STATUSES.has(status)) {
+    throw new Error(`status must be one of ${[...STATUSES].sort().join(", ")}`);
+  }
+
+  const { board, ticket } = await findTicket(root, ticketId);
+  const frontMatter = withUpdated({ ...ticket.frontMatter, status }, options.now);
+  const content = renderMarkdownTicket(frontMatter, ticket.body);
+  const targetFolder = path.join(board.root, "plans", "tickets", STATUS_FOLDERS.get(status));
+  const targetPath = path.join(targetFolder, path.basename(ticket.path));
+
+  await mkdir(targetFolder, { recursive: true });
+  if (path.resolve(ticket.path) !== path.resolve(targetPath) && (await exists(targetPath))) {
+    throw new Error(`${targetPath} already exists`);
+  }
+
+  await writeFile(ticket.path, content, "utf8");
+
+  if (path.resolve(ticket.path) !== path.resolve(targetPath)) {
+    await rename(ticket.path, targetPath);
+  }
+
+  return targetPath;
+}
+
+export async function setTicketField(root, ticketId, field, value, options = {}) {
+  if (!REQUIRED_FIELDS.includes(field)) {
+    throw new Error(`field must be one of ${REQUIRED_FIELDS.join(", ")}`);
+  }
+  if (IMMUTABLE_FIELDS.has(field)) {
+    throw new Error(`${field} is managed by local-board and cannot be set directly`);
+  }
+  if (field === "status") {
+    return moveTicket(root, ticketId, String(value), options);
+  }
+
+  assertFieldValue(field, value);
+
+  const { ticket } = await findTicket(root, ticketId);
+  const frontMatter = withUpdated({ ...ticket.frontMatter, [field]: value }, options.now);
+  await writeFile(ticket.path, renderMarkdownTicket(frontMatter, ticket.body), "utf8");
+  return ticket.path;
+}
+
+export async function appendTicketComment(root, ticketId, section, text, options = {}) {
+  if (text.trim() === "") {
+    throw new Error("comment text is required");
+  }
+
+  const { ticket } = await findTicket(root, ticketId);
+  const body = appendToSection(ticket.body, section, `- ${formatIsoSeconds(options.now ?? new Date())}: ${text.trim()}`);
+  const frontMatter = withUpdated({ ...ticket.frontMatter }, options.now);
+  await writeFile(ticket.path, renderMarkdownTicket(frontMatter, body), "utf8");
+  return ticket.path;
 }
 
 export function byTicketId(board) {
@@ -488,6 +561,22 @@ updated: ${created}
 `;
 }
 
+export function renderMarkdownTicket(frontMatter, body) {
+  const normalizedBody = body.startsWith("\n") ? body : `\n${body}`;
+  const trailingBody = normalizedBody.endsWith("\n") ? normalizedBody : `${normalizedBody}\n`;
+  return `---\n${serializeFrontMatter(frontMatter)}---${trailingBody}`;
+}
+
+export function serializeFrontMatter(frontMatter) {
+  const orderedKeys = [
+    ...REQUIRED_FIELDS.filter((field) => Object.hasOwn(frontMatter, field)),
+    ...Object.keys(frontMatter)
+      .filter((field) => !REQUIRED_FIELDS.includes(field))
+      .sort(),
+  ];
+  return orderedKeys.map((field) => `${field}: ${formatScalar(frontMatter[field])}\n`).join("");
+}
+
 export function ticketRecord(root, ticket) {
   return {
     id: ticket.id,
@@ -510,6 +599,70 @@ function extractTitle(body) {
 
 function asList(value) {
   return Array.isArray(value) ? value.map(String).filter((item) => item !== "") : [];
+}
+
+function assertFieldValue(field, value) {
+  if (LIST_FIELDS.includes(field) && !Array.isArray(value)) {
+    throw new Error(`${field} must be a list`);
+  }
+  if (NULLABLE_FIELDS.includes(field) && value !== null && typeof value !== "string") {
+    throw new Error(`${field} must be null or a string`);
+  }
+  if (field === "priority" && !PRIORITIES.includes(value)) {
+    throw new Error(`priority must be one of ${PRIORITIES.join(", ")}`);
+  }
+}
+
+function appendToSection(body, section, line) {
+  const sectionRe = new RegExp(`(^## ${escapeRegExp(section)}\\s*$)`, "m");
+  const match = body.match(sectionRe);
+  if (match === null || match.index === undefined) {
+    throw new Error(`section "${section}" not found`);
+  }
+
+  const sectionStart = match.index + match[0].length;
+  const nextSection = body.slice(sectionStart).search(/\n## /);
+  const insertAt = nextSection === -1 ? body.length : sectionStart + nextSection;
+  const before = body.slice(0, insertAt).replace(/\s*$/, "\n\n");
+  const after = body.slice(insertAt);
+  return `${before}${line}\n${after}`;
+}
+
+function withUpdated(frontMatter, now = new Date()) {
+  return { ...frontMatter, updated: formatIsoSeconds(now) };
+}
+
+function formatScalar(value) {
+  if (value === null || value === undefined) {
+    return "null";
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => formatListItem(item)).join(", ")}]`;
+  }
+  return formatString(String(value));
+}
+
+function formatListItem(value) {
+  return formatString(String(value));
+}
+
+function formatString(value) {
+  if (/^[A-Za-z0-9_./:+-]+$/.test(value)) {
+    return value;
+  }
+  return JSON.stringify(value);
+}
+
+async function exists(filePath) {
+  try {
+    await stat(filePath);
+    return true;
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      return false;
+    }
+    throw error;
+  }
 }
 
 function parseDate(value) {

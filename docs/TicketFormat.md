@@ -107,3 +107,17 @@ The CLI validator checks:
 - parent/child link existence and reciprocity;
 - `blockedBy`/`blocks` link existence and reciprocity;
 - ISO-8601 `created` and `updated` values with timezone offsets or `Z`.
+
+## Rewriting Front Matter
+
+Use the CLI for state changes that affect canonical front matter:
+
+```sh
+node ./bin/local-board.js move T20260514T1234Z implementing
+node ./bin/local-board.js set T20260514T1234Z priority P1
+node ./bin/local-board.js update-field T20260514T1234Z blockedBy "[T20260514T1200Z]"
+```
+
+`move` updates `status`, rewrites `updated`, and relocates the file to the mapped status folder. `set` and `update-field` are aliases for front matter updates. `id`, `type`, `created`, and `updated` are managed fields and cannot be set directly.
+
+The writer emits required fields in canonical order and preserves the Markdown body.

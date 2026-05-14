@@ -17,6 +17,9 @@ node ./bin/local-board.js validate
 node ./bin/local-board.js list
 node ./bin/local-board.js next
 node ./bin/local-board.js create task "Implement ticket validator" --status ready_for_design --priority P1
+node ./bin/local-board.js move T20260514T1234Z implementing
+node ./bin/local-board.js set T20260514T1234Z priority P1
+node ./bin/local-board.js comment T20260514T1234Z "Started implementation."
 ```
 
 The same commands are available through `local-board` when the package bin is on `PATH`.
@@ -42,7 +45,7 @@ plans/               File-backed board: tickets, prompts, templates
 plans/tickets/       Ticket files grouped by human-friendly status folders
 plans/prompts/       Role and step prompts for delegated agents
 plans/templates/     Reusable ticket templates
-src/                 Node.js ESM ticket parser, validator, picker, and CLI
+src/                 Node.js ESM ticket parser, validator, writer, picker, and CLI
 bin/                 CLI executable entrypoint
 test/                Unit tests for the ticket kernel
 ```

@@ -6,7 +6,7 @@
 | Ticket storage | Markdown + YAML front matter |
 | Orchestrator | Claude Code initially |
 | Delegated agents | Claude Code subagents, Codex, or prompt-directed external CLIs |
-| Automation | Dependency-free Node.js ESM package |
+| Automation | Dependency-free Node.js ESM CLI package |
 | VCS | Git |
 | License | MIT |
 
@@ -18,7 +18,7 @@ plans/tickets/        local ticket board
 plans/prompts/roles/  durable role instructions
 plans/prompts/steps/  durable step instructions
 plans/templates/      ticket templates
-src/                  parser, validator, priority picker, CLI
+src/                  parser, validator, writer, priority picker, CLI
 bin/                  executable CLI entrypoint
 test/                 node:test unit tests
 ```

@@ -1,4 +1,14 @@
-import { createTicket, discover, nextTicket, ticketRecord, validate } from "./tickets.js";
+import {
+  appendTicketComment,
+  createTicket,
+  discover,
+  moveTicket,
+  nextTicket,
+  parseScalar,
+  setTicketField,
+  ticketRecord,
+  validate,
+} from "./tickets.js";
 
 export async function main(argv) {
   const args = [...argv];
@@ -17,6 +27,15 @@ export async function main(argv) {
     }
     if (command === "create") {
       return await commandCreate(root, args);
+    }
+    if (command === "move") {
+      return await commandMove(root, args);
+    }
+    if (command === "set" || command === "update-field") {
+      return await commandSet(root, args);
+    }
+    if (command === "comment") {
+      return await commandComment(root, args);
     }
 
     printUsage();
@@ -107,6 +126,49 @@ async function commandCreate(root, args) {
   return 0;
 }
 
+async function commandMove(root, args) {
+  const ticketId = args.shift();
+  const status = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined || status === undefined) {
+    throw new Error("move requires: <ticket-id> <status>");
+  }
+
+  const ticketPath = await moveTicket(root, ticketId, status);
+  console.log(ticketPath);
+  return 0;
+}
+
+async function commandSet(root, args) {
+  const ticketId = args.shift();
+  const field = args.shift();
+  const rawValue = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined || field === undefined || rawValue === undefined) {
+    throw new Error("set requires: <ticket-id> <field> <value>");
+  }
+
+  const ticketPath = await setTicketField(root, ticketId, field, parseScalar(rawValue));
+  console.log(ticketPath);
+  return 0;
+}
+
+async function commandComment(root, args) {
+  const section = takeOption(args, "--section") ?? "Run Log";
+  const ticketId = args.shift();
+  const text = args.join(" ").trim();
+
+  if (ticketId === undefined || text === "") {
+    throw new Error("comment requires: <ticket-id> <text> [--section <section>]");
+  }
+
+  const ticketPath = await appendTicketComment(root, ticketId, section, text);
+  console.log(ticketPath);
+  return 0;
+}
+
 function takeFlag(args, name) {
   const index = args.indexOf(name);
   if (index === -1) {
@@ -140,5 +202,8 @@ function printUsage() {
   local-board [--root <path>] validate [--json]
   local-board [--root <path>] list [--status <status>] [--json]
   local-board [--root <path>] next [--json]
-  local-board [--root <path>] create <type> <title> [--status <status>] [--priority <priority>] [--parent <id>]`);
+  local-board [--root <path>] create <type> <title> [--status <status>] [--priority <priority>] [--parent <id>]
+  local-board [--root <path>] move <ticket-id> <status>
+  local-board [--root <path>] set <ticket-id> <field> <value>
+  local-board [--root <path>] comment <ticket-id> <text> [--section <section>]`);
 }

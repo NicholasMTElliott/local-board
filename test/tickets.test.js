@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createTicket, discover, nextTicket, validate } from "../src/tickets.js";
+import { appendTicketComment, createTicket, discover, moveTicket, nextTicket, setTicketField, validate } from "../src/tickets.js";
 
 async function withBoard(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "local-board-"));
@@ -99,6 +99,67 @@ test("next ticket skips open dependencies", async () => {
     const selected = nextTicket(await discover(root));
 
     assert.equal(selected?.path, path.resolve(fallback));
+  });
+});
+
+test("move rewrites status and relocates ticket", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Move me", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const movedPath = await moveTicket(root, ticketId, "implementing", {
+      now: new Date("2026-05-14T21:00:00Z"),
+    });
+
+    assert.equal(path.relative(root, movedPath), path.join("plans", "tickets", "active", path.basename(ticketPath)));
+    const movedText = await readFile(movedPath, "utf8");
+    assert.match(movedText, /^status: implementing$/m);
+    assert.match(movedText, /^updated: 2026-05-14T21:00:00Z$/m);
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+test("setTicketField rewrites front matter without replacing the body", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Set field", {
+      status: "backlog",
+      priority: "P3",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    await replaceText(ticketPath, "## Implementation Notes\n", "## Implementation Notes\n\nKeep this note.\n");
+
+    await setTicketField(root, ticketId, "priority", "P1", {
+      now: new Date("2026-05-14T21:01:00Z"),
+    });
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^priority: P1$/m);
+    assert.match(text, /^updated: 2026-05-14T21:01:00Z$/m);
+    assert.match(text, /Keep this note\./);
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+test("appendTicketComment adds timestamped section entry and updates front matter", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Comment target", {
+      status: "backlog",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await appendTicketComment(root, ticketId, "Run Log", "Checked the ticket.", {
+      now: new Date("2026-05-14T21:02:00Z"),
+    });
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^updated: 2026-05-14T21:02:00Z$/m);
+    assert.match(text, /## Run Log\n\n- 2026-05-14T21:02:00Z: Checked the ticket\./);
+    assert.deepEqual(validate(await discover(root)), []);
   });
 });
 
