@@ -42,7 +42,7 @@ export const DEFAULT_CONFIG = {
         },
         {
           status: "blocked",
-          when: "Use when another ticket or external dependency blocks decomposition.",
+          when: "Use only when a non-ticket blocker stops decomposition.",
         },
       ],
       ready_for_design: [
@@ -56,7 +56,7 @@ export const DEFAULT_CONFIG = {
         },
         {
           status: "blocked",
-          when: "Use when another ticket or external dependency blocks design.",
+          when: "Use only when a non-ticket blocker stops design.",
         },
       ],
       ready_for_implementation: [
@@ -74,7 +74,7 @@ export const DEFAULT_CONFIG = {
         },
         {
           status: "blocked",
-          when: "Use when another ticket or external dependency blocks implementation.",
+          when: "Use only when a non-ticket blocker stops implementation.",
         },
       ],
       implementing: [
@@ -92,7 +92,7 @@ export const DEFAULT_CONFIG = {
         },
         {
           status: "blocked",
-          when: "Use when another ticket or external dependency blocks implementation.",
+          when: "Use only when a non-ticket blocker stops implementation.",
         },
       ],
       ready_for_review: [
@@ -114,7 +114,7 @@ export const DEFAULT_CONFIG = {
         },
         {
           status: "blocked",
-          when: "Use when another ticket or external dependency blocks review.",
+          when: "Use only when a non-ticket blocker stops review.",
         },
       ],
       reviewing: [
@@ -136,7 +136,7 @@ export const DEFAULT_CONFIG = {
         },
         {
           status: "blocked",
-          when: "Use when another ticket or external dependency blocks review.",
+          when: "Use only when a non-ticket blocker stops review.",
         },
       ],
       ready_for_test: [
@@ -158,7 +158,7 @@ export const DEFAULT_CONFIG = {
         },
         {
           status: "blocked",
-          when: "Use when another ticket or external dependency blocks testing.",
+          when: "Use only when a non-ticket blocker stops testing.",
         },
       ],
       testing: [
@@ -180,7 +180,7 @@ export const DEFAULT_CONFIG = {
         },
         {
           status: "blocked",
-          when: "Use when another ticket or external dependency blocks testing.",
+          when: "Use only when a non-ticket blocker stops testing.",
         },
       ],
       ready_for_docs: [
@@ -202,7 +202,7 @@ export const DEFAULT_CONFIG = {
         },
         {
           status: "blocked",
-          when: "Use when another ticket or external dependency blocks documentation.",
+          when: "Use only when a non-ticket blocker stops documentation.",
         },
       ],
     },
@@ -298,6 +298,8 @@ export function defaultConfigJsonc() {
     // Advisory status outcomes for each workflow decision point.
     // Use exact status values with "move <ticket-id> <status>".
     // This is guidance for orchestrators, not a hard transition validator yet.
+    // Ticket dependencies should use blockedBy and stay in the intended ready status.
+    // status: blocked is reserved for non-ticket blockers.
     "transitions": {
       "ready_for_decomposition": [
         {
@@ -310,7 +312,7 @@ export function defaultConfigJsonc() {
         },
         {
           "status": "blocked",
-          "when": "Use when another ticket or external dependency blocks decomposition."
+          "when": "Use only when a non-ticket blocker stops decomposition."
         }
       ],
       "ready_for_design": [
@@ -324,7 +326,7 @@ export function defaultConfigJsonc() {
         },
         {
           "status": "blocked",
-          "when": "Use when another ticket or external dependency blocks design."
+          "when": "Use only when a non-ticket blocker stops design."
         }
       ],
       "ready_for_implementation": [
@@ -342,7 +344,7 @@ export function defaultConfigJsonc() {
         },
         {
           "status": "blocked",
-          "when": "Use when another ticket or external dependency blocks implementation."
+          "when": "Use only when a non-ticket blocker stops implementation."
         }
       ],
       "implementing": [
@@ -360,7 +362,7 @@ export function defaultConfigJsonc() {
         },
         {
           "status": "blocked",
-          "when": "Use when another ticket or external dependency blocks implementation."
+          "when": "Use only when a non-ticket blocker stops implementation."
         }
       ],
       "ready_for_review": [
@@ -382,7 +384,7 @@ export function defaultConfigJsonc() {
         },
         {
           "status": "blocked",
-          "when": "Use when another ticket or external dependency blocks review."
+          "when": "Use only when a non-ticket blocker stops review."
         }
       ],
       "reviewing": [
@@ -404,7 +406,7 @@ export function defaultConfigJsonc() {
         },
         {
           "status": "blocked",
-          "when": "Use when another ticket or external dependency blocks review."
+          "when": "Use only when a non-ticket blocker stops review."
         }
       ],
       "ready_for_test": [
@@ -426,7 +428,7 @@ export function defaultConfigJsonc() {
         },
         {
           "status": "blocked",
-          "when": "Use when another ticket or external dependency blocks testing."
+          "when": "Use only when a non-ticket blocker stops testing."
         }
       ],
       "testing": [
@@ -448,7 +450,7 @@ export function defaultConfigJsonc() {
         },
         {
           "status": "blocked",
-          "when": "Use when another ticket or external dependency blocks testing."
+          "when": "Use only when a non-ticket blocker stops testing."
         }
       ],
       "ready_for_docs": [
@@ -470,7 +472,7 @@ export function defaultConfigJsonc() {
         },
         {
           "status": "blocked",
-          "when": "Use when another ticket or external dependency blocks documentation."
+          "when": "Use only when a non-ticket blocker stops documentation."
         }
       ]
     }

@@ -200,6 +200,30 @@ test("next ticket skips open dependencies", async () => {
   });
 });
 
+test("validate rejects dependency-blocked tickets in blocked status", async () => {
+  await withBoard(async (root) => {
+    const dependency = await createTicket(root, "task", "Open dependency", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:53:00Z"),
+    });
+    const candidate = await createTicket(root, "task", "Misfiled dependency block", {
+      status: "blocked",
+      now: new Date("2026-05-14T20:54:00Z"),
+    });
+    const dependencyId = path.basename(dependency).split("_", 1)[0];
+    const candidateId = path.basename(candidate).split("_", 1)[0];
+    await replaceText(candidate, "blockedBy: []", `blockedBy: [${dependencyId}]`);
+    await replaceText(dependency, "blocks: []", `blocks: [${candidateId}]`);
+
+    const issues = validate(await discover(root));
+
+    assert.equal(
+      issues.some((issue) => issue.includes("dependency-blocked tickets must stay in their intended ready status")),
+      true,
+    );
+  });
+});
+
 test("move rewrites status and relocates ticket", async () => {
   await withBoard(async (root) => {
     const ticketPath = await createTicket(root, "task", "Move me", {

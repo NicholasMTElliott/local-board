@@ -40,6 +40,8 @@
     // Advisory status outcomes for each workflow decision point.
     // Use exact status values with "move <ticket-id> <status>".
     // This is guidance for orchestrators, not a hard transition validator yet.
+    // Ticket dependencies should use blockedBy and stay in the intended ready status.
+    // status: blocked is reserved for non-ticket blockers.
     "transitions": {
       "ready_for_decomposition": [
         {
@@ -52,7 +54,7 @@
         },
         {
           "status": "blocked",
-          "when": "Use when another ticket or external dependency blocks decomposition."
+          "when": "Use only when a non-ticket blocker stops decomposition."
         }
       ],
       "ready_for_design": [
@@ -66,7 +68,7 @@
         },
         {
           "status": "blocked",
-          "when": "Use when another ticket or external dependency blocks design."
+          "when": "Use only when a non-ticket blocker stops design."
         }
       ],
       "ready_for_implementation": [
@@ -84,7 +86,7 @@
         },
         {
           "status": "blocked",
-          "when": "Use when another ticket or external dependency blocks implementation."
+          "when": "Use only when a non-ticket blocker stops implementation."
         }
       ],
       "implementing": [
@@ -102,7 +104,7 @@
         },
         {
           "status": "blocked",
-          "when": "Use when another ticket or external dependency blocks implementation."
+          "when": "Use only when a non-ticket blocker stops implementation."
         }
       ],
       "ready_for_review": [
@@ -124,7 +126,7 @@
         },
         {
           "status": "blocked",
-          "when": "Use when another ticket or external dependency blocks review."
+          "when": "Use only when a non-ticket blocker stops review."
         }
       ],
       "reviewing": [
@@ -146,7 +148,7 @@
         },
         {
           "status": "blocked",
-          "when": "Use when another ticket or external dependency blocks review."
+          "when": "Use only when a non-ticket blocker stops review."
         }
       ],
       "ready_for_test": [
@@ -168,7 +170,7 @@
         },
         {
           "status": "blocked",
-          "when": "Use when another ticket or external dependency blocks testing."
+          "when": "Use only when a non-ticket blocker stops testing."
         }
       ],
       "testing": [
@@ -190,7 +192,7 @@
         },
         {
           "status": "blocked",
-          "when": "Use when another ticket or external dependency blocks testing."
+          "when": "Use only when a non-ticket blocker stops testing."
         }
       ],
       "ready_for_docs": [
@@ -212,7 +214,7 @@
         },
         {
           "status": "blocked",
-          "when": "Use when another ticket or external dependency blocks documentation."
+          "when": "Use only when a non-ticket blocker stops documentation."
         }
       ]
     }

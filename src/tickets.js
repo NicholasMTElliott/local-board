@@ -576,6 +576,9 @@ function validateTicketShape(board, ticket) {
     issues.push(`${ticket.path}: status must be one of ${[...STATUSES].sort().join(", ")}`);
   } else {
     issues.push(...validateStatusFolder(board, ticket, fm.status));
+    if (fm.status === "blocked" && asList(fm.blockedBy).length > 0) {
+      issues.push(`${ticket.path}: dependency-blocked tickets must stay in their intended ready status; status blocked is for non-ticket blockers`);
+    }
   }
 
   if (!PRIORITIES.includes(fm.priority)) {

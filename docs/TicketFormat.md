@@ -71,6 +71,8 @@ Front matter is canonical. Folder placement is for humans and should match statu
 | `blocked` | `plans/tickets/blocked/` |
 | `archived` | `plans/tickets/archive/` |
 
+`blocked` is for non-ticket blockers. If one ticket waits on another ticket, keep the dependent ticket in its intended ready status and set `blockedBy` with `block <ticket-id> <dependency-id>`.
+
 ## Standard Sections
 
 ```md
@@ -111,6 +113,7 @@ The CLI validator checks:
 - required standard sections;
 - parent/child link existence and reciprocity;
 - `blockedBy`/`blocks` link existence and reciprocity;
+- dependency-blocked tickets are not placed in `status: blocked`;
 - ISO-8601 `created` and `updated` values with timezone offsets or `Z`.
 
 ## Rewriting Front Matter
@@ -140,5 +143,6 @@ With `retention.archiveOnMoveDone: true`, `move <ticket-id> done` also moves old
 The writer emits required fields in canonical order and preserves the Markdown body. `section` replaces one Markdown section body by heading name. Inline text is supported for short updates; `section --file <path>` is preferred for multi-line Markdown.
 
 `link-parent` and `link-child` update reciprocal `parent`/`children` fields. `block` and `unblock` update reciprocal `blockedBy`/`blocks` fields.
+`block` does not move ticket status. Dependency-blocked tickets stay in their ready status and become eligible automatically when dependencies close.
 
 `complete-step` updates `completedSteps` and appends a run-log entry. Under strict routing, the executor must match `plans/local-board.config.jsonc` unless `approve-inline` has recorded an explicit approval.

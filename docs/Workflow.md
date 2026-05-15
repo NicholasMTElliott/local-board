@@ -48,6 +48,8 @@ Current trigger statuses are:
 
 `backlog` is not selected by `next`; move a ticket to a ready status when it should enter the automation queue.
 
+Ticket dependencies should not use `status: blocked`. Keep the dependent ticket in its intended ready status and record the dependency with `block <ticket-id> <dependency-id>`. The ticket will become eligible automatically when every `blockedBy` ticket is `done` or `archived`.
+
 Priority order is `P0`, `P1`, `P2`, `P3`, then `P4`. Ties use configured pipeline order, then oldest `created`, then ticket ID.
 
 Pipeline order and action dispatch live in `plans/local-board.config.jsonc`. Comments and trailing commas are allowed.
@@ -69,7 +71,8 @@ Typical review outcomes:
 - implementation defects or gaps: move to `ready_for_implementation`;
 - fundamental design issue: move to `ready_for_design`;
 - user input needed: move to `questions`;
-- external blocker: move to `blocked`.
+- ticket dependency: use `block` and keep or return to the intended ready status;
+- non-ticket blocker: move to `blocked`.
 
 ## Decomposition
 
@@ -125,6 +128,7 @@ node ./bin/local-board.js block T20260514T1237Z T20260514T1236Z
 
 Use `move` for status transitions. Do not use `set status`; it delegates to the same move behavior so folder placement stays consistent.
 Use `section --file <path>` for generated or multi-line Markdown. Inline `section <text>` is best for short one-line edits.
+Use `block` and `unblock` for ticket dependencies. Do not move dependency-blocked tickets to `blocked`; that status is reserved for non-ticket blockers.
 
 ## Branch Handling
 

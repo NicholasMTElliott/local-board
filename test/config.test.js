@@ -50,6 +50,7 @@ test("loadConfig reads the commented default config", async () => {
     assert.equal(config.workflow.statusActions.ready_for_design, "design");
     assert.equal(config.workflow.transitions.ready_for_review[0].status, "ready_for_test");
     assert.match(config.workflow.transitions.ready_for_review[1].when, /implementation defects/);
+    assert.match(config.workflow.transitions.ready_for_review.at(-1).when, /non-ticket blocker/);
     assert.equal(config.agents.implement, "claude-subagent:local-board-implementer");
     assert.equal(config.agents.review, "codex-task:read-only");
     assert.equal(config.agents.document, "codex-task:workspace-write");

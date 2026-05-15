@@ -43,6 +43,7 @@ Do not infer the workflow state when `query-next` or `query-ticket` can answer i
 Do not invent next statuses. Use the returned `transitions` list or `schema --json`.
 Do not inspect local-board source files to discover statuses or command contracts. Use `schema --json`.
 Do not bypass configured routing. Strict routing is policy, not preference.
+Do not move ticket-dependency blockers to `blocked`. Use `block <ticket-id> <dependency-id>` and leave or return the ticket to its intended ready status so it becomes eligible when the dependency is `done` or `archived`.
 
 ## Process Contract
 
@@ -101,7 +102,8 @@ Use those statuses after completing the action. Examples:
 - review finds implementation gaps: move to `ready_for_implementation`;
 - review finds a fundamental design flaw: move to `ready_for_design`;
 - any stage needs user input: move to `questions` and write the question;
-- any stage is externally blocked: move to `blocked` and record the blocker.
+- ticket dependency blocks progress: use `block <ticket-id> <dependency-id>` and keep or return the ticket to its intended ready status;
+- non-ticket blocker stops progress: move to `blocked` and record the blocker.
 
 ## Branch Discipline
 
@@ -192,3 +194,4 @@ node <<SCRIPT_PATH>> unblock <ticket-id> <dependency-id>
 
 Use `comment` for run-log style notes. Use `move` for status transitions. Use relationship commands for parent/child and dependency state.
 Use `section --file <path>` for generated or multi-line Markdown. Inline `section <text>` is only for short edits.
+Use `blockedBy` for ticket dependencies without moving the dependent ticket to `blocked`.
