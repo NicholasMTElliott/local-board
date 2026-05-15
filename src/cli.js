@@ -9,6 +9,7 @@ import {
   parseScalar,
   queryNext,
   queryTicket,
+  schemaRecord,
   setTicketField,
   setTicketSection,
   stateReport,
@@ -17,6 +18,7 @@ import {
   unlinkParent,
   validate,
 } from "./tickets.js";
+import { startTicketWork } from "./git.js";
 import { initProject } from "./scaffold.js";
 
 export async function main(argv) {
@@ -43,8 +45,14 @@ export async function main(argv) {
     if (command === "state-report" || command === "report") {
       return await commandStateReport(root, args);
     }
+    if (command === "schema") {
+      return await commandSchema(root, args);
+    }
     if (command === "create") {
       return await commandCreate(root, args);
+    }
+    if (command === "start-work" || command === "ensure-branch") {
+      return await commandStartWork(root, args);
     }
     if (command === "init") {
       return await commandInit(root, args);
@@ -203,6 +211,23 @@ async function commandStateReport(root, args) {
   return report.ok ? 0 : 1;
 }
 
+async function commandSchema(root, args) {
+  const asJson = takeFlag(args, "--json");
+  ensureNoArgs(args);
+
+  const schema = await schemaRecord(root);
+  if (asJson) {
+    console.log(JSON.stringify(schema, null, 2));
+  } else {
+    console.log(`Config: ${schema.configPath}`);
+    console.log(`Statuses: ${schema.statuses.join(", ")}`);
+    console.log(`Trigger statuses: ${schema.triggerStatuses.join(", ")}`);
+    console.log(`Actions: ${schema.actions.join(", ")}`);
+    console.log(`Agent values: ${schema.agentValues.join(", ")}`);
+  }
+  return 0;
+}
+
 async function commandCreate(root, args) {
   const status = takeOption(args, "--status") ?? "backlog";
   const priority = takeOption(args, "--priority") ?? "P2";
@@ -217,6 +242,26 @@ async function commandCreate(root, args) {
 
   const ticketPath = await createTicket(root, ticketType, title, { status, priority, parent });
   console.log(ticketPath);
+  return 0;
+}
+
+async function commandStartWork(root, args) {
+  const asJson = takeFlag(args, "--json");
+  const allowDirty = takeFlag(args, "--allow-dirty");
+  const branch = takeOption(args, "--branch");
+  const ticketId = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined) {
+    throw new Error("start-work requires: <ticket-id> [--branch <branch>] [--allow-dirty]");
+  }
+
+  const result = await startTicketWork(root, ticketId, { branch, allowDirty });
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`${result.ticket} ${result.branch} ${result.gitAction} ${result.path}`);
+  }
   return 0;
 }
 
@@ -398,8 +443,10 @@ function printUsage() {
   local-board [--root <path>] query-next [--json]
   local-board [--root <path>] query-ticket <ticket-id> [--json]
   local-board [--root <path>] state-report [--json]
+  local-board [--root <path>] schema [--json]
   local-board [--root <path>] init [--overwrite] [--json]
   local-board [--root <path>] create <type> <title> [--status <status>] [--priority <priority>] [--parent <id>]
+  local-board [--root <path>] start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--json]
   local-board [--root <path>] move <ticket-id> <status>
   local-board [--root <path>] set <ticket-id> <field> <value>
   local-board [--root <path>] comment <ticket-id> <text> [--section <section>]

@@ -8,7 +8,7 @@
     "local-board": "./bin/local-board.js"
   },
   "scripts": {
-    "check": "node --check bin/local-board.js && node --check src/cli.js && node --check src/config.js && node --check src/scaffold.js && node --check src/tickets.js && node --check install.mjs",
+    "check": "node --check bin/local-board.js && node --check src/cli.js && node --check src/config.js && node --check src/git.js && node --check src/scaffold.js && node --check src/tickets.js && node --check install.mjs",
     "test": "node --test",
     "validate": "node ./bin/local-board.js validate"
   },

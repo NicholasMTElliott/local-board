@@ -44,6 +44,8 @@ created: 2026-05-14T12:34:00-04:00
 updated: 2026-05-14T12:34:00-04:00
 ```
 
+`branch` is the git branch associated with task, bug, review, test, or documentation work. Prefer `local-board start-work <ticket-id>` over editing it manually; the command creates or switches branches and records the selected branch.
+
 Front matter is canonical. Folder placement is for humans and should match status.
 
 ## Status Folder Mapping

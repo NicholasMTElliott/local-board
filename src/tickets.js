@@ -607,6 +607,23 @@ export async function stateReport(root = ".") {
   };
 }
 
+export async function schemaRecord(root = ".") {
+  const config = await loadConfig(root);
+  return {
+    configPath: "plans/local-board.config.jsonc",
+    types: Object.fromEntries(TYPE_PREFIXES),
+    statuses: [...STATUSES],
+    statusFolders: Object.fromEntries(STATUS_FOLDERS),
+    triggerStatuses: [...TRIGGER_STATUSES],
+    priorities: PRIORITIES,
+    actions: [...new Set(Object.values(config.workflow.statusActions))],
+    agentValues: ["inline", "claude-subagent", "codex-task:read-only", "codex-task:workspace-write"],
+    workflow: config.workflow,
+    agents: config.agents,
+    git: config.git,
+  };
+}
+
 export function isEligible(ticket, byId) {
   if (!TRIGGER_STATUSES.has(ticket.status)) {
     return false;
@@ -646,6 +663,7 @@ function actionRecord(root, ticket, config, byId) {
     priority: ticket.priority,
     path: path.relative(root, ticket.path),
     title: ticket.title,
+    branch: ticket.frontMatter.branch ?? null,
     action,
     prompt: action === null ? null : config.workflow.actionPrompts[action] ?? null,
     agent: action === null ? null : config.agents[action] ?? config.agents.default ?? "inline",
@@ -696,7 +714,17 @@ export async function createTicket(root, ticketType, title, options = {}) {
     throw new Error(`priority must be one of ${PRIORITIES.join(", ")}`);
   }
 
-  const timestamp = await nextAvailableTimestamp(root, ticketType, now);
+  const board = await discover(root);
+  const loadErrors = board.loadErrors.filter((error) => !error.endsWith(": missing ticket directory"));
+  if (loadErrors.length > 0) {
+    throw new Error(loadErrors.join("\n"));
+  }
+  const byId = byTicketId(board);
+  if (parent !== null && !byId.has(parent)) {
+    throw new Error(`parent ${parent} does not exist`);
+  }
+
+  const timestamp = nextAvailableTimestamp(board, ticketType, now);
   const ticketId = `${TYPE_PREFIXES.get(ticketType)}${formatTicketTimestamp(timestamp)}`;
   const slug = slugify(title);
   const folder = path.resolve(root, "plans", "tickets", STATUS_FOLDERS.get(status));
@@ -709,13 +737,16 @@ export async function createTicket(root, ticketType, title, options = {}) {
     flag: "wx",
   });
 
+  if (parent !== null) {
+    await linkParent(root, ticketId, parent, { now: timestamp });
+  }
+
   return ticketPath;
 }
 
-async function nextAvailableTimestamp(root, ticketType, start) {
+function nextAvailableTimestamp(board, ticketType, start) {
   const prefix = TYPE_PREFIXES.get(ticketType);
   let timestamp = new Date(start);
-  const board = await discover(root);
   const usedIds = new Set(board.tickets.map((ticket) => ticket.id));
   while (usedIds.has(`${prefix}${formatTicketTimestamp(timestamp)}`)) {
     timestamp = new Date(timestamp.getTime() + 60_000);

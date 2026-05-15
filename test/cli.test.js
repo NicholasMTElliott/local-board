@@ -81,6 +81,10 @@ test("CLI command surface supports init, create, query, mutate, relate, report, 
     assert.equal(report.code, 0);
     assert.equal(JSON.parse(report.stdout).eligible, 2);
 
+    const schema = await runCli(["--root", root, "schema", "--json"]);
+    assert.equal(schema.code, 0);
+    assert.equal(JSON.parse(schema.stdout).statuses.includes("ready_for_implementation"), true);
+
     const validate = await runCli(["--root", root, "validate", "--json"]);
     assert.equal(validate.code, 0);
     assert.equal(JSON.parse(validate.stdout).ok, true);

@@ -19,7 +19,7 @@ plans/prompts/roles/  durable role instructions
 plans/prompts/steps/  durable step instructions
 plans/templates/      ticket templates
 plans/local-board.config.jsonc workflow and routing config
-src/                  parser, validator, writer, priority picker, CLI
+src/                  parser, validator, writer, git workflow, priority picker, CLI
 bin/                  executable CLI entrypoint
 test/                 node:test unit tests
 install.mjs           cross-harness installer

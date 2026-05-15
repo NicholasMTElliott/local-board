@@ -13,21 +13,63 @@ Use the installed CLI:
 node <<SCRIPT_PATH>>
 ```
 
+Installation metadata:
+
+- Runtime directory: `<<INSTALL_PATH>>`
+- CLI entrypoint: `<<SCRIPT_PATH>>`
+
+Do not search the filesystem for local-board source or scripts. Use the CLI entrypoint above.
+
 Operate in the user's current project unless they specify another root. Pass `--root <path>` for non-current projects.
 
 ## Core Loop
 
 1. Read project instructions: `AGENTS.md`, `CLAUDE.md`, and `memory-bank/` when present.
 2. If `plans/` is absent and the user asked to initialize, run `node <<SCRIPT_PATH>> init`.
-3. Run `node <<SCRIPT_PATH>> validate`.
-4. For whole-project work, run `node <<SCRIPT_PATH>> query-next --json`.
-5. For a specific ticket, run `node <<SCRIPT_PATH>> query-ticket <id> --json`.
-6. Read the returned ticket `path`, returned `prompt`, and relevant project context.
-7. Execute the returned `action`.
-8. Mutate ticket state only through CLI commands.
-9. Run `validate` again before reporting completion.
+3. Run `node <<SCRIPT_PATH>> schema --json` when you need accepted statuses, priorities, actions, or agent values.
+4. Run `node <<SCRIPT_PATH>> validate`.
+5. For whole-project work, run `node <<SCRIPT_PATH>> query-next --json`.
+6. For a specific ticket, run `node <<SCRIPT_PATH>> query-ticket <id> --json`.
+7. Read the returned ticket `path`, returned `prompt`, `branch`, and relevant project context.
+8. Execute the returned `action`.
+9. Mutate ticket state only through CLI commands.
+10. Run `validate` again before reporting completion.
 
 Do not infer the workflow state when `query-next` or `query-ticket` can answer it.
+Do not inspect local-board source files to discover statuses or command contracts. Use `schema --json`.
+
+## Process Contract
+
+Ticket types: `epic`, `story`, `task`, `bug`.
+
+Statuses:
+
+- `backlog`
+- `ready_for_decomposition`
+- `ready_for_design`
+- `designing`
+- `questions`
+- `ready_for_implementation`
+- `implementing`
+- `ready_for_review`
+- `reviewing`
+- `ready_for_test`
+- `testing`
+- `ready_for_docs`
+- `done`
+- `blocked`
+- `archived`
+
+Eligible trigger statuses:
+
+- `ready_for_decomposition`
+- `ready_for_design`
+- `ready_for_implementation`
+- `ready_for_review`
+- `ready_for_test`
+- `ready_for_docs`
+
+Priorities: `P0`, `P1`, `P2`, `P3`, `P4`.
 
 ## Actions
 
@@ -39,6 +81,24 @@ Do not infer the workflow state when `query-next` or `query-ticket` can answer i
 - `document`: update docs and write `## Documentation Updates`.
 
 Project-local prompts in `plans/prompts/` are authoritative. If a returned prompt is missing, use fallback prompts from `<<INSTALL_PATH>>/prompts/`.
+
+## Branch Discipline
+
+Before `implement`, `review`, `test`, or `document`, run:
+
+```sh
+node <<SCRIPT_PATH>> start-work <ticket-id> --json
+```
+
+`start-work` creates a branch when the ticket has no `branch`, switches to a recorded existing branch when it exists, records the selected branch in front matter, appends a run-log entry, and moves `ready_for_implementation` tickets to `implementing`.
+
+If the user pre-seeded work on a branch that is not yet recorded in the ticket, run:
+
+```sh
+node <<SCRIPT_PATH>> start-work <ticket-id> --branch <branch-name> --json
+```
+
+When switching to an existing branch, `start-work` refuses a dirty worktree unless `--allow-dirty` is supplied. Do not use plain `git switch` for ticket work unless the CLI command is unavailable or the user explicitly asks for manual git control.
 
 ## Delegation
 
@@ -60,7 +120,9 @@ node <<SCRIPT_PATH>> validate
 node <<SCRIPT_PATH>> query-next --json
 node <<SCRIPT_PATH>> query-ticket <ticket-id> --json
 node <<SCRIPT_PATH>> state-report --json
+node <<SCRIPT_PATH>> schema --json
 node <<SCRIPT_PATH>> create <epic|story|task|bug> "<title>" --status <status> --priority <priority> [--parent <id>]
+node <<SCRIPT_PATH>> start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--json]
 node <<SCRIPT_PATH>> move <ticket-id> <status>
 node <<SCRIPT_PATH>> set <ticket-id> <field> <value>
 node <<SCRIPT_PATH>> section <ticket-id> "<text>" --section "<section>"

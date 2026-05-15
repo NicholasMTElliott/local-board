@@ -19,7 +19,9 @@ node ./bin/local-board.js next
 node ./bin/local-board.js query-next --json
 node ./bin/local-board.js query-ticket T20260514T1234Z --json
 node ./bin/local-board.js state-report --json
+node ./bin/local-board.js schema --json
 node ./bin/local-board.js create task "Implement ticket validator" --status ready_for_design --priority P1
+node ./bin/local-board.js start-work T20260514T1234Z --json
 node ./bin/local-board.js move T20260514T1234Z implementing
 node ./bin/local-board.js set T20260514T1234Z priority P1
 node ./bin/local-board.js section T20260514T1234Z "A clear requirement." --section Requirement
@@ -49,7 +51,7 @@ npm test
 npm run validate
 ```
 
-The test suite includes function-level ticket kernel coverage and CLI command-surface coverage for init, create, list, validate, next/query, state report, field/section edits, comments, moves, parent-child links, and dependency links.
+The test suite includes function-level ticket kernel coverage and CLI command-surface coverage for init, create, list, validate, next/query, schema, state report, branch start-work, field/section edits, comments, moves, parent-child links, and dependency links.
 
 ## Documentation Index
 

@@ -59,6 +59,41 @@ test("create advances timestamp to keep ticket ids unique", async () => {
   });
 });
 
+test("create with parent updates reciprocal parent and child fields", async () => {
+  await withBoard(async (root) => {
+    const parent = await createTicket(root, "epic", "Parent epic", {
+      status: "ready_for_decomposition",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const parentId = path.basename(parent).split("_", 1)[0];
+
+    const child = await createTicket(root, "story", "Child story", {
+      status: "ready_for_decomposition",
+      parent: parentId,
+      now: new Date("2026-05-14T20:57:00Z"),
+    });
+    const childId = path.basename(child).split("_", 1)[0];
+
+    assert.match(await readFile(parent, "utf8"), new RegExp(`^children: \\[${childId}\\]$`, "m"));
+    assert.match(await readFile(child, "utf8"), new RegExp(`^parent: ${parentId}$`, "m"));
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+test("create with unknown parent fails before writing a child ticket", async () => {
+  await withBoard(async (root) => {
+    await assert.rejects(
+      createTicket(root, "story", "Orphan story", {
+        parent: "E20260514T2056Z",
+        now: new Date("2026-05-14T20:56:00Z"),
+      }),
+      /parent E20260514T2056Z does not exist/,
+    );
+
+    assert.equal((await discover(root)).tickets.length, 0);
+  });
+});
+
 test("status folder mismatch is invalid", async () => {
   await withBoard(async (root) => {
     const ticketPath = await createTicket(root, "bug", "Fix folder mismatch", {

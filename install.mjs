@@ -106,6 +106,7 @@ function install() {
     .replace(/<<INSTALL_PATH>>/g, () => INSTALL_DIR.replace(/\\/g, "/"))
     .replace(/<<SCRIPT_PATH>>/g, () => scriptPath);
   const allowRule = `Bash(node ${scriptPath} *)`;
+  writeInstallInfo({ nodeVersion, scriptPath });
 
   console.log(`local-board installer`);
   console.log(`node ${nodeVersion}`);
@@ -119,6 +120,24 @@ function install() {
       patchSettings(target.settingsPath, allowRule);
     }
   }
+}
+
+function writeInstallInfo({ nodeVersion, scriptPath }) {
+  writeFileSync(
+    join(INSTALL_DIR, "install-info.json"),
+    `${JSON.stringify(
+      {
+        name: "local-board",
+        installedAt: new Date().toISOString(),
+        installDir: INSTALL_DIR,
+        scriptPath,
+        nodeVersion,
+        skillName: "local-board-orchestrator",
+      },
+      null,
+      2,
+    )}\n`,
+  );
 }
 
 function uninstall() {
