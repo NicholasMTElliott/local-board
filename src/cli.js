@@ -1,6 +1,7 @@
 import {
   appendTicketComment,
   approveInline,
+  archiveDoneTickets,
   beginStep,
   blockTicket,
   completeStep,
@@ -21,7 +22,7 @@ import {
   unlinkParent,
   validate,
 } from "./tickets.js";
-import { startTicketWork } from "./git.js";
+import { assertAutoMergeReady, autoMergeTicketBranch, startTicketWork } from "./git.js";
 import { loadConfig } from "./config.js";
 import { initProject } from "./scaffold.js";
 
@@ -355,6 +356,7 @@ async function commandInit(root, args) {
 }
 
 async function commandMove(root, args) {
+  const asJson = takeFlag(args, "--json");
   const ticketId = args.shift();
   const status = args.shift();
   ensureNoArgs(args);
@@ -363,8 +365,7 @@ async function commandMove(root, args) {
     throw new Error("move requires: <ticket-id> <status>");
   }
 
-  const ticketPath = await moveTicket(root, ticketId, status);
-  console.log(ticketPath);
+  await moveAndMaybeMerge(root, ticketId, status, { asJson });
   return 0;
 }
 
@@ -378,9 +379,50 @@ async function commandSet(root, args) {
     throw new Error("set requires: <ticket-id> <field> <value>");
   }
 
-  const ticketPath = await setTicketField(root, ticketId, field, parseScalar(rawValue));
+  const value = parseScalar(rawValue);
+  if (field === "status") {
+    await moveAndMaybeMerge(root, ticketId, String(value), { asJson: false });
+    return 0;
+  }
+
+  const ticketPath = await setTicketField(root, ticketId, field, value);
   console.log(ticketPath);
   return 0;
+}
+
+async function moveAndMaybeMerge(root, ticketId, status, options = {}) {
+  const config = await loadConfig(root);
+  const shouldAutoMerge = status === "done" && config.git.autoMerge === true;
+  const shouldArchiveDone = status === "done" && config.retention?.archiveOnMoveDone === true;
+  if (shouldAutoMerge) {
+    await assertAutoMergeReady(root, ticketId, { defaultBranch: config.git.defaultBranch });
+  }
+
+  const ticketPath = await moveTicket(root, ticketId, status);
+  const archived = shouldArchiveDone
+    ? await archiveDoneTickets(root, {
+        archiveDoneAfterDays: config.retention.archiveDoneAfterDays,
+        excludeIds: [ticketId],
+      })
+    : [];
+  const merge = shouldAutoMerge
+    ? await autoMergeTicketBranch(root, ticketId, {
+        commitPlanningChanges: config.git.commitPlanningChanges,
+        defaultBranch: config.git.defaultBranch,
+      })
+    : null;
+
+  if (options.asJson) {
+    console.log(JSON.stringify({ path: ticketPath, archived, autoMerge: merge }, null, 2));
+  } else {
+    console.log(ticketPath);
+    for (const archivedTicket of archived) {
+      console.log(`Archived ${archivedTicket.ticket} ${archivedTicket.path}`);
+    }
+    if (merge !== null) {
+      console.log(`Merged ${merge.branch} into ${merge.defaultBranch}`);
+    }
+  }
 }
 
 async function commandComment(root, args) {
@@ -524,7 +566,7 @@ function printUsage() {
   local-board [--root <path>] begin-step <ticket-id> [--action <action>] [--json]
   local-board [--root <path>] complete-step <ticket-id> <action> --executor <executor> --evidence <text> [--json]
   local-board [--root <path>] approve-inline <ticket-id> <action> --reason <text> [--json]
-  local-board [--root <path>] move <ticket-id> <status>
+  local-board [--root <path>] move <ticket-id> <status> [--json]
   local-board [--root <path>] set <ticket-id> <field> <value>
   local-board [--root <path>] comment <ticket-id> <text> [--section <section>]
   local-board [--root <path>] section <ticket-id> <text> --section <section>

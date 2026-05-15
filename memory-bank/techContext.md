@@ -34,8 +34,7 @@ SKILL.md              installable orchestration skill template
 - Preserve portability across Windows/macOS/Linux.
 
 ## Open Decisions
-- Exact transition validator shape.
-- Branch/commit/merge automation policy.
+- Whether advisory transition guidance should become a hard transition validator.
 - Agent routing refinements after real orchestration runs.
 
 ## Verification

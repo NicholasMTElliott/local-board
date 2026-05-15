@@ -30,6 +30,182 @@ export const DEFAULT_CONFIG = {
       test: "plans/prompts/steps/test.md",
       document: "plans/prompts/steps/document.md",
     },
+    transitions: {
+      ready_for_decomposition: [
+        {
+          status: "done",
+          when: "Use after decomposition is complete, child tickets are linked, and decomposition evidence is recorded.",
+        },
+        {
+          status: "questions",
+          when: "Use when decomposition needs user input before it can continue.",
+        },
+        {
+          status: "blocked",
+          when: "Use when another ticket or external dependency blocks decomposition.",
+        },
+      ],
+      ready_for_design: [
+        {
+          status: "ready_for_implementation",
+          when: "Use after the technical design is complete and design evidence is recorded.",
+        },
+        {
+          status: "questions",
+          when: "Use when design needs user input before it can continue.",
+        },
+        {
+          status: "blocked",
+          when: "Use when another ticket or external dependency blocks design.",
+        },
+      ],
+      ready_for_implementation: [
+        {
+          status: "ready_for_review",
+          when: "Use after implementation is complete, committed, and implementation evidence is recorded.",
+        },
+        {
+          status: "ready_for_design",
+          when: "Use when implementation reveals a design gap or contradiction.",
+        },
+        {
+          status: "questions",
+          when: "Use when implementation needs user input before it can continue.",
+        },
+        {
+          status: "blocked",
+          when: "Use when another ticket or external dependency blocks implementation.",
+        },
+      ],
+      implementing: [
+        {
+          status: "ready_for_review",
+          when: "Use after implementation is complete, committed, and implementation evidence is recorded.",
+        },
+        {
+          status: "ready_for_design",
+          when: "Use when implementation reveals a design gap or contradiction.",
+        },
+        {
+          status: "questions",
+          when: "Use when implementation needs user input before it can continue.",
+        },
+        {
+          status: "blocked",
+          when: "Use when another ticket or external dependency blocks implementation.",
+        },
+      ],
+      ready_for_review: [
+        {
+          status: "ready_for_test",
+          when: "Use when review finds no blocking issues and review evidence is recorded.",
+        },
+        {
+          status: "ready_for_implementation",
+          when: "Use when review finds implementation defects or gaps.",
+        },
+        {
+          status: "ready_for_design",
+          when: "Use when review finds a fundamental design issue, contradiction, or flaw.",
+        },
+        {
+          status: "questions",
+          when: "Use when review needs user input before it can continue.",
+        },
+        {
+          status: "blocked",
+          when: "Use when another ticket or external dependency blocks review.",
+        },
+      ],
+      reviewing: [
+        {
+          status: "ready_for_test",
+          when: "Use when review finds no blocking issues and review evidence is recorded.",
+        },
+        {
+          status: "ready_for_implementation",
+          when: "Use when review finds implementation defects or gaps.",
+        },
+        {
+          status: "ready_for_design",
+          when: "Use when review finds a fundamental design issue, contradiction, or flaw.",
+        },
+        {
+          status: "questions",
+          when: "Use when review needs user input before it can continue.",
+        },
+        {
+          status: "blocked",
+          when: "Use when another ticket or external dependency blocks review.",
+        },
+      ],
+      ready_for_test: [
+        {
+          status: "ready_for_docs",
+          when: "Use when tests pass, relevant evidence is recorded, and no blocking failures remain.",
+        },
+        {
+          status: "ready_for_implementation",
+          when: "Use when tests fail because implementation changes are required.",
+        },
+        {
+          status: "ready_for_design",
+          when: "Use when tests expose a fundamental design issue.",
+        },
+        {
+          status: "questions",
+          when: "Use when testing needs user input before it can continue.",
+        },
+        {
+          status: "blocked",
+          when: "Use when another ticket or external dependency blocks testing.",
+        },
+      ],
+      testing: [
+        {
+          status: "ready_for_docs",
+          when: "Use when tests pass, relevant evidence is recorded, and no blocking failures remain.",
+        },
+        {
+          status: "ready_for_implementation",
+          when: "Use when tests fail because implementation changes are required.",
+        },
+        {
+          status: "ready_for_design",
+          when: "Use when tests expose a fundamental design issue.",
+        },
+        {
+          status: "questions",
+          when: "Use when testing needs user input before it can continue.",
+        },
+        {
+          status: "blocked",
+          when: "Use when another ticket or external dependency blocks testing.",
+        },
+      ],
+      ready_for_docs: [
+        {
+          status: "done",
+          when: "Use after documentation is complete, documentation evidence is recorded, and all required stages are complete.",
+        },
+        {
+          status: "ready_for_implementation",
+          when: "Use when documentation work exposes an implementation gap.",
+        },
+        {
+          status: "ready_for_design",
+          when: "Use when documentation work exposes a design contradiction or flaw.",
+        },
+        {
+          status: "questions",
+          when: "Use when documentation needs user input before it can continue.",
+        },
+        {
+          status: "blocked",
+          when: "Use when another ticket or external dependency blocks documentation.",
+        },
+      ],
+    },
   },
   agents: {
     decompose: "claude-subagent:local-board-decomposer",
@@ -48,7 +224,12 @@ export const DEFAULT_CONFIG = {
       bug: ["design", "implement", "review", "test", "document"],
     },
   },
+  retention: {
+    archiveDoneAfterDays: 30,
+    archiveOnMoveDone: true,
+  },
   git: {
+    defaultBranch: null,
     commitPlanningChanges: true,
     autoMerge: false,
   },
@@ -112,6 +293,186 @@ export function defaultConfigJsonc() {
       "review": "plans/prompts/roles/code_reviewer.md",
       "test": "plans/prompts/steps/test.md",
       "document": "plans/prompts/steps/document.md"
+    },
+
+    // Advisory status outcomes for each workflow decision point.
+    // Use exact status values with "move <ticket-id> <status>".
+    // This is guidance for orchestrators, not a hard transition validator yet.
+    "transitions": {
+      "ready_for_decomposition": [
+        {
+          "status": "done",
+          "when": "Use after decomposition is complete, child tickets are linked, and decomposition evidence is recorded."
+        },
+        {
+          "status": "questions",
+          "when": "Use when decomposition needs user input before it can continue."
+        },
+        {
+          "status": "blocked",
+          "when": "Use when another ticket or external dependency blocks decomposition."
+        }
+      ],
+      "ready_for_design": [
+        {
+          "status": "ready_for_implementation",
+          "when": "Use after the technical design is complete and design evidence is recorded."
+        },
+        {
+          "status": "questions",
+          "when": "Use when design needs user input before it can continue."
+        },
+        {
+          "status": "blocked",
+          "when": "Use when another ticket or external dependency blocks design."
+        }
+      ],
+      "ready_for_implementation": [
+        {
+          "status": "ready_for_review",
+          "when": "Use after implementation is complete, committed, and implementation evidence is recorded."
+        },
+        {
+          "status": "ready_for_design",
+          "when": "Use when implementation reveals a design gap or contradiction."
+        },
+        {
+          "status": "questions",
+          "when": "Use when implementation needs user input before it can continue."
+        },
+        {
+          "status": "blocked",
+          "when": "Use when another ticket or external dependency blocks implementation."
+        }
+      ],
+      "implementing": [
+        {
+          "status": "ready_for_review",
+          "when": "Use after implementation is complete, committed, and implementation evidence is recorded."
+        },
+        {
+          "status": "ready_for_design",
+          "when": "Use when implementation reveals a design gap or contradiction."
+        },
+        {
+          "status": "questions",
+          "when": "Use when implementation needs user input before it can continue."
+        },
+        {
+          "status": "blocked",
+          "when": "Use when another ticket or external dependency blocks implementation."
+        }
+      ],
+      "ready_for_review": [
+        {
+          "status": "ready_for_test",
+          "when": "Use when review finds no blocking issues and review evidence is recorded."
+        },
+        {
+          "status": "ready_for_implementation",
+          "when": "Use when review finds implementation defects or gaps."
+        },
+        {
+          "status": "ready_for_design",
+          "when": "Use when review finds a fundamental design issue, contradiction, or flaw."
+        },
+        {
+          "status": "questions",
+          "when": "Use when review needs user input before it can continue."
+        },
+        {
+          "status": "blocked",
+          "when": "Use when another ticket or external dependency blocks review."
+        }
+      ],
+      "reviewing": [
+        {
+          "status": "ready_for_test",
+          "when": "Use when review finds no blocking issues and review evidence is recorded."
+        },
+        {
+          "status": "ready_for_implementation",
+          "when": "Use when review finds implementation defects or gaps."
+        },
+        {
+          "status": "ready_for_design",
+          "when": "Use when review finds a fundamental design issue, contradiction, or flaw."
+        },
+        {
+          "status": "questions",
+          "when": "Use when review needs user input before it can continue."
+        },
+        {
+          "status": "blocked",
+          "when": "Use when another ticket or external dependency blocks review."
+        }
+      ],
+      "ready_for_test": [
+        {
+          "status": "ready_for_docs",
+          "when": "Use when tests pass, relevant evidence is recorded, and no blocking failures remain."
+        },
+        {
+          "status": "ready_for_implementation",
+          "when": "Use when tests fail because implementation changes are required."
+        },
+        {
+          "status": "ready_for_design",
+          "when": "Use when tests expose a fundamental design issue."
+        },
+        {
+          "status": "questions",
+          "when": "Use when testing needs user input before it can continue."
+        },
+        {
+          "status": "blocked",
+          "when": "Use when another ticket or external dependency blocks testing."
+        }
+      ],
+      "testing": [
+        {
+          "status": "ready_for_docs",
+          "when": "Use when tests pass, relevant evidence is recorded, and no blocking failures remain."
+        },
+        {
+          "status": "ready_for_implementation",
+          "when": "Use when tests fail because implementation changes are required."
+        },
+        {
+          "status": "ready_for_design",
+          "when": "Use when tests expose a fundamental design issue."
+        },
+        {
+          "status": "questions",
+          "when": "Use when testing needs user input before it can continue."
+        },
+        {
+          "status": "blocked",
+          "when": "Use when another ticket or external dependency blocks testing."
+        }
+      ],
+      "ready_for_docs": [
+        {
+          "status": "done",
+          "when": "Use after documentation is complete, documentation evidence is recorded, and all required stages are complete."
+        },
+        {
+          "status": "ready_for_implementation",
+          "when": "Use when documentation work exposes an implementation gap."
+        },
+        {
+          "status": "ready_for_design",
+          "when": "Use when documentation work exposes a design contradiction or flaw."
+        },
+        {
+          "status": "questions",
+          "when": "Use when documentation needs user input before it can continue."
+        },
+        {
+          "status": "blocked",
+          "when": "Use when another ticket or external dependency blocks documentation."
+        }
+      ]
     }
   },
 
@@ -140,8 +501,19 @@ export function defaultConfigJsonc() {
     }
   },
 
+  // Done tickets are recent closeout history. Older done tickets are retained
+  // by moving them to archived, never by deleting them automatically.
+  "retention": {
+    "archiveDoneAfterDays": 30,
+    "archiveOnMoveDone": true
+  },
+
   // Conservative git policy defaults. The orchestrator may still ask before git operations.
+  // defaultBranch: null auto-detects origin/HEAD, main, then master.
+  // autoMerge: true makes "move <ticket-id> done" commit planning-only ticket updates,
+  // switch to the default branch, and merge the recorded ticket branch.
   "git": {
+    "defaultBranch": null,
     "commitPlanningChanges": true,
     "autoMerge": false
   }

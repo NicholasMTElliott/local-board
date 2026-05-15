@@ -26,6 +26,7 @@ node ./bin/local-board.js begin-step T20260514T1234Z --json
 node ./bin/local-board.js complete-step T20260514T1234Z review --executor codex-task:read-only --evidence "Review notes added."
 node ./bin/local-board.js approve-inline T20260514T1234Z review --reason "User approved fallback."
 node ./bin/local-board.js move T20260514T1234Z implementing
+node ./bin/local-board.js move T20260514T1234Z done --json
 node ./bin/local-board.js set T20260514T1234Z priority P1
 node ./bin/local-board.js section T20260514T1234Z "A clear requirement." --section Requirement
 node ./bin/local-board.js comment T20260514T1234Z "Started implementation."
@@ -37,9 +38,13 @@ The same commands are available through `local-board` when the package bin is on
 
 ## Installable Skill
 
-`SKILL.md` turns a compatible coding agent into a local-board orchestrator. It tells the agent to call `query-next` or `query-ticket` for deterministic workflow dispatch, then use CLI mutation commands for canonical state changes.
+`SKILL.md` turns a compatible coding agent into a local-board orchestrator. It tells the agent to call `query-next` or `query-ticket` for deterministic workflow dispatch and transition guidance, then use CLI mutation commands for canonical state changes.
 
 Workflow routing lives in `plans/local-board.config.jsonc`. Comments and trailing commas are allowed. Strict routing is enforced by `begin-step`, `complete-step`, `approve-inline`, `move ... done`, and `validate`.
+
+When `git.autoMerge` is `true`, `move ... done` commits planning-only closeout changes and merges the recorded ticket branch into the configured or detected default branch after strict routing validation passes.
+
+When `retention.archiveOnMoveDone` is `true`, `move ... done` also archives older done tickets after the configured retention window. Archived tickets remain closed for dependency checks.
 
 Claude subagent definitions live in `agents/claude/` and are installed to the user's Claude agents directory by `node install.mjs`.
 
@@ -56,7 +61,7 @@ npm test
 npm run validate
 ```
 
-The test suite includes function-level ticket kernel coverage and CLI command-surface coverage for init, create, list, validate, next/query, schema, state report, strict routing evidence, branch start-work, field/section edits, comments, moves, parent-child links, and dependency links.
+The test suite includes function-level ticket kernel coverage and CLI command-surface coverage for init, create, list, validate, next/query, schema, state report, transition guidance, strict routing evidence, branch start-work, auto-merge closeout, done-ticket retention, field/section edits, comments, moves, parent-child links, and dependency links.
 
 ## Documentation Index
 

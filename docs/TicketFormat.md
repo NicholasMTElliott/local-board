@@ -119,6 +119,7 @@ Use the CLI for state changes that affect canonical front matter:
 
 ```sh
 node ./bin/local-board.js move T20260514T1234Z implementing
+node ./bin/local-board.js move T20260514T1234Z done --json
 node ./bin/local-board.js set T20260514T1234Z priority P1
 node ./bin/local-board.js begin-step T20260514T1234Z --json
 node ./bin/local-board.js complete-step T20260514T1234Z review --executor codex-task:read-only --evidence "Review findings recorded."
@@ -129,7 +130,11 @@ node ./bin/local-board.js link-parent S20260514T1235Z E20260514T1234Z
 node ./bin/local-board.js block T20260514T1236Z T20260514T1235Z
 ```
 
-`move` updates `status`, rewrites `updated`, and relocates the file to the mapped status folder. `set` and `update-field` are aliases for front matter updates. `id`, `type`, `created`, and `updated` are managed fields and cannot be set directly.
+`move` updates `status`, rewrites `updated`, and relocates the file to the mapped status folder. With `git.autoMerge: true`, `move <ticket-id> done` also commits planning-only closeout changes and merges the recorded ticket branch into the configured or detected default branch. It refuses uncommitted non-planning changes.
+
+With `retention.archiveOnMoveDone: true`, `move <ticket-id> done` also moves older done tickets to `archived`. Archived tickets remain closed for dependency checks and are retained in `plans/tickets/archive/`.
+
+`set` and `update-field` are aliases for front matter updates. `id`, `type`, `created`, and `updated` are managed fields and cannot be set directly.
 
 The writer emits required fields in canonical order and preserves the Markdown body. `section` replaces one Markdown section body by heading name.
 

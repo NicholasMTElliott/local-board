@@ -143,6 +143,34 @@ test("next ticket uses priority then created and allows done dependencies", asyn
   });
 });
 
+test("next ticket treats archived dependencies as closed", async () => {
+  await withBoard(async (root) => {
+    const archived = await createTicket(root, "task", "Archived dependency", {
+      status: "archived",
+      priority: "P0",
+      now: new Date("2026-05-14T20:50:00Z"),
+    });
+    const blocked = await createTicket(root, "task", "Blocked by archive", {
+      status: "ready_for_implementation",
+      priority: "P0",
+      now: new Date("2026-05-14T20:51:00Z"),
+    });
+    await createTicket(root, "task", "Fallback implementation", {
+      status: "ready_for_implementation",
+      priority: "P1",
+      now: new Date("2026-05-14T20:52:00Z"),
+    });
+
+    const archivedId = path.basename(archived).split("_", 1)[0];
+    const blockedId = path.basename(blocked).split("_", 1)[0];
+    await replaceText(blocked, "blockedBy: []", `blockedBy: [${archivedId}]`);
+    await replaceText(archived, "blocks: []", `blocks: [${blockedId}]`);
+
+    assert.equal(nextTicket(await discover(root))?.path, path.resolve(blocked));
+    assert.equal((await queryNext(root))?.ticket, blockedId);
+  });
+});
+
 test("next ticket skips open dependencies", async () => {
   await withBoard(async (root) => {
     const dependency = await createTicket(root, "task", "Open dependency", {
@@ -271,6 +299,7 @@ test("queryNext returns configured action and prefers closest pipeline phase aft
     assert.equal(result?.action, "document");
     assert.equal(result?.prompt, "plans/prompts/steps/document.md");
     assert.equal(result?.agent, "codex-task:workspace-write");
+    assert.equal(result?.transitions[0].status, "done");
   });
 });
 
@@ -321,6 +350,10 @@ test("queryTicket returns action bundle for a specific ticket", async () => {
     assert.equal(result.action, "review");
     assert.equal(result.prompt, "plans/prompts/roles/code_reviewer.md");
     assert.equal(result.eligible, true);
+    assert.deepEqual(
+      result.transitions.slice(0, 3).map((transition) => transition.status),
+      ["ready_for_test", "ready_for_implementation", "ready_for_design"],
+    );
   });
 });
 
@@ -338,6 +371,7 @@ test("beginStep reports strict configured routing for a ticket action", async ()
     assert.equal(result.configuredAgent, "codex-task:read-only");
     assert.equal(result.strict, true);
     assert.equal(result.delegationRequired, true);
+    assert.equal(result.transitions[0].status, "ready_for_test");
   });
 });
 

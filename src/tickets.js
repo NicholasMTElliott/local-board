@@ -57,6 +57,8 @@ export const TRIGGER_STATUSES = new Set([
   "ready_for_docs",
 ]);
 
+const CLOSED_STATUSES = new Set(["done", "archived"]);
+
 export const PRIORITIES = ["P0", "P1", "P2", "P3", "P4"];
 
 const REQUIRED_FIELDS = [
@@ -296,6 +298,39 @@ export async function moveTicket(root, ticketId, status, options = {}) {
   return targetPath;
 }
 
+export async function archiveDoneTickets(root, options = {}) {
+  const archiveDoneAfterDays = options.archiveDoneAfterDays ?? 30;
+  if (!Number.isFinite(archiveDoneAfterDays) || archiveDoneAfterDays < 0) {
+    throw new Error("retention.archiveDoneAfterDays must be a non-negative number");
+  }
+
+  const now = options.now ?? new Date();
+  const cutoff = now.getTime() - archiveDoneAfterDays * 24 * 60 * 60 * 1000;
+  const excluded = new Set(options.excludeIds ?? []);
+  const board = await discover(root);
+  if (board.loadErrors.length > 0) {
+    throw new Error(board.loadErrors.join("\n"));
+  }
+
+  const archived = [];
+  for (const ticket of board.tickets) {
+    if (ticket.status !== "done" || excluded.has(ticket.id)) {
+      continue;
+    }
+    const updatedTime = Date.parse(ticket.frontMatter.updated);
+    if (!Number.isFinite(updatedTime) || updatedTime >= cutoff) {
+      continue;
+    }
+    const targetPath = await moveTicket(board.root, ticket.id, "archived", { now });
+    archived.push({
+      ticket: ticket.id,
+      path: path.relative(board.root, targetPath),
+    });
+  }
+
+  return archived;
+}
+
 export async function setTicketField(root, ticketId, field, value, options = {}) {
   if (!CANONICAL_FIELDS.includes(field)) {
     throw new Error(`field must be one of ${CANONICAL_FIELDS.join(", ")}`);
@@ -359,6 +394,7 @@ export async function beginStep(root, ticketId, actionOverride = null) {
     ticket: ticket.id,
     action,
     status: ticket.status,
+    transitions: transitionsForStatus(config, ticket.status),
     configuredAgent,
     strict: config.routing?.strict === true,
     delegationRequired: config.routing?.strict === true && configuredAgent !== "inline",
@@ -786,6 +822,7 @@ export async function schemaRecord(root = ".") {
     workflow: config.workflow,
     agents: config.agents,
     routing: config.routing,
+    retention: config.retention,
     git: config.git,
   };
 }
@@ -797,7 +834,7 @@ export function isEligible(ticket, byId) {
 
   for (const dependencyId of asList(ticket.frontMatter.blockedBy)) {
     const dependency = byId.get(dependencyId);
-    if (dependency === undefined || dependency.status !== "done") {
+    if (dependency === undefined || !isClosedStatus(dependency.status)) {
       return false;
     }
   }
@@ -812,12 +849,16 @@ function isEligibleForConfig(ticket, byId, config) {
 
   for (const dependencyId of asList(ticket.frontMatter.blockedBy)) {
     const dependency = byId.get(dependencyId);
-    if (dependency === undefined || dependency.status !== "done") {
+    if (dependency === undefined || !isClosedStatus(dependency.status)) {
       return false;
     }
   }
 
   return true;
+}
+
+function isClosedStatus(status) {
+  return CLOSED_STATUSES.has(status);
 }
 
 function actionRecord(root, ticket, config, byId) {
@@ -840,8 +881,14 @@ function actionRecord(root, ticket, config, byId) {
           strict: config.routing?.strict === true,
           delegationRequired: config.routing?.strict === true && configuredAgent !== "inline",
         },
+    transitions: transitionsForStatus(config, ticket.status),
     eligible: action === null ? false : isEligibleForConfig(ticket, byId, config),
   };
+}
+
+function transitionsForStatus(config, status) {
+  const transitions = config.workflow?.transitions?.[status];
+  return Array.isArray(transitions) ? transitions : [];
 }
 
 function compareTicketsForSelection(left, right) {

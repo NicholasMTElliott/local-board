@@ -13,7 +13,8 @@ A developer can ask Claude Code to run the local board. Claude reads `plans/`, p
 - Markdown ticket schema for epics, stories, tasks, bugs.
 - Dependency-free Node.js ESM CLI for validate/list/query/schema/create/start-work/begin-step/complete-step/approve-inline/move/set/section/comment/link/block/init.
 - Front matter rewrite support with canonical field ordering.
-- JSONC-configured local status model with dependency blocking, action dispatch, and strict routing evidence.
+- JSONC-configured local status model with dependency blocking, action dispatch, transition guidance, and strict routing evidence.
+- Done-ticket retention that archives old closed tickets without deleting history.
 - Prompt/role structure for delegated steps.
 - Installable orchestration skill, Claude subagents, and cross-harness installer.
 - Human-readable docs for the workflow.

@@ -1,10 +1,11 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 
 import { main } from "../src/cli.js";
+import { createTicket, discover } from "../src/tickets.js";
 
 async function withBoard(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "local-board-cli-"));
@@ -84,6 +85,8 @@ test("CLI command surface supports init, create, query, mutate, relate, report, 
     const schema = await runCli(["--root", root, "schema", "--json"]);
     assert.equal(schema.code, 0);
     assert.equal(JSON.parse(schema.stdout).statuses.includes("ready_for_implementation"), true);
+    assert.equal(JSON.parse(schema.stdout).retention.archiveDoneAfterDays, 30);
+    assert.equal(JSON.parse(schema.stdout).workflow.transitions.ready_for_review[0].status, "ready_for_test");
 
     const beginStep = await runCli(["--root", root, "begin-step", childId, "--json"]);
     assert.equal(beginStep.code, 0);
@@ -116,6 +119,74 @@ test("CLI command surface supports init, create, query, mutate, relate, report, 
   });
 });
 
+test("move done archives old done tickets but leaves recent and current done tickets", async () => {
+  await withBoard(async (root) => {
+    const oldDonePath = await createTicket(root, "epic", "Old done ticket", {
+      status: "done",
+      now: new Date("2026-03-01T12:00:00Z"),
+    });
+    const recentDonePath = await createTicket(root, "epic", "Recent done ticket", {
+      status: "done",
+      now: new Date("2026-05-10T12:00:00Z"),
+    });
+    await recordEpicDecomposition(oldDonePath);
+    await recordEpicDecomposition(recentDonePath);
+    const currentPath = await createTicket(root, "epic", "Current closeout", {
+      status: "ready_for_decomposition",
+      now: new Date("2026-05-14T12:00:00Z"),
+    });
+    const currentId = path.basename(currentPath).split("_", 1)[0];
+    const oldDoneId = path.basename(oldDonePath).split("_", 1)[0];
+    const recentDoneId = path.basename(recentDonePath).split("_", 1)[0];
+    assert.equal(
+      (
+        await runCli([
+          "--root",
+          root,
+          "complete-step",
+          currentId,
+          "decompose",
+          "--executor",
+          "claude-subagent:local-board-decomposer",
+          "--evidence",
+          "Decomposition not needed.",
+        ])
+      ).code,
+      0,
+    );
+
+    const result = await runCli(["--root", root, "move", currentId, "done", "--json"]);
+
+    assert.equal(result.code, 0, result.stderr);
+    const output = JSON.parse(result.stdout);
+    assert.deepEqual(output.archived.map((record) => record.ticket), [oldDoneId]);
+    const tickets = new Map((await discover(root)).tickets.map((ticket) => [ticket.id, ticket]));
+    assert.equal(tickets.get(oldDoneId)?.status, "archived");
+    assert.equal(tickets.get(recentDoneId)?.status, "done");
+    assert.equal(tickets.get(currentId)?.status, "done");
+  });
+});
+
+test("read-only commands do not archive old done tickets", async () => {
+  await withBoard(async (root) => {
+    const oldDonePath = await createTicket(root, "epic", "Old read-only done", {
+      status: "done",
+      now: new Date("2026-03-01T12:00:00Z"),
+    });
+    await recordEpicDecomposition(oldDonePath);
+    const oldDoneId = path.basename(oldDonePath).split("_", 1)[0];
+
+    assert.equal((await runCli(["--root", root, "validate"])).code, 0);
+    assert.equal((await runCli(["--root", root, "list", "--json"])).code, 0);
+    assert.equal((await runCli(["--root", root, "query-next", "--json"])).code, 1);
+    assert.equal((await runCli(["--root", root, "state-report", "--json"])).code, 0);
+
+    const tickets = new Map((await discover(root)).tickets.map((ticket) => [ticket.id, ticket]));
+    assert.equal(tickets.get(oldDoneId)?.status, "done");
+    assert.equal(path.relative(root, tickets.get(oldDoneId)?.path), path.join("plans", "tickets", "done", path.basename(oldDonePath)));
+  });
+});
+
 async function runCli(args) {
   const stdout = [];
   const stderr = [];
@@ -134,4 +205,13 @@ async function runCli(args) {
     console.log = originalLog;
     console.error = originalError;
   }
+}
+
+async function recordEpicDecomposition(ticketPath) {
+  const text = await readFile(ticketPath, "utf8");
+  await writeFile(
+    ticketPath,
+    text.replace("completedSteps: []", "completedSteps: [decompose:claude-subagent:local-board-decomposer]"),
+    "utf8",
+  );
 }

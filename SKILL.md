@@ -30,14 +30,17 @@ Operate in the user's current project unless they specify another root. Pass `--
 4. Run `node <<SCRIPT_PATH>> validate`.
 5. For whole-project work, run `node <<SCRIPT_PATH>> query-next --json`.
 6. For a specific ticket, run `node <<SCRIPT_PATH>> query-ticket <id> --json`.
-7. Read the returned ticket `path`, returned `prompt`, `branch`, and relevant project context.
+7. Read the returned ticket `path`, returned `prompt`, `branch`, `transitions`, and relevant project context.
 8. Run `node <<SCRIPT_PATH>> begin-step <ticket-id> --json`.
 9. Execute the returned `action` through the configured route. For `claude-subagent:<agent-name>`, delegate to the named Claude agent after the colon.
 10. Run `node <<SCRIPT_PATH>> complete-step <ticket-id> <action> --executor <configuredAgent> --evidence "<evidence>"`.
 11. Mutate ticket state only through CLI commands.
-12. Run `validate` again before reporting completion.
+12. After the action, choose the next status from the returned `transitions` list and run `node <<SCRIPT_PATH>> move <ticket-id> <status> --json`.
+13. Choose `done` only when all required stages are complete.
+14. Run `validate` again before reporting completion.
 
 Do not infer the workflow state when `query-next` or `query-ticket` can answer it.
+Do not invent next statuses. Use the returned `transitions` list or `schema --json`.
 Do not inspect local-board source files to discover statuses or command contracts. Use `schema --json`.
 Do not bypass configured routing. Strict routing is policy, not preference.
 
@@ -85,6 +88,21 @@ Priorities: `P0`, `P1`, `P2`, `P3`, `P4`.
 
 Project-local prompts in `plans/prompts/` are authoritative. If a returned prompt is missing, use fallback prompts from `<<INSTALL_PATH>>/prompts/`.
 
+## Transition Guidance
+
+`query-next --json`, `query-ticket <id> --json`, and `begin-step <id> --json` return a `transitions` array for the ticket's current status. Each item has:
+
+- `status`: exact value to pass to `move`;
+- `when`: the condition for choosing that status.
+
+Use those statuses after completing the action. Examples:
+
+- review passes: move to `ready_for_test`;
+- review finds implementation gaps: move to `ready_for_implementation`;
+- review finds a fundamental design flaw: move to `ready_for_design`;
+- any stage needs user input: move to `questions` and write the question;
+- any stage is externally blocked: move to `blocked` and record the blocker.
+
 ## Branch Discipline
 
 Before `implement`, `review`, `test`, or `document`, run:
@@ -102,6 +120,22 @@ node <<SCRIPT_PATH>> start-work <ticket-id> --branch <branch-name> --json
 ```
 
 When switching to an existing branch, `start-work` refuses a dirty worktree unless `--allow-dirty` is supplied. Do not use plain `git switch` for ticket work unless the CLI command is unavailable or the user explicitly asks for manual git control.
+
+## Done and Auto-Merge
+
+Use `move <ticket-id> done --json` only after required design, implementation, review, test, and documentation evidence is recorded.
+
+When `git.autoMerge` is `true`, `move ... done` also:
+
+- verifies the current branch is the ticket's recorded `branch`;
+- refuses uncommitted non-planning changes;
+- commits planning-only ticket updates when `git.commitPlanningChanges` is `true`;
+- switches to `git.defaultBranch` or the detected default branch;
+- merges the ticket branch into the default branch.
+
+When `retention.archiveOnMoveDone` is `true`, `move ... done` also archives other `done` tickets whose `updated` timestamp is older than `retention.archiveDoneAfterDays`. Archived tickets remain closed and still satisfy dependencies.
+
+If auto-merge refuses to proceed, fix the reported git state or ask the user. Do not mark the ticket done by manual front matter edits.
 
 ## Delegation
 
@@ -145,7 +179,7 @@ node <<SCRIPT_PATH>> start-work <ticket-id> [--branch <branch>] [--allow-dirty] 
 node <<SCRIPT_PATH>> begin-step <ticket-id> [--action <action>] [--json]
 node <<SCRIPT_PATH>> complete-step <ticket-id> <action> --executor <executor> --evidence "<evidence>" [--json]
 node <<SCRIPT_PATH>> approve-inline <ticket-id> <action> --reason "<reason>" [--json]
-node <<SCRIPT_PATH>> move <ticket-id> <status>
+node <<SCRIPT_PATH>> move <ticket-id> <status> [--json]
 node <<SCRIPT_PATH>> set <ticket-id> <field> <value>
 node <<SCRIPT_PATH>> section <ticket-id> "<text>" --section "<section>"
 node <<SCRIPT_PATH>> comment <ticket-id> "<text>" [--section "<section>"]
