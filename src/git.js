@@ -94,8 +94,9 @@ async function ensureGitBranch(root, branch, options) {
     return { root: gitRoot, action: "already-current" };
   }
 
-  if ((existsLocal || existsOrigin) && dirty && !options.allowDirty) {
-    throw new Error(`working tree has uncommitted changes; refusing to switch to existing branch ${branch}`);
+  if (dirty && !options.allowDirty) {
+    const action = existsLocal || existsOrigin ? "switch to existing branch" : "create branch";
+    throw new Error(`working tree has uncommitted changes; refusing to ${action} ${branch}`);
   }
 
   if (existsLocal) {

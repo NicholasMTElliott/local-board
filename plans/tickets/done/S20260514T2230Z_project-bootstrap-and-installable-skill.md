@@ -10,7 +10,8 @@ blocks: []
 branch: null
 estimate: null
 created: 2026-05-14T22:30:50Z
-updated: 2026-05-14T22:28:51Z
+updated: 2026-05-15T13:48:57Z
+completedSteps: [decompose:claude-subagent:local-board-decomposer]
 ---
 # Project bootstrap and installable skill
 

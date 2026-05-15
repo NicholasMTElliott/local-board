@@ -96,6 +96,22 @@ test("startTicketWork refuses to switch to an existing branch with a dirty workt
   });
 });
 
+test("startTicketWork refuses to create a branch with a dirty worktree", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, baseBranch) => {
+    const ticketPath = await createTicket(root, "task", "Dirty branch create", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add dirty branch ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    await writeFile(path.join(root, "dirty.txt"), "uncommitted\n", "utf8");
+
+    await assert.rejects(startTicketWork(root, ticketId), /refusing to create branch/);
+    assert.equal(await currentBranch(root), baseBranch);
+  });
+});
+
 test("move done auto-merges the ticket branch when autoMerge is enabled", { skip: !GIT_AVAILABLE }, async () => {
   await withRepo(async (root, baseBranch) => {
     await writeAutoMergeConfig(root, baseBranch);

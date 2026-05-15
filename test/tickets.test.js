@@ -425,6 +425,19 @@ test("strict routing blocks done until required steps have completion evidence",
   });
 });
 
+test("strict routing blocks done when optional routing fields are absent", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Strict legacy done", {
+      status: "ready_for_docs",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    await replaceText(ticketPath, "completedSteps: []\nroutingApprovals: []\n", "");
+
+    await assert.rejects(moveTicket(root, ticketId, "done"), /missing completedSteps entry for design/);
+  });
+});
+
 test("strict routing accepts custom codex-task modes", async () => {
   await withBoard(async (root) => {
     const ticketPath = await createTicket(root, "task", "Custom codex mode", {
@@ -473,6 +486,37 @@ test("linkParent updates reciprocal parent and child fields", async () => {
     const childText = await readFile(child, "utf8");
     assert.match(parentText, new RegExp(`^children: \\[${childId}\\]$`, "m"));
     assert.match(childText, new RegExp(`^parent: ${parentId}$`, "m"));
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+test("linkParent rejects reparenting without unlinking first", async () => {
+  await withBoard(async (root) => {
+    const firstParent = await createTicket(root, "epic", "First parent", {
+      status: "ready_for_decomposition",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const secondParent = await createTicket(root, "epic", "Second parent", {
+      status: "ready_for_decomposition",
+      now: new Date("2026-05-14T20:57:00Z"),
+    });
+    const child = await createTicket(root, "story", "Child", {
+      status: "ready_for_decomposition",
+      now: new Date("2026-05-14T20:58:00Z"),
+    });
+    const firstParentId = path.basename(firstParent).split("_", 1)[0];
+    const secondParentId = path.basename(secondParent).split("_", 1)[0];
+    const childId = path.basename(child).split("_", 1)[0];
+
+    await linkParent(root, childId, firstParentId, { now: new Date("2026-05-14T21:03:00Z") });
+    await assert.rejects(
+      linkParent(root, childId, secondParentId, { now: new Date("2026-05-14T21:04:00Z") }),
+      new RegExp(`ticket ${childId} already has parent ${firstParentId}`),
+    );
+
+    assert.match(await readFile(firstParent, "utf8"), new RegExp(`^children: \\[${childId}\\]$`, "m"));
+    assert.match(await readFile(secondParent, "utf8"), /^children: \[\]$/m);
+    assert.match(await readFile(child, "utf8"), new RegExp(`^parent: ${firstParentId}$`, "m"));
     assert.deepEqual(validate(await discover(root)), []);
   });
 });

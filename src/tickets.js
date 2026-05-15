@@ -462,6 +462,9 @@ export async function completeStep(root, ticketId, action, executor, evidence, o
 
 export async function linkParent(root, childId, parentId, options = {}) {
   const { child, parent } = await findTicketPair(root, childId, parentId, "parent");
+  if (child.frontMatter.parent !== null && child.frontMatter.parent !== undefined && child.frontMatter.parent !== parent.id) {
+    throw new Error(`ticket ${child.id} already has parent ${child.frontMatter.parent}; unlink it before reparenting`);
+  }
   const now = options.now ?? new Date();
 
   await writeTicketUpdate(child, {
@@ -675,7 +678,7 @@ function validateLinks(ticket, byId) {
 
 function validateRouting(ticket, config) {
   const issues = [];
-  if (config.routing?.strict !== true || !hasRoutingFields(ticket)) {
+  if (config.routing?.strict !== true) {
     return issues;
   }
 
@@ -723,10 +726,6 @@ function completedStepRecords(ticket) {
       ? { action: token, executor: "" }
       : { action: token.slice(0, separator), executor: token.slice(separator + 1) };
   });
-}
-
-function hasRoutingFields(ticket) {
-  return Object.hasOwn(ticket.frontMatter, "completedSteps") || Object.hasOwn(ticket.frontMatter, "routingApprovals");
 }
 
 export function nextTicket(board) {

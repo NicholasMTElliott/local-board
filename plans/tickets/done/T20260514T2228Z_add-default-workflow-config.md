@@ -10,7 +10,8 @@ blocks: []
 branch: null
 estimate: null
 created: 2026-05-14T22:28:49Z
-updated: 2026-05-14T22:28:49Z
+updated: 2026-05-15T13:48:57Z
+completedSteps: [design:claude-subagent:local-board-designer, implement:claude-subagent:local-board-implementer, review:codex-task:read-only, test:claude-subagent:local-board-tester, document:codex-task:workspace-write]
 ---
 # Add default workflow config
 

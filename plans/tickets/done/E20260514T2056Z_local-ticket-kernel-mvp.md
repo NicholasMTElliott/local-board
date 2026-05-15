@@ -10,7 +10,8 @@ blocks: []
 branch: null
 estimate: null
 created: 2026-05-14T20:56:00+00:00
-updated: 2026-05-14T22:28:52Z
+updated: 2026-05-15T13:48:57Z
+completedSteps: [decompose:claude-subagent:local-board-decomposer]
 ---
 # Local Ticket Kernel MVP
 
