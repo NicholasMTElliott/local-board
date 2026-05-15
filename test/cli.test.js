@@ -85,6 +85,25 @@ test("CLI command surface supports init, create, query, mutate, relate, report, 
     assert.equal(schema.code, 0);
     assert.equal(JSON.parse(schema.stdout).statuses.includes("ready_for_implementation"), true);
 
+    const beginStep = await runCli(["--root", root, "begin-step", childId, "--json"]);
+    assert.equal(beginStep.code, 0);
+    assert.equal(JSON.parse(beginStep.stdout).configuredAgent, "claude-subagent");
+    assert.equal((await runCli(["--root", root, "approve-inline", childId, "design", "--reason", "CLI fallback test"])).code, 0);
+    assert.equal(
+      (await runCli([
+        "--root",
+        root,
+        "complete-step",
+        childId,
+        "design",
+        "--executor",
+        "inline",
+        "--evidence",
+        "CLI design evidence",
+      ])).code,
+      0,
+    );
+
     const validate = await runCli(["--root", root, "validate", "--json"]);
     assert.equal(validate.code, 0);
     assert.equal(JSON.parse(validate.stdout).ok, true);

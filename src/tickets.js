@@ -74,8 +74,10 @@ const REQUIRED_FIELDS = [
   "updated",
 ];
 
+const OPTIONAL_FIELDS = ["completedSteps", "routingApprovals"];
+const CANONICAL_FIELDS = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS];
 const IMMUTABLE_FIELDS = new Set(["id", "type", "created", "updated"]);
-const LIST_FIELDS = ["children", "blockedBy", "blocks"];
+const LIST_FIELDS = ["children", "blockedBy", "blocks", ...OPTIONAL_FIELDS];
 const NULLABLE_FIELDS = ["parent", "branch", "estimate"];
 const STANDARD_SECTIONS = [
   "Requirement",
@@ -221,7 +223,7 @@ function parseListItem(value) {
   return String(parsed);
 }
 
-export function validate(board) {
+export function validate(board, config = null) {
   const issues = [...board.loadErrors];
   const byId = byTicketId(board);
   const seenIds = new Map();
@@ -238,6 +240,9 @@ export function validate(board) {
 
   for (const ticket of board.tickets) {
     issues.push(...validateLinks(ticket, byId));
+    if (config !== null) {
+      issues.push(...validateRouting(ticket, config));
+    }
   }
 
   return issues;
@@ -266,6 +271,13 @@ export async function moveTicket(root, ticketId, status, options = {}) {
 
   const { board, ticket } = await findTicket(root, ticketId);
   const frontMatter = withUpdated({ ...ticket.frontMatter, status }, options.now);
+  if (status === "done") {
+    const config = await loadConfig(board.root);
+    const issues = validateRouting({ ...ticket, status, frontMatter }, config);
+    if (issues.length > 0) {
+      throw new Error(`routing validation failed:\n${issues.join("\n")}`);
+    }
+  }
   const content = renderMarkdownTicket(frontMatter, ticket.body);
   const targetFolder = path.join(board.root, "plans", "tickets", STATUS_FOLDERS.get(status));
   const targetPath = path.join(targetFolder, path.basename(ticket.path));
@@ -285,8 +297,8 @@ export async function moveTicket(root, ticketId, status, options = {}) {
 }
 
 export async function setTicketField(root, ticketId, field, value, options = {}) {
-  if (!REQUIRED_FIELDS.includes(field)) {
-    throw new Error(`field must be one of ${REQUIRED_FIELDS.join(", ")}`);
+  if (!CANONICAL_FIELDS.includes(field)) {
+    throw new Error(`field must be one of ${CANONICAL_FIELDS.join(", ")}`);
   }
   if (IMMUTABLE_FIELDS.has(field)) {
     throw new Error(`${field} is managed by local-board and cannot be set directly`);
@@ -321,6 +333,95 @@ export async function setTicketSection(root, ticketId, section, text, options = 
   const frontMatter = withUpdated({ ...ticket.frontMatter }, options.now);
   await writeFile(ticket.path, renderMarkdownTicket(frontMatter, body), "utf8");
   return ticket.path;
+}
+
+export async function beginStep(root, ticketId, actionOverride = null) {
+  const [board, config] = await Promise.all([discover(root), loadConfig(root)]);
+  const issues = validate(board, config);
+  if (issues.length > 0) {
+    throw new Error(`ticket validation failed:\n${issues.join("\n")}`);
+  }
+
+  const byId = byTicketId(board);
+  const ticket = byId.get(ticketId);
+  if (ticket === undefined) {
+    throw new Error(`ticket ${ticketId} not found`);
+  }
+
+  const action = actionOverride ?? config.workflow.statusActions[ticket.status] ?? null;
+  if (action === null) {
+    throw new Error(`ticket ${ticketId} has no configured action for status ${ticket.status}`);
+  }
+
+  assertAction(config, action);
+  const configuredAgent = agentForAction(config, action);
+  return {
+    ticket: ticket.id,
+    action,
+    status: ticket.status,
+    configuredAgent,
+    strict: config.routing?.strict === true,
+    delegationRequired: config.routing?.strict === true && configuredAgent !== "inline",
+    branch: ticket.frontMatter.branch ?? null,
+    path: path.relative(board.root, ticket.path),
+  };
+}
+
+export async function approveInline(root, ticketId, action, reason, options = {}) {
+  if (reason.trim() === "") {
+    throw new Error("approve-inline requires a non-empty reason");
+  }
+
+  const config = await loadConfig(root);
+  assertAction(config, action);
+  const { ticket } = await findTicket(root, ticketId);
+  const token = stepToken(action, "inline");
+  const now = options.now ?? new Date();
+  const frontMatter = withUpdated(
+    {
+      ...ticket.frontMatter,
+      routingApprovals: addUnique(asList(ticket.frontMatter.routingApprovals), token),
+    },
+    now,
+  );
+  const body = appendToSection(ticket.body, "Run Log", `- ${formatIsoSeconds(now)}: Approved inline ${action}: ${reason.trim()}`);
+  await writeFile(ticket.path, renderMarkdownTicket(frontMatter, body), "utf8");
+  return { ticket: ticket.id, action, approvedExecutor: "inline", path: ticket.path };
+}
+
+export async function completeStep(root, ticketId, action, executor, evidence, options = {}) {
+  if (evidence.trim() === "") {
+    throw new Error("complete-step requires non-empty evidence");
+  }
+
+  const config = await loadConfig(root);
+  assertAction(config, action);
+  if (!schemaAgentValues().includes(executor)) {
+    throw new Error(`executor must be one of ${schemaAgentValues().join(", ")}`);
+  }
+
+  const { ticket } = await findTicket(root, ticketId);
+  const token = stepToken(action, executor);
+  const routingIssues = validateStepRouting(ticket, config, action, executor);
+  if (routingIssues.length > 0) {
+    throw new Error(`routing validation failed:\n${routingIssues.join("\n")}`);
+  }
+
+  const now = options.now ?? new Date();
+  const frontMatter = withUpdated(
+    {
+      ...ticket.frontMatter,
+      completedSteps: addUnique(asList(ticket.frontMatter.completedSteps), token),
+    },
+    now,
+  );
+  const body = appendToSection(
+    ticket.body,
+    "Run Log",
+    `- ${formatIsoSeconds(now)}: Completed ${action} via ${executor}: ${evidence.trim()}`,
+  );
+  await writeFile(ticket.path, renderMarkdownTicket(frontMatter, body), "utf8");
+  return { ticket: ticket.id, action, executor, path: ticket.path };
 }
 
 export async function linkParent(root, childId, parentId, options = {}) {
@@ -536,6 +637,62 @@ function validateLinks(ticket, byId) {
   return issues;
 }
 
+function validateRouting(ticket, config) {
+  const issues = [];
+  if (config.routing?.strict !== true || !hasRoutingFields(ticket)) {
+    return issues;
+  }
+
+  const completed = completedStepRecords(ticket);
+  const required = config.routing.doneRequires?.[ticket.type] ?? [];
+
+  for (const record of completed) {
+    issues.push(...validateStepRouting(ticket, config, record.action, record.executor));
+  }
+
+  if (ticket.status === "done") {
+    for (const action of required) {
+      if (!completed.some((record) => record.action === action)) {
+        issues.push(`${ticket.path}: done ticket is missing completedSteps entry for ${action}`);
+      }
+    }
+  }
+
+  return issues;
+}
+
+function validateStepRouting(ticket, config, action, executor) {
+  const issues = [];
+  const actions = new Set(Object.values(config.workflow.statusActions));
+  if (!actions.has(action)) {
+    return [`${ticket.path}: completedSteps entry uses unknown action ${action}`];
+  }
+  if (!schemaAgentValues().includes(executor)) {
+    return [`${ticket.path}: completedSteps entry for ${action} uses unknown executor ${executor}`];
+  }
+  const configuredAgent = agentForAction(config, action);
+  const approvals = asList(ticket.frontMatter.routingApprovals);
+  if (configuredAgent !== executor && !approvals.includes(stepToken(action, executor))) {
+    issues.push(
+      `${ticket.path}: ${action} completed by ${executor}, but configured agent is ${configuredAgent}; approve the deviation first`,
+    );
+  }
+  return issues;
+}
+
+function completedStepRecords(ticket) {
+  return asList(ticket.frontMatter.completedSteps).map((token) => {
+    const separator = token.indexOf(":");
+    return separator === -1
+      ? { action: token, executor: "" }
+      : { action: token.slice(0, separator), executor: token.slice(separator + 1) };
+  });
+}
+
+function hasRoutingFields(ticket) {
+  return Object.hasOwn(ticket.frontMatter, "completedSteps") || Object.hasOwn(ticket.frontMatter, "routingApprovals");
+}
+
 export function nextTicket(board) {
   const byId = byTicketId(board);
   const eligible = board.tickets.filter((ticket) => isEligible(ticket, byId));
@@ -545,7 +702,7 @@ export function nextTicket(board) {
 
 export async function queryNext(root = ".") {
   const [board, config] = await Promise.all([discover(root), loadConfig(root)]);
-  const issues = validate(board);
+  const issues = validate(board, config);
   if (issues.length > 0) {
     throw new Error(`ticket validation failed:\n${issues.join("\n")}`);
   }
@@ -563,7 +720,7 @@ export async function queryNext(root = ".") {
 
 export async function queryTicket(root = ".", ticketId) {
   const [board, config] = await Promise.all([discover(root), loadConfig(root)]);
-  const issues = validate(board);
+  const issues = validate(board, config);
   if (issues.length > 0) {
     throw new Error(`ticket validation failed:\n${issues.join("\n")}`);
   }
@@ -578,7 +735,7 @@ export async function queryTicket(root = ".", ticketId) {
 
 export async function stateReport(root = ".") {
   const [board, config] = await Promise.all([discover(root), loadConfig(root)]);
-  const issues = validate(board);
+  const issues = validate(board, config);
   const byId = byTicketId(board);
   const byStatus = {};
   const byType = {};
@@ -617,9 +774,10 @@ export async function schemaRecord(root = ".") {
     triggerStatuses: [...TRIGGER_STATUSES],
     priorities: PRIORITIES,
     actions: [...new Set(Object.values(config.workflow.statusActions))],
-    agentValues: ["inline", "claude-subagent", "codex-task:read-only", "codex-task:workspace-write"],
+    agentValues: schemaAgentValues(),
     workflow: config.workflow,
     agents: config.agents,
+    routing: config.routing,
     git: config.git,
   };
 }
@@ -656,6 +814,7 @@ function isEligibleForConfig(ticket, byId, config) {
 
 function actionRecord(root, ticket, config, byId) {
   const action = config.workflow.statusActions[ticket.status] ?? null;
+  const configuredAgent = action === null ? null : agentForAction(config, action);
   return {
     ticket: ticket.id,
     type: ticket.type,
@@ -666,7 +825,13 @@ function actionRecord(root, ticket, config, byId) {
     branch: ticket.frontMatter.branch ?? null,
     action,
     prompt: action === null ? null : config.workflow.actionPrompts[action] ?? null,
-    agent: action === null ? null : config.agents[action] ?? config.agents.default ?? "inline",
+    agent: configuredAgent,
+    routing: action === null
+      ? null
+      : {
+          strict: config.routing?.strict === true,
+          delegationRequired: config.routing?.strict === true && configuredAgent !== "inline",
+        },
     eligible: action === null ? false : isEligibleForConfig(ticket, byId, config),
   };
 }
@@ -767,6 +932,8 @@ blockedBy: []
 blocks: []
 branch: null
 estimate: null
+completedSteps: []
+routingApprovals: []
 created: ${created}
 updated: ${created}
 ---
@@ -803,9 +970,9 @@ export function renderMarkdownTicket(frontMatter, body) {
 
 export function serializeFrontMatter(frontMatter) {
   const orderedKeys = [
-    ...REQUIRED_FIELDS.filter((field) => Object.hasOwn(frontMatter, field)),
+    ...CANONICAL_FIELDS.filter((field) => Object.hasOwn(frontMatter, field)),
     ...Object.keys(frontMatter)
-      .filter((field) => !REQUIRED_FIELDS.includes(field))
+      .filter((field) => !CANONICAL_FIELDS.includes(field))
       .sort(),
   ];
   return orderedKeys.map((field) => `${field}: ${formatScalar(frontMatter[field])}\n`).join("");
@@ -833,6 +1000,25 @@ function extractTitle(body) {
 
 function asList(value) {
   return Array.isArray(value) ? value.map(String).filter((item) => item !== "") : [];
+}
+
+function assertAction(config, action) {
+  const actions = new Set(Object.values(config.workflow.statusActions));
+  if (!actions.has(action)) {
+    throw new Error(`action must be one of ${[...actions].sort().join(", ")}`);
+  }
+}
+
+function agentForAction(config, action) {
+  return config.agents[action] ?? config.agents.default ?? "inline";
+}
+
+function schemaAgentValues() {
+  return ["inline", "claude-subagent", "codex-task:read-only", "codex-task:workspace-write"];
+}
+
+function stepToken(action, executor) {
+  return `${action}:${executor}`;
 }
 
 function assertFieldValue(field, value) {

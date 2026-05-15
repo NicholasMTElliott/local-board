@@ -35,7 +35,7 @@ SKILL.md              installable orchestration skill template
 ## Open Decisions
 - Exact transition validator shape.
 - Branch/commit/merge automation policy.
-- Test strategy for generated workflow steps.
+- Concrete Claude subagent definition/install strategy.
 
 ## Verification
 - `npm run check`

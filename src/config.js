@@ -32,12 +32,21 @@ export const DEFAULT_CONFIG = {
     },
   },
   agents: {
-    decompose: "inline",
-    design: "inline",
-    implement: "inline",
-    review: "inline",
-    test: "inline",
-    document: "inline",
+    decompose: "claude-subagent",
+    design: "claude-subagent",
+    implement: "claude-subagent",
+    review: "codex-task:read-only",
+    test: "claude-subagent",
+    document: "codex-task:workspace-write",
+  },
+  routing: {
+    strict: true,
+    doneRequires: {
+      epic: ["decompose"],
+      story: ["decompose"],
+      task: ["design", "implement", "review", "test", "document"],
+      bug: ["design", "implement", "review", "test", "document"],
+    },
   },
   git: {
     commitPlanningChanges: true,
@@ -106,15 +115,28 @@ export function defaultConfigJsonc() {
     }
   },
 
-  // Agent routing is interpreted by the orchestration skill, not by the validator.
+  // Agent routing is enforced by strict routing commands and validation.
   // Available values: inline, claude-subagent, codex-task:read-only, codex-task:workspace-write.
   "agents": {
-    "decompose": "inline",
-    "design": "inline",
-    "implement": "inline",
-    "review": "inline",
-    "test": "inline",
-    "document": "inline"
+    "decompose": "claude-subagent",
+    "design": "claude-subagent",
+    "implement": "claude-subagent",
+    "review": "codex-task:read-only",
+    "test": "claude-subagent",
+    "document": "codex-task:workspace-write"
+  },
+
+  // Routing policy is enforced by validate, complete-step, and move-to-done.
+  // strict: true means configured non-inline routes require matching completion evidence
+  // or an explicit routing approval.
+  "routing": {
+    "strict": true,
+    "doneRequires": {
+      "epic": ["decompose"],
+      "story": ["decompose"],
+      "task": ["design", "implement", "review", "test", "document"],
+      "bug": ["design", "implement", "review", "test", "document"]
+    }
   },
 
   // Conservative git policy defaults. The orchestrator may still ask before git operations.

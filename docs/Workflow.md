@@ -66,14 +66,13 @@ Generated child tickets should link back to the parent and should be committed a
 2. Write technical design.
 3. Ask questions if blocked by ambiguity.
 4. Create or switch to the ticket branch with `start-work`.
-5. Implement the task.
-6. Run code review.
-7. Run specialty review when needed.
-8. Test the result.
-9. Update documentation.
-10. Commit changes.
-11. Merge and push according to policy.
-12. Mark ticket done.
+5. Run `begin-step` for the current action.
+6. Execute the action through the configured agent route.
+7. Run `complete-step` with executor and evidence.
+8. Repeat for review, test, and docs.
+9. Commit changes.
+10. Merge and push according to policy.
+11. Mark ticket done.
 
 ## Human Questions
 
@@ -91,6 +90,9 @@ node ./bin/local-board.js schema --json
 node ./bin/local-board.js create story "Ticket parser" --status backlog --priority P2
 node ./bin/local-board.js start-work T20260514T1234Z --json
 node ./bin/local-board.js start-work T20260514T1234Z --branch preseeded/ticket-parser --json
+node ./bin/local-board.js begin-step T20260514T1234Z --json
+node ./bin/local-board.js complete-step T20260514T1234Z review --executor codex-task:read-only --evidence "Review findings recorded."
+node ./bin/local-board.js approve-inline T20260514T1234Z review --reason "User approved fallback."
 node ./bin/local-board.js move T20260514T1234Z ready_for_design
 node ./bin/local-board.js set T20260514T1234Z branch feature/T20260514T1234Z-ticket-parser
 node ./bin/local-board.js section T20260514T1234Z "Use the existing parser." --section "Technical Design"
@@ -125,4 +127,12 @@ Use `start-work` before implementation and before review/test/docs work that mus
 - `codex-task:read-only`
 - `codex-task:workspace-write`
 
-If a configured agent is unavailable, the orchestrator should explain the fallback and continue inline unless doing so would be risky.
+If a configured agent is unavailable, the orchestrator should ask the user before falling back. Inline fallback requires `approve-inline`.
+
+## Strict Routing
+
+`routing.strict: true` makes configured routing mandatory.
+
+Before each action, use `begin-step` to read the configured executor. After the action, use `complete-step` to record `<action>:<executor>` evidence in front matter. A non-inline configured route cannot be completed as `inline` unless `approve-inline` has first recorded explicit user approval.
+
+`move <ticket-id> done` validates required completion evidence for new tickets that include `completedSteps`/`routingApprovals`.

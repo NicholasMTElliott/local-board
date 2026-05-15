@@ -11,9 +11,9 @@ A developer can ask Claude Code to run the local board. Claude reads `plans/`, p
 
 ## Current Scope
 - Markdown ticket schema for epics, stories, tasks, bugs.
-- Dependency-free Node.js ESM CLI for validate/list/query/schema/create/start-work/move/set/section/comment/link/block/init.
+- Dependency-free Node.js ESM CLI for validate/list/query/schema/create/start-work/begin-step/complete-step/approve-inline/move/set/section/comment/link/block/init.
 - Front matter rewrite support with canonical field ordering.
-- JSONC-configured local status model with dependency blocking and action dispatch.
+- JSONC-configured local status model with dependency blocking, action dispatch, and strict routing evidence.
 - Prompt/role structure for delegated steps.
 - Installable orchestration skill and cross-harness installer.
 - Human-readable docs for the workflow.

@@ -31,12 +31,15 @@ Operate in the user's current project unless they specify another root. Pass `--
 5. For whole-project work, run `node <<SCRIPT_PATH>> query-next --json`.
 6. For a specific ticket, run `node <<SCRIPT_PATH>> query-ticket <id> --json`.
 7. Read the returned ticket `path`, returned `prompt`, `branch`, and relevant project context.
-8. Execute the returned `action`.
-9. Mutate ticket state only through CLI commands.
-10. Run `validate` again before reporting completion.
+8. Run `node <<SCRIPT_PATH>> begin-step <ticket-id> --json`.
+9. Execute the returned `action` through the configured route.
+10. Run `node <<SCRIPT_PATH>> complete-step <ticket-id> <action> --executor <executor> --evidence "<evidence>"`.
+11. Mutate ticket state only through CLI commands.
+12. Run `validate` again before reporting completion.
 
 Do not infer the workflow state when `query-next` or `query-ticket` can answer it.
 Do not inspect local-board source files to discover statuses or command contracts. Use `schema --json`.
+Do not bypass configured routing. Strict routing is policy, not preference.
 
 ## Process Contract
 
@@ -111,7 +114,13 @@ Use `plans/local-board.config.jsonc` to decide how each action is handled. Comme
 
 Delegated agents may produce proposals or patches. The orchestrator remains responsible for canonical ticket state unless a delegated worker was explicitly assigned that write scope.
 
-If the configured agent is unavailable, explain the fallback and continue inline unless doing so would be risky.
+If the configured agent is unavailable, do not continue inline by default. Ask the user for approval. If approved, run:
+
+```sh
+node <<SCRIPT_PATH>> approve-inline <ticket-id> <action> --reason "<user-approved reason>"
+```
+
+Then run `complete-step` with `--executor inline`. If the user does not approve the deviation, move the ticket to `questions` and record the blocker.
 
 ## CLI Commands
 
@@ -123,6 +132,9 @@ node <<SCRIPT_PATH>> state-report --json
 node <<SCRIPT_PATH>> schema --json
 node <<SCRIPT_PATH>> create <epic|story|task|bug> "<title>" --status <status> --priority <priority> [--parent <id>]
 node <<SCRIPT_PATH>> start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--json]
+node <<SCRIPT_PATH>> begin-step <ticket-id> [--action <action>] [--json]
+node <<SCRIPT_PATH>> complete-step <ticket-id> <action> --executor <executor> --evidence "<evidence>" [--json]
+node <<SCRIPT_PATH>> approve-inline <ticket-id> <action> --reason "<reason>" [--json]
 node <<SCRIPT_PATH>> move <ticket-id> <status>
 node <<SCRIPT_PATH>> set <ticket-id> <field> <value>
 node <<SCRIPT_PATH>> section <ticket-id> "<text>" --section "<section>"

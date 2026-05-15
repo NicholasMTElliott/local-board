@@ -1,6 +1,9 @@
 import {
   appendTicketComment,
+  approveInline,
+  beginStep,
   blockTicket,
+  completeStep,
   createTicket,
   discover,
   linkParent,
@@ -19,6 +22,7 @@ import {
   validate,
 } from "./tickets.js";
 import { startTicketWork } from "./git.js";
+import { loadConfig } from "./config.js";
 import { initProject } from "./scaffold.js";
 
 export async function main(argv) {
@@ -53,6 +57,15 @@ export async function main(argv) {
     }
     if (command === "start-work" || command === "ensure-branch") {
       return await commandStartWork(root, args);
+    }
+    if (command === "begin-step") {
+      return await commandBeginStep(root, args);
+    }
+    if (command === "complete-step") {
+      return await commandCompleteStep(root, args);
+    }
+    if (command === "approve-inline") {
+      return await commandApproveInline(root, args);
     }
     if (command === "init") {
       return await commandInit(root, args);
@@ -98,7 +111,8 @@ async function commandValidate(root, args) {
   ensureNoArgs(args);
 
   const board = await discover(root);
-  const issues = validate(board);
+  const config = await loadConfig(root);
+  const issues = validate(board, config);
 
   if (asJson) {
     console.log(JSON.stringify({ ok: issues.length === 0, issues }, null, 2));
@@ -261,6 +275,66 @@ async function commandStartWork(root, args) {
     console.log(JSON.stringify(result, null, 2));
   } else {
     console.log(`${result.ticket} ${result.branch} ${result.gitAction} ${result.path}`);
+  }
+  return 0;
+}
+
+async function commandBeginStep(root, args) {
+  const asJson = takeFlag(args, "--json");
+  const action = takeOption(args, "--action") ?? null;
+  const ticketId = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined) {
+    throw new Error("begin-step requires: <ticket-id> [--action <action>] [--json]");
+  }
+
+  const result = await beginStep(root, ticketId, action);
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`${result.ticket} ${result.action} ${result.configuredAgent}`);
+  }
+  return 0;
+}
+
+async function commandCompleteStep(root, args) {
+  const asJson = takeFlag(args, "--json");
+  const executor = takeOption(args, "--executor");
+  const evidence = takeOption(args, "--evidence");
+  const ticketId = args.shift();
+  const action = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined || action === undefined || executor === undefined || evidence === undefined) {
+    throw new Error("complete-step requires: <ticket-id> <action> --executor <executor> --evidence <text>");
+  }
+
+  const result = await completeStep(root, ticketId, action, executor, evidence);
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`${result.ticket} ${result.action} ${result.executor} ${result.path}`);
+  }
+  return 0;
+}
+
+async function commandApproveInline(root, args) {
+  const asJson = takeFlag(args, "--json");
+  const reason = takeOption(args, "--reason");
+  const ticketId = args.shift();
+  const action = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined || action === undefined || reason === undefined) {
+    throw new Error("approve-inline requires: <ticket-id> <action> --reason <text>");
+  }
+
+  const result = await approveInline(root, ticketId, action, reason);
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`${result.ticket} ${result.action} ${result.approvedExecutor} ${result.path}`);
   }
   return 0;
 }
@@ -447,6 +521,9 @@ function printUsage() {
   local-board [--root <path>] init [--overwrite] [--json]
   local-board [--root <path>] create <type> <title> [--status <status>] [--priority <priority>] [--parent <id>]
   local-board [--root <path>] start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--json]
+  local-board [--root <path>] begin-step <ticket-id> [--action <action>] [--json]
+  local-board [--root <path>] complete-step <ticket-id> <action> --executor <executor> --evidence <text> [--json]
+  local-board [--root <path>] approve-inline <ticket-id> <action> --reason <text> [--json]
   local-board [--root <path>] move <ticket-id> <status>
   local-board [--root <path>] set <ticket-id> <field> <value>
   local-board [--root <path>] comment <ticket-id> <text> [--section <section>]

@@ -40,11 +40,14 @@ blockedBy: []
 blocks: []
 branch: null
 estimate: null
+completedSteps: []
+routingApprovals: []
 created: 2026-05-14T12:34:00-04:00
 updated: 2026-05-14T12:34:00-04:00
 ```
 
 `branch` is the git branch associated with task, bug, review, test, or documentation work. Prefer `local-board start-work <ticket-id>` over editing it manually; the command creates or switches branches and records the selected branch.
+`completedSteps` records deterministic workflow evidence as `<action>:<executor>` tokens. `routingApprovals` records explicit user-approved route deviations such as `review:inline`.
 
 Front matter is canonical. Folder placement is for humans and should match status.
 
@@ -117,6 +120,9 @@ Use the CLI for state changes that affect canonical front matter:
 ```sh
 node ./bin/local-board.js move T20260514T1234Z implementing
 node ./bin/local-board.js set T20260514T1234Z priority P1
+node ./bin/local-board.js begin-step T20260514T1234Z --json
+node ./bin/local-board.js complete-step T20260514T1234Z review --executor codex-task:read-only --evidence "Review findings recorded."
+node ./bin/local-board.js approve-inline T20260514T1234Z review --reason "User approved fallback."
 node ./bin/local-board.js section T20260514T1234Z "A clear requirement." --section Requirement
 node ./bin/local-board.js update-field T20260514T1234Z blockedBy "[T20260514T1200Z]"
 node ./bin/local-board.js link-parent S20260514T1235Z E20260514T1234Z
@@ -128,3 +134,5 @@ node ./bin/local-board.js block T20260514T1236Z T20260514T1235Z
 The writer emits required fields in canonical order and preserves the Markdown body. `section` replaces one Markdown section body by heading name.
 
 `link-parent` and `link-child` update reciprocal `parent`/`children` fields. `block` and `unblock` update reciprocal `blockedBy`/`blocks` fields.
+
+`complete-step` updates `completedSteps` and appends a run-log entry. Under strict routing, the executor must match `plans/local-board.config.jsonc` unless `approve-inline` has recorded an explicit approval.

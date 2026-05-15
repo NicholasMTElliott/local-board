@@ -6,7 +6,10 @@ import assert from "node:assert/strict";
 
 import {
   appendTicketComment,
+  approveInline,
+  beginStep,
   blockTicket,
+  completeStep,
   createTicket,
   discover,
   linkParent,
@@ -21,6 +24,7 @@ import {
   validate,
 } from "../src/tickets.js";
 import { initProject } from "../src/scaffold.js";
+import { loadConfig } from "../src/config.js";
 
 async function withBoard(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "local-board-"));
@@ -266,7 +270,7 @@ test("queryNext returns configured action and prefers closest pipeline phase aft
     assert.equal(result?.ticket, path.basename(docs).split("_", 1)[0]);
     assert.equal(result?.action, "document");
     assert.equal(result?.prompt, "plans/prompts/steps/document.md");
-    assert.equal(result?.agent, "inline");
+    assert.equal(result?.agent, "codex-task:workspace-write");
   });
 });
 
@@ -292,8 +296,8 @@ test("queryNext prioritizes priority before pipeline closeness", async () => {
 
 test("queryNext reports null when no actionable tickets remain", async () => {
   await withBoard(async (root) => {
-    await createTicket(root, "task", "Finished", {
-      status: "done",
+    await createTicket(root, "task", "Not ready", {
+      status: "backlog",
       priority: "P0",
       now: new Date("2026-05-14T20:56:00Z"),
     });
@@ -317,6 +321,73 @@ test("queryTicket returns action bundle for a specific ticket", async () => {
     assert.equal(result.action, "review");
     assert.equal(result.prompt, "plans/prompts/roles/code_reviewer.md");
     assert.equal(result.eligible, true);
+  });
+});
+
+test("beginStep reports strict configured routing for a ticket action", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Needs review", {
+      status: "ready_for_review",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const result = await beginStep(root, ticketId);
+
+    assert.equal(result.action, "review");
+    assert.equal(result.configuredAgent, "codex-task:read-only");
+    assert.equal(result.strict, true);
+    assert.equal(result.delegationRequired, true);
+  });
+});
+
+test("completeStep enforces configured routing unless inline is approved", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Review with approval", {
+      status: "ready_for_review",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await assert.rejects(
+      completeStep(root, ticketId, "review", "inline", "Self-review evidence."),
+      /configured agent is codex-task:read-only/,
+    );
+
+    await approveInline(root, ticketId, "review", "User approved a local fallback.", {
+      now: new Date("2026-05-14T21:00:00Z"),
+    });
+    await completeStep(root, ticketId, "review", "inline", "Approved self-review evidence.", {
+      now: new Date("2026-05-14T21:01:00Z"),
+    });
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^routingApprovals: \[review:inline\]$/m);
+    assert.match(text, /^completedSteps: \[review:inline\]$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("strict routing blocks done until required steps have completion evidence", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Strict done", {
+      status: "ready_for_docs",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await assert.rejects(moveTicket(root, ticketId, "done"), /missing completedSteps entry for design/);
+
+    await completeStep(root, ticketId, "design", "claude-subagent", "Design evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent", "Implementation evidence.");
+    await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
+    await completeStep(root, ticketId, "test", "claude-subagent", "Test evidence.");
+    await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
+
+    const moved = await moveTicket(root, ticketId, "done");
+
+    assert.match(await readFile(moved, "utf8"), /^status: done$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
   });
 });
 
@@ -374,8 +445,8 @@ test("stateReport summarizes ticket state and next action", async () => {
       priority: "P2",
       now: new Date("2026-05-14T20:56:00Z"),
     });
-    await createTicket(root, "bug", "Done bug", {
-      status: "done",
+    await createTicket(root, "bug", "Backlog bug", {
+      status: "backlog",
       priority: "P0",
       now: new Date("2026-05-14T20:57:00Z"),
     });
@@ -386,7 +457,7 @@ test("stateReport summarizes ticket state and next action", async () => {
     assert.equal(report.total, 2);
     assert.equal(report.eligible, 1);
     assert.equal(report.byStatus.ready_for_design, 1);
-    assert.equal(report.byStatus.done, 1);
+    assert.equal(report.byStatus.backlog, 1);
     assert.equal(report.byType.task, 1);
     assert.equal(report.byType.bug, 1);
     assert.equal(report.byAction.design, 1);
@@ -403,6 +474,7 @@ test("initProject scaffolds a new local-board project idempotently", async () =>
     assert.equal(first.created.includes(path.join(root, "plans", "local-board.config.jsonc")), true);
     assert.equal(second.created.length, 0);
     assert.equal(second.skipped.length > 0, true);
+    assert.equal((await loadConfig(root)).agents.implement, "claude-subagent");
     assert.deepEqual(validate(await discover(root)), []);
   });
 });

@@ -48,6 +48,10 @@ test("loadConfig reads the commented default config", async () => {
 
     assert.equal(config.version, 1);
     assert.equal(config.workflow.statusActions.ready_for_design, "design");
-    assert.equal(config.agents.implement, "inline");
+    assert.equal(config.agents.implement, "claude-subagent");
+    assert.equal(config.agents.review, "codex-task:read-only");
+    assert.equal(config.agents.document, "codex-task:workspace-write");
+    assert.equal(config.routing.strict, true);
+    assert.deepEqual(config.routing.doneRequires.task, ["design", "implement", "review", "test", "document"]);
   });
 });

@@ -9,6 +9,8 @@ blockedBy: []
 blocks: []
 branch: null
 estimate: null
+completedSteps: []
+routingApprovals: []
 created: YYYY-MM-DDTHH:MM:SS-04:00
 updated: YYYY-MM-DDTHH:MM:SS-04:00
 ---
