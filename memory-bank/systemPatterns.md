@@ -98,6 +98,7 @@ Step prompts live in `plans/prompts/steps/`.
 Skills should be orchestration entrypoints. Step behavior should live in prompt files and deterministic scripts where possible.
 
 The installable `local-board-orchestrator` skill is the portable entrypoint. Project-local prompts override bundled fallback prompts.
+Bundled Claude agents live in `agents/claude/` and are installed to `~/.claude/agents/`.
 
 ## Safety Pattern
 LLMs write designs, code, reviews, tests, docs, and questions. Deterministic tooling validates ticket schema, dependency eligibility, status transitions, branch names, and commits.

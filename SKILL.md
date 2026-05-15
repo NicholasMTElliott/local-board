@@ -32,8 +32,8 @@ Operate in the user's current project unless they specify another root. Pass `--
 6. For a specific ticket, run `node <<SCRIPT_PATH>> query-ticket <id> --json`.
 7. Read the returned ticket `path`, returned `prompt`, `branch`, and relevant project context.
 8. Run `node <<SCRIPT_PATH>> begin-step <ticket-id> --json`.
-9. Execute the returned `action` through the configured route.
-10. Run `node <<SCRIPT_PATH>> complete-step <ticket-id> <action> --executor <executor> --evidence "<evidence>"`.
+9. Execute the returned `action` through the configured route. For `claude-subagent:<agent-name>`, delegate to the named Claude agent after the colon.
+10. Run `node <<SCRIPT_PATH>> complete-step <ticket-id> <action> --executor <configuredAgent> --evidence "<evidence>"`.
 11. Mutate ticket state only through CLI commands.
 12. Run `validate` again before reporting completion.
 
@@ -108,11 +108,21 @@ When switching to an existing branch, `start-work` refuses a dirty worktree unle
 Use `plans/local-board.config.jsonc` to decide how each action is handled. Comments and trailing commas are valid:
 
 - `inline`: do the work in the current agent.
-- `claude-subagent`: delegate to a Claude subagent when the harness supports it.
-- `codex-task:read-only`: use codex-task for read-only investigation/proposals if available.
-- `codex-task:workspace-write`: use codex-task for bounded edits if available and the user has approved that delegation pattern.
+- `claude-subagent:<agent-name>`: delegate to the named Claude subagent when the harness supports it.
+- `codex-task:<mode>`: use codex-task in the configured mode, such as `codex-task:read-only` or `codex-task:workspace-write`.
+
+Bundled Claude subagent names:
+
+- `local-board-decomposer`
+- `local-board-designer`
+- `local-board-implementer`
+- `local-board-reviewer`
+- `local-board-tester`
+- `local-board-documenter`
 
 Delegated agents may produce proposals or patches. The orchestrator remains responsible for canonical ticket state unless a delegated worker was explicitly assigned that write scope.
+
+When recording completion evidence, use the exact configured executor string from `begin-step`, for example `claude-subagent:local-board-designer`.
 
 If the configured agent is unavailable, do not continue inline by default. Ask the user for approval. If approved, run:
 

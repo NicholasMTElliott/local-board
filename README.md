@@ -41,6 +41,8 @@ The same commands are available through `local-board` when the package bin is on
 
 Workflow routing lives in `plans/local-board.config.jsonc`. Comments and trailing commas are allowed. Strict routing is enforced by `begin-step`, `complete-step`, `approve-inline`, `move ... done`, and `validate`.
 
+Claude subagent definitions live in `agents/claude/` and are installed to the user's Claude agents directory by `node install.mjs`.
+
 ```sh
 node install.mjs
 node install.mjs --list-targets
@@ -66,6 +68,7 @@ The test suite includes function-level ticket kernel coverage and CLI command-su
 
 ```text
 memory-bank/         Token-optimized project context for AI agents
+agents/              Installable agent definitions
 docs/                Human-facing documentation
 plans/               File-backed board: tickets, prompts, templates
 plans/tickets/       Ticket files grouped by human-friendly status folders

@@ -120,14 +120,24 @@ Use `start-work` before implementation and before review/test/docs work that mus
 
 ## Agent Routing
 
-`plans/local-board.config.jsonc` maps actions to agents. Supported values are conventions interpreted by the orchestration skill:
+`plans/local-board.config.jsonc` maps actions to agents. Supported values are conventions interpreted by the orchestration skill and strict routing validator:
 
 - `inline`
-- `claude-subagent`
-- `codex-task:read-only`
-- `codex-task:workspace-write`
+- `claude-subagent:<agent-name>`
+- `codex-task:<mode>`
+
+Current Codex examples include `codex-task:read-only` and `codex-task:workspace-write`; projects may add more specific modes.
 
 If a configured agent is unavailable, the orchestrator should ask the user before falling back. Inline fallback requires `approve-inline`.
+
+Bundled Claude agents:
+
+- `local-board-decomposer`
+- `local-board-designer`
+- `local-board-implementer`
+- `local-board-reviewer`
+- `local-board-tester`
+- `local-board-documenter`
 
 ## Strict Routing
 

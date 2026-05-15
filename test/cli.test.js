@@ -87,7 +87,7 @@ test("CLI command surface supports init, create, query, mutate, relate, report, 
 
     const beginStep = await runCli(["--root", root, "begin-step", childId, "--json"]);
     assert.equal(beginStep.code, 0);
-    assert.equal(JSON.parse(beginStep.stdout).configuredAgent, "claude-subagent");
+    assert.equal(JSON.parse(beginStep.stdout).configuredAgent, "claude-subagent:local-board-designer");
     assert.equal((await runCli(["--root", root, "approve-inline", childId, "design", "--reason", "CLI fallback test"])).code, 0);
     assert.equal(
       (await runCli([

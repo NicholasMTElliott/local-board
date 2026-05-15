@@ -378,15 +378,44 @@ test("strict routing blocks done until required steps have completion evidence",
 
     await assert.rejects(moveTicket(root, ticketId, "done"), /missing completedSteps entry for design/);
 
-    await completeStep(root, ticketId, "design", "claude-subagent", "Design evidence.");
-    await completeStep(root, ticketId, "implement", "claude-subagent", "Implementation evidence.");
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer", "Implementation evidence.");
     await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
-    await completeStep(root, ticketId, "test", "claude-subagent", "Test evidence.");
+    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester", "Test evidence.");
     await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
 
     const moved = await moveTicket(root, ticketId, "done");
 
     assert.match(await readFile(moved, "utf8"), /^status: done$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("strict routing accepts custom codex-task modes", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Custom codex mode", {
+      status: "ready_for_review",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    await mkdir(path.join(root, "plans"), { recursive: true });
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      `{
+        "agents": {
+          "review": "codex-task:xhigh-review"
+        }
+      }
+      `,
+      "utf8",
+    );
+
+    const begin = await beginStep(root, ticketId);
+    assert.equal(begin.configuredAgent, "codex-task:xhigh-review");
+
+    await completeStep(root, ticketId, "review", "codex-task:xhigh-review", "Custom Codex review evidence.");
+
+    assert.match(await readFile(ticketPath, "utf8"), /^completedSteps: \[review:codex-task:xhigh-review\]$/m);
     assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
   });
 });
@@ -474,7 +503,7 @@ test("initProject scaffolds a new local-board project idempotently", async () =>
     assert.equal(first.created.includes(path.join(root, "plans", "local-board.config.jsonc")), true);
     assert.equal(second.created.length, 0);
     assert.equal(second.skipped.length > 0, true);
-    assert.equal((await loadConfig(root)).agents.implement, "claude-subagent");
+    assert.equal((await loadConfig(root)).agents.implement, "claude-subagent:local-board-implementer");
     assert.deepEqual(validate(await discover(root)), []);
   });
 });

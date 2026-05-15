@@ -6,6 +6,7 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -98,6 +99,7 @@ function install() {
   copyFileSync(join(SCRIPT_DIR, "SKILL.md"), join(INSTALL_DIR, "SKILL.md"));
   copyDir("bin");
   copyDir("src");
+  copyDir("agents");
   copyDir(join("plans", "prompts"), "prompts");
   copyDir(join("plans", "templates"), "templates");
 
@@ -116,6 +118,9 @@ function install() {
     mkdirSync(target.skillDir, { recursive: true });
     writeFileSync(join(target.skillDir, "SKILL.md"), renderedSkill);
     console.log(`installed skill for ${target.label}: ${target.skillDir}`);
+    if (target.id === "claude") {
+      installClaudeAgents();
+    }
     if (target.settingsPath !== null) {
       patchSettings(target.settingsPath, allowRule);
     }
@@ -133,11 +138,40 @@ function writeInstallInfo({ nodeVersion, scriptPath }) {
         scriptPath,
         nodeVersion,
         skillName: "local-board-orchestrator",
+        claudeAgents: claudeAgentNames(),
       },
       null,
       2,
     )}\n`,
   );
+}
+
+function installClaudeAgents() {
+  const sourceDir = join(SCRIPT_DIR, "agents", "claude");
+  const targetDir = join(HOME, ".claude", "agents");
+  if (!existsSync(sourceDir)) {
+    return;
+  }
+  mkdirSync(targetDir, { recursive: true });
+  for (const fileName of readdirSync(sourceDir)) {
+    if (!fileName.endsWith(".md")) {
+      continue;
+    }
+    const targetPath = join(targetDir, fileName);
+    copyFileSync(join(sourceDir, fileName), targetPath);
+    console.log(`installed Claude agent: ${targetPath}`);
+  }
+}
+
+function claudeAgentNames() {
+  const sourceDir = join(SCRIPT_DIR, "agents", "claude");
+  if (!existsSync(sourceDir)) {
+    return [];
+  }
+  return readdirSync(sourceDir)
+    .filter((fileName) => fileName.endsWith(".md"))
+    .map((fileName) => fileName.slice(0, -".md".length))
+    .sort();
 }
 
 function uninstall() {
@@ -149,6 +183,21 @@ function uninstall() {
     if (existsSync(target.skillDir)) {
       rmSync(target.skillDir, { recursive: true, force: true });
       console.log(`removed ${target.skillDir}`);
+    }
+  }
+  uninstallClaudeAgents();
+}
+
+function uninstallClaudeAgents() {
+  const targetDir = join(HOME, ".claude", "agents");
+  if (!existsSync(targetDir)) {
+    return;
+  }
+  for (const agentName of claudeAgentNames()) {
+    const agentPath = join(targetDir, `${agentName}.md`);
+    if (existsSync(agentPath)) {
+      rmSync(agentPath, { force: true });
+      console.log(`removed ${agentPath}`);
     }
   }
 }

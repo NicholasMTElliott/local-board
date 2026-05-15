@@ -13,6 +13,7 @@
 ## Repository Layout
 ```text
 memory-bank/          AI context
+agents/claude/        installable Claude subagent definitions
 docs/                 human docs
 plans/tickets/        local ticket board
 plans/prompts/roles/  durable role instructions
@@ -35,7 +36,7 @@ SKILL.md              installable orchestration skill template
 ## Open Decisions
 - Exact transition validator shape.
 - Branch/commit/merge automation policy.
-- Concrete Claude subagent definition/install strategy.
+- Agent routing refinements after real orchestration runs.
 
 ## Verification
 - `npm run check`

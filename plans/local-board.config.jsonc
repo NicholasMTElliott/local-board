@@ -39,13 +39,14 @@
   },
 
   // Agent routing is enforced by strict routing commands and validation.
-  // Available values: inline, claude-subagent, codex-task:read-only, codex-task:workspace-write.
+  // Available values: inline, claude-subagent:<agent-name>, codex-task:<mode>.
+  // Current Codex examples: codex-task:read-only, codex-task:workspace-write.
   "agents": {
-    "decompose": "claude-subagent",
-    "design": "claude-subagent",
-    "implement": "claude-subagent",
+    "decompose": "claude-subagent:local-board-decomposer",
+    "design": "claude-subagent:local-board-designer",
+    "implement": "claude-subagent:local-board-implementer",
     "review": "codex-task:read-only",
-    "test": "claude-subagent",
+    "test": "claude-subagent:local-board-tester",
     "document": "codex-task:workspace-write"
   },
 

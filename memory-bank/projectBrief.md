@@ -15,7 +15,7 @@ A developer can ask Claude Code to run the local board. Claude reads `plans/`, p
 - Front matter rewrite support with canonical field ordering.
 - JSONC-configured local status model with dependency blocking, action dispatch, and strict routing evidence.
 - Prompt/role structure for delegated steps.
-- Installable orchestration skill and cross-harness installer.
+- Installable orchestration skill, Claude subagents, and cross-harness installer.
 - Human-readable docs for the workflow.
 - Memory Bank for persistent AI context.
 

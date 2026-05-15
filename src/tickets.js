@@ -396,7 +396,7 @@ export async function completeStep(root, ticketId, action, executor, evidence, o
 
   const config = await loadConfig(root);
   assertAction(config, action);
-  if (!schemaAgentValues().includes(executor)) {
+  if (!isValidAgentValue(executor)) {
     throw new Error(`executor must be one of ${schemaAgentValues().join(", ")}`);
   }
 
@@ -667,7 +667,7 @@ function validateStepRouting(ticket, config, action, executor) {
   if (!actions.has(action)) {
     return [`${ticket.path}: completedSteps entry uses unknown action ${action}`];
   }
-  if (!schemaAgentValues().includes(executor)) {
+  if (!isValidAgentValue(executor)) {
     return [`${ticket.path}: completedSteps entry for ${action} uses unknown executor ${executor}`];
   }
   const configuredAgent = agentForAction(config, action);
@@ -775,6 +775,14 @@ export async function schemaRecord(root = ".") {
     priorities: PRIORITIES,
     actions: [...new Set(Object.values(config.workflow.statusActions))],
     agentValues: schemaAgentValues(),
+    claudeAgents: [
+      "local-board-decomposer",
+      "local-board-designer",
+      "local-board-implementer",
+      "local-board-reviewer",
+      "local-board-tester",
+      "local-board-documenter",
+    ],
     workflow: config.workflow,
     agents: config.agents,
     routing: config.routing,
@@ -1014,7 +1022,19 @@ function agentForAction(config, action) {
 }
 
 function schemaAgentValues() {
-  return ["inline", "claude-subagent", "codex-task:read-only", "codex-task:workspace-write"];
+  return [
+    "inline",
+    "claude-subagent:<agent-name>",
+    "codex-task:<mode>",
+  ];
+}
+
+function isValidAgentValue(value) {
+  return (
+    value === "inline" ||
+    /^codex-task:[a-z0-9][a-z0-9-]*$/.test(value) ||
+    /^claude-subagent:[a-z0-9][a-z0-9-]*$/.test(value)
+  );
 }
 
 function stepToken(action, executor) {
