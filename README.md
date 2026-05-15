@@ -29,12 +29,15 @@ node ./bin/local-board.js move T20260514T1234Z implementing
 node ./bin/local-board.js move T20260514T1234Z done --json
 node ./bin/local-board.js set T20260514T1234Z priority P1
 node ./bin/local-board.js section T20260514T1234Z "A clear requirement." --section Requirement
+node ./bin/local-board.js section T20260514T1234Z --file /tmp/design.md --section "Technical Design"
 node ./bin/local-board.js comment T20260514T1234Z "Started implementation."
 node ./bin/local-board.js link-parent S20260514T1235Z E20260514T1234Z
 node ./bin/local-board.js block T20260514T1236Z T20260514T1235Z
 ```
 
 The same commands are available through `local-board` when the package bin is on `PATH`.
+
+For multi-line Markdown, `section --file <path>` is preferred. It avoids shell quoting failures from apostrophes, backticks, dollar signs, and long generated text.
 
 ## Installable Skill
 

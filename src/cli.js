@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+
 import {
   appendTicketComment,
   approveInline,
@@ -441,11 +443,20 @@ async function commandComment(root, args) {
 
 async function commandSection(root, args) {
   const section = takeOption(args, "--section");
+  const file = takeOption(args, "--file");
   const ticketId = args.shift();
-  const text = args.join(" ").trim();
+  const inlineText = args.join(" ").trim();
 
-  if (ticketId === undefined || section === undefined || text === "") {
-    throw new Error("section requires: <ticket-id> <text> --section <section>");
+  if (ticketId === undefined || section === undefined) {
+    throw new Error("section requires: <ticket-id> (<text>|--file <path>) --section <section>");
+  }
+  if (file !== undefined && inlineText !== "") {
+    throw new Error("section accepts either <text> or --file <path>, not both");
+  }
+
+  const text = file === undefined ? inlineText : await readFile(file, "utf8");
+  if (text.trim() === "") {
+    throw new Error("section requires non-empty text from <text> or --file <path>");
   }
 
   const ticketPath = await setTicketSection(root, ticketId, section, text);
@@ -570,6 +581,7 @@ function printUsage() {
   local-board [--root <path>] set <ticket-id> <field> <value>
   local-board [--root <path>] comment <ticket-id> <text> [--section <section>]
   local-board [--root <path>] section <ticket-id> <text> --section <section>
+  local-board [--root <path>] section <ticket-id> --file <path> --section <section>
   local-board [--root <path>] link-parent <child-ticket-id> <parent-ticket-id>
   local-board [--root <path>] link-child <parent-ticket-id> <child-ticket-id>
   local-board [--root <path>] unlink-parent <child-ticket-id> <parent-ticket-id>

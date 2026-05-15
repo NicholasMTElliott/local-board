@@ -53,6 +53,13 @@ test("CLI command surface supports init, create, query, mutate, relate, report, 
 
     assert.equal((await runCli(["--root", root, "link-child", parentId, childId])).code, 0);
     assert.equal((await runCli(["--root", root, "section", childId, "CLI requirement.", "--section", "Requirement"])).code, 0);
+    const designPath = path.join(root, "technical-design.md");
+    await writeFile(designPath, "Use the existing parser.\n\nAvoid shell quoting for long Markdown.\n", "utf8");
+    assert.equal((await runCli(["--root", root, "section", childId, "--file", designPath, "--section", "Technical Design"])).code, 0);
+    assert.equal(
+      (await runCli(["--root", root, "section", childId, "Inline text", "--file", designPath, "--section", "Technical Design"])).code,
+      2,
+    );
     assert.equal((await runCli(["--root", root, "comment", childId, "CLI touched this.", "--section", "Run Log"])).code, 0);
     assert.equal((await runCli(["--root", root, "set", childId, "priority", "P2"])).code, 0);
     assert.equal((await runCli(["--root", root, "update-field", childId, "estimate", "2"])).code, 0);
@@ -115,6 +122,8 @@ test("CLI command surface supports init, create, query, mutate, relate, report, 
     assert.match(movedText, /^priority: P2$/m);
     assert.match(movedText, /^estimate: 2$/m);
     assert.match(movedText, /CLI requirement\./);
+    assert.match(movedText, /Use the existing parser\./);
+    assert.match(movedText, /Avoid shell quoting for long Markdown\./);
     assert.match(movedText, /CLI touched this\./);
   });
 });

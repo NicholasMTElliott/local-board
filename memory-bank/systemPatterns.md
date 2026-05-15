@@ -111,6 +111,7 @@ When `retention.archiveOnMoveDone` is true, `move ... done` archives other done 
 Use `node ./bin/local-board.js validate`, `list`, `query-next`, `query-ticket`, `state-report`, `schema`, `create`, `start-work`, `begin-step`, `complete-step`, `approve-inline`, `move`, `set`, `section`, `comment`, `link-parent`, `link-child`, `block`, `unblock`, and `init`.
 
 `move` changes status and relocates the ticket. `set` updates mutable front matter fields. `section` replaces section content. `comment` appends timestamped notes to a ticket section.
+`section --file <path>` is preferred for generated or multi-line Markdown; inline section text is for short edits.
 `query-next`, `query-ticket`, and `begin-step` return advisory transition guidance for the current status. The orchestrator should choose one returned status when moving after an action.
 `start-work` creates or switches to a ticket branch, records `branch`, logs the action, and moves `ready_for_implementation` tickets to `implementing`.
 `complete-step` records `<action>:<executor>` evidence. Strict routing rejects inline completion for delegated actions unless `approve-inline` has recorded user approval.

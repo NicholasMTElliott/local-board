@@ -117,12 +117,14 @@ node ./bin/local-board.js move T20260514T1234Z ready_for_design
 node ./bin/local-board.js move T20260514T1234Z done --json
 node ./bin/local-board.js set T20260514T1234Z branch feature/T20260514T1234Z-ticket-parser
 node ./bin/local-board.js section T20260514T1234Z "Use the existing parser." --section "Technical Design"
+node ./bin/local-board.js section T20260514T1234Z --file /tmp/design.md --section "Technical Design"
 node ./bin/local-board.js comment T20260514T1234Z "Design pass complete." --section "Run Log"
 node ./bin/local-board.js link-child E20260514T1234Z S20260514T1235Z
 node ./bin/local-board.js block T20260514T1237Z T20260514T1236Z
 ```
 
 Use `move` for status transitions. Do not use `set status`; it delegates to the same move behavior so folder placement stays consistent.
+Use `section --file <path>` for generated or multi-line Markdown. Inline `section <text>` is best for short one-line edits.
 
 ## Branch Handling
 

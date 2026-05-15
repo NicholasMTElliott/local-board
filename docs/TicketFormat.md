@@ -125,6 +125,7 @@ node ./bin/local-board.js begin-step T20260514T1234Z --json
 node ./bin/local-board.js complete-step T20260514T1234Z review --executor codex-task:read-only --evidence "Review findings recorded."
 node ./bin/local-board.js approve-inline T20260514T1234Z review --reason "User approved fallback."
 node ./bin/local-board.js section T20260514T1234Z "A clear requirement." --section Requirement
+node ./bin/local-board.js section T20260514T1234Z --file /tmp/design.md --section "Technical Design"
 node ./bin/local-board.js update-field T20260514T1234Z blockedBy "[T20260514T1200Z]"
 node ./bin/local-board.js link-parent S20260514T1235Z E20260514T1234Z
 node ./bin/local-board.js block T20260514T1236Z T20260514T1235Z
@@ -136,7 +137,7 @@ With `retention.archiveOnMoveDone: true`, `move <ticket-id> done` also moves old
 
 `set` and `update-field` are aliases for front matter updates. `id`, `type`, `created`, and `updated` are managed fields and cannot be set directly.
 
-The writer emits required fields in canonical order and preserves the Markdown body. `section` replaces one Markdown section body by heading name.
+The writer emits required fields in canonical order and preserves the Markdown body. `section` replaces one Markdown section body by heading name. Inline text is supported for short updates; `section --file <path>` is preferred for multi-line Markdown.
 
 `link-parent` and `link-child` update reciprocal `parent`/`children` fields. `block` and `unblock` update reciprocal `blockedBy`/`blocks` fields.
 

@@ -182,6 +182,7 @@ node <<SCRIPT_PATH>> approve-inline <ticket-id> <action> --reason "<reason>" [--
 node <<SCRIPT_PATH>> move <ticket-id> <status> [--json]
 node <<SCRIPT_PATH>> set <ticket-id> <field> <value>
 node <<SCRIPT_PATH>> section <ticket-id> "<text>" --section "<section>"
+node <<SCRIPT_PATH>> section <ticket-id> --file <path> --section "<section>"
 node <<SCRIPT_PATH>> comment <ticket-id> "<text>" [--section "<section>"]
 node <<SCRIPT_PATH>> link-parent <child-id> <parent-id>
 node <<SCRIPT_PATH>> link-child <parent-id> <child-id>
@@ -190,3 +191,4 @@ node <<SCRIPT_PATH>> unblock <ticket-id> <dependency-id>
 ```
 
 Use `comment` for run-log style notes. Use `move` for status transitions. Use relationship commands for parent/child and dependency state.
+Use `section --file <path>` for generated or multi-line Markdown. Inline `section <text>` is only for short edits.
