@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 
 import {
   appendTicketComment,
@@ -10,6 +11,7 @@ import {
   createTicket,
   discover,
   findTicket,
+  getSectionText,
   linkParent,
   moveTicket,
   nextTicket,
@@ -28,7 +30,7 @@ import {
   validate,
 } from "./tickets.js";
 import { assertAutoMergeReady, autoMergeTicketBranch, startTicketWork } from "./git.js";
-import { loadConfig } from "./config.js";
+import { loadConfig, OPTIONAL_STEP_STAGES } from "./config.js";
 import { initProject } from "./scaffold.js";
 
 export async function main(argv) {
@@ -105,6 +107,9 @@ export async function main(argv) {
     }
     if (command === "estimate") {
       return await commandEstimate(root, args);
+    }
+    if (command === "gate-check") {
+      return await commandGateCheck(root, args);
     }
     if (command === "calibration") {
       const sub = args.shift();
@@ -601,6 +606,70 @@ async function commandEstimate(root, args) {
   return 0;
 }
 
+async function commandGateCheck(root, args) {
+  const asJson = takeFlag(args, "--json");
+  const stage = takeOption(args, "--stage");
+  const ticketId = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined || stage === undefined) {
+    throw new Error("gate-check requires: <ticket-id> --stage <stage> [--json]");
+  }
+  if (!OPTIONAL_STEP_STAGES.includes(stage)) {
+    throw new Error(`gate-check --stage must be one of ${OPTIONAL_STEP_STAGES.join(", ")}`);
+  }
+
+  const config = await loadConfig(root);
+  const { ticket } = await findTicket(root, ticketId);
+
+  const catalog = (config.optionalSteps?.[stage] ?? []).map((entry) => {
+    const normalized = {
+      name: entry.name,
+      prompt: entry.prompt,
+      triggers: entry.triggers,
+    };
+    if (Object.hasOwn(entry, "agent")) {
+      normalized.agent = entry.agent;
+    }
+    return normalized;
+  });
+
+  const promptPath = path.resolve(root, "plans", "prompts", "steps", "gate-check.md");
+  const baseRecord = ticketRecord(root, ticket);
+  const currentAction = config.workflow?.statusActions?.[ticket.status] ?? null;
+  const ticketContext = {
+    id: baseRecord.id,
+    type: baseRecord.type,
+    status: baseRecord.status,
+    priority: baseRecord.priority,
+    path: baseRecord.path,
+    title: baseRecord.title,
+    currentAction,
+    requirement: getSectionText(ticket.body, "Requirement") ?? "",
+    acceptanceCriteria: getSectionText(ticket.body, "Acceptance Criteria") ?? "",
+  };
+
+  const payload = {
+    ticket: ticket.id,
+    stage,
+    prompt: promptPath,
+    ticketPath: ticket.path,
+    ticketContext,
+    catalog,
+  };
+
+  if (asJson) {
+    console.log(JSON.stringify(payload, null, 2));
+  } else {
+    console.log(`gate-check ${ticket.id} stage=${stage} catalog=${catalog.length}`);
+    console.log(promptPath);
+    for (const entry of catalog) {
+      console.log(`- ${entry.name}: ${entry.triggers}`);
+    }
+  }
+  return 0;
+}
+
 async function commandCalibrationSuggest(root, args) {
   const asJson = takeFlag(args, "--json");
   const ticketId = args.shift();
@@ -673,5 +742,6 @@ function printUsage() {
   local-board [--root <path>] block <ticket-id> <dependency-ticket-id>
   local-board [--root <path>] unblock <ticket-id> <dependency-ticket-id>
   local-board [--root <path>] estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]
+  local-board [--root <path>] gate-check <ticket-id> --stage <stage> [--json]
   local-board [--root <path>] calibration suggest <ticket-id> [--json]`);
 }

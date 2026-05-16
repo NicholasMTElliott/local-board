@@ -1226,6 +1226,19 @@ function appendToSection(body, section, line) {
   return `${before}${line}\n${after}`;
 }
 
+export function getSectionText(body, section) {
+  const sectionRe = new RegExp(`(^## ${escapeRegExp(section)}\\s*$)`, "m");
+  const match = body.match(sectionRe);
+  if (match === null || match.index === undefined) {
+    return null;
+  }
+
+  const sectionStart = match.index + match[0].length;
+  const nextSection = body.slice(sectionStart).search(/\n## /);
+  const endAt = nextSection === -1 ? body.length : sectionStart + nextSection;
+  return body.slice(sectionStart, endAt).trim();
+}
+
 function replaceSection(body, section, text) {
   const sectionRe = new RegExp(`(^## ${escapeRegExp(section)}\\s*$)`, "m");
   const match = body.match(sectionRe);

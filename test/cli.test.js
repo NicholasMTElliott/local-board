@@ -456,6 +456,140 @@ test("CLI calibration suggest exits 2 for unknown ticket id and missing argument
   });
 });
 
+test("CLI gate-check resolves catalog, prompt path, and ticket context per stage", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const create = await runCli([
+      "--root",
+      root,
+      "create",
+      "task",
+      "Gate-check target",
+      "--status",
+      "ready_for_design",
+      "--priority",
+      "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketPath = create.stdout.trim();
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    // Happy path: design stage
+    const design = await runCli(["--root", root, "gate-check", ticketId, "--stage", "design", "--json"]);
+    assert.equal(design.code, 0, design.stderr);
+    const designOut = JSON.parse(design.stdout);
+    assert.equal(designOut.ticket, ticketId);
+    assert.equal(designOut.stage, "design");
+    assert.equal(designOut.prompt.endsWith(path.join("plans", "prompts", "steps", "gate-check.md")), true);
+    assert.equal(designOut.ticketContext.id, ticketId);
+    assert.equal(designOut.ticketContext.status, "ready_for_design");
+    assert.equal(designOut.ticketContext.currentAction, "design");
+    assert.equal(Array.isArray(designOut.catalog), true);
+    assert.equal(designOut.catalog.length, 3);
+    assert.deepEqual(
+      designOut.catalog.map((entry) => entry.name),
+      ["security_threat_model", "ui_component_review", "ux_interaction_review"],
+    );
+    // Default catalog entries omit agent field
+    for (const entry of designOut.catalog) {
+      assert.equal(Object.hasOwn(entry, "agent"), false, `entry ${entry.name} should omit agent when absent in config`);
+    }
+
+    // Happy path: implement stage
+    const implement = await runCli(["--root", root, "gate-check", ticketId, "--stage", "implement", "--json"]);
+    assert.equal(implement.code, 0, implement.stderr);
+    const implementOut = JSON.parse(implement.stdout);
+    assert.equal(implementOut.stage, "implement");
+    assert.deepEqual(
+      implementOut.catalog.map((entry) => entry.name),
+      ["security_audit", "ui_visual_review"],
+    );
+    // No design names leak in
+    for (const entry of implementOut.catalog) {
+      assert.ok(!["security_threat_model", "ui_component_review", "ux_interaction_review"].includes(entry.name));
+    }
+
+    // Empty-catalog stage (test) returns success with empty array
+    const testStage = await runCli(["--root", root, "gate-check", ticketId, "--stage", "test", "--json"]);
+    assert.equal(testStage.code, 0, testStage.stderr);
+    const testOut = JSON.parse(testStage.stdout);
+    assert.deepEqual(testOut.catalog, []);
+    assert.equal(typeof testOut.prompt, "string");
+    assert.equal(testOut.prompt.length > 0, true);
+
+    // Plain (non-JSON) output smoke
+    const plain = await runCli(["--root", root, "gate-check", ticketId, "--stage", "design"]);
+    assert.equal(plain.code, 0, plain.stderr);
+    const plainLines = plain.stdout.split("\n");
+    assert.match(plainLines[0], /^gate-check .* stage=design catalog=3$/);
+    assert.equal(plainLines[1].endsWith(path.join("plans", "prompts", "steps", "gate-check.md")), true);
+  });
+});
+
+test("CLI gate-check returns empty catalog when optionalSteps is omitted from config", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    // Overwrite the config with a minimal one that drops optionalSteps entirely.
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({ version: 1 }),
+      "utf8",
+    );
+
+    const create = await runCli([
+      "--root",
+      root,
+      "create",
+      "task",
+      "Gate-check empty catalog",
+      "--status",
+      "ready_for_design",
+      "--priority",
+      "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const result = await runCli(["--root", root, "gate-check", ticketId, "--stage", "design", "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.deepEqual(out.catalog, []);
+  });
+});
+
+test("CLI gate-check rejects invalid stage, missing stage, and unknown ticket", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const create = await runCli([
+      "--root",
+      root,
+      "create",
+      "task",
+      "Gate-check errors",
+      "--status",
+      "ready_for_design",
+      "--priority",
+      "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const invalidStage = await runCli(["--root", root, "gate-check", ticketId, "--stage", "docs"]);
+    assert.equal(invalidStage.code, 2);
+    assert.match(invalidStage.stderr, /--stage must be one of design, implement, test/);
+
+    const missingStage = await runCli(["--root", root, "gate-check", ticketId]);
+    assert.equal(missingStage.code, 2);
+    assert.match(missingStage.stderr, /gate-check requires/);
+
+    const unknown = await runCli(["--root", root, "gate-check", "T20990101T0000Z", "--stage", "design"]);
+    assert.equal(unknown.code, 2);
+    assert.match(unknown.stderr, /ticket T20990101T0000Z not found/);
+  });
+});
+
 async function runCli(args) {
   const stdout = [];
   const stderr = [];
