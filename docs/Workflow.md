@@ -97,6 +97,14 @@ Generated child tickets should link back to the parent and should be committed a
 11. Mark ticket done with `move <ticket-id> done`.
 12. Merge and push according to policy.
 
+## Wall-Clock Work Tracking
+
+`start-work` sets `workStartedAt` the first time it is called for a ticket. Later `start-work` calls leave the original timestamp unchanged, including after a ticket returns from `questions` or `blocked`.
+
+`move <ticket-id> done` sets `workCompletedAt` when the field is null and `workStartedAt` is already set. Later moves to `done` preserve the original completion timestamp. A direct move to `done` without prior `start-work` leaves both `workStartedAt` and `workCompletedAt` null to preserve the validator invariant that completion requires a start timestamp.
+
+Wall-clock actual is `workCompletedAt - workStartedAt`. It intentionally includes time spent in intermediate statuses such as `questions` and `blocked`. Archiving done tickets does not change either wall-clock field.
+
 ## Human Questions
 
 When work needs user input, set `status: questions` and write the questions in the `## Questions` section.
