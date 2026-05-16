@@ -1,7 +1,7 @@
 ---
 id: T20260516T1546Z
 type: task
-status: implementing
+status: done
 priority: P2
 parent: S20260516T1537Z
 children: []
@@ -9,13 +9,13 @@ blockedBy: [T20260516T1543Z]
 blocks: [T20260516T1549Z]
 branch: feature/estimation-and-specialty-steps
 estimate: null
-estimateBasis: null
-workStartedAt: null
-workCompletedAt: null
 created: 2026-05-16T15:46:42Z
-updated: 2026-05-16T17:55:37Z
-completedSteps: [design:claude-subagent:local-board-designer]
+updated: 2026-05-16T18:26:31Z
+completedSteps: [design:claude-subagent:local-board-designer, implement:claude-subagent:local-board-implementer, review:codex-task:read-only, test:claude-subagent:local-board-tester, document:codex-task:workspace-write]
 routingApprovals: []
+estimateBasis: null
+workCompletedAt: null
+workStartedAt: null
 ---
 # CLI: local-board calibration suggest <ticket-id> command
 
@@ -172,9 +172,38 @@ Acceptance-criterion coverage map: empty pool -> (1); type separation -> (5); po
 
 ## Review Findings
 
+**Verdict:** PASS.
+
+Reviewer: codex-task:read-only (gpt-5.5). Static review.
+
+- Target excluded before pool checks (src/tickets.js:848); status===done (:851); strict same-type filter (:854) keeps task and bug pools separate.
+- Pool eligibility: non-null estimate (:858), string workStartedAt (:861), string workCompletedAt (:864), numeric coercion guarded (:867).
+- Empty-pool returns bootstrap sentinel with poolSize=0 and median=null (:873-879).
+- Lower-median: sort numeric estimates ascending (:883), index Math.floor((n-1)/2) (:885).
+- Selection: absDiff ascending (:888-892), recency tie-break via workCompletedAt descending localeCompare (:894-895).
+- CLI two-word dispatch (src/cli.js:109-114); --json prints full record, plain prints calibration ID only (:604-617).
+- 11 tests (9 unit + 2 CLI) cover bootstrap, odd/even median, recency tie-break, type filtering, missing fields, non-done exclusion, self-exclusion, unknown ID, plain/JSON output, error exits.
+
 ## Test Evidence
 
+- `npm test` -> 82/82 pass (duration 3921ms). All new `suggestCalibration` unit tests and CLI smoke tests included.
+- `npm run check` -> clean (`node --check` over all source files).
+- `npm run validate` -> `Ticket validation OK`.
+- End-to-end CLI smoke against this board:
+  - `node bin/local-board.js calibration suggest T20260516T1546Z` -> stdout: `bootstrap` (single line, no prefix).
+  - `node bin/local-board.js calibration suggest T20260516T1546Z --json` -> JSON with keys `ticket`, `calibration`, `poolSize`, `median`, `reason` matching design spec. Values: ticket=T20260516T1546Z, calibration=bootstrap, poolSize=0, median=null, reason="No prior calibrated tickets of type task".
+- Board state at verification time: 12 done task tickets, 0 with `estimate` + `workStartedAt` + `workCompletedAt` all populated, so `bootstrap` is the correct expected output. Eligibility filter empty confirmed by direct `discover` inspection.
+- Verified on branch `feature/estimation-and-specialty-steps` at commit 79dd4b3.
+
 ## Documentation Updates
+
+Updated in commit 2a0219b:
+
+- `memory-bank/systemPatterns.md` — `calibration suggest` added to the MVP CLI list.
+- `docs/Workflow.md` — Estimation section gained a "Calibration auto-pick" subsection covering same-type done pool, non-null timing/estimate requirements, lower-median, absDiff selection with most-recent workCompletedAt tie-break, bootstrap sentinel, command syntax, JSON shape, and example.
+- `README.md` — CLI command list now lists the new command.
+
+Author: codex-task:workspace-write (gpt-5.5). Codex sandbox blocked .git writes; orchestrator committed.
 
 ## Questions
 
@@ -183,3 +212,11 @@ Acceptance-criterion coverage map: empty pool -> (1); type separation -> (5); po
 - 2026-05-16T17:51:54Z: Completed design via claude-subagent:local-board-designer: Design: new suggestCalibration in src/tickets.js, commandCalibrationSuggest in src/cli.js (two-word dispatch). Filters same-type done with non-null estimate+workStartedAt+workCompletedAt; excludes target; lower-median for even counts; absolute-diff selection with most-recent workCompletedAt tie-break. Empty pool returns bootstrap. JSON output: {ticket, calibration, poolSize, median, reason}. 13-case test plan.
 
 - 2026-05-16T17:51:55Z: Ensured git branch feature/estimation-and-specialty-steps (already-current).
+
+- 2026-05-16T17:56:50Z: Completed implement via claude-subagent:local-board-implementer: Implemented in commit 79dd4b3. suggestCalibration in src/tickets.js (filter same-type done with non-null estimate+work timestamps, exclude target, lower-median, absDiff selection with recency tie-break). commandCalibrationSuggest in src/cli.js with two-word dispatch. printUsage updated. 11 new tests (9 unit + 2 CLI). npm test 82/82; check + validate clean.
+
+- 2026-05-16T17:59:21Z: Completed review via codex-task:read-only: Codex review of commit 79dd4b3. Verdict: PASS. All algorithm guarantees verified by source inspection (filter, lower-median, tie-break, sentinel). 11 tests adequate.
+
+- 2026-05-16T18:01:08Z: Completed test via claude-subagent:local-board-tester: npm test 82/82; check + validate clean. Live CLI smoke (calibration suggest T20260516T1546Z --json) returned bootstrap with correct JSON shape: {ticket, calibration, poolSize, median, reason}. All AC verified. Note: live pool was empty because existing done tickets lack workStartedAt/workCompletedAt (those tickets predate T1544). Verdict: PASS.
+
+- 2026-05-16T18:26:31Z: Completed document via codex-task:workspace-write: Doc updates in commit 2a0219b: memory-bank/systemPatterns.md (MVP CLI list), docs/Workflow.md (Calibration auto-pick subsection), README.md (CLI list).

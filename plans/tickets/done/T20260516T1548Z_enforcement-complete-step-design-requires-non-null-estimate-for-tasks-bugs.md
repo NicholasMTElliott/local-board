@@ -1,7 +1,7 @@
 ---
 id: T20260516T1548Z
 type: task
-status: implementing
+status: done
 priority: P2
 parent: S20260516T1537Z
 children: []
@@ -10,9 +10,12 @@ blocks: []
 branch: feature/estimation-and-specialty-steps
 estimate: null
 created: 2026-05-16T15:48:45Z
-updated: 2026-05-16T23:08:14Z
-completedSteps: [design:claude-subagent:local-board-designer]
+updated: 2026-05-16T23:18:31Z
+completedSteps: [design:claude-subagent:local-board-designer, implement:claude-subagent:local-board-implementer, review:codex-task:read-only, test:claude-subagent:local-board-tester, document:codex-task:workspace-write]
 routingApprovals: []
+estimateBasis: null
+workCompletedAt: null
+workStartedAt: null
 ---
 # Enforcement: complete-step design requires non-null estimate for tasks/bugs
 
@@ -172,9 +175,59 @@ Place this immediately after the routingIssues throw and before const now = opti
 
 ## Review Findings
 
+**Verdict:** CONCERNS (soft pass — coverage gap on epic exemption).
+
+Reviewer: codex-task:read-only (gpt-5.5). Static review.
+
+**Confirmed correct:**
+- Placement: validateStepRouting runs first (src/tickets.js:458), then estimate gate (:464), then evidence mutation (:478, :482) and writeFile (:487). Routing errors aren't preempted; refused completions don't write evidence.
+- Four predicates combined with && (src/tickets.js:464-467): action === 'design', type ∈ {task,bug}, config.estimation?.enabled === true, estimate is null/undefined. Stories/epics exempt in-code (type predicate); enabled=false bypasses; only design action gated.
+- Refusal message preserves ticket id and references the estimate CLI (src/tickets.js:470).
+- Test for implement action acceptance confirms scope (test/tickets.test.js:1344, :1353).
+
+**Concern (non-blocking, test coverage gap):**
+- 6 new tests cover task/bug refusal, story acceptance, task-with-estimate, enabled=false, and implement. Missing: explicit epic exemption (epic + null estimate + enabled=true + design = should accept). Implementation already covers this via the type predicate, but no test pins it.
+
+Recommend tester adds one epic-exemption case to round out the matrix.
+
 ## Test Evidence
 
+Commands run:
+- npm test (pre-change): 96/96 passing
+- npm run check (pre-change): clean
+- npm run validate (pre-change): Ticket validation OK
+- npm test (post-change): 97/97 passing, including new epic exemption test
+- npm run check (post-change): clean
+- npm run validate (post-change): Ticket validation OK
+
+Added test (test/tickets.test.js):
+- completeStep design accepts an epic with null estimate when estimation is enabled
+  - Creates epic at ready_for_design with estimation.enabled=true and estimate=null.
+  - Calls completeStep(..., "design", "claude-subagent:local-board-designer", ...).
+  - Asserts completedSteps records the design step and validate() returns [].
+
+Acceptance criteria coverage:
+- Task with null estimate refused: covered (existing test, passing).
+- Task with non-null estimate proceeds: covered (existing, passing).
+- Bug with null estimate refused: covered (existing, passing).
+- Story with null estimate proceeds: covered (existing, passing).
+- Epic with null estimate proceeds: NEWLY covered by this commit (24bf0a0), closing the reviewer concern.
+- estimation.enabled=false bypasses gate: covered (existing, passing).
+- Implement action not gated: covered (existing, passing).
+
+Commit: 24bf0a0 "Add epic exemption test for design estimate gate (T20260516T1548Z)".
+
+No flakes observed. No environment caveats. The pre-existing untracked/moved ticket files in plans/tickets are unrelated to this ticket and were not touched.
+
 ## Documentation Updates
+
+Updated in commit 3537f1b:
+
+- memory-bank/systemPatterns.md - Safety Pattern updated with one-line note: complete-step design refuses task/bug tickets without an estimate when estimation.enabled is true.
+- docs/Workflow.md - new "Design-step enforcement" subsection under Estimation covering the four required conditions, story/epic exemption, enabled=false bypass, non-design action behavior, and refusal flow pointing users to local-board estimate.
+- README untouched (already references the estimate CLI).
+
+Docs author: codex-task:workspace-write (gpt-5.5). Codex sandbox blocked .git writes; orchestrator committed.
 
 ## Questions
 
@@ -183,3 +236,11 @@ Place this immediately after the routingIssues throw and before const now = opti
 - 2026-05-16T23:03:53Z: Completed design via claude-subagent:local-board-designer: Design: estimate gate inside completeStep (src/tickets.js after validateStepRouting). Gate fires when action=design AND type in {task,bug} AND config.estimation.enabled AND estimate is null/undefined. Stories/epics exempt. Other actions unaffected. Refusal message names the estimate CLI command. Exit 2 via existing CLI catch. 6-test plan.
 
 - 2026-05-16T23:03:53Z: Ensured git branch feature/estimation-and-specialty-steps (already-current).
+
+- 2026-05-16T23:11:05Z: Completed implement via claude-subagent:local-board-implementer: Implemented in commit 4a2458f. Estimate gate added in completeStep after validateStepRouting; throws clear refusal when action=design AND type in {task,bug} AND config.estimation.enabled AND estimate is null. Stories/epics exempt; enabled=false bypasses; other actions unaffected. 6 new tests; npm test 96/96; check + validate clean. Existing done tickets without estimates remain valid (gate runs only on complete-step, not validate).
+
+- 2026-05-16T23:13:01Z: Completed review via codex-task:read-only: Codex review of commit 4a2458f. Verdict: CONCERNS — coverage gap only. Placement, predicates, message, exemptions all correct. Concern: 6 tests miss explicit epic exemption case. Tester will close.
+
+- 2026-05-16T23:17:02Z: Completed test via claude-subagent:local-board-tester: npm test 97/97 after adding epic exemption test (commit 24bf0a0) to close review coverage gap. All 7 AC matrix entries covered. check + validate clean. Verdict: PASS.
+
+- 2026-05-16T23:18:31Z: Completed document via codex-task:workspace-write: Doc updates in commit 3537f1b: memory-bank/systemPatterns.md (Safety Pattern), docs/Workflow.md (Design-step enforcement subsection).

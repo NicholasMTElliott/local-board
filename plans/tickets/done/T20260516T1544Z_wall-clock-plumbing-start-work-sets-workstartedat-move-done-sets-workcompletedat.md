@@ -1,7 +1,7 @@
 ---
 id: T20260516T1544Z
 type: task
-status: implementing
+status: done
 priority: P2
 parent: S20260516T1537Z
 children: []
@@ -9,13 +9,13 @@ blockedBy: [T20260516T1543Z]
 blocks: []
 branch: feature/estimation-and-specialty-steps
 estimate: null
-estimateBasis: null
-workStartedAt: null
-workCompletedAt: null
 created: 2026-05-16T15:44:39Z
-updated: 2026-05-16T16:54:41Z
-completedSteps: [design:claude-subagent:local-board-designer]
+updated: 2026-05-16T17:03:52Z
+completedSteps: [design:claude-subagent:local-board-designer, implement:claude-subagent:local-board-implementer, review:codex-task:read-only, test:claude-subagent:local-board-tester, document:codex-task:workspace-write]
 routingApprovals: []
+estimateBasis: null
+workCompletedAt: null
+workStartedAt: null
 ---
 # Wall-clock plumbing: start-work sets workStartedAt; move done sets workCompletedAt
 
@@ -177,9 +177,69 @@ Remaining risks:
 
 ## Review Findings
 
+**Verdict:** CONCERNS (soft pass — accepted by orchestrator).
+
+Reviewer: codex-task:read-only (gpt-5.5).
+
+**Confirmed correct:**
+- start-work deviation (write after ensureGitBranch instead of before) is justified. Preserves the dirty-worktree refusal in `ensureGitBranch` (src/git.js:95-103). Now-capture is at function top so timestamp accuracy is preserved.
+- Idempotence holds: second startTicketWork re-reads ticket and skips non-null workStartedAt (src/git.js:9, :17). Reopen-from-done doesn't clear workCompletedAt; reclose preserves it (src/tickets.js:285-291).
+- archiveDoneTickets correctly bypasses the completion write path (calls moveTicket with "archived", not "done").
+- autoMergeTicketBranch does not touch either lifecycle timestamp.
+- 5 new tests cover happy paths.
+
+**Concern (medium, accepted as documented behavior):**
+- moveTicket only stamps workCompletedAt when workStartedAt is already a string (src/tickets.js:286-291). Direct move-to-done on a ticket that never had start-work leaves both fields null.
+
+**Orchestrator decision:** This is the correct behavior. A ticket that never had start-work has no meaningful "work started" timestamp, and the validator invariant (workCompletedAt requires workStartedAt) must be preserved. Leaving both null is the honest semantics. Documented here for future readers; not gating.
+
+Codex could not re-run tests in read-only sandbox; review based on diff and source inspection.
+
 ## Test Evidence
 
+Verified commit 7503676 plus follow-on commit 74f0a79 (this ticket).
+
+### Commands run
+
+- npm test: 62 passed, 0 failed (was 61 before adding the new edge-case test).
+- npm run check: clean (node --check on all source files).
+- npm run validate: Ticket validation OK.
+
+### Acceptance Criteria coverage
+
+- First start-work stamps workStartedAt to ISO-8601: covered by test/git.test.js "startTicketWork stamps workStartedAt on first call and is idempotent thereafter" - asserts workStartedAt = 2026-05-16T15:37:00Z after first call.
+- start-work idempotent on subsequent calls: same test, second invocation with a later injected now leaves workStartedAt unchanged.
+- move done stamps workCompletedAt when null: test/tickets.test.js "moveTicket to done stamps workCompletedAt when null".
+- Reopen then move done preserves original workCompletedAt: test/tickets.test.js "moveTicket re-opening and returning to done preserves the original workCompletedAt".
+- Pre-existing workCompletedAt preserved on subsequent move done: test/tickets.test.js "moveTicket to done preserves a pre-existing workCompletedAt".
+- archiveDoneTickets does not touch either field: test/tickets.test.js "archiveDoneTickets preserves workStartedAt and workCompletedAt".
+- autoMerge closeout path setting workCompletedAt: covered transitively because autoMergeTicketBranch does not change status; the closeout move done call funnels through moveTicket and hits the new conditional. No new test added (design confirms no direct autoMerge write site).
+
+### New edge-case test (commit 74f0a79)
+
+- test/tickets.test.js "moveTicket directly to done with workStartedAt null leaves both timestamps null" - locks in the orchestrator-accepted behavior from review: moveTicket only stamps workCompletedAt when workStartedAt is already a string, preserving the validator invariant that workCompletedAt requires workStartedAt to be set.
+
+### Spot-check notes
+
+- The five implementation tests use deterministic now injection (via the options.now parameter) and the existing withBoard/withRepo helpers, matching project conventions.
+- replaceText-seeded workStartedAt values feed the validator correctly; assertions use anchored multiline regex matches on the rendered front matter.
+- archiveDoneTickets test reads from plans/tickets/archive/ which is the correct post-archive folder.
+
+### Gaps and caveats
+
+- No automated test for the autoMerge closeout path stamping workCompletedAt. Design correctly notes autoMergeTicketBranch does not call moveTicket directly; the stamp comes from the surrounding move done invocation. Acceptable based on read-through of src/git.js.
+- Tests run on Windows (current host); a CRLF warning was emitted on commit but file content is preserved as LF.
+- Ambient state caveat: the working tree had unrelated ticket folder moves (T20260516T1543Z, T20260516T1550Z, T20260516T1544Z) in plans/tickets/ at verification time. Not modified by this run. Only test/tickets.test.js was committed in 74f0a79.
+
 ## Documentation Updates
+
+Updated in commit b21e26c:
+
+- `memory-bank/systemPatterns.md` — added one-line note that start-work stamps workStartedAt once; move done stamps workCompletedAt when workStartedAt is set; archive does not touch them.
+- `docs/Workflow.md` — documented the wall-clock work tracking behavior: when each field gets set, idempotence rules, direct-move-to-done edge case (both stay null), and that wall-clock = `workCompletedAt - workStartedAt` includes time in `questions` and `blocked` by design.
+- `docs/TicketFormat.md` — small note added on when the fields get set automatically.
+
+Author: codex-task:workspace-write (gpt-5.5). Codex sandbox blocked .git writes; orchestrator committed.
 
 ## Questions
 
@@ -188,3 +248,11 @@ Remaining risks:
 - 2026-05-16T16:51:28Z: Completed design via claude-subagent:local-board-designer: Technical Design written. Uses existing formatIsoSeconds for timestamps; startTicketWork (src/git.js) sets workStartedAt via setTicketField when null; moveTicket (src/tickets.js) sets workCompletedAt when status becomes done and field is null. archiveDoneTickets and autoMergeTicketBranch do not touch these fields. Test plan covers idempotence, reopen, archive preservation.
 
 - 2026-05-16T16:51:28Z: Ensured git branch feature/estimation-and-specialty-steps (already-current).
+
+- 2026-05-16T16:55:27Z: Completed implement via claude-subagent:local-board-implementer: Implemented in commit 7503676. src/git.js startTicketWork stamps workStartedAt after ensureGitBranch (design tweak to avoid dirty-worktree race). src/tickets.js moveTicket stamps workCompletedAt at start when target=done and field is null. formatIsoSeconds exported. 5 new tests; npm test 61/61; check + validate clean.
+
+- 2026-05-16T16:58:03Z: Completed review via codex-task:read-only: Codex review of commit 7503676. Verdict: CONCERNS — soft pass. start-work deviation justified, idempotence correct, archive/auto-merge interactions correct. Concern: direct move-to-done without start-work leaves both timestamps null (preserves validator invariant). Accepted as documented behavior. Advancing.
+
+- 2026-05-16T17:02:00Z: Completed test via claude-subagent:local-board-tester: npm test: 62/62 after adding edge-case test for direct-move-to-done semantics (commit 74f0a79). All AC verified to test locations. npm run check and validate clean. Wall-clock plumbing locked in.
+
+- 2026-05-16T17:03:52Z: Completed document via codex-task:workspace-write: Doc updates in commit b21e26c: memory-bank/systemPatterns.md, docs/Workflow.md (new Wall-clock work tracking section), docs/TicketFormat.md (auto-set notes). README untouched.

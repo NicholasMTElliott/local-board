@@ -1,7 +1,7 @@
 ---
 id: T20260516T1551Z
 type: task
-status: implementing
+status: done
 priority: P2
 parent: S20260516T1538Z
 children: []
@@ -10,9 +10,12 @@ blocks: [T20260516T1554Z]
 branch: feature/estimation-and-specialty-steps
 estimate: null
 created: 2026-05-16T15:51:06Z
-updated: 2026-05-16T18:50:15Z
-completedSteps: [design:claude-subagent:local-board-designer]
+updated: 2026-05-16T22:06:45Z
+completedSteps: [design:claude-subagent:local-board-designer, implement:claude-subagent:local-board-implementer, review:codex-task:read-only, test:claude-subagent:local-board-tester, document:codex-task:workspace-write]
 routingApprovals: []
+estimateBasis: null
+workCompletedAt: null
+workStartedAt: null
 ---
 # Add gate-check prompt and CLI command
 
@@ -246,9 +249,63 @@ Files changed:
 
 ## Review Findings
 
+**Verdict:** PASS.
+
+Reviewer: codex-task:read-only (gpt-5.5). Static review.
+
+- Stage validation imports the shared OPTIONAL_STEP_STAGES (no duplicated literal) at src/cli.js:33, :618, :619.
+- Catalog projection copies name/prompt/triggers; agent added only when source entry owns it via Object.hasOwn — no null coercion (src/cli.js:625, :631).
+- ticketContext is useful and narrow: identity/status/title/currentAction plus Requirement and Acceptance Criteria; omits branch, dependencies, run logs, comments, routing approvals, full body (src/cli.js:640, :649).
+- Empty catalog stages succeed: command maps to `[]` when optionalSteps[stage] is absent; test verifies (src/cli.js:625; test/cli.test.js:513, :517).
+- Unknown ticket reuses findTicket throwing the standard message; CLI test pins it (src/tickets.js:262; test/cli.test.js:587-589).
+- Test coverage covers design/implement payloads, omitted agent, empty catalog, missing optionalSteps, invalid stage, missing stage, unknown ticket, plain output (test/cli.test.js:459, :496, :530, :561).
+- Gate-check prompt documents pattern-matching role and strict requestedSteps JSON contract with empty-list semantics (plans/prompts/steps/gate-check.md:3, :15, :21).
+
 ## Test Evidence
 
+## Verification 2026-05-16
+
+Branch: feature/estimation-and-specialty-steps. Commit under test: 1f4f8ce.
+
+Commands run:
+- `npm test` -> 85/85 pass, 0 fail.
+- `npm run check` -> ok (no syntax errors across bin/local-board.js, src/cli.js, src/config.js, src/git.js, src/scaffold.js, src/tickets.js, install.mjs).
+- `npm run validate` -> `Ticket validation OK`.
+
+CLI end-to-end smoke (`node bin/local-board.js gate-check T20260516T1551Z --stage implement --json`):
+- JSON shape contains all required top-level keys: `ticket`, `stage`, `prompt`, `ticketPath`, `ticketContext`, `catalog`.
+- `prompt` is an absolute path: `C:\Users\Nicho\Documents\local-board\plans\prompts\steps\gate-check.md`.
+- `ticketPath` is an absolute path to the ticket file under `plans/tickets/ready/`.
+- `ticketContext` carries `id`, `type`, `status=ready_for_test`, `priority=P2`, relative `path`, `title`, `currentAction=test`, `requirement` (full section text), `acceptanceCriteria` (full section text).
+- `catalog` for `--stage implement` returns exactly the two entries from `plans/local-board.config.jsonc` `optionalSteps.implement`: `security_audit` and `ui_visual_review`, each with `name`/`prompt`/`triggers` and no `agent` field (matches default config which omits per-entry agent overrides).
+
+Prompt file `plans/prompts/steps/gate-check.md`:
+- Exists, readable, 25 lines.
+- Documents the strict-JSON output contract: shape is an object with a `requestedSteps` array of step names.
+- Names empty-list as the common case and the safe default.
+- Documents the per-stage catalog lookup rule (only names from the supplied catalog may be returned).
+- Documents the pattern-matching role and explicit not-a-quality-evaluation rule.
+
+Acceptance criteria coverage:
+- Prompt file exists with required contract: PASS.
+- `local-board gate-check` registered in CLI usage: covered by 85/85 test suite (the gate-check tests assert plain output + usage error paths).
+- Unknown stage rejected with clear error: covered by `CLI gate-check rejects invalid stage, missing stage, and unknown ticket` test.
+- Unknown ticket id rejected: same test.
+- `--json` payload contains expected keys plus correct catalog entries: verified live for `implement` stage and covered by `CLI gate-check resolves catalog, prompt path, and ticket context per stage` test for both `design` and `implement` stages.
+- Plain output: smoke-tested via assertion `/^gate-check .* stage=design catalog=3$/`.
+- Ticket without `optionalSteps` config returns empty catalog: covered by `CLI gate-check returns empty catalog when optionalSteps is omitted from config` test.
+
+Gaps / flakes / caveats: none observed. No environment issues. All tests deterministic on this run.
+
 ## Documentation Updates
+
+Updated in commit 27b765a:
+
+- memory-bank/systemPatterns.md - gate-check added to MVP CLI list.
+- docs/Workflow.md - new "Gate-check" subsection under Optional Steps covering command usage, JSON output shape, and the orchestrator handoff pattern (CLI returns data, orchestrator dispatches the prompt). Forward refs to T20260516T1552Z and T20260516T1554Z as consumers.
+- README.md - gate-check added to CLI list.
+
+Docs author: codex-task:workspace-write (gpt-5.5). Codex sandbox blocked .git writes; orchestrator committed.
 
 ## Questions
 
@@ -257,3 +314,11 @@ Files changed:
 - 2026-05-16T18:47:27Z: Completed design via claude-subagent:local-board-designer: Design: new plans/prompts/steps/gate-check.md (pattern-matching gate, returns requestedSteps array). New CLI gate-check ticket --stage [--json] in src/cli.js. JSON: ticket, stage, prompt, catalog, ticketPath. Stage validated against design/implement/test. Empty catalog returns success. 8-test plan. Risk: omit agent field when absent so downstream inline default stays clean.
 
 - 2026-05-16T18:47:27Z: Ensured git branch feature/estimation-and-specialty-steps (already-current).
+
+- 2026-05-16T18:51:32Z: Completed implement via claude-subagent:local-board-implementer: Implemented in commit 1f4f8ce. New plans/prompts/steps/gate-check.md (terse role prompt with strict JSON contract). New commandGateCheck in src/cli.js (validates stage against OPTIONAL_STEP_STAGES, reads catalog from config.optionalSteps, emits ticket+stage+prompt+catalog+ticketPath+ticketContext JSON; agent field omitted via Object.hasOwn when absent). getSectionText export added to src/tickets.js. printUsage updated. 3 new test blocks (10 assertions). npm test 85/85; check + validate clean.
+
+- 2026-05-16T22:02:46Z: Completed review via codex-task:read-only: Codex review of commit 1f4f8ce. Verdict: PASS. Stage validation uses shared constant; catalog projection correctly omits agent; ticketContext narrow and useful; empty/missing catalog handled; unknown ticket reuses findTicket. 10-assertion test coverage adequate.
+
+- 2026-05-16T22:04:46Z: Completed test via claude-subagent:local-board-tester: npm test 85/85; check + validate clean. CLI smoke (gate-check T20260516T1551Z --stage implement --json) returned correct JSON shape with all expected keys and 2 catalog entries (security_audit, ui_visual_review). Prompt file at plans/prompts/steps/gate-check.md confirmed exists and documents requestedSteps contract. All AC verified. Verdict: PASS.
+
+- 2026-05-16T22:06:45Z: Completed document via codex-task:workspace-write: Doc updates in commit 27b765a: memory-bank/systemPatterns.md, docs/Workflow.md (Gate-check subsection), README.md.
