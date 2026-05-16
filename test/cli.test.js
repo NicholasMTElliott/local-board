@@ -1,10 +1,13 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import assert from "node:assert/strict";
 
 import { main } from "../src/cli.js";
+import { loadConfig } from "../src/config.js";
 import { createTicket, discover } from "../src/tickets.js";
 
 async function withBoard(fn) {
@@ -953,6 +956,32 @@ test("CLI specialty-run status-to-stage mapping covers every status", async () =
       );
     }
   });
+});
+
+test("optionalSteps catalog prompt paths resolve to existing non-empty files on disk", async () => {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const config = await loadConfig(repoRoot);
+  const stages = Object.keys(config.optionalSteps || {});
+  assert.ok(stages.length > 0, "optionalSteps must define at least one stage");
+
+  let entryCount = 0;
+  for (const stage of stages) {
+    const entries = config.optionalSteps[stage];
+    assert.ok(Array.isArray(entries), `optionalSteps.${stage} must be an array`);
+    for (const entry of entries) {
+      assert.ok(
+        typeof entry.prompt === "string" && entry.prompt.length > 0,
+        `optionalSteps.${stage}[${entry.name}] missing prompt path`,
+      );
+      const absolute = path.resolve(repoRoot, entry.prompt);
+      const stat = statSync(absolute);
+      assert.ok(stat.isFile(), `${entry.prompt} is not a file`);
+      assert.ok(stat.size > 0, `${entry.prompt} is empty`);
+      entryCount += 1;
+    }
+  }
+
+  assert.ok(entryCount >= 5, `expected at least 5 v1 prompt entries, saw ${entryCount}`);
 });
 
 async function runCli(args) {
