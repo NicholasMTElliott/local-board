@@ -249,6 +249,42 @@ Example:
 local-board estimate T20260516T1545Z 4 --basis bootstrap --json
 ```
 
+### Calibration auto-pick
+
+Suggest a calibration basis with:
+
+```sh
+local-board calibration suggest <ticket-id> [--json]
+```
+
+The command builds a pool of `done` tickets with the same `type` as the target ticket. Pool tickets must have non-null `estimate`, `workStartedAt`, and `workCompletedAt` fields. It sorts the pool estimates and uses the lower median as the target value. For an even-sized pool, this means the lower of the two middle estimates.
+
+It returns the pool ticket whose estimate has the smallest absolute difference from the lower median. If multiple tickets tie, it picks the one with the most recent `workCompletedAt`. If the pool is empty, it returns the `bootstrap` sentinel so the estimator can use `estimation.bootstrapDefault`.
+
+Without `--json`, the command prints only the recommended calibration ticket ID or `bootstrap`.
+
+JSON output is shaped:
+
+```json
+{ "ticket": "<ticket-id>", "calibration": "<ticket-id-or-bootstrap>", "poolSize": 0, "median": null, "reason": "<reason>" }
+```
+
+Example:
+
+```sh
+local-board calibration suggest T20260516T1546Z --json
+```
+
+```json
+{
+  "ticket": "T20260516T1546Z",
+  "calibration": "T20260516T1545Z",
+  "poolSize": 5,
+  "median": 4,
+  "reason": "selected same-type done ticket nearest the lower median"
+}
+```
+
 ## Strict Routing
 
 `routing.strict: true` makes configured routing mandatory.
