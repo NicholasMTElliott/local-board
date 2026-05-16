@@ -9,6 +9,7 @@ import {
   completeStep,
   createTicket,
   discover,
+  findTicket,
   linkParent,
   moveTicket,
   nextTicket,
@@ -19,6 +20,7 @@ import {
   setTicketField,
   setTicketSection,
   stateReport,
+  TICKET_ID_RE,
   ticketRecord,
   unblockTicket,
   unlinkParent,
@@ -99,6 +101,9 @@ export async function main(argv) {
     }
     if (command === "unblock") {
       return await commandUnblock(root, args);
+    }
+    if (command === "estimate") {
+      return await commandEstimate(root, args);
     }
 
     printUsage();
@@ -534,6 +539,60 @@ async function commandUnblock(root, args) {
   return 0;
 }
 
+async function commandEstimate(root, args) {
+  const basisOption = takeOption(args, "--basis");
+  const force = takeFlag(args, "--force");
+  const asJson = takeFlag(args, "--json");
+  const ticketId = args.shift();
+  const rawPoints = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined || rawPoints === undefined) {
+    throw new Error("estimate requires: <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]");
+  }
+
+  const trimmedPoints = rawPoints.trim();
+  if (trimmedPoints === "") {
+    throw new Error("estimate: <points> must be an integer");
+  }
+  const parsedPoints = Number.parseInt(trimmedPoints, 10);
+  if (Number.isNaN(parsedPoints) || String(parsedPoints) !== trimmedPoints) {
+    throw new Error("estimate: <points> must be an integer");
+  }
+
+  const config = await loadConfig(root);
+  const scale = config.estimation.scale;
+  if (!scale.includes(parsedPoints)) {
+    throw new Error(`estimate: ${parsedPoints} is not in estimation.scale [${scale.join(", ")}]`);
+  }
+
+  if (basisOption !== undefined && basisOption !== "bootstrap") {
+    if (!TICKET_ID_RE.test(basisOption)) {
+      throw new Error('estimate: --basis must be "bootstrap" or a ticket id matching [ESBT]yyyyMMddTHHmmZ');
+    }
+    await findTicket(root, basisOption);
+  }
+
+  const { ticket } = await findTicket(root, ticketId);
+  const currentEstimate = ticket.frontMatter.estimate ?? null;
+  if (currentEstimate !== null && !force) {
+    throw new Error(`estimate: ticket ${ticketId} already has estimate ${currentEstimate}; pass --force to overwrite`);
+  }
+
+  const effectiveBasis = basisOption ?? "bootstrap";
+  const pointsValue = String(parsedPoints);
+
+  await setTicketField(root, ticketId, "estimate", pointsValue);
+  const ticketPath = await setTicketField(root, ticketId, "estimateBasis", effectiveBasis);
+
+  if (asJson) {
+    console.log(JSON.stringify({ path: ticketPath, estimate: parsedPoints, estimateBasis: effectiveBasis }, null, 2));
+  } else {
+    console.log(ticketPath);
+  }
+  return 0;
+}
+
 function takeFlag(args, name) {
   const index = args.indexOf(name);
   if (index === -1) {
@@ -586,5 +645,6 @@ function printUsage() {
   local-board [--root <path>] link-child <parent-ticket-id> <child-ticket-id>
   local-board [--root <path>] unlink-parent <child-ticket-id> <parent-ticket-id>
   local-board [--root <path>] block <ticket-id> <dependency-ticket-id>
-  local-board [--root <path>] unblock <ticket-id> <dependency-ticket-id>`);
+  local-board [--root <path>] unblock <ticket-id> <dependency-ticket-id>
+  local-board [--root <path>] estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]`);
 }

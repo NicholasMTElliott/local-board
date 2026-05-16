@@ -98,7 +98,7 @@ const STANDARD_SECTIONS = [
   "Run Log",
 ];
 
-const TICKET_ID_RE = /^[ESBT]\d{8}T\d{4}Z$/;
+export const TICKET_ID_RE = /^[ESBT]\d{8}T\d{4}Z$/;
 const TICKET_FILE_RE = /^(?<id>[ESBT]\d{8}T\d{4}Z)_(?<slug>[a-z0-9]+(?:-[a-z0-9]+)*)\.md$/;
 
 export async function discover(root = ".") {

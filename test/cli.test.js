@@ -196,6 +196,175 @@ test("read-only commands do not archive old done tickets", async () => {
   });
 });
 
+test("CLI estimate command writes estimate and basis with validation, force, and config override", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const ticketCreate = await runCli([
+      "--root",
+      root,
+      "create",
+      "task",
+      "Estimate target",
+      "--status",
+      "ready_for_design",
+      "--priority",
+      "P2",
+    ]);
+    assert.equal(ticketCreate.code, 0);
+    const ticketPath = ticketCreate.stdout.trim();
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    // Happy path: default basis bootstrap
+    const happy = await runCli(["--root", root, "estimate", ticketId, "4"]);
+    assert.equal(happy.code, 0, happy.stderr);
+    const happyText = await readFile(ticketPath, "utf8");
+    assert.match(happyText, /^estimate: 4$/m);
+    assert.match(happyText, /^estimateBasis: bootstrap$/m);
+
+    // Out-of-scale rejection
+    const outOfScale = await runCli(["--root", root, "estimate", ticketId, "3", "--force"]);
+    assert.equal(outOfScale.code, 2);
+    assert.match(outOfScale.stderr, /not in estimation\.scale/);
+
+    // Non-integer rejection (2.5)
+    const decimal = await runCli(["--root", root, "estimate", ticketId, "2.5", "--force"]);
+    assert.equal(decimal.code, 2);
+    assert.match(decimal.stderr, /must be an integer/);
+
+    // Non-integer rejection (abc)
+    const alpha = await runCli(["--root", root, "estimate", ticketId, "abc", "--force"]);
+    assert.equal(alpha.code, 2);
+    assert.match(alpha.stderr, /must be an integer/);
+
+    // Overwrite refusal without --force
+    const overwriteFail = await runCli(["--root", root, "estimate", ticketId, "2"]);
+    assert.equal(overwriteFail.code, 2);
+    assert.match(overwriteFail.stderr, /pass --force to overwrite/);
+    const stillFour = await readFile(ticketPath, "utf8");
+    assert.match(stillFour, /^estimate: 4$/m);
+
+    // Overwrite with --force, --basis bootstrap
+    const forceOverwrite = await runCli([
+      "--root",
+      root,
+      "estimate",
+      ticketId,
+      "2",
+      "--basis",
+      "bootstrap",
+      "--force",
+    ]);
+    assert.equal(forceOverwrite.code, 0, forceOverwrite.stderr);
+    const afterForce = await readFile(ticketPath, "utf8");
+    assert.match(afterForce, /^estimate: 2$/m);
+    assert.match(afterForce, /^estimateBasis: bootstrap$/m);
+
+    // --basis valid ticket id
+    const basisCreate = await runCli([
+      "--root",
+      root,
+      "create",
+      "task",
+      "Basis ticket",
+      "--status",
+      "ready_for_design",
+      "--priority",
+      "P2",
+    ]);
+    assert.equal(basisCreate.code, 0);
+    const basisId = path.basename(basisCreate.stdout.trim()).split("_", 1)[0];
+
+    const validBasis = await runCli([
+      "--root",
+      root,
+      "estimate",
+      ticketId,
+      "8",
+      "--basis",
+      basisId,
+      "--force",
+    ]);
+    assert.equal(validBasis.code, 0, validBasis.stderr);
+    const afterBasis = await readFile(ticketPath, "utf8");
+    assert.match(afterBasis, /^estimate: 8$/m);
+    assert.match(afterBasis, new RegExp(`^estimateBasis: ${basisId}$`, "m"));
+
+    // --basis malformed (not a ticket id)
+    const malformed = await runCli([
+      "--root",
+      root,
+      "estimate",
+      ticketId,
+      "1",
+      "--basis",
+      "not-a-ticket",
+      "--force",
+    ]);
+    assert.equal(malformed.code, 2);
+    assert.match(malformed.stderr, /--basis must be "bootstrap" or a ticket id/);
+
+    // --basis non-existent ticket id
+    const missingBasis = await runCli([
+      "--root",
+      root,
+      "estimate",
+      ticketId,
+      "1",
+      "--basis",
+      "T20990101T0000Z",
+      "--force",
+    ]);
+    assert.equal(missingBasis.code, 2);
+    assert.match(missingBasis.stderr, /ticket T20990101T0000Z not found/);
+
+    // Validate after writes still ok
+    const validateAfter = await runCli(["--root", root, "validate", "--json"]);
+    assert.equal(validateAfter.code, 0, validateAfter.stderr);
+    assert.equal(JSON.parse(validateAfter.stdout).ok, true);
+  });
+});
+
+test("CLI estimate honors a config override scale", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({
+        estimation: { enabled: true, scale: [1, 3, 5], bootstrapDefault: 3, splitThreshold: 16 },
+      }),
+      "utf8",
+    );
+
+    const ticketCreate = await runCli([
+      "--root",
+      root,
+      "create",
+      "task",
+      "Override scale target",
+      "--status",
+      "ready_for_design",
+      "--priority",
+      "P2",
+    ]);
+    assert.equal(ticketCreate.code, 0);
+    const ticketPath = ticketCreate.stdout.trim();
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    // Default 4 is no longer in scale -> rejected
+    const rejected = await runCli(["--root", root, "estimate", ticketId, "4"]);
+    assert.equal(rejected.code, 2);
+    assert.match(rejected.stderr, /not in estimation\.scale \[1, 3, 5\]/);
+
+    // 3 is in the override scale -> accepted
+    const accepted = await runCli(["--root", root, "estimate", ticketId, "3"]);
+    assert.equal(accepted.code, 0, accepted.stderr);
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^estimate: 3$/m);
+    assert.match(text, /^estimateBasis: bootstrap$/m);
+  });
+});
+
 async function runCli(args) {
   const stdout = [];
   const stderr = [];
