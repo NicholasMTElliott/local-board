@@ -20,6 +20,7 @@ import {
   setTicketField,
   setTicketSection,
   stateReport,
+  suggestCalibration,
   TICKET_ID_RE,
   ticketRecord,
   unblockTicket,
@@ -104,6 +105,13 @@ export async function main(argv) {
     }
     if (command === "estimate") {
       return await commandEstimate(root, args);
+    }
+    if (command === "calibration") {
+      const sub = args.shift();
+      if (sub === "suggest") {
+        return await commandCalibrationSuggest(root, args);
+      }
+      throw new Error(`unknown calibration subcommand: ${sub ?? "(missing)"}`);
     }
 
     printUsage();
@@ -593,6 +601,24 @@ async function commandEstimate(root, args) {
   return 0;
 }
 
+async function commandCalibrationSuggest(root, args) {
+  const asJson = takeFlag(args, "--json");
+  const ticketId = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined) {
+    throw new Error("calibration suggest requires: <ticket-id> [--json]");
+  }
+
+  const result = await suggestCalibration(root, ticketId);
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(result.calibration);
+  }
+  return 0;
+}
+
 function takeFlag(args, name) {
   const index = args.indexOf(name);
   if (index === -1) {
@@ -646,5 +672,6 @@ function printUsage() {
   local-board [--root <path>] unlink-parent <child-ticket-id> <parent-ticket-id>
   local-board [--root <path>] block <ticket-id> <dependency-ticket-id>
   local-board [--root <path>] unblock <ticket-id> <dependency-ticket-id>
-  local-board [--root <path>] estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]`);
+  local-board [--root <path>] estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]
+  local-board [--root <path>] calibration suggest <ticket-id> [--json]`);
 }

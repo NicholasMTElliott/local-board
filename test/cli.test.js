@@ -365,6 +365,97 @@ test("CLI estimate honors a config override scale", async () => {
   });
 });
 
+test("CLI calibration suggest prints calibration id or bootstrap", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const targetCreate = await runCli([
+      "--root",
+      root,
+      "create",
+      "task",
+      "Calibration target",
+      "--status",
+      "ready_for_implementation",
+      "--priority",
+      "P2",
+    ]);
+    assert.equal(targetCreate.code, 0);
+    const targetId = path.basename(targetCreate.stdout.trim()).split("_", 1)[0];
+
+    // Empty pool -> bootstrap, both plain and JSON.
+    const bootstrap = await runCli(["--root", root, "calibration", "suggest", targetId]);
+    assert.equal(bootstrap.code, 0, bootstrap.stderr);
+    assert.equal(bootstrap.stdout.trim(), "bootstrap");
+
+    const bootstrapJson = await runCli(["--root", root, "calibration", "suggest", targetId, "--json"]);
+    assert.equal(bootstrapJson.code, 0, bootstrapJson.stderr);
+    const bootstrapRecord = JSON.parse(bootstrapJson.stdout);
+    assert.equal(bootstrapRecord.calibration, "bootstrap");
+    assert.equal(bootstrapRecord.poolSize, 0);
+    assert.equal(bootstrapRecord.median, null);
+    assert.equal(bootstrapRecord.ticket, targetId);
+    assert.match(bootstrapRecord.reason, /No prior calibrated tickets of type task/);
+
+    // Seed a populated pool: three done tasks (estimates 1, 2, 4) and one done bug as a foil.
+    const seed = async (title, type, estimate, completedAt, status = "done") => {
+      const create = await runCli([
+        "--root",
+        root,
+        "create",
+        type,
+        title,
+        "--status",
+        status,
+        "--priority",
+        "P2",
+      ]);
+      assert.equal(create.code, 0, create.stderr);
+      const ticketPath = create.stdout.trim();
+      const text = await readFile(ticketPath, "utf8");
+      const rewritten = text
+        .replace("estimate: null", `estimate: ${estimate}`)
+        .replace("estimateBasis: null", "estimateBasis: bootstrap")
+        .replace("workStartedAt: null", "workStartedAt: 2026-05-14T21:00:00Z")
+        .replace("workCompletedAt: null", `workCompletedAt: ${completedAt}`);
+      await writeFile(ticketPath, rewritten, "utf8");
+      return path.basename(ticketPath).split("_", 1)[0];
+    };
+    await seed("Done task 1", "task", 1, "2026-05-14T22:00:00Z");
+    const mid = await seed("Done task 2", "task", 2, "2026-05-14T22:01:00Z");
+    await seed("Done task 4", "task", 4, "2026-05-14T22:02:00Z");
+    await seed("Done bug foil", "bug", 8, "2026-05-14T22:03:00Z");
+
+    const populated = await runCli(["--root", root, "calibration", "suggest", targetId]);
+    assert.equal(populated.code, 0, populated.stderr);
+    // Lower-median of [1, 2, 4] is 2; the estimate-2 ticket is the pick.
+    assert.equal(populated.stdout.trim(), mid);
+
+    const populatedJson = await runCli(["--root", root, "calibration", "suggest", targetId, "--json"]);
+    assert.equal(populatedJson.code, 0, populatedJson.stderr);
+    const record = JSON.parse(populatedJson.stdout);
+    assert.equal(record.ticket, targetId);
+    assert.equal(record.calibration, mid);
+    assert.equal(record.poolSize, 3);
+    assert.equal(record.median, 2);
+    assert.equal(typeof record.reason, "string");
+  });
+});
+
+test("CLI calibration suggest exits 2 for unknown ticket id and missing argument", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const unknown = await runCli(["--root", root, "calibration", "suggest", "T20990101T0000Z"]);
+    assert.equal(unknown.code, 2);
+    assert.match(unknown.stderr, /not found/);
+
+    const missing = await runCli(["--root", root, "calibration", "suggest"]);
+    assert.equal(missing.code, 2);
+    assert.match(missing.stderr, /requires.*<ticket-id>/);
+  });
+});
+
 async function runCli(args) {
   const stdout = [];
   const stderr = [];

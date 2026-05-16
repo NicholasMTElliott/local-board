@@ -837,6 +837,75 @@ export async function stateReport(root = ".") {
   };
 }
 
+export async function suggestCalibration(root, ticketId) {
+  const { ticket: target } = await findTicket(root, ticketId);
+  const board = await discover(root);
+  if (board.loadErrors.length > 0) {
+    throw new Error(board.loadErrors.join("\n"));
+  }
+
+  const pool = board.tickets.filter((candidate) => {
+    if (candidate.id === target.id) {
+      return false;
+    }
+    if (candidate.status !== "done") {
+      return false;
+    }
+    if (candidate.type !== target.type) {
+      return false;
+    }
+    const fm = candidate.frontMatter;
+    if (fm.estimate === null || fm.estimate === undefined) {
+      return false;
+    }
+    if (typeof fm.workStartedAt !== "string") {
+      return false;
+    }
+    if (typeof fm.workCompletedAt !== "string") {
+      return false;
+    }
+    if (Number.isNaN(Number(fm.estimate))) {
+      return false;
+    }
+    return true;
+  });
+
+  if (pool.length === 0) {
+    return {
+      ticket: target.id,
+      calibration: "bootstrap",
+      poolSize: 0,
+      median: null,
+      reason: `No prior calibrated tickets of type ${target.type}`,
+    };
+  }
+
+  const sortedEstimates = pool.map((entry) => Number(entry.frontMatter.estimate)).sort((left, right) => left - right);
+  // Lower-median: for odd n take the middle; for even n take the lower of the two middle entries.
+  const medianIndex = Math.floor((sortedEstimates.length - 1) / 2);
+  const median = sortedEstimates[medianIndex];
+
+  const ranked = [...pool].sort((left, right) => {
+    const leftDiff = Math.abs(Number(left.frontMatter.estimate) - median);
+    const rightDiff = Math.abs(Number(right.frontMatter.estimate) - median);
+    if (leftDiff !== rightDiff) {
+      return leftDiff - rightDiff;
+    }
+    // Tie-break: most-recent workCompletedAt first. ISO-8601 with Z suffix sorts lexicographically.
+    return right.frontMatter.workCompletedAt.localeCompare(left.frontMatter.workCompletedAt);
+  });
+
+  const pick = ranked[0];
+  const noun = `${target.type}${pool.length === 1 ? "" : "s"}`;
+  return {
+    ticket: target.id,
+    calibration: pick.id,
+    poolSize: pool.length,
+    median,
+    reason: `Closest to median estimate ${median} among ${pool.length} calibrated ${noun}; selected by recency on tie.`,
+  };
+}
+
 export async function schemaRecord(root = ".") {
   const config = await loadConfig(root);
   return {

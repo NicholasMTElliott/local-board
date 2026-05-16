@@ -21,6 +21,7 @@ import {
   setTicketField,
   setTicketSection,
   stateReport,
+  suggestCalibration,
   unblockTicket,
   validate,
 } from "../src/tickets.js";
@@ -947,6 +948,291 @@ test("initProject scaffolds a new local-board project idempotently", async () =>
     assert.equal(second.skipped.length > 0, true);
     assert.equal((await loadConfig(root)).agents.implement, "claude-subagent:local-board-implementer");
     assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+async function stampCalibrated(filePath, estimate, workStartedAt, workCompletedAt) {
+  await replaceText(filePath, "estimate: null", `estimate: ${estimate}`);
+  await replaceText(filePath, "estimateBasis: null", "estimateBasis: bootstrap");
+  await replaceText(filePath, "workStartedAt: null", `workStartedAt: ${workStartedAt}`);
+  await replaceText(filePath, "workCompletedAt: null", `workCompletedAt: ${workCompletedAt}`);
+}
+
+test("suggestCalibration returns bootstrap for an empty pool", async () => {
+  await withBoard(async (root) => {
+    const targetPath = await createTicket(root, "task", "Target with no pool", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const targetId = path.basename(targetPath).split("_", 1)[0];
+
+    const result = await suggestCalibration(root, targetId);
+
+    assert.equal(result.ticket, targetId);
+    assert.equal(result.calibration, "bootstrap");
+    assert.equal(result.poolSize, 0);
+    assert.equal(result.median, null);
+    assert.match(result.reason, /No prior calibrated tickets of type task/);
+  });
+});
+
+test("suggestCalibration picks the lower-median estimate for odd-count pools", async () => {
+  await withBoard(async (root) => {
+    const targetPath = await createTicket(root, "task", "Odd pool target", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:50:00Z"),
+    });
+    const targetId = path.basename(targetPath).split("_", 1)[0];
+
+    const a = await createTicket(root, "task", "Done 1", {
+      status: "done",
+      now: new Date("2026-05-14T20:51:00Z"),
+    });
+    const b = await createTicket(root, "task", "Done 2", {
+      status: "done",
+      now: new Date("2026-05-14T20:52:00Z"),
+    });
+    const c = await createTicket(root, "task", "Done 4a", {
+      status: "done",
+      now: new Date("2026-05-14T20:53:00Z"),
+    });
+    const d = await createTicket(root, "task", "Done 4b", {
+      status: "done",
+      now: new Date("2026-05-14T20:54:00Z"),
+    });
+    const e = await createTicket(root, "task", "Done 8", {
+      status: "done",
+      now: new Date("2026-05-14T20:55:00Z"),
+    });
+
+    await stampCalibrated(a, 1, "2026-05-14T21:00:00Z", "2026-05-14T22:00:00Z");
+    await stampCalibrated(b, 2, "2026-05-14T21:00:00Z", "2026-05-14T22:01:00Z");
+    await stampCalibrated(c, 4, "2026-05-14T21:00:00Z", "2026-05-14T22:02:00Z");
+    await stampCalibrated(d, 4, "2026-05-14T21:00:00Z", "2026-05-14T22:03:00Z");
+    await stampCalibrated(e, 8, "2026-05-14T21:00:00Z", "2026-05-14T22:04:00Z");
+
+    const dId = path.basename(d).split("_", 1)[0];
+    const result = await suggestCalibration(root, targetId);
+
+    assert.equal(result.poolSize, 5);
+    assert.equal(result.median, 4);
+    // Both estimate-4 entries tie on absDiff; the later workCompletedAt wins.
+    assert.equal(result.calibration, dId);
+  });
+});
+
+test("suggestCalibration uses the lower of two middles for even-count pools", async () => {
+  await withBoard(async (root) => {
+    const targetPath = await createTicket(root, "task", "Even pool target", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:50:00Z"),
+    });
+    const targetId = path.basename(targetPath).split("_", 1)[0];
+
+    const a = await createTicket(root, "task", "Done 1", {
+      status: "done",
+      now: new Date("2026-05-14T20:51:00Z"),
+    });
+    const b = await createTicket(root, "task", "Done 2", {
+      status: "done",
+      now: new Date("2026-05-14T20:52:00Z"),
+    });
+    const c = await createTicket(root, "task", "Done 4", {
+      status: "done",
+      now: new Date("2026-05-14T20:53:00Z"),
+    });
+    const d = await createTicket(root, "task", "Done 8", {
+      status: "done",
+      now: new Date("2026-05-14T20:54:00Z"),
+    });
+    await stampCalibrated(a, 1, "2026-05-14T21:00:00Z", "2026-05-14T22:00:00Z");
+    await stampCalibrated(b, 2, "2026-05-14T21:00:00Z", "2026-05-14T22:01:00Z");
+    await stampCalibrated(c, 4, "2026-05-14T21:00:00Z", "2026-05-14T22:02:00Z");
+    await stampCalibrated(d, 8, "2026-05-14T21:00:00Z", "2026-05-14T22:03:00Z");
+
+    const bId = path.basename(b).split("_", 1)[0];
+    const result = await suggestCalibration(root, targetId);
+
+    assert.equal(result.poolSize, 4);
+    assert.equal(result.median, 2);
+    assert.equal(result.calibration, bId);
+  });
+});
+
+test("suggestCalibration breaks absDiff ties by most-recent workCompletedAt", async () => {
+  await withBoard(async (root) => {
+    const targetPath = await createTicket(root, "task", "Tie-break target", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:50:00Z"),
+    });
+    const targetId = path.basename(targetPath).split("_", 1)[0];
+
+    const early = await createTicket(root, "task", "Early completed", {
+      status: "done",
+      now: new Date("2026-05-14T20:51:00Z"),
+    });
+    const late = await createTicket(root, "task", "Late completed", {
+      status: "done",
+      now: new Date("2026-05-14T20:52:00Z"),
+    });
+    await stampCalibrated(early, 4, "2026-05-14T21:00:00Z", "2026-05-14T22:00:00Z");
+    await stampCalibrated(late, 4, "2026-05-14T21:00:00Z", "2026-05-15T22:00:00Z");
+
+    const earlyId = path.basename(early).split("_", 1)[0];
+    const lateId = path.basename(late).split("_", 1)[0];
+
+    const result = await suggestCalibration(root, targetId);
+    assert.equal(result.poolSize, 2);
+    assert.equal(result.calibration, lateId);
+
+    // Swap timestamps; selection should flip.
+    await replaceText(early, "workCompletedAt: 2026-05-14T22:00:00Z", "workCompletedAt: 2026-05-16T22:00:00Z");
+    const swapped = await suggestCalibration(root, targetId);
+    assert.equal(swapped.calibration, earlyId);
+  });
+});
+
+test("suggestCalibration filters pool by ticket type", async () => {
+  await withBoard(async (root) => {
+    const taskTargetPath = await createTicket(root, "task", "Task target", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:50:00Z"),
+    });
+    const bugTargetPath = await createTicket(root, "bug", "Bug target", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:51:00Z"),
+    });
+    const taskTargetId = path.basename(taskTargetPath).split("_", 1)[0];
+    const bugTargetId = path.basename(bugTargetPath).split("_", 1)[0];
+
+    const doneTask1 = await createTicket(root, "task", "Done task 1", {
+      status: "done",
+      now: new Date("2026-05-14T20:52:00Z"),
+    });
+    const doneTask2 = await createTicket(root, "task", "Done task 2", {
+      status: "done",
+      now: new Date("2026-05-14T20:53:00Z"),
+    });
+    const doneTask3 = await createTicket(root, "task", "Done task 4", {
+      status: "done",
+      now: new Date("2026-05-14T20:54:00Z"),
+    });
+    const doneBug = await createTicket(root, "bug", "Done bug", {
+      status: "done",
+      now: new Date("2026-05-14T20:55:00Z"),
+    });
+    await stampCalibrated(doneTask1, 1, "2026-05-14T21:00:00Z", "2026-05-14T22:00:00Z");
+    await stampCalibrated(doneTask2, 2, "2026-05-14T21:00:00Z", "2026-05-14T22:01:00Z");
+    await stampCalibrated(doneTask3, 4, "2026-05-14T21:00:00Z", "2026-05-14T22:02:00Z");
+    await stampCalibrated(doneBug, 8, "2026-05-14T21:00:00Z", "2026-05-14T22:03:00Z");
+
+    const doneBugId = path.basename(doneBug).split("_", 1)[0];
+    const doneTask2Id = path.basename(doneTask2).split("_", 1)[0];
+
+    const bugResult = await suggestCalibration(root, bugTargetId);
+    assert.equal(bugResult.poolSize, 1);
+    assert.equal(bugResult.calibration, doneBugId);
+
+    const taskResult = await suggestCalibration(root, taskTargetId);
+    assert.equal(taskResult.poolSize, 3);
+    // Lower-median of [1, 2, 4] is 2.
+    assert.equal(taskResult.median, 2);
+    assert.equal(taskResult.calibration, doneTask2Id);
+  });
+});
+
+test("suggestCalibration excludes tickets missing estimate or work timestamps", async () => {
+  await withBoard(async (root) => {
+    const targetPath = await createTicket(root, "task", "Field-missing target", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:50:00Z"),
+    });
+    const targetId = path.basename(targetPath).split("_", 1)[0];
+
+    const missingEstimate = await createTicket(root, "task", "Missing estimate", {
+      status: "done",
+      now: new Date("2026-05-14T20:51:00Z"),
+    });
+    const missingStart = await createTicket(root, "task", "Missing start", {
+      status: "done",
+      now: new Date("2026-05-14T20:52:00Z"),
+    });
+    const full = await createTicket(root, "task", "Fully populated", {
+      status: "done",
+      now: new Date("2026-05-14T20:53:00Z"),
+    });
+    // missingEstimate: no estimate, but has timestamps
+    await replaceText(missingEstimate, "workStartedAt: null", "workStartedAt: 2026-05-14T21:00:00Z");
+    await replaceText(missingEstimate, "workCompletedAt: null", "workCompletedAt: 2026-05-14T22:00:00Z");
+    // missingStart: has estimate, but no workStartedAt
+    await replaceText(missingStart, "estimate: null", "estimate: 4");
+    await replaceText(missingStart, "estimateBasis: null", "estimateBasis: bootstrap");
+    // (and no work timestamps; workCompletedAt without workStartedAt would be a validate error,
+    //  so we leave both null here.)
+    await stampCalibrated(full, 2, "2026-05-14T21:00:00Z", "2026-05-14T22:00:00Z");
+
+    const fullId = path.basename(full).split("_", 1)[0];
+    const result = await suggestCalibration(root, targetId);
+
+    assert.equal(result.poolSize, 1);
+    assert.equal(result.calibration, fullId);
+  });
+});
+
+test("suggestCalibration excludes non-done statuses even when other fields are stamped", async () => {
+  await withBoard(async (root) => {
+    const targetPath = await createTicket(root, "task", "Status-filtered target", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:50:00Z"),
+    });
+    const targetId = path.basename(targetPath).split("_", 1)[0];
+
+    const notDone = await createTicket(root, "task", "Not done yet", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:51:00Z"),
+    });
+    await stampCalibrated(notDone, 4, "2026-05-14T21:00:00Z", "2026-05-14T22:00:00Z");
+
+    const result = await suggestCalibration(root, targetId);
+    assert.equal(result.calibration, "bootstrap");
+    assert.equal(result.poolSize, 0);
+  });
+});
+
+test("suggestCalibration excludes the target ticket from its own pool", async () => {
+  await withBoard(async (root) => {
+    const targetPath = await createTicket(root, "task", "Self-exclusion target", {
+      status: "done",
+      now: new Date("2026-05-14T20:50:00Z"),
+    });
+    const targetId = path.basename(targetPath).split("_", 1)[0];
+    await stampCalibrated(targetPath, 4, "2026-05-14T21:00:00Z", "2026-05-14T22:00:00Z");
+
+    const other = await createTicket(root, "task", "Other done", {
+      status: "done",
+      now: new Date("2026-05-14T20:51:00Z"),
+    });
+    await stampCalibrated(other, 2, "2026-05-14T21:00:00Z", "2026-05-14T22:01:00Z");
+
+    const otherId = path.basename(other).split("_", 1)[0];
+    const result = await suggestCalibration(root, targetId);
+
+    assert.equal(result.poolSize, 1);
+    assert.equal(result.calibration, otherId);
+  });
+});
+
+test("suggestCalibration throws for an unknown ticket id", async () => {
+  await withBoard(async (root) => {
+    // Seed at least one ticket so the ticket directory exists; the lookup itself should miss.
+    await createTicket(root, "task", "Existing ticket", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await assert.rejects(
+      suggestCalibration(root, "T20990101T0000Z"),
+      /ticket T20990101T0000Z not found/,
+    );
   });
 });
 
