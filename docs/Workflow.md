@@ -166,6 +166,35 @@ Bundled Claude agents:
 - `local-board-tester`
 - `local-board-documenter`
 
+## Optional Steps
+
+`plans/local-board.config.jsonc` may include an `optionalSteps` catalog keyed by stage:
+
+```jsonc
+{
+  "optionalSteps": {
+    "design": [
+      {
+        "name": "security_threat_model",
+        "prompt": "plans/prompts/optional-steps/design/security_threat_model.md",
+        "triggers": "Auth, authorization, cryptography, external API integrations, PII handling, new attack surface."
+      }
+    ],
+    "implement": [],
+    "test": []
+  }
+}
+```
+
+Each stage contains entries shaped `{ name, prompt, triggers, agent? }`.
+
+- `name`: required lowercase snake_case identifier, unique within the stage. It cannot reuse a mandatory action name such as `design`, `implement`, `review`, or `test`.
+- `prompt`: required repo-relative path to the specialty prompt, normally under `plans/prompts/optional-steps/<stage>/`. Config loading validates the string but does not require the file to exist.
+- `triggers`: required human-readable guidance for deciding when the specialty applies.
+- `agent`: optional route override using the same conventions as mandatory action routing: `inline`, `claude-subagent:<agent-name>`, or `codex-task:<mode>`. Omitted entries run inline.
+
+The catalog is config surface only for now. Pending tickets T20260516T1551Z (`gate-check`) and T20260516T1552Z (`specialty-run`) add runtime behavior that reads this catalog from the schema/config output.
+
 ## Strict Routing
 
 `routing.strict: true` makes configured routing mandatory.

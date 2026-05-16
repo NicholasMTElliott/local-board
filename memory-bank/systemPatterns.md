@@ -27,6 +27,7 @@ It defines:
 - `routing.strict` and `routing.doneRequires`
 - retention policy: `archiveDoneAfterDays`, `archiveOnMoveDone`
 - git policy: `defaultBranch`, `commitPlanningChanges`, `autoMerge`
+- `optionalSteps`: per-stage specialty review catalogs (`design`/`implement`/`test`)
 
 ## Ticket Types
 | Prefix | Type | Children |
