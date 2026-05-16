@@ -302,6 +302,9 @@ function validateOptionalStepEntry(entry, stage, seenNames) {
   if (typeof name !== "string" || name.trim() === "") {
     throw new Error(`optionalSteps.${stage} entry is missing a non-empty name`);
   }
+  if (!/^[a-z][a-z0-9_]*$/.test(name)) {
+    throw new Error(`optionalSteps.${stage} entry name "${name}" must be lowercase snake_case (matching /^[a-z][a-z0-9_]*$/)`);
+  }
   if (typeof prompt !== "string" || prompt.trim() === "") {
     throw new Error(`optionalSteps.${stage} entry "${name}" is missing a non-empty prompt`);
   }

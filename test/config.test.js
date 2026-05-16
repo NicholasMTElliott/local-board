@@ -246,6 +246,28 @@ test("loadConfig rejects malformed optionalSteps entries", async () => {
 }`,
       expected: /invalid agent "bogus"/,
     },
+    {
+      label: "name is not snake_case (spaces + capitals)",
+      body: `{
+  "optionalSteps": {
+    "design": [
+      { "name": "Bad Name", "prompt": "a.md", "triggers": "t" }
+    ]
+  }
+}`,
+      expected: /must be lowercase snake_case/,
+    },
+    {
+      label: "name uses hyphens instead of underscores",
+      body: `{
+  "optionalSteps": {
+    "design": [
+      { "name": "not-snake", "prompt": "a.md", "triggers": "t" }
+    ]
+  }
+}`,
+      expected: /must be lowercase snake_case/,
+    },
   ];
 
   for (const testCase of cases) {
@@ -254,6 +276,27 @@ test("loadConfig rejects malformed optionalSteps entries", async () => {
       await assert.rejects(loadConfig(root), testCase.expected, `case ${testCase.label}`);
     });
   }
+});
+
+test("loadConfig accepts valid lowercase snake_case names for optionalSteps entries", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, `{
+  "version": 1,
+  "optionalSteps": {
+    "design": [
+      {
+        "name": "valid_snake_case_name_v2",
+        "prompt": "plans/prompts/optional-steps/design/valid_snake_case_name_v2.md",
+        "triggers": "Any trigger description."
+      }
+    ]
+  }
+}
+`);
+    const config = await loadConfig(root);
+    assert.equal(config.optionalSteps.design.length, 1);
+    assert.equal(config.optionalSteps.design[0].name, "valid_snake_case_name_v2");
+  });
 });
 
 test("loadConfig warns about unknown optionalSteps stage keys without throwing", async () => {
