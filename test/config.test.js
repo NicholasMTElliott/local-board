@@ -76,3 +76,210 @@ test("default Claude subagent routes have matching agent definitions", async () 
     assert.match(text, new RegExp(`^name: ${agentName}$`, "m"));
   }
 });
+
+async function writeConfig(root, body) {
+  await mkdir(path.join(root, "plans"), { recursive: true });
+  await writeFile(path.join(root, "plans", "local-board.config.jsonc"), body, "utf8");
+}
+
+test("loadConfig parses the v1 optionalSteps catalog from the default config", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, defaultConfigJsonc());
+    const config = await loadConfig(root);
+
+    assert.equal(config.optionalSteps.design.length, 3);
+    assert.equal(config.optionalSteps.design[0].name, "security_threat_model");
+    assert.equal(
+      config.optionalSteps.design[0].prompt,
+      "plans/prompts/optional-steps/design/security_threat_model.md",
+    );
+    assert.match(config.optionalSteps.design[0].triggers, /Auth/);
+    assert.equal(config.optionalSteps.design[1].name, "ui_component_review");
+    assert.equal(config.optionalSteps.design[2].name, "ux_interaction_review");
+
+    assert.equal(config.optionalSteps.implement.length, 2);
+    assert.equal(config.optionalSteps.implement[0].name, "security_audit");
+    assert.equal(config.optionalSteps.implement[1].name, "ui_visual_review");
+
+    assert.deepEqual(config.optionalSteps.test, []);
+
+    // None of the v1 entries set agent.
+    for (const stage of ["design", "implement", "test"]) {
+      for (const entry of config.optionalSteps[stage]) {
+        assert.equal(Object.hasOwn(entry, "agent"), false);
+      }
+    }
+  });
+});
+
+test("loadConfig returns empty optionalSteps catalog when the block is omitted", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, `{
+  "version": 1
+}
+`);
+    const config = await loadConfig(root);
+    assert.deepEqual(config.optionalSteps.design, []);
+    assert.deepEqual(config.optionalSteps.implement, []);
+    assert.deepEqual(config.optionalSteps.test, []);
+  });
+});
+
+test("loadConfig preserves an optional agent override on optionalSteps entries", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, `{
+  "version": 1,
+  "optionalSteps": {
+    "design": [
+      {
+        "name": "custom_review",
+        "prompt": "plans/prompts/optional-steps/design/custom_review.md",
+        "triggers": "Anything",
+        "agent": "claude-subagent:local-board-reviewer"
+      }
+    ]
+  }
+}
+`);
+    const config = await loadConfig(root);
+    assert.equal(config.optionalSteps.design.length, 1);
+    assert.equal(config.optionalSteps.design[0].agent, "claude-subagent:local-board-reviewer");
+  });
+});
+
+test("loadConfig rejects duplicate optionalSteps names within a stage", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, `{
+  "version": 1,
+  "optionalSteps": {
+    "design": [
+      {
+        "name": "duplicate_name",
+        "prompt": "a.md",
+        "triggers": "first"
+      },
+      {
+        "name": "duplicate_name",
+        "prompt": "b.md",
+        "triggers": "second"
+      }
+    ]
+  }
+}
+`);
+    await assert.rejects(loadConfig(root), /duplicate name "duplicate_name"/);
+  });
+});
+
+test("loadConfig rejects malformed optionalSteps entries", async () => {
+  const cases = [
+    {
+      label: "missing name",
+      body: `{
+  "optionalSteps": {
+    "design": [
+      { "prompt": "a.md", "triggers": "t" }
+    ]
+  }
+}`,
+      expected: /missing a non-empty name/,
+    },
+    {
+      label: "missing prompt",
+      body: `{
+  "optionalSteps": {
+    "design": [
+      { "name": "foo", "triggers": "t" }
+    ]
+  }
+}`,
+      expected: /missing a non-empty prompt/,
+    },
+    {
+      label: "missing triggers",
+      body: `{
+  "optionalSteps": {
+    "design": [
+      { "name": "foo", "prompt": "a.md" }
+    ]
+  }
+}`,
+      expected: /missing a non-empty triggers/,
+    },
+    {
+      label: "entry is a string",
+      body: `{
+  "optionalSteps": {
+    "design": [ "not_an_object" ]
+  }
+}`,
+      expected: /entries must be objects/,
+    },
+    {
+      label: "design is an object",
+      body: `{
+  "optionalSteps": {
+    "design": { "name": "foo" }
+  }
+}`,
+      expected: /optionalSteps\.design must be an array/,
+    },
+    {
+      label: "name collides with mandatory action",
+      body: `{
+  "optionalSteps": {
+    "design": [
+      { "name": "review", "prompt": "a.md", "triggers": "t" }
+    ]
+  }
+}`,
+      expected: /collides with a mandatory action/,
+    },
+    {
+      label: "agent fails prefix validation",
+      body: `{
+  "optionalSteps": {
+    "design": [
+      { "name": "foo", "prompt": "a.md", "triggers": "t", "agent": "bogus" }
+    ]
+  }
+}`,
+      expected: /invalid agent "bogus"/,
+    },
+  ];
+
+  for (const testCase of cases) {
+    await withRoot(async (root) => {
+      await writeConfig(root, testCase.body);
+      await assert.rejects(loadConfig(root), testCase.expected, `case ${testCase.label}`);
+    });
+  }
+});
+
+test("loadConfig warns about unknown optionalSteps stage keys without throwing", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, `{
+  "optionalSteps": {
+    "docs": [
+      { "name": "doc_review", "prompt": "a.md", "triggers": "t" }
+    ]
+  }
+}
+`);
+
+    const originalWarn = console.warn;
+    const warnings = [];
+    console.warn = (...args) => warnings.push(args.join(" "));
+    try {
+      const config = await loadConfig(root);
+      assert.equal(Object.hasOwn(config.optionalSteps, "docs"), false);
+      assert.deepEqual(config.optionalSteps.design, []);
+      assert.deepEqual(config.optionalSteps.implement, []);
+      assert.deepEqual(config.optionalSteps.test, []);
+      assert.equal(warnings.length, 1);
+      assert.match(warnings[0], /unknown optionalSteps stage "docs"/);
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+});

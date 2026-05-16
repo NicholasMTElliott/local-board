@@ -260,5 +260,44 @@
     "defaultBranch": null,
     "commitPlanningChanges": true,
     "autoMerge": false
+  },
+
+  // Optional specialty review steps per stage. Each entry is shaped
+  // { name, prompt, triggers, agent? }. The gate-check action picks zero or more
+  // entries from the relevant stage catalog based on the work just completed.
+  // Per-entry agent overrides the default routing for that specialty;
+  // when omitted the specialty runs inline. Setting a stage to an empty array
+  // wipes the default catalog for that stage; the loader's array merge is wholesale.
+  "optionalSteps": {
+    "design": [
+      {
+        "name": "security_threat_model",
+        "prompt": "plans/prompts/optional-steps/design/security_threat_model.md",
+        "triggers": "Auth, authorization, cryptography, external API integrations, PII handling, new attack surface."
+      },
+      {
+        "name": "ui_component_review",
+        "prompt": "plans/prompts/optional-steps/design/ui_component_review.md",
+        "triggers": "New or substantially modified user-facing UI components, layout changes, design-system additions."
+      },
+      {
+        "name": "ux_interaction_review",
+        "prompt": "plans/prompts/optional-steps/design/ux_interaction_review.md",
+        "triggers": "New user-facing flows, interaction patterns, or significant changes to existing flows."
+      }
+    ],
+    "implement": [
+      {
+        "name": "security_audit",
+        "prompt": "plans/prompts/optional-steps/impl/security_audit.md",
+        "triggers": "Changes to auth code, input validation, external API calls, credential handling."
+      },
+      {
+        "name": "ui_visual_review",
+        "prompt": "plans/prompts/optional-steps/impl/ui_visual_review.md",
+        "triggers": "Visible UI changes - styles, layouts, components, accessibility-relevant markup."
+      }
+    ],
+    "test": []
   }
 }
