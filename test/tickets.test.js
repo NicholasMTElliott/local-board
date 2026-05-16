@@ -547,6 +547,37 @@ test("archiveDoneTickets preserves workStartedAt and workCompletedAt", async () 
   });
 });
 
+test("moveTicket directly to done with workStartedAt null leaves both timestamps null", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Direct move to done", {
+      status: "ready_for_docs",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer", "Implementation evidence.");
+    await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
+    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester", "Test evidence.");
+    await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
+
+    // Sanity-check: workStartedAt was never stamped (no startTicketWork call was made).
+    const before = await readFile(ticketPath, "utf8");
+    assert.match(before, /^workStartedAt: null$/m);
+    assert.match(before, /^workCompletedAt: null$/m);
+
+    const moved = await moveTicket(root, ticketId, "done", { now: new Date("2026-05-16T15:37:00Z") });
+
+    const text = await readFile(moved, "utf8");
+    // Documented behavior: moveTicket only stamps workCompletedAt when workStartedAt is
+    // already set, to preserve the validator invariant that workCompletedAt requires
+    // workStartedAt. A direct move-to-done without prior start-work leaves both null.
+    assert.match(text, /^workStartedAt: null$/m);
+    assert.match(text, /^workCompletedAt: null$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
 test("strict routing blocks done when optional routing fields are absent", async () => {
   await withBoard(async (root) => {
     const ticketPath = await createTicket(root, "task", "Strict legacy done", {
