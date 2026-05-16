@@ -248,6 +248,53 @@ The CLI is a read-only resolver. It does not invoke an agent and does not decide
 
 An empty `requestedSteps` array means no specialty step is needed. T20260516T1552Z (`specialty-run` dispatcher) consumes each requested step name to resolve the specialty prompt/agent. T20260516T1554Z (`orchestrator wiring`) consumes the whole gate-check handoff pattern in the local-board orchestration flow.
 
+### Specialty-run
+
+Resolve one requested optional step with:
+
+```sh
+local-board specialty-run <ticket-id> <step-name> [--json]
+```
+
+The command derives the specialty stage from the ticket status:
+
+| Ticket status | Stage |
+|---|---|
+| `designing` | `design` |
+| `ready_for_design` | `design` |
+| `implementing` | `implement` |
+| `ready_for_implementation` | `implement` |
+| `testing` | `test` |
+| `ready_for_test` | `test` |
+
+Other statuses are rejected. `<step-name>` must match an entry in `config.optionalSteps[stage]`.
+
+With `--json`, the command returns:
+
+```json
+{
+  "ticket": "<ticket-id>",
+  "stage": "implement",
+  "step": "security_audit",
+  "prompt": "<absolute-path-to-specialty-prompt>",
+  "agent": "inline",
+  "ticketPath": "plans/tickets/ready/<ticket-file>.md",
+  "ticketContext": {
+    "id": "<ticket-id>",
+    "type": "task",
+    "status": "ready_for_implementation",
+    "priority": "P2",
+    "path": "plans/tickets/ready/<ticket-file>.md",
+    "title": "<title>",
+    "currentAction": "implement",
+    "requirement": "<Requirement section text>",
+    "acceptanceCriteria": "<Acceptance Criteria section text>"
+  }
+}
+```
+
+`agent` defaults to `inline` when the optional step entry has no override. The CLI is a read-only dispatcher: it does not invoke any agent. The orchestrator hands the returned `prompt`, `agent`, and `ticketContext` to the resolved execution route, then records completion with the normal step evidence flow. T20260516T1554Z (`orchestrator wiring`) will connect this resolver to the gate-check `requestedSteps` loop.
+
 ## Estimation
 
 `plans/local-board.config.jsonc` may include an `estimation` block:

@@ -114,11 +114,12 @@ When `retention.archiveOnMoveDone` is true, `move ... done` archives other done 
 `start-work` stamps `workStartedAt` once. `move ... done` stamps `workCompletedAt` only when `workStartedAt` is set. Archive does not touch wall-clock fields.
 
 ## MVP CLI
-Use `node ./bin/local-board.js validate`, `list`, `query-next`, `query-ticket`, `state-report`, `schema`, `create`, `estimate`, `calibration suggest`, `gate-check`, `start-work`, `begin-step`, `complete-step`, `approve-inline`, `move`, `set`, `section`, `comment`, `link-parent`, `link-child`, `block`, `unblock`, and `init`.
+Use `node ./bin/local-board.js validate`, `list`, `query-next`, `query-ticket`, `state-report`, `schema`, `create`, `estimate`, `calibration suggest`, `gate-check`, `specialty-run`, `start-work`, `begin-step`, `complete-step`, `approve-inline`, `move`, `set`, `section`, `comment`, `link-parent`, `link-child`, `block`, `unblock`, and `init`.
 
 `move` changes status and relocates the ticket. `set` updates mutable front matter fields. `section` replaces section content. `comment` appends timestamped notes to a ticket section.
 `estimate` records story points and an estimate basis, validates points against the configured scale, and requires `--force` to overwrite.
 `gate-check` returns the gate-check prompt path, stage specialty catalog, and narrow ticket context; the orchestrator dispatches the prompt and consumes its `requestedSteps` JSON.
+`specialty-run` resolves one configured optional step for the current stage without invoking an agent.
 `section --file <path>` is preferred for generated or multi-line Markdown; inline section text is for short edits.
 `query-next`, `query-ticket`, and `begin-step` return advisory transition guidance for the current status. The orchestrator should choose one returned status when moving after an action.
 `start-work` creates or switches to a ticket branch, records `branch`, logs the action, and moves `ready_for_implementation` tickets to `implementing`.
