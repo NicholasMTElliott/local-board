@@ -299,6 +299,135 @@ test("loadConfig accepts valid lowercase snake_case names for optionalSteps entr
   });
 });
 
+test("loadConfig parses the shipped estimation block", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, defaultConfigJsonc());
+    const config = await loadConfig(root);
+
+    assert.equal(config.estimation.enabled, true);
+    assert.deepEqual(config.estimation.scale, [1, 2, 4, 8]);
+    assert.equal(config.estimation.bootstrapDefault, 4);
+    assert.equal(config.estimation.splitThreshold, 16);
+  });
+});
+
+test("loadConfig defaults estimation when the block is omitted (backward-compat disabled)", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, `{
+  "version": 1
+}
+`);
+    const config = await loadConfig(root);
+
+    assert.equal(config.estimation.enabled, false);
+    assert.deepEqual(config.estimation.scale, [1, 2, 4, 8]);
+    assert.equal(config.estimation.bootstrapDefault, 4);
+    assert.equal(config.estimation.splitThreshold, 16);
+  });
+});
+
+test("loadConfig fills missing estimation keys from defaults on partial overlay", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, `{
+  "version": 1,
+  "estimation": {
+    "enabled": true
+  }
+}
+`);
+    const config = await loadConfig(root);
+
+    assert.equal(config.estimation.enabled, true);
+    assert.deepEqual(config.estimation.scale, [1, 2, 4, 8]);
+    assert.equal(config.estimation.bootstrapDefault, 4);
+    assert.equal(config.estimation.splitThreshold, 16);
+  });
+});
+
+test("loadConfig rejects invalid estimation.scale values", async () => {
+  const cases = [
+    {
+      label: "scale is not an array",
+      body: `{ "estimation": { "enabled": true, "scale": "x", "bootstrapDefault": 4, "splitThreshold": 16 } }`,
+      expected: /estimation\.scale must be a non-empty array/,
+    },
+    {
+      label: "scale is empty",
+      body: `{ "estimation": { "enabled": true, "scale": [], "bootstrapDefault": 4, "splitThreshold": 16 } }`,
+      expected: /estimation\.scale must be a non-empty array/,
+    },
+    {
+      label: "scale contains zero",
+      body: `{ "estimation": { "enabled": true, "scale": [0, 1, 2], "bootstrapDefault": 1, "splitThreshold": 16 } }`,
+      expected: /must contain only positive integers/,
+    },
+    {
+      label: "scale contains a non-integer",
+      body: `{ "estimation": { "enabled": true, "scale": [1, 2.5, 4], "bootstrapDefault": 4, "splitThreshold": 16 } }`,
+      expected: /must contain only positive integers/,
+    },
+    {
+      label: "scale is unsorted",
+      body: `{ "estimation": { "enabled": true, "scale": [4, 2, 1], "bootstrapDefault": 4, "splitThreshold": 16 } }`,
+      expected: /strictly ascending/,
+    },
+    {
+      label: "scale contains duplicates",
+      body: `{ "estimation": { "enabled": true, "scale": [1, 2, 2, 4], "bootstrapDefault": 4, "splitThreshold": 16 } }`,
+      expected: /strictly ascending/,
+    },
+  ];
+
+  for (const testCase of cases) {
+    await withRoot(async (root) => {
+      await writeConfig(root, testCase.body);
+      await assert.rejects(loadConfig(root), testCase.expected, `case ${testCase.label}`);
+    });
+  }
+});
+
+test("loadConfig rejects estimation.bootstrapDefault not in scale", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, `{
+  "estimation": {
+    "enabled": true,
+    "scale": [1, 2, 3],
+    "bootstrapDefault": 4,
+    "splitThreshold": 16
+  }
+}
+`);
+    await assert.rejects(loadConfig(root), /bootstrapDefault 4 is not a member of/);
+  });
+});
+
+test("loadConfig rejects invalid estimation.enabled types", async () => {
+  const cases = [
+    `{ "estimation": { "enabled": "true", "scale": [1, 2, 4, 8], "bootstrapDefault": 4, "splitThreshold": 16 } }`,
+    `{ "estimation": { "enabled": 1, "scale": [1, 2, 4, 8], "bootstrapDefault": 4, "splitThreshold": 16 } }`,
+  ];
+  for (const body of cases) {
+    await withRoot(async (root) => {
+      await writeConfig(root, body);
+      await assert.rejects(loadConfig(root), /estimation\.enabled must be a boolean/);
+    });
+  }
+});
+
+test("loadConfig rejects invalid estimation.splitThreshold values", async () => {
+  const cases = [
+    `{ "estimation": { "enabled": true, "scale": [1, 2, 4, 8], "bootstrapDefault": 4, "splitThreshold": 0 } }`,
+    `{ "estimation": { "enabled": true, "scale": [1, 2, 4, 8], "bootstrapDefault": 4, "splitThreshold": -1 } }`,
+    `{ "estimation": { "enabled": true, "scale": [1, 2, 4, 8], "bootstrapDefault": 4, "splitThreshold": 1.5 } }`,
+  ];
+  for (const body of cases) {
+    await withRoot(async (root) => {
+      await writeConfig(root, body);
+      await assert.rejects(loadConfig(root), /estimation\.splitThreshold must be a positive integer/);
+    });
+  }
+});
+
 test("loadConfig warns about unknown optionalSteps stage keys without throwing", async () => {
   await withRoot(async (root) => {
     await writeConfig(root, `{

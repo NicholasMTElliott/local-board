@@ -299,5 +299,17 @@
       }
     ],
     "test": []
+  },
+
+  // Relative-sized estimation. Sized after design; enforced on complete-step
+  // design for tasks and bugs when enabled is true. Stories and epics are exempt.
+  // scale: allowed point values, must be a sorted-ascending array of positive integers.
+  // bootstrapDefault: anchor value when no calibration exists; must be in scale.
+  // splitThreshold: estimator flags tickets at or above this for decomposition.
+  "estimation": {
+    "enabled": true,
+    "scale": [1, 2, 4, 8],
+    "bootstrapDefault": 4,
+    "splitThreshold": 16
   }
 }

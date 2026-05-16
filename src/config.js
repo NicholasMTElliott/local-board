@@ -248,6 +248,12 @@ export const DEFAULT_CONFIG = {
     implement: [],
     test: [],
   },
+  estimation: {
+    enabled: false,
+    scale: [1, 2, 4, 8],
+    bootstrapDefault: 4,
+    splitThreshold: 16,
+  },
 };
 
 export async function loadConfig(root = ".") {
@@ -256,6 +262,7 @@ export async function loadConfig(root = ".") {
     const parsed = parseJsonc(await readFile(configPath, "utf8"));
     const merged = mergeConfig(DEFAULT_CONFIG, parsed);
     normalizeOptionalSteps(merged, configPath);
+    normalizeEstimation(merged);
     return merged;
   } catch (error) {
     if (error.code === "ENOENT") {
@@ -292,6 +299,55 @@ function normalizeOptionalSteps(merged, configPath) {
   }
 
   merged.optionalSteps = normalized;
+}
+
+function normalizeEstimation(merged) {
+  if (!isObject(merged.estimation)) {
+    throw new Error("estimation must be an object");
+  }
+
+  const { enabled, scale, bootstrapDefault, splitThreshold } = merged.estimation;
+
+  if (typeof enabled !== "boolean") {
+    throw new Error("estimation.enabled must be a boolean");
+  }
+
+  if (!Array.isArray(scale) || scale.length === 0) {
+    throw new Error("estimation.scale must be a non-empty array of positive integers");
+  }
+  for (const value of scale) {
+    if (!Number.isInteger(value) || value <= 0) {
+      throw new Error(
+        `estimation.scale must contain only positive integers; got ${JSON.stringify(value)}`,
+      );
+    }
+  }
+  for (let index = 1; index < scale.length; index += 1) {
+    if (scale[index] <= scale[index - 1]) {
+      throw new Error(
+        `estimation.scale must be strictly ascending; got ${JSON.stringify(scale)}`,
+      );
+    }
+  }
+
+  if (!Number.isInteger(bootstrapDefault) || bootstrapDefault <= 0) {
+    throw new Error(
+      `estimation.bootstrapDefault must be a positive integer; got ${JSON.stringify(bootstrapDefault)}`,
+    );
+  }
+  if (!scale.includes(bootstrapDefault)) {
+    throw new Error(
+      `estimation.bootstrapDefault ${bootstrapDefault} is not a member of estimation.scale ${JSON.stringify(
+        scale,
+      )}; set bootstrapDefault explicitly when overriding scale`,
+    );
+  }
+
+  if (!Number.isInteger(splitThreshold) || splitThreshold <= 0) {
+    throw new Error(
+      `estimation.splitThreshold must be a positive integer; got ${JSON.stringify(splitThreshold)}`,
+    );
+  }
 }
 
 function validateOptionalStepEntry(entry, stage, seenNames) {
@@ -650,6 +706,18 @@ export function defaultConfigJsonc() {
       }
     ],
     "test": []
+  },
+
+  // Relative-sized estimation. Sized after design; enforced on complete-step
+  // design for tasks and bugs when enabled is true. Stories and epics are exempt.
+  // scale: allowed point values, must be a sorted-ascending array of positive integers.
+  // bootstrapDefault: anchor value when no calibration exists; must be in scale.
+  // splitThreshold: estimator flags tickets at or above this for decomposition.
+  "estimation": {
+    "enabled": true,
+    "scale": [1, 2, 4, 8],
+    "bootstrapDefault": 4,
+    "splitThreshold": 16
   }
 }
 `;

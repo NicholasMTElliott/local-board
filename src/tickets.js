@@ -862,6 +862,7 @@ export async function schemaRecord(root = ".") {
     retention: config.retention,
     git: config.git,
     optionalSteps: config.optionalSteps,
+    estimation: config.estimation,
   };
 }
 
