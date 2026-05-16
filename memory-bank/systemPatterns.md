@@ -28,6 +28,7 @@ It defines:
 - retention policy: `archiveDoneAfterDays`, `archiveOnMoveDone`
 - git policy: `defaultBranch`, `commitPlanningChanges`, `autoMerge`
 - `optionalSteps`: per-stage specialty review catalogs (`design`/`implement`/`test`)
+- `estimation`: relative-sized story points config (`enabled`, `scale`, `bootstrapDefault`, `splitThreshold`)
 
 ## Ticket Types
 | Prefix | Type | Children |

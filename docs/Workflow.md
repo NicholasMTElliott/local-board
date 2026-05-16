@@ -203,6 +203,30 @@ Each stage contains entries shaped `{ name, prompt, triggers, agent? }`.
 
 The catalog is config surface only for now. Pending tickets T20260516T1551Z (`gate-check`) and T20260516T1552Z (`specialty-run`) add runtime behavior that reads this catalog from the schema/config output.
 
+## Estimation
+
+`plans/local-board.config.jsonc` may include an `estimation` block:
+
+```jsonc
+{
+  "estimation": {
+    "enabled": true,
+    "scale": [1, 2, 4, 8],
+    "bootstrapDefault": 4,
+    "splitThreshold": 16
+  }
+}
+```
+
+- `enabled`: turns estimation behavior on for projects that opt in.
+- `scale`: allowed relative story point values, as a strictly ascending array of positive integers.
+- `bootstrapDefault`: first-ticket anchor value when no calibration ticket exists. It must be a member of `scale`.
+- `splitThreshold`: value at or above which estimation should flag the ticket for decomposition.
+
+Legacy configs that omit `estimation` load with `enabled: false` so existing projects do not silently turn on estimation behavior during upgrade. Freshly initialized projects include the block with `enabled: true`.
+
+The block is config/schema surface now. T20260516T1548Z (`enforcement`) will make design completion consume `estimation.enabled`, and T20260516T1549Z (`estimator prompts`) will consume `scale`, `bootstrapDefault`, and `splitThreshold`.
+
 ## Strict Routing
 
 `routing.strict: true` makes configured routing mandatory.
