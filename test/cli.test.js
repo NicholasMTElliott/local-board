@@ -816,6 +816,145 @@ test("CLI specialty-run returns per-entry agent override when configured", async
   });
 });
 
+test("CLI specialty-run status-to-stage mapping covers every status", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    // Overwrite the seeded config with a non-empty test catalog so that
+    // testing/ready_for_test can be exercised against a populated stage. The
+    // empty-test rejection branch is then asserted afterward against the
+    // default seed (which has optionalSteps.test = []).
+    const fullConfigPath = path.join(root, "plans", "local-board.config.jsonc");
+    await writeFile(
+      fullConfigPath,
+      JSON.stringify({
+        version: 1,
+        optionalSteps: {
+          design: [
+            {
+              name: "security_threat_model",
+              prompt: "plans/prompts/optional-steps/design/security_threat_model.md",
+              triggers: "Auth, authorization, cryptography, external API integrations, PII handling, new attack surface.",
+            },
+          ],
+          implement: [
+            {
+              name: "security_audit",
+              prompt: "plans/prompts/optional-steps/impl/security_audit.md",
+              triggers: "Changes to auth code, input validation, external API calls, credential handling.",
+            },
+          ],
+          test: [
+            {
+              name: "perf_smoke",
+              prompt: "plans/prompts/optional-steps/test/perf_smoke.md",
+              triggers: "Hot paths, query plans, large input fixtures.",
+            },
+          ],
+        },
+      }),
+      "utf8",
+    );
+
+    // Table-driven coverage of statusToStage. Success cases exit 0 with the
+    // expected resolved stage; reject-unmapped cases exit 2 with the
+    // unmapped-status error; the empty-catalog branch is asserted afterward.
+    const successCases = [
+      { status: "designing", stage: "design", step: "security_threat_model" },
+      { status: "ready_for_design", stage: "design", step: "security_threat_model" },
+      { status: "implementing", stage: "implement", step: "security_audit" },
+      { status: "ready_for_implementation", stage: "implement", step: "security_audit" },
+      { status: "testing", stage: "test", step: "perf_smoke" },
+      { status: "ready_for_test", stage: "test", step: "perf_smoke" },
+    ];
+
+    for (const { status, stage, step } of successCases) {
+      const c = await runCli([
+        "--root",
+        root,
+        "create",
+        "task",
+        `Specialty success ${status}`,
+        "--status",
+        status,
+        "--priority",
+        "P2",
+      ]);
+      assert.equal(c.code, 0, c.stderr);
+      const tid = path.basename(c.stdout.trim()).split("_", 1)[0];
+      const r = await runCli(["--root", root, "specialty-run", tid, step, "--json"]);
+      assert.equal(r.code, 0, `${status}: ${r.stderr}`);
+      const out = JSON.parse(r.stdout);
+      assert.equal(out.ticket, tid, `${status}: ticket id`);
+      assert.equal(out.stage, stage, `${status}: resolved stage`);
+      assert.equal(out.step, step, `${status}: resolved step`);
+      assert.equal(out.agent, "inline", `${status}: default agent`);
+      assert.equal(out.ticketContext.status, status, `${status}: ticketContext.status`);
+    }
+
+    const rejectUnmappedCases = [
+      "ready_for_review",
+      "reviewing",
+      "ready_for_docs",
+      "backlog",
+      "questions",
+      "blocked",
+      "done",
+      "archived",
+    ];
+
+    for (const status of rejectUnmappedCases) {
+      const c = await runCli([
+        "--root",
+        root,
+        "create",
+        "task",
+        `Specialty reject ${status}`,
+        "--status",
+        status,
+        "--priority",
+        "P2",
+      ]);
+      assert.equal(c.code, 0, c.stderr);
+      const tid = path.basename(c.stdout.trim()).split("_", 1)[0];
+      const r = await runCli(["--root", root, "specialty-run", tid, "security_audit"]);
+      assert.equal(r.code, 2, `${status} should reject; stderr=${r.stderr}`);
+      assert.match(
+        r.stderr,
+        new RegExp(`status ${status} has no specialty stage`),
+        `${status} unmapped error message`,
+      );
+    }
+
+    // Empty-catalog branch for testing/ready_for_test against the default seed.
+    // The brief explicitly requires asserting that the seeded test=[] catalog
+    // rejects with the "(available: none)" suffix.
+    await rm(fullConfigPath, { force: true });
+    for (const status of ["testing", "ready_for_test"]) {
+      const c = await runCli([
+        "--root",
+        root,
+        "create",
+        "task",
+        `Specialty empty-test ${status}`,
+        "--status",
+        status,
+        "--priority",
+        "P2",
+      ]);
+      assert.equal(c.code, 0, c.stderr);
+      const tid = path.basename(c.stdout.trim()).split("_", 1)[0];
+      const r = await runCli(["--root", root, "specialty-run", tid, "anything"]);
+      assert.equal(r.code, 2, `${status} empty-test: ${r.stderr}`);
+      assert.match(
+        r.stderr,
+        /optionalSteps\.test \(available: none\)/,
+        `${status}: empty test catalog error`,
+      );
+    }
+  });
+});
+
 async function runCli(args) {
   const stdout = [];
   const stderr = [];
