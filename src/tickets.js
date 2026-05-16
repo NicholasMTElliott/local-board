@@ -72,6 +72,9 @@ const REQUIRED_FIELDS = [
   "blocks",
   "branch",
   "estimate",
+  "estimateBasis",
+  "workStartedAt",
+  "workCompletedAt",
   "created",
   "updated",
 ];
@@ -80,7 +83,8 @@ const OPTIONAL_FIELDS = ["completedSteps", "routingApprovals"];
 const CANONICAL_FIELDS = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS];
 const IMMUTABLE_FIELDS = new Set(["id", "type", "created", "updated"]);
 const LIST_FIELDS = ["children", "blockedBy", "blocks", ...OPTIONAL_FIELDS];
-const NULLABLE_FIELDS = ["parent", "branch", "estimate"];
+const NULLABLE_FIELDS = ["parent", "branch", "estimate", "estimateBasis", "workStartedAt", "workCompletedAt"];
+const LEGACY_DEFAULT_NULL_FIELDS = ["estimateBasis", "workStartedAt", "workCompletedAt"];
 const STANDARD_SECTIONS = [
   "Requirement",
   "Acceptance Criteria",
@@ -143,6 +147,11 @@ async function* walkMarkdown(root) {
 export async function readTicket(filePath) {
   const text = await readFile(filePath, "utf8");
   const { frontMatter, body } = parseMarkdownTicket(text);
+  for (const field of LEGACY_DEFAULT_NULL_FIELDS) {
+    if (!Object.hasOwn(frontMatter, field)) {
+      frontMatter[field] = null;
+    }
+  }
   return {
     path: path.resolve(filePath),
     frontMatter,
@@ -603,6 +612,24 @@ function validateTicketShape(board, ticket) {
     }
   }
 
+  if (typeof fm.estimateBasis === "string" && fm.estimateBasis !== "bootstrap" && !TICKET_ID_RE.test(fm.estimateBasis)) {
+    issues.push(`${ticket.path}: estimateBasis must be a ticket id or the literal bootstrap`);
+  }
+
+  for (const field of ["workStartedAt", "workCompletedAt"]) {
+    if (typeof fm[field] === "string" && Number.isNaN(parseDate(fm[field]).getTime())) {
+      issues.push(`${ticket.path}: ${field} must be an ISO-8601 datetime with a timezone offset or Z`);
+    }
+  }
+
+  if (fm.estimate === null && typeof fm.estimateBasis === "string") {
+    issues.push(`${ticket.path}: estimateBasis must be null when estimate is null`);
+  }
+
+  if (typeof fm.workCompletedAt === "string" && fm.workStartedAt === null) {
+    issues.push(`${ticket.path}: workCompletedAt requires workStartedAt to be set`);
+  }
+
   if (ticket.title === "") {
     issues.push(`${ticket.path}: missing # Title`);
   }
@@ -989,6 +1016,9 @@ blockedBy: []
 blocks: []
 branch: null
 estimate: null
+estimateBasis: null
+workStartedAt: null
+workCompletedAt: null
 completedSteps: []
 routingApprovals: []
 created: ${created}

@@ -597,6 +597,181 @@ test("stateReport summarizes ticket state and next action", async () => {
   });
 });
 
+test("createTicket scaffolds estimateBasis, workStartedAt, workCompletedAt as null in canonical order", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Estimation fields scaffold", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^estimateBasis: null$/m);
+    assert.match(text, /^workStartedAt: null$/m);
+    assert.match(text, /^workCompletedAt: null$/m);
+
+    const lines = text.split("\n");
+    const estimateIdx = lines.findIndex((line) => line === "estimate: null");
+    const basisIdx = lines.findIndex((line) => line === "estimateBasis: null");
+    const startedIdx = lines.findIndex((line) => line === "workStartedAt: null");
+    const completedIdx = lines.findIndex((line) => line === "workCompletedAt: null");
+    const createdIdx = lines.findIndex((line) => line.startsWith("created: "));
+
+    assert.ok(estimateIdx >= 0 && basisIdx > estimateIdx, "estimateBasis follows estimate");
+    assert.ok(startedIdx > basisIdx, "workStartedAt follows estimateBasis");
+    assert.ok(completedIdx > startedIdx, "workCompletedAt follows workStartedAt");
+    assert.ok(createdIdx > completedIdx, "created follows workCompletedAt");
+
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+test("populated estimateBasis with ticket id round-trips through write and validates clean", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Populated estimation", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await replaceText(ticketPath, "estimate: null", "estimate: 4");
+    await replaceText(ticketPath, "estimateBasis: null", "estimateBasis: T20260514T2056Z");
+    await replaceText(ticketPath, "workStartedAt: null", "workStartedAt: 2026-05-14T21:00:00Z");
+    await replaceText(ticketPath, "workCompletedAt: null", "workCompletedAt: 2026-05-14T22:00:00Z");
+
+    assert.deepEqual(validate(await discover(root)), []);
+
+    await setTicketField(root, ticketId, "priority", "P1", {
+      now: new Date("2026-05-14T22:30:00Z"),
+    });
+    const rewritten = await readFile(ticketPath, "utf8");
+    assert.match(rewritten, /^estimate: 4$/m);
+    assert.match(rewritten, /^estimateBasis: T20260514T2056Z$/m);
+    assert.match(rewritten, /^workStartedAt: 2026-05-14T21:00:00Z$/m);
+    assert.match(rewritten, /^workCompletedAt: 2026-05-14T22:00:00Z$/m);
+
+    const lines = rewritten.split("\n");
+    const estimateIdx = lines.findIndex((line) => line === "estimate: 4");
+    const basisIdx = lines.findIndex((line) => line === "estimateBasis: T20260514T2056Z");
+    const startedIdx = lines.findIndex((line) => line === "workStartedAt: 2026-05-14T21:00:00Z");
+    const completedIdx = lines.findIndex((line) => line === "workCompletedAt: 2026-05-14T22:00:00Z");
+    assert.ok(estimateIdx < basisIdx && basisIdx < startedIdx && startedIdx < completedIdx, "canonical order preserved");
+  });
+});
+
+test("estimateBasis accepts the literal bootstrap", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Bootstrap basis", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await replaceText(ticketPath, "estimate: null", "estimate: 2");
+    await replaceText(ticketPath, "estimateBasis: null", "estimateBasis: bootstrap");
+
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+test("validate rejects malformed estimateBasis", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Malformed basis", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await replaceText(ticketPath, "estimate: null", "estimate: 3");
+    await replaceText(ticketPath, "estimateBasis: null", "estimateBasis: nonsense-string");
+
+    const issues = validate(await discover(root));
+    assert.equal(
+      issues.some((issue) => issue.includes("estimateBasis must be a ticket id or the literal bootstrap")),
+      true,
+    );
+  });
+});
+
+test("validate rejects estimateBasis when estimate is null", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Basis without estimate", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await replaceText(ticketPath, "estimateBasis: null", "estimateBasis: T20260514T2056Z");
+
+    const issues = validate(await discover(root));
+    assert.equal(
+      issues.some((issue) => issue.includes("estimateBasis must be null when estimate is null")),
+      true,
+    );
+  });
+});
+
+test("validate rejects malformed workStartedAt and workCompletedAt timestamps", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Malformed timestamps", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await replaceText(ticketPath, "workStartedAt: null", "workStartedAt: not-a-timestamp");
+
+    let issues = validate(await discover(root));
+    assert.equal(
+      issues.some((issue) => issue.includes("workStartedAt must be an ISO-8601 datetime with a timezone offset or Z")),
+      true,
+    );
+
+    await replaceText(ticketPath, "workStartedAt: not-a-timestamp", "workStartedAt: 2026-05-14T21:00:00Z");
+    await replaceText(ticketPath, "workCompletedAt: null", "workCompletedAt: not-a-timestamp");
+
+    issues = validate(await discover(root));
+    assert.equal(
+      issues.some((issue) =>
+        issue.includes("workCompletedAt must be an ISO-8601 datetime with a timezone offset or Z"),
+      ),
+      true,
+    );
+  });
+});
+
+test("validate rejects workCompletedAt without workStartedAt", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Completed without started", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await replaceText(ticketPath, "workCompletedAt: null", "workCompletedAt: 2026-05-14T22:00:00Z");
+
+    const issues = validate(await discover(root));
+    assert.equal(
+      issues.some((issue) => issue.includes("workCompletedAt requires workStartedAt to be set")),
+      true,
+    );
+  });
+});
+
+test("legacy ticket without new estimation fields parses and validates via read-time defaulting", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Legacy ticket shape", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await replaceText(ticketPath, "estimateBasis: null\n", "");
+    await replaceText(ticketPath, "workStartedAt: null\n", "");
+    await replaceText(ticketPath, "workCompletedAt: null\n", "");
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.equal(text.includes("estimateBasis"), false);
+    assert.equal(text.includes("workStartedAt"), false);
+    assert.equal(text.includes("workCompletedAt"), false);
+
+    const board = await discover(root);
+    const ticket = board.tickets[0];
+    assert.equal(ticket.frontMatter.estimateBasis, null);
+    assert.equal(ticket.frontMatter.workStartedAt, null);
+    assert.equal(ticket.frontMatter.workCompletedAt, null);
+
+    assert.deepEqual(validate(board), []);
+  });
+});
+
 test("initProject scaffolds a new local-board project idempotently", async () => {
   await withBoard(async (root) => {
     const first = await initProject(root);
