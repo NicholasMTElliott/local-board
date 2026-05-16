@@ -72,6 +72,9 @@ const REQUIRED_FIELDS = [
   "blocks",
   "branch",
   "estimate",
+  "estimateBasis",
+  "workStartedAt",
+  "workCompletedAt",
   "created",
   "updated",
 ];
@@ -80,7 +83,8 @@ const OPTIONAL_FIELDS = ["completedSteps", "routingApprovals"];
 const CANONICAL_FIELDS = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS];
 const IMMUTABLE_FIELDS = new Set(["id", "type", "created", "updated"]);
 const LIST_FIELDS = ["children", "blockedBy", "blocks", ...OPTIONAL_FIELDS];
-const NULLABLE_FIELDS = ["parent", "branch", "estimate"];
+const NULLABLE_FIELDS = ["parent", "branch", "estimate", "estimateBasis", "workStartedAt", "workCompletedAt"];
+const LEGACY_DEFAULT_NULL_FIELDS = ["estimateBasis", "workStartedAt", "workCompletedAt"];
 const STANDARD_SECTIONS = [
   "Requirement",
   "Acceptance Criteria",
@@ -94,7 +98,7 @@ const STANDARD_SECTIONS = [
   "Run Log",
 ];
 
-const TICKET_ID_RE = /^[ESBT]\d{8}T\d{4}Z$/;
+export const TICKET_ID_RE = /^[ESBT]\d{8}T\d{4}Z$/;
 const TICKET_FILE_RE = /^(?<id>[ESBT]\d{8}T\d{4}Z)_(?<slug>[a-z0-9]+(?:-[a-z0-9]+)*)\.md$/;
 
 export async function discover(root = ".") {
@@ -143,6 +147,11 @@ async function* walkMarkdown(root) {
 export async function readTicket(filePath) {
   const text = await readFile(filePath, "utf8");
   const { frontMatter, body } = parseMarkdownTicket(text);
+  for (const field of LEGACY_DEFAULT_NULL_FIELDS) {
+    if (!Object.hasOwn(frontMatter, field)) {
+      frontMatter[field] = null;
+    }
+  }
   return {
     path: path.resolve(filePath),
     frontMatter,
@@ -271,8 +280,16 @@ export async function moveTicket(root, ticketId, status, options = {}) {
     throw new Error(`status must be one of ${[...STATUSES].sort().join(", ")}`);
   }
 
+  const now = options.now ?? new Date();
   const { board, ticket } = await findTicket(root, ticketId);
-  const frontMatter = withUpdated({ ...ticket.frontMatter, status }, options.now);
+  const frontMatter = withUpdated({ ...ticket.frontMatter, status }, now);
+  if (
+    status === "done" &&
+    frontMatter.workCompletedAt === null &&
+    typeof frontMatter.workStartedAt === "string"
+  ) {
+    frontMatter.workCompletedAt = formatIsoSeconds(now);
+  }
   if (status === "done") {
     const config = await loadConfig(board.root);
     const issues = validateRouting({ ...ticket, status, frontMatter }, config);
@@ -443,6 +460,17 @@ export async function completeStep(root, ticketId, action, executor, evidence, o
     throw new Error(`routing validation failed:\n${routingIssues.join("\n")}`);
   }
 
+  if (
+    action === "design"
+    && (ticket.frontMatter.type === "task" || ticket.frontMatter.type === "bug")
+    && config.estimation?.enabled === true
+    && (ticket.frontMatter.estimate === null || ticket.frontMatter.estimate === undefined)
+  ) {
+    throw new Error(
+      `complete-step design refused: ticket has no estimate. Run local-board estimate ${ticket.id} POINTS [--basis ID] before completing design (config.estimation.enabled is true).`,
+    );
+  }
+
   const now = options.now ?? new Date();
   const frontMatter = withUpdated(
     {
@@ -601,6 +629,24 @@ function validateTicketShape(board, ticket) {
     if (Object.hasOwn(fm, field) && Number.isNaN(parseDate(fm[field]).getTime())) {
       issues.push(`${ticket.path}: ${field} must be an ISO-8601 datetime with a timezone offset or Z`);
     }
+  }
+
+  if (typeof fm.estimateBasis === "string" && fm.estimateBasis !== "bootstrap" && !TICKET_ID_RE.test(fm.estimateBasis)) {
+    issues.push(`${ticket.path}: estimateBasis must be a ticket id or the literal bootstrap`);
+  }
+
+  for (const field of ["workStartedAt", "workCompletedAt"]) {
+    if (typeof fm[field] === "string" && Number.isNaN(parseDate(fm[field]).getTime())) {
+      issues.push(`${ticket.path}: ${field} must be an ISO-8601 datetime with a timezone offset or Z`);
+    }
+  }
+
+  if (fm.estimate === null && typeof fm.estimateBasis === "string") {
+    issues.push(`${ticket.path}: estimateBasis must be null when estimate is null`);
+  }
+
+  if (typeof fm.workCompletedAt === "string" && fm.workStartedAt === null) {
+    issues.push(`${ticket.path}: workCompletedAt requires workStartedAt to be set`);
   }
 
   if (ticket.title === "") {
@@ -802,6 +848,75 @@ export async function stateReport(root = ".") {
   };
 }
 
+export async function suggestCalibration(root, ticketId) {
+  const { ticket: target } = await findTicket(root, ticketId);
+  const board = await discover(root);
+  if (board.loadErrors.length > 0) {
+    throw new Error(board.loadErrors.join("\n"));
+  }
+
+  const pool = board.tickets.filter((candidate) => {
+    if (candidate.id === target.id) {
+      return false;
+    }
+    if (candidate.status !== "done") {
+      return false;
+    }
+    if (candidate.type !== target.type) {
+      return false;
+    }
+    const fm = candidate.frontMatter;
+    if (fm.estimate === null || fm.estimate === undefined) {
+      return false;
+    }
+    if (typeof fm.workStartedAt !== "string") {
+      return false;
+    }
+    if (typeof fm.workCompletedAt !== "string") {
+      return false;
+    }
+    if (Number.isNaN(Number(fm.estimate))) {
+      return false;
+    }
+    return true;
+  });
+
+  if (pool.length === 0) {
+    return {
+      ticket: target.id,
+      calibration: "bootstrap",
+      poolSize: 0,
+      median: null,
+      reason: `No prior calibrated tickets of type ${target.type}`,
+    };
+  }
+
+  const sortedEstimates = pool.map((entry) => Number(entry.frontMatter.estimate)).sort((left, right) => left - right);
+  // Lower-median: for odd n take the middle; for even n take the lower of the two middle entries.
+  const medianIndex = Math.floor((sortedEstimates.length - 1) / 2);
+  const median = sortedEstimates[medianIndex];
+
+  const ranked = [...pool].sort((left, right) => {
+    const leftDiff = Math.abs(Number(left.frontMatter.estimate) - median);
+    const rightDiff = Math.abs(Number(right.frontMatter.estimate) - median);
+    if (leftDiff !== rightDiff) {
+      return leftDiff - rightDiff;
+    }
+    // Tie-break: most-recent workCompletedAt first. ISO-8601 with Z suffix sorts lexicographically.
+    return right.frontMatter.workCompletedAt.localeCompare(left.frontMatter.workCompletedAt);
+  });
+
+  const pick = ranked[0];
+  const noun = `${target.type}${pool.length === 1 ? "" : "s"}`;
+  return {
+    ticket: target.id,
+    calibration: pick.id,
+    poolSize: pool.length,
+    median,
+    reason: `Closest to median estimate ${median} among ${pool.length} calibrated ${noun}; selected by recency on tie.`,
+  };
+}
+
 export async function schemaRecord(root = ".") {
   const config = await loadConfig(root);
   return {
@@ -826,6 +941,8 @@ export async function schemaRecord(root = ".") {
     routing: config.routing,
     retention: config.retention,
     git: config.git,
+    optionalSteps: config.optionalSteps,
+    estimation: config.estimation,
   };
 }
 
@@ -989,6 +1106,9 @@ blockedBy: []
 blocks: []
 branch: null
 estimate: null
+estimateBasis: null
+workStartedAt: null
+workCompletedAt: null
 completedSteps: []
 routingApprovals: []
 created: ${created}
@@ -1117,6 +1237,19 @@ function appendToSection(body, section, line) {
   return `${before}${line}\n${after}`;
 }
 
+export function getSectionText(body, section) {
+  const sectionRe = new RegExp(`(^## ${escapeRegExp(section)}\\s*$)`, "m");
+  const match = body.match(sectionRe);
+  if (match === null || match.index === undefined) {
+    return null;
+  }
+
+  const sectionStart = match.index + match[0].length;
+  const nextSection = body.slice(sectionStart).search(/\n## /);
+  const endAt = nextSection === -1 ? body.length : sectionStart + nextSection;
+  return body.slice(sectionStart, endAt).trim();
+}
+
 function replaceSection(body, section, text) {
   const sectionRe = new RegExp(`(^## ${escapeRegExp(section)}\\s*$)`, "m");
   const match = body.match(sectionRe);
@@ -1214,7 +1347,7 @@ function formatTicketTimestamp(date) {
   return date.toISOString().replace(/[-:]/g, "").slice(0, 13) + "Z";
 }
 
-function formatIsoSeconds(date) {
+export function formatIsoSeconds(date) {
   return date.toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 

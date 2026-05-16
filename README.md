@@ -21,6 +21,10 @@ node ./bin/local-board.js query-ticket T20260514T1234Z --json
 node ./bin/local-board.js state-report --json
 node ./bin/local-board.js schema --json
 node ./bin/local-board.js create task "Implement ticket validator" --status ready_for_design --priority P1
+node ./bin/local-board.js estimate T20260514T1234Z 4 --basis bootstrap --json
+node ./bin/local-board.js calibration suggest T20260514T1234Z --json
+node ./bin/local-board.js gate-check T20260514T1234Z --stage implement --json
+node ./bin/local-board.js specialty-run T20260514T1234Z security_audit --json
 node ./bin/local-board.js start-work T20260514T1234Z --json
 node ./bin/local-board.js begin-step T20260514T1234Z --json
 node ./bin/local-board.js complete-step T20260514T1234Z review --executor codex-task:read-only --evidence "Review notes added."
@@ -73,6 +77,7 @@ The test suite includes function-level ticket kernel coverage and CLI command-su
 - [docs/LocalBoardConcept.md](docs/LocalBoardConcept.md) — human-readable overview of the repo-native board model, workflow, and tradeoffs.
 - [docs/TicketFormat.md](docs/TicketFormat.md) — ticket naming, front matter, sections, and state rules.
 - [docs/Workflow.md](docs/Workflow.md) — lifecycle from epic/story decomposition through implementation, review, test, docs, and closeout.
+- [docs/specialty-steps.md](docs/specialty-steps.md) — optional security, UI, and UX specialty review steps and how the gate-check classifier dispatches them.
 
 ## Repository Layout
 
@@ -82,7 +87,9 @@ agents/              Installable agent definitions
 docs/                Human-facing documentation
 plans/               File-backed board: tickets, prompts, templates
 plans/tickets/       Ticket files grouped by human-friendly status folders
-plans/prompts/       Role and step prompts for delegated agents
+plans/prompts/       Role and step prompts for delegated agents, including estimator and estimate prompts
+plans/prompts/optional-steps/
+                     Specialty review prompts for optional workflow steps
 plans/templates/     Reusable ticket templates
 plans/local-board.config.jsonc
 src/                 Node.js ESM ticket parser, validator, writer, picker, and CLI

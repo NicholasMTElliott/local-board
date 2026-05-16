@@ -139,6 +139,44 @@ When `retention.archiveOnMoveDone` is `true`, `move ... done` also archives othe
 
 If auto-merge refuses to proceed, fix the reported git state or ask the user. Do not mark the ticket done by manual front matter edits.
 
+## Specialty Steps
+
+After the mandatory action for a `design`, `implement`, or `test` stage completes (evidence recorded via `complete-step`) and before running `move <ticket-id> <next-status>`, run gate-check to ask the gate agent which specialty reviews apply.
+
+Gate-check is not run after `decompose` or `document`.
+
+```sh
+node <<SCRIPT_PATH>> gate-check <ticket-id> --stage <stage> --json
+```
+
+`<stage>` must be one of `design`, `implement`, or `test`. The CLI returns the gate-check `prompt` path, a narrow `ticketContext`, and the stage `catalog` of available specialty entries. The CLI does not invoke an agent.
+
+Dispatch the gate-check prompt through the configured agent (or inline) and parse the agent's strict JSON response:
+
+```json
+{ "requestedSteps": ["security_audit"] }
+```
+
+An empty `requestedSteps` array is the normal case; skip the specialty pass and proceed to `move`.
+
+For each name in `requestedSteps`, resolve the specialty:
+
+```sh
+node <<SCRIPT_PATH>> specialty-run <ticket-id> <step-name> --json
+```
+
+`specialty-run` derives the stage automatically from ticket status; do not pass `--stage`. It returns the resolved `prompt`, the `agent` route (defaulting to `inline`), and a narrow `ticketContext`. Dispatch the prompt through that route, parse the specialty agent's `verdict` (`PASS` / `CONCERNS` / `FAIL`) plus `findings`, then record evidence:
+
+```sh
+node <<SCRIPT_PATH>> complete-step <ticket-id> <step-name> --executor <executor> --evidence "<VERDICT>: <short summary>"
+```
+
+Use the exact `<step-name>` returned by gate-check. `specialty-run` rejects unknown names. Use the resolved executor string (the `agent` value from `specialty-run`, or `inline`) so the `<step-name>:<executor>` evidence pair satisfies strict routing.
+
+Only after every requested specialty has recorded completion evidence does the orchestrator run `move <ticket-id> <next-status>`.
+
+Specialty evidence is never gated by `routing.doneRequires`; it lives in `completedSteps` for traceability but never blocks closeout. Tickets that run zero specialties still pass `validate` and `move ... done`.
+
 ## Delegation
 
 Use `plans/local-board.config.jsonc` to decide how each action is handled. Comments and trailing commas are valid:
@@ -181,6 +219,10 @@ node <<SCRIPT_PATH>> start-work <ticket-id> [--branch <branch>] [--allow-dirty] 
 node <<SCRIPT_PATH>> begin-step <ticket-id> [--action <action>] [--json]
 node <<SCRIPT_PATH>> complete-step <ticket-id> <action> --executor <executor> --evidence "<evidence>" [--json]
 node <<SCRIPT_PATH>> approve-inline <ticket-id> <action> --reason "<reason>" [--json]
+node <<SCRIPT_PATH>> gate-check <ticket-id> --stage <stage> [--json]
+node <<SCRIPT_PATH>> specialty-run <ticket-id> <step-name> [--json]
+node <<SCRIPT_PATH>> calibration suggest <ticket-id> [--json]
+node <<SCRIPT_PATH>> estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]
 node <<SCRIPT_PATH>> move <ticket-id> <status> [--json]
 node <<SCRIPT_PATH>> set <ticket-id> <field> <value>
 node <<SCRIPT_PATH>> section <ticket-id> "<text>" --section "<section>"

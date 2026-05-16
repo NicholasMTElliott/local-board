@@ -3,6 +3,16 @@ import path from "node:path";
 
 export const CONFIG_PATH = path.join("plans", "local-board.config.jsonc");
 
+export const OPTIONAL_STEP_STAGES = ["design", "implement", "test"];
+const MANDATORY_ACTION_NAMES = new Set([
+  "decompose",
+  "design",
+  "implement",
+  "review",
+  "test",
+  "document",
+]);
+
 export const DEFAULT_CONFIG = {
   version: 1,
   workflow: {
@@ -233,19 +243,158 @@ export const DEFAULT_CONFIG = {
     commitPlanningChanges: true,
     autoMerge: false,
   },
+  optionalSteps: {
+    design: [],
+    implement: [],
+    test: [],
+  },
+  estimation: {
+    enabled: false,
+    scale: [1, 2, 4, 8],
+    bootstrapDefault: 4,
+    splitThreshold: 16,
+  },
 };
 
 export async function loadConfig(root = ".") {
   const configPath = path.resolve(root, CONFIG_PATH);
   try {
     const parsed = parseJsonc(await readFile(configPath, "utf8"));
-    return mergeConfig(DEFAULT_CONFIG, parsed);
+    const merged = mergeConfig(DEFAULT_CONFIG, parsed);
+    normalizeOptionalSteps(merged, configPath);
+    normalizeEstimation(merged);
+    return merged;
   } catch (error) {
     if (error.code === "ENOENT") {
       return structuredClone(DEFAULT_CONFIG);
     }
     throw new Error(`${configPath}: ${error.message}`);
   }
+}
+
+function normalizeOptionalSteps(merged, configPath) {
+  if (!isObject(merged.optionalSteps)) {
+    merged.optionalSteps = { design: [], implement: [], test: [] };
+    return;
+  }
+
+  const normalized = {};
+  for (const stage of OPTIONAL_STEP_STAGES) {
+    const value = merged.optionalSteps[stage];
+    if (value === undefined || value === null) {
+      normalized[stage] = [];
+      continue;
+    }
+    if (!Array.isArray(value)) {
+      throw new Error(`optionalSteps.${stage} must be an array`);
+    }
+    const seenNames = new Set();
+    normalized[stage] = value.map((entry) => validateOptionalStepEntry(entry, stage, seenNames));
+  }
+
+  for (const key of Object.keys(merged.optionalSteps)) {
+    if (!OPTIONAL_STEP_STAGES.includes(key)) {
+      console.warn(`${configPath}: ignoring unknown optionalSteps stage "${key}"`);
+    }
+  }
+
+  merged.optionalSteps = normalized;
+}
+
+function normalizeEstimation(merged) {
+  if (!isObject(merged.estimation)) {
+    throw new Error("estimation must be an object");
+  }
+
+  const { enabled, scale, bootstrapDefault, splitThreshold } = merged.estimation;
+
+  if (typeof enabled !== "boolean") {
+    throw new Error("estimation.enabled must be a boolean");
+  }
+
+  if (!Array.isArray(scale) || scale.length === 0) {
+    throw new Error("estimation.scale must be a non-empty array of positive integers");
+  }
+  for (const value of scale) {
+    if (!Number.isInteger(value) || value <= 0) {
+      throw new Error(
+        `estimation.scale must contain only positive integers; got ${JSON.stringify(value)}`,
+      );
+    }
+  }
+  for (let index = 1; index < scale.length; index += 1) {
+    if (scale[index] <= scale[index - 1]) {
+      throw new Error(
+        `estimation.scale must be strictly ascending; got ${JSON.stringify(scale)}`,
+      );
+    }
+  }
+
+  if (!Number.isInteger(bootstrapDefault) || bootstrapDefault <= 0) {
+    throw new Error(
+      `estimation.bootstrapDefault must be a positive integer; got ${JSON.stringify(bootstrapDefault)}`,
+    );
+  }
+  if (!scale.includes(bootstrapDefault)) {
+    throw new Error(
+      `estimation.bootstrapDefault ${bootstrapDefault} is not a member of estimation.scale ${JSON.stringify(
+        scale,
+      )}; set bootstrapDefault explicitly when overriding scale`,
+    );
+  }
+
+  if (!Number.isInteger(splitThreshold) || splitThreshold <= 0) {
+    throw new Error(
+      `estimation.splitThreshold must be a positive integer; got ${JSON.stringify(splitThreshold)}`,
+    );
+  }
+}
+
+function validateOptionalStepEntry(entry, stage, seenNames) {
+  if (!isObject(entry)) {
+    throw new Error(`optionalSteps.${stage} entries must be objects`);
+  }
+  const { name, prompt, triggers, agent } = entry;
+  if (typeof name !== "string" || name.trim() === "") {
+    throw new Error(`optionalSteps.${stage} entry is missing a non-empty name`);
+  }
+  if (!/^[a-z][a-z0-9_]*$/.test(name)) {
+    throw new Error(`optionalSteps.${stage} entry name "${name}" must be lowercase snake_case (matching /^[a-z][a-z0-9_]*$/)`);
+  }
+  if (typeof prompt !== "string" || prompt.trim() === "") {
+    throw new Error(`optionalSteps.${stage} entry "${name}" is missing a non-empty prompt`);
+  }
+  if (typeof triggers !== "string" || triggers.trim() === "") {
+    throw new Error(`optionalSteps.${stage} entry "${name}" is missing a non-empty triggers`);
+  }
+  if (MANDATORY_ACTION_NAMES.has(name)) {
+    throw new Error(
+      `optionalSteps.${stage} entry name "${name}" collides with a mandatory action`,
+    );
+  }
+  if (seenNames.has(name)) {
+    throw new Error(`optionalSteps.${stage} has duplicate name "${name}"`);
+  }
+  seenNames.add(name);
+
+  const normalized = { name, prompt, triggers };
+  if (agent !== undefined) {
+    if (typeof agent !== "string" || !isValidOptionalStepAgent(agent)) {
+      throw new Error(
+        `optionalSteps.${stage} entry "${name}" has invalid agent "${String(agent)}"`,
+      );
+    }
+    normalized.agent = agent;
+  }
+  return normalized;
+}
+
+function isValidOptionalStepAgent(value) {
+  return (
+    value === "inline" ||
+    /^claude-subagent:[a-z0-9][a-z0-9-]*$/.test(value) ||
+    /^codex-task:[a-z0-9][a-z0-9-]*$/.test(value)
+  );
 }
 
 export async function writeDefaultConfig(root = ".", overwrite = false) {
@@ -518,6 +667,57 @@ export function defaultConfigJsonc() {
     "defaultBranch": null,
     "commitPlanningChanges": true,
     "autoMerge": false
+  },
+
+  // Optional specialty review steps per stage. Each entry is shaped
+  // { name, prompt, triggers, agent? }. The gate-check action picks zero or more
+  // entries from the relevant stage catalog based on the work just completed.
+  // Per-entry agent overrides the default routing for that specialty;
+  // when omitted the specialty runs inline. Setting a stage to an empty array
+  // wipes the default catalog for that stage; the loader's array merge is wholesale.
+  "optionalSteps": {
+    "design": [
+      {
+        "name": "security_threat_model",
+        "prompt": "plans/prompts/optional-steps/design/security_threat_model.md",
+        "triggers": "Auth, authorization, cryptography, external API integrations, PII handling, new attack surface."
+      },
+      {
+        "name": "ui_component_review",
+        "prompt": "plans/prompts/optional-steps/design/ui_component_review.md",
+        "triggers": "New or substantially modified user-facing UI components, layout changes, design-system additions."
+      },
+      {
+        "name": "ux_interaction_review",
+        "prompt": "plans/prompts/optional-steps/design/ux_interaction_review.md",
+        "triggers": "New user-facing flows, interaction patterns, or significant changes to existing flows."
+      }
+    ],
+    "implement": [
+      {
+        "name": "security_audit",
+        "prompt": "plans/prompts/optional-steps/impl/security_audit.md",
+        "triggers": "Changes to auth code, input validation, external API calls, credential handling."
+      },
+      {
+        "name": "ui_visual_review",
+        "prompt": "plans/prompts/optional-steps/impl/ui_visual_review.md",
+        "triggers": "Visible UI changes - styles, layouts, components, accessibility-relevant markup."
+      }
+    ],
+    "test": []
+  },
+
+  // Relative-sized estimation. Sized after design; enforced on complete-step
+  // design for tasks and bugs when enabled is true. Stories and epics are exempt.
+  // scale: allowed point values, must be a sorted-ascending array of positive integers.
+  // bootstrapDefault: anchor value when no calibration exists; must be in scale.
+  // splitThreshold: estimator flags tickets at or above this for decomposition.
+  "estimation": {
+    "enabled": true,
+    "scale": [1, 2, 4, 8],
+    "bootstrapDefault": 4,
+    "splitThreshold": 16
   }
 }
 `;

@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import path from "node:path";
 
 import {
   appendTicketComment,
@@ -9,6 +10,8 @@ import {
   completeStep,
   createTicket,
   discover,
+  findTicket,
+  getSectionText,
   linkParent,
   moveTicket,
   nextTicket,
@@ -19,13 +22,15 @@ import {
   setTicketField,
   setTicketSection,
   stateReport,
+  suggestCalibration,
+  TICKET_ID_RE,
   ticketRecord,
   unblockTicket,
   unlinkParent,
   validate,
 } from "./tickets.js";
 import { assertAutoMergeReady, autoMergeTicketBranch, startTicketWork } from "./git.js";
-import { loadConfig } from "./config.js";
+import { loadConfig, OPTIONAL_STEP_STAGES } from "./config.js";
 import { initProject } from "./scaffold.js";
 
 export async function main(argv) {
@@ -99,6 +104,22 @@ export async function main(argv) {
     }
     if (command === "unblock") {
       return await commandUnblock(root, args);
+    }
+    if (command === "estimate") {
+      return await commandEstimate(root, args);
+    }
+    if (command === "gate-check") {
+      return await commandGateCheck(root, args);
+    }
+    if (command === "specialty-run") {
+      return await commandSpecialtyRun(root, args);
+    }
+    if (command === "calibration") {
+      const sub = args.shift();
+      if (sub === "suggest") {
+        return await commandCalibrationSuggest(root, args);
+      }
+      throw new Error(`unknown calibration subcommand: ${sub ?? "(missing)"}`);
     }
 
     printUsage();
@@ -534,6 +555,220 @@ async function commandUnblock(root, args) {
   return 0;
 }
 
+async function commandEstimate(root, args) {
+  const basisOption = takeOption(args, "--basis");
+  const force = takeFlag(args, "--force");
+  const asJson = takeFlag(args, "--json");
+  const ticketId = args.shift();
+  const rawPoints = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined || rawPoints === undefined) {
+    throw new Error("estimate requires: <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]");
+  }
+
+  const trimmedPoints = rawPoints.trim();
+  if (trimmedPoints === "") {
+    throw new Error("estimate: <points> must be an integer");
+  }
+  const parsedPoints = Number.parseInt(trimmedPoints, 10);
+  if (Number.isNaN(parsedPoints) || String(parsedPoints) !== trimmedPoints) {
+    throw new Error("estimate: <points> must be an integer");
+  }
+
+  const config = await loadConfig(root);
+  const scale = config.estimation.scale;
+  if (!scale.includes(parsedPoints)) {
+    throw new Error(`estimate: ${parsedPoints} is not in estimation.scale [${scale.join(", ")}]`);
+  }
+
+  if (basisOption !== undefined && basisOption !== "bootstrap") {
+    if (!TICKET_ID_RE.test(basisOption)) {
+      throw new Error('estimate: --basis must be "bootstrap" or a ticket id matching [ESBT]yyyyMMddTHHmmZ');
+    }
+    await findTicket(root, basisOption);
+  }
+
+  const { ticket } = await findTicket(root, ticketId);
+  const currentEstimate = ticket.frontMatter.estimate ?? null;
+  if (currentEstimate !== null && !force) {
+    throw new Error(`estimate: ticket ${ticketId} already has estimate ${currentEstimate}; pass --force to overwrite`);
+  }
+
+  const effectiveBasis = basisOption ?? "bootstrap";
+  const pointsValue = String(parsedPoints);
+
+  await setTicketField(root, ticketId, "estimate", pointsValue);
+  const ticketPath = await setTicketField(root, ticketId, "estimateBasis", effectiveBasis);
+
+  if (asJson) {
+    console.log(JSON.stringify({ path: ticketPath, estimate: parsedPoints, estimateBasis: effectiveBasis }, null, 2));
+  } else {
+    console.log(ticketPath);
+  }
+  return 0;
+}
+
+async function commandGateCheck(root, args) {
+  const asJson = takeFlag(args, "--json");
+  const stage = takeOption(args, "--stage");
+  const ticketId = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined || stage === undefined) {
+    throw new Error("gate-check requires: <ticket-id> --stage <stage> [--json]");
+  }
+  if (!OPTIONAL_STEP_STAGES.includes(stage)) {
+    throw new Error(`gate-check --stage must be one of ${OPTIONAL_STEP_STAGES.join(", ")}`);
+  }
+
+  const config = await loadConfig(root);
+  const { ticket } = await findTicket(root, ticketId);
+
+  const catalog = (config.optionalSteps?.[stage] ?? []).map((entry) => {
+    const normalized = {
+      name: entry.name,
+      prompt: entry.prompt,
+      triggers: entry.triggers,
+    };
+    if (Object.hasOwn(entry, "agent")) {
+      normalized.agent = entry.agent;
+    }
+    return normalized;
+  });
+
+  const promptPath = path.resolve(root, "plans", "prompts", "steps", "gate-check.md");
+  const baseRecord = ticketRecord(root, ticket);
+  const currentAction = config.workflow?.statusActions?.[ticket.status] ?? null;
+  const ticketContext = {
+    id: baseRecord.id,
+    type: baseRecord.type,
+    status: baseRecord.status,
+    priority: baseRecord.priority,
+    path: baseRecord.path,
+    title: baseRecord.title,
+    currentAction,
+    requirement: getSectionText(ticket.body, "Requirement") ?? "",
+    acceptanceCriteria: getSectionText(ticket.body, "Acceptance Criteria") ?? "",
+  };
+
+  const payload = {
+    ticket: ticket.id,
+    stage,
+    prompt: promptPath,
+    ticketPath: ticket.path,
+    ticketContext,
+    catalog,
+  };
+
+  if (asJson) {
+    console.log(JSON.stringify(payload, null, 2));
+  } else {
+    console.log(`gate-check ${ticket.id} stage=${stage} catalog=${catalog.length}`);
+    console.log(promptPath);
+    for (const entry of catalog) {
+      console.log(`- ${entry.name}: ${entry.triggers}`);
+    }
+  }
+  return 0;
+}
+
+async function commandSpecialtyRun(root, args) {
+  const asJson = takeFlag(args, "--json");
+  const ticketId = args.shift();
+  const stepName = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined || stepName === undefined) {
+    throw new Error("specialty-run requires: <ticket-id> <step-name> [--json]");
+  }
+
+  const config = await loadConfig(root);
+  const { ticket } = await findTicket(root, ticketId);
+
+  const stage = statusToStage(ticket.status);
+  if (stage === null) {
+    throw new Error(
+      `specialty-run: status ${ticket.status} has no specialty stage (expected designing, ready_for_design, implementing, ready_for_implementation, testing, or ready_for_test)`,
+    );
+  }
+
+  const catalog = config.optionalSteps?.[stage] ?? [];
+  const entry = catalog.find((candidate) => candidate.name === stepName);
+  if (entry === undefined) {
+    const available = catalog.length === 0 ? "none" : catalog.map((c) => c.name).join(", ");
+    throw new Error(
+      `specialty-run: step ${stepName} not found in optionalSteps.${stage} (available: ${available})`,
+    );
+  }
+
+  const promptPath = path.resolve(root, entry.prompt);
+  const agent = Object.hasOwn(entry, "agent") ? entry.agent : "inline";
+
+  const baseRecord = ticketRecord(root, ticket);
+  const currentAction = config.workflow?.statusActions?.[ticket.status] ?? null;
+  const ticketContext = {
+    id: baseRecord.id,
+    type: baseRecord.type,
+    status: baseRecord.status,
+    priority: baseRecord.priority,
+    path: baseRecord.path,
+    title: baseRecord.title,
+    currentAction,
+    requirement: getSectionText(ticket.body, "Requirement") ?? "",
+    acceptanceCriteria: getSectionText(ticket.body, "Acceptance Criteria") ?? "",
+  };
+
+  const payload = {
+    ticket: ticket.id,
+    stage,
+    step: entry.name,
+    prompt: promptPath,
+    agent,
+    ticketPath: ticket.path,
+    ticketContext,
+  };
+
+  if (asJson) {
+    console.log(JSON.stringify(payload, null, 2));
+  } else {
+    console.log(`specialty-run ${ticket.id} step=${entry.name} stage=${stage} agent=${agent}`);
+    console.log(promptPath);
+  }
+  return 0;
+}
+
+function statusToStage(status) {
+  if (status === "designing" || status === "ready_for_design") {
+    return "design";
+  }
+  if (status === "implementing" || status === "ready_for_implementation") {
+    return "implement";
+  }
+  if (status === "testing" || status === "ready_for_test") {
+    return "test";
+  }
+  return null;
+}
+
+async function commandCalibrationSuggest(root, args) {
+  const asJson = takeFlag(args, "--json");
+  const ticketId = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined) {
+    throw new Error("calibration suggest requires: <ticket-id> [--json]");
+  }
+
+  const result = await suggestCalibration(root, ticketId);
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(result.calibration);
+  }
+  return 0;
+}
+
 function takeFlag(args, name) {
   const index = args.indexOf(name);
   if (index === -1) {
@@ -586,5 +821,9 @@ function printUsage() {
   local-board [--root <path>] link-child <parent-ticket-id> <child-ticket-id>
   local-board [--root <path>] unlink-parent <child-ticket-id> <parent-ticket-id>
   local-board [--root <path>] block <ticket-id> <dependency-ticket-id>
-  local-board [--root <path>] unblock <ticket-id> <dependency-ticket-id>`);
+  local-board [--root <path>] unblock <ticket-id> <dependency-ticket-id>
+  local-board [--root <path>] estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]
+  local-board [--root <path>] gate-check <ticket-id> --stage <stage> [--json]
+  local-board [--root <path>] specialty-run <ticket-id> <step-name> [--json]
+  local-board [--root <path>] calibration suggest <ticket-id> [--json]`);
 }

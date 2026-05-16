@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import {
   appendTicketComment,
   approveInline,
+  archiveDoneTickets,
   beginStep,
   blockTicket,
   completeStep,
@@ -20,6 +21,7 @@ import {
   setTicketField,
   setTicketSection,
   stateReport,
+  suggestCalibration,
   unblockTicket,
   validate,
 } from "../src/tickets.js";
@@ -449,6 +451,134 @@ test("strict routing blocks done until required steps have completion evidence",
   });
 });
 
+test("moveTicket to done stamps workCompletedAt when null", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Stamp completion", {
+      status: "ready_for_docs",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    await replaceText(ticketPath, "workStartedAt: null", "workStartedAt: 2026-05-14T21:00:00Z");
+
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer", "Implementation evidence.");
+    await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
+    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester", "Test evidence.");
+    await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
+
+    const moved = await moveTicket(root, ticketId, "done", { now: new Date("2026-05-16T15:37:00Z") });
+
+    const text = await readFile(moved, "utf8");
+    assert.match(text, /^workCompletedAt: 2026-05-16T15:37:00Z$/m);
+    assert.match(text, /^updated: 2026-05-16T15:37:00Z$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("moveTicket re-opening and returning to done preserves the original workCompletedAt", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Reopen preserve completion", {
+      status: "ready_for_docs",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    await replaceText(ticketPath, "workStartedAt: null", "workStartedAt: 2026-05-14T21:00:00Z");
+
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer", "Implementation evidence.");
+    await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
+    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester", "Test evidence.");
+    await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
+
+    await moveTicket(root, ticketId, "done", { now: new Date("2026-05-16T15:37:00Z") });
+    await moveTicket(root, ticketId, "ready_for_review", { now: new Date("2026-05-16T16:00:00Z") });
+    const reclosed = await moveTicket(root, ticketId, "done", { now: new Date("2026-05-16T17:00:00Z") });
+
+    const text = await readFile(reclosed, "utf8");
+    assert.match(text, /^workCompletedAt: 2026-05-16T15:37:00Z$/m);
+  });
+});
+
+test("moveTicket to done preserves a pre-existing workCompletedAt", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Preserve completion", {
+      status: "ready_for_docs",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    await replaceText(ticketPath, "workStartedAt: null", "workStartedAt: 2026-05-14T21:00:00Z");
+    await replaceText(ticketPath, "workCompletedAt: null", "workCompletedAt: 2026-05-14T22:00:00Z");
+
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer", "Implementation evidence.");
+    await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
+    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester", "Test evidence.");
+    await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
+
+    const moved = await moveTicket(root, ticketId, "done", { now: new Date("2026-05-16T15:37:00Z") });
+
+    const text = await readFile(moved, "utf8");
+    assert.match(text, /^workCompletedAt: 2026-05-14T22:00:00Z$/m);
+  });
+});
+
+test("archiveDoneTickets preserves workStartedAt and workCompletedAt", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Archive preserves timestamps", {
+      status: "done",
+      now: new Date("2026-01-01T00:00:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    await replaceText(ticketPath, "workStartedAt: null", "workStartedAt: 2026-01-01T01:00:00Z");
+    await replaceText(ticketPath, "workCompletedAt: null", "workCompletedAt: 2026-01-01T02:00:00Z");
+    await replaceText(ticketPath, "updated: 2026-01-01T00:00:00Z", "updated: 2026-01-01T03:00:00Z");
+
+    const archived = await archiveDoneTickets(root, {
+      archiveDoneAfterDays: 0,
+      now: new Date("2026-05-16T15:37:00Z"),
+    });
+
+    assert.equal(archived.length, 1);
+    const archivedPath = path.join(root, "plans", "tickets", "archive", path.basename(ticketPath));
+    const text = await readFile(archivedPath, "utf8");
+    assert.match(text, /^status: archived$/m);
+    assert.match(text, /^workStartedAt: 2026-01-01T01:00:00Z$/m);
+    assert.match(text, /^workCompletedAt: 2026-01-01T02:00:00Z$/m);
+    assert.equal(archived[0].ticket, ticketId);
+  });
+});
+
+test("moveTicket directly to done with workStartedAt null leaves both timestamps null", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Direct move to done", {
+      status: "ready_for_docs",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer", "Implementation evidence.");
+    await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
+    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester", "Test evidence.");
+    await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
+
+    // Sanity-check: workStartedAt was never stamped (no startTicketWork call was made).
+    const before = await readFile(ticketPath, "utf8");
+    assert.match(before, /^workStartedAt: null$/m);
+    assert.match(before, /^workCompletedAt: null$/m);
+
+    const moved = await moveTicket(root, ticketId, "done", { now: new Date("2026-05-16T15:37:00Z") });
+
+    const text = await readFile(moved, "utf8");
+    // Documented behavior: moveTicket only stamps workCompletedAt when workStartedAt is
+    // already set, to preserve the validator invariant that workCompletedAt requires
+    // workStartedAt. A direct move-to-done without prior start-work leaves both null.
+    assert.match(text, /^workStartedAt: null$/m);
+    assert.match(text, /^workCompletedAt: null$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
 test("strict routing blocks done when optional routing fields are absent", async () => {
   await withBoard(async (root) => {
     const ticketPath = await createTicket(root, "task", "Strict legacy done", {
@@ -597,6 +727,217 @@ test("stateReport summarizes ticket state and next action", async () => {
   });
 });
 
+test("createTicket scaffolds estimateBasis, workStartedAt, workCompletedAt as null in canonical order", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Estimation fields scaffold", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^estimateBasis: null$/m);
+    assert.match(text, /^workStartedAt: null$/m);
+    assert.match(text, /^workCompletedAt: null$/m);
+
+    const lines = text.split("\n");
+    const estimateIdx = lines.findIndex((line) => line === "estimate: null");
+    const basisIdx = lines.findIndex((line) => line === "estimateBasis: null");
+    const startedIdx = lines.findIndex((line) => line === "workStartedAt: null");
+    const completedIdx = lines.findIndex((line) => line === "workCompletedAt: null");
+    const createdIdx = lines.findIndex((line) => line.startsWith("created: "));
+
+    assert.ok(estimateIdx >= 0 && basisIdx > estimateIdx, "estimateBasis follows estimate");
+    assert.ok(startedIdx > basisIdx, "workStartedAt follows estimateBasis");
+    assert.ok(completedIdx > startedIdx, "workCompletedAt follows workStartedAt");
+    assert.ok(createdIdx > completedIdx, "created follows workCompletedAt");
+
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+test("populated estimateBasis with ticket id round-trips through write and validates clean", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Populated estimation", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await replaceText(ticketPath, "estimate: null", "estimate: 4");
+    await replaceText(ticketPath, "estimateBasis: null", "estimateBasis: T20260514T2056Z");
+    await replaceText(ticketPath, "workStartedAt: null", "workStartedAt: 2026-05-14T21:00:00Z");
+    await replaceText(ticketPath, "workCompletedAt: null", "workCompletedAt: 2026-05-14T22:00:00Z");
+
+    assert.deepEqual(validate(await discover(root)), []);
+
+    await setTicketField(root, ticketId, "priority", "P1", {
+      now: new Date("2026-05-14T22:30:00Z"),
+    });
+    const rewritten = await readFile(ticketPath, "utf8");
+    assert.match(rewritten, /^estimate: 4$/m);
+    assert.match(rewritten, /^estimateBasis: T20260514T2056Z$/m);
+    assert.match(rewritten, /^workStartedAt: 2026-05-14T21:00:00Z$/m);
+    assert.match(rewritten, /^workCompletedAt: 2026-05-14T22:00:00Z$/m);
+
+    const lines = rewritten.split("\n");
+    const estimateIdx = lines.findIndex((line) => line === "estimate: 4");
+    const basisIdx = lines.findIndex((line) => line === "estimateBasis: T20260514T2056Z");
+    const startedIdx = lines.findIndex((line) => line === "workStartedAt: 2026-05-14T21:00:00Z");
+    const completedIdx = lines.findIndex((line) => line === "workCompletedAt: 2026-05-14T22:00:00Z");
+    assert.ok(estimateIdx < basisIdx && basisIdx < startedIdx && startedIdx < completedIdx, "canonical order preserved");
+  });
+});
+
+test("estimateBasis accepts the literal bootstrap", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Bootstrap basis", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await replaceText(ticketPath, "estimate: null", "estimate: 2");
+    await replaceText(ticketPath, "estimateBasis: null", "estimateBasis: bootstrap");
+
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+test("validate rejects malformed estimateBasis", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Malformed basis", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await replaceText(ticketPath, "estimate: null", "estimate: 3");
+    await replaceText(ticketPath, "estimateBasis: null", "estimateBasis: nonsense-string");
+
+    const issues = validate(await discover(root));
+    assert.equal(
+      issues.some((issue) => issue.includes("estimateBasis must be a ticket id or the literal bootstrap")),
+      true,
+    );
+  });
+});
+
+test("validate rejects estimateBasis when estimate is null", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Basis without estimate", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await replaceText(ticketPath, "estimateBasis: null", "estimateBasis: T20260514T2056Z");
+
+    const issues = validate(await discover(root));
+    assert.equal(
+      issues.some((issue) => issue.includes("estimateBasis must be null when estimate is null")),
+      true,
+    );
+  });
+});
+
+test("validate rejects malformed workStartedAt and workCompletedAt timestamps", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Malformed timestamps", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await replaceText(ticketPath, "workStartedAt: null", "workStartedAt: not-a-timestamp");
+
+    let issues = validate(await discover(root));
+    assert.equal(
+      issues.some((issue) => issue.includes("workStartedAt must be an ISO-8601 datetime with a timezone offset or Z")),
+      true,
+    );
+
+    await replaceText(ticketPath, "workStartedAt: not-a-timestamp", "workStartedAt: 2026-05-14T21:00:00Z");
+    await replaceText(ticketPath, "workCompletedAt: null", "workCompletedAt: not-a-timestamp");
+
+    issues = validate(await discover(root));
+    assert.equal(
+      issues.some((issue) =>
+        issue.includes("workCompletedAt must be an ISO-8601 datetime with a timezone offset or Z"),
+      ),
+      true,
+    );
+  });
+});
+
+test("validate rejects workCompletedAt without workStartedAt", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Completed without started", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await replaceText(ticketPath, "workCompletedAt: null", "workCompletedAt: 2026-05-14T22:00:00Z");
+
+    const issues = validate(await discover(root));
+    assert.equal(
+      issues.some((issue) => issue.includes("workCompletedAt requires workStartedAt to be set")),
+      true,
+    );
+  });
+});
+
+test("legacy ticket without new estimation fields parses and validates via read-time defaulting", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Legacy ticket shape", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await replaceText(ticketPath, "estimateBasis: null\n", "");
+    await replaceText(ticketPath, "workStartedAt: null\n", "");
+    await replaceText(ticketPath, "workCompletedAt: null\n", "");
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.equal(text.includes("estimateBasis"), false);
+    assert.equal(text.includes("workStartedAt"), false);
+    assert.equal(text.includes("workCompletedAt"), false);
+
+    const board = await discover(root);
+    const ticket = board.tickets[0];
+    assert.equal(ticket.frontMatter.estimateBasis, null);
+    assert.equal(ticket.frontMatter.workStartedAt, null);
+    assert.equal(ticket.frontMatter.workCompletedAt, null);
+
+    assert.deepEqual(validate(board), []);
+  });
+});
+
+test("freshly-scaffolded ticket exposes new estimation fields as null in parsed front matter", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "All-null parsed front matter", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+
+    const board = await discover(root);
+    const ticket = board.tickets.find((entry) => entry.path === path.resolve(ticketPath));
+    assert.ok(ticket, "ticket discovered");
+    assert.equal(Object.hasOwn(ticket.frontMatter, "estimateBasis"), true);
+    assert.equal(Object.hasOwn(ticket.frontMatter, "workStartedAt"), true);
+    assert.equal(Object.hasOwn(ticket.frontMatter, "workCompletedAt"), true);
+    assert.equal(ticket.frontMatter.estimateBasis, null);
+    assert.equal(ticket.frontMatter.workStartedAt, null);
+    assert.equal(ticket.frontMatter.workCompletedAt, null);
+  });
+});
+
+test("validate rejects non-string YAML estimateBasis", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Non-string basis", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await replaceText(ticketPath, "estimate: null", "estimate: 2");
+    await replaceText(ticketPath, "estimateBasis: null", "estimateBasis: []");
+
+    const issues = validate(await discover(root));
+    assert.equal(
+      issues.some((issue) => issue.includes("estimateBasis must be null or a string")),
+      true,
+    );
+  });
+});
+
 test("initProject scaffolds a new local-board project idempotently", async () => {
   await withBoard(async (root) => {
     const first = await initProject(root);
@@ -607,6 +948,430 @@ test("initProject scaffolds a new local-board project idempotently", async () =>
     assert.equal(second.skipped.length > 0, true);
     assert.equal((await loadConfig(root)).agents.implement, "claude-subagent:local-board-implementer");
     assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+async function stampCalibrated(filePath, estimate, workStartedAt, workCompletedAt) {
+  await replaceText(filePath, "estimate: null", `estimate: ${estimate}`);
+  await replaceText(filePath, "estimateBasis: null", "estimateBasis: bootstrap");
+  await replaceText(filePath, "workStartedAt: null", `workStartedAt: ${workStartedAt}`);
+  await replaceText(filePath, "workCompletedAt: null", `workCompletedAt: ${workCompletedAt}`);
+}
+
+test("suggestCalibration returns bootstrap for an empty pool", async () => {
+  await withBoard(async (root) => {
+    const targetPath = await createTicket(root, "task", "Target with no pool", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const targetId = path.basename(targetPath).split("_", 1)[0];
+
+    const result = await suggestCalibration(root, targetId);
+
+    assert.equal(result.ticket, targetId);
+    assert.equal(result.calibration, "bootstrap");
+    assert.equal(result.poolSize, 0);
+    assert.equal(result.median, null);
+    assert.match(result.reason, /No prior calibrated tickets of type task/);
+  });
+});
+
+test("suggestCalibration picks the lower-median estimate for odd-count pools", async () => {
+  await withBoard(async (root) => {
+    const targetPath = await createTicket(root, "task", "Odd pool target", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:50:00Z"),
+    });
+    const targetId = path.basename(targetPath).split("_", 1)[0];
+
+    const a = await createTicket(root, "task", "Done 1", {
+      status: "done",
+      now: new Date("2026-05-14T20:51:00Z"),
+    });
+    const b = await createTicket(root, "task", "Done 2", {
+      status: "done",
+      now: new Date("2026-05-14T20:52:00Z"),
+    });
+    const c = await createTicket(root, "task", "Done 4a", {
+      status: "done",
+      now: new Date("2026-05-14T20:53:00Z"),
+    });
+    const d = await createTicket(root, "task", "Done 4b", {
+      status: "done",
+      now: new Date("2026-05-14T20:54:00Z"),
+    });
+    const e = await createTicket(root, "task", "Done 8", {
+      status: "done",
+      now: new Date("2026-05-14T20:55:00Z"),
+    });
+
+    await stampCalibrated(a, 1, "2026-05-14T21:00:00Z", "2026-05-14T22:00:00Z");
+    await stampCalibrated(b, 2, "2026-05-14T21:00:00Z", "2026-05-14T22:01:00Z");
+    await stampCalibrated(c, 4, "2026-05-14T21:00:00Z", "2026-05-14T22:02:00Z");
+    await stampCalibrated(d, 4, "2026-05-14T21:00:00Z", "2026-05-14T22:03:00Z");
+    await stampCalibrated(e, 8, "2026-05-14T21:00:00Z", "2026-05-14T22:04:00Z");
+
+    const dId = path.basename(d).split("_", 1)[0];
+    const result = await suggestCalibration(root, targetId);
+
+    assert.equal(result.poolSize, 5);
+    assert.equal(result.median, 4);
+    // Both estimate-4 entries tie on absDiff; the later workCompletedAt wins.
+    assert.equal(result.calibration, dId);
+  });
+});
+
+test("suggestCalibration uses the lower of two middles for even-count pools", async () => {
+  await withBoard(async (root) => {
+    const targetPath = await createTicket(root, "task", "Even pool target", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:50:00Z"),
+    });
+    const targetId = path.basename(targetPath).split("_", 1)[0];
+
+    const a = await createTicket(root, "task", "Done 1", {
+      status: "done",
+      now: new Date("2026-05-14T20:51:00Z"),
+    });
+    const b = await createTicket(root, "task", "Done 2", {
+      status: "done",
+      now: new Date("2026-05-14T20:52:00Z"),
+    });
+    const c = await createTicket(root, "task", "Done 4", {
+      status: "done",
+      now: new Date("2026-05-14T20:53:00Z"),
+    });
+    const d = await createTicket(root, "task", "Done 8", {
+      status: "done",
+      now: new Date("2026-05-14T20:54:00Z"),
+    });
+    await stampCalibrated(a, 1, "2026-05-14T21:00:00Z", "2026-05-14T22:00:00Z");
+    await stampCalibrated(b, 2, "2026-05-14T21:00:00Z", "2026-05-14T22:01:00Z");
+    await stampCalibrated(c, 4, "2026-05-14T21:00:00Z", "2026-05-14T22:02:00Z");
+    await stampCalibrated(d, 8, "2026-05-14T21:00:00Z", "2026-05-14T22:03:00Z");
+
+    const bId = path.basename(b).split("_", 1)[0];
+    const result = await suggestCalibration(root, targetId);
+
+    assert.equal(result.poolSize, 4);
+    assert.equal(result.median, 2);
+    assert.equal(result.calibration, bId);
+  });
+});
+
+test("suggestCalibration breaks absDiff ties by most-recent workCompletedAt", async () => {
+  await withBoard(async (root) => {
+    const targetPath = await createTicket(root, "task", "Tie-break target", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:50:00Z"),
+    });
+    const targetId = path.basename(targetPath).split("_", 1)[0];
+
+    const early = await createTicket(root, "task", "Early completed", {
+      status: "done",
+      now: new Date("2026-05-14T20:51:00Z"),
+    });
+    const late = await createTicket(root, "task", "Late completed", {
+      status: "done",
+      now: new Date("2026-05-14T20:52:00Z"),
+    });
+    await stampCalibrated(early, 4, "2026-05-14T21:00:00Z", "2026-05-14T22:00:00Z");
+    await stampCalibrated(late, 4, "2026-05-14T21:00:00Z", "2026-05-15T22:00:00Z");
+
+    const earlyId = path.basename(early).split("_", 1)[0];
+    const lateId = path.basename(late).split("_", 1)[0];
+
+    const result = await suggestCalibration(root, targetId);
+    assert.equal(result.poolSize, 2);
+    assert.equal(result.calibration, lateId);
+
+    // Swap timestamps; selection should flip.
+    await replaceText(early, "workCompletedAt: 2026-05-14T22:00:00Z", "workCompletedAt: 2026-05-16T22:00:00Z");
+    const swapped = await suggestCalibration(root, targetId);
+    assert.equal(swapped.calibration, earlyId);
+  });
+});
+
+test("suggestCalibration filters pool by ticket type", async () => {
+  await withBoard(async (root) => {
+    const taskTargetPath = await createTicket(root, "task", "Task target", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:50:00Z"),
+    });
+    const bugTargetPath = await createTicket(root, "bug", "Bug target", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:51:00Z"),
+    });
+    const taskTargetId = path.basename(taskTargetPath).split("_", 1)[0];
+    const bugTargetId = path.basename(bugTargetPath).split("_", 1)[0];
+
+    const doneTask1 = await createTicket(root, "task", "Done task 1", {
+      status: "done",
+      now: new Date("2026-05-14T20:52:00Z"),
+    });
+    const doneTask2 = await createTicket(root, "task", "Done task 2", {
+      status: "done",
+      now: new Date("2026-05-14T20:53:00Z"),
+    });
+    const doneTask3 = await createTicket(root, "task", "Done task 4", {
+      status: "done",
+      now: new Date("2026-05-14T20:54:00Z"),
+    });
+    const doneBug = await createTicket(root, "bug", "Done bug", {
+      status: "done",
+      now: new Date("2026-05-14T20:55:00Z"),
+    });
+    await stampCalibrated(doneTask1, 1, "2026-05-14T21:00:00Z", "2026-05-14T22:00:00Z");
+    await stampCalibrated(doneTask2, 2, "2026-05-14T21:00:00Z", "2026-05-14T22:01:00Z");
+    await stampCalibrated(doneTask3, 4, "2026-05-14T21:00:00Z", "2026-05-14T22:02:00Z");
+    await stampCalibrated(doneBug, 8, "2026-05-14T21:00:00Z", "2026-05-14T22:03:00Z");
+
+    const doneBugId = path.basename(doneBug).split("_", 1)[0];
+    const doneTask2Id = path.basename(doneTask2).split("_", 1)[0];
+
+    const bugResult = await suggestCalibration(root, bugTargetId);
+    assert.equal(bugResult.poolSize, 1);
+    assert.equal(bugResult.calibration, doneBugId);
+
+    const taskResult = await suggestCalibration(root, taskTargetId);
+    assert.equal(taskResult.poolSize, 3);
+    // Lower-median of [1, 2, 4] is 2.
+    assert.equal(taskResult.median, 2);
+    assert.equal(taskResult.calibration, doneTask2Id);
+  });
+});
+
+test("suggestCalibration excludes tickets missing estimate or work timestamps", async () => {
+  await withBoard(async (root) => {
+    const targetPath = await createTicket(root, "task", "Field-missing target", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:50:00Z"),
+    });
+    const targetId = path.basename(targetPath).split("_", 1)[0];
+
+    const missingEstimate = await createTicket(root, "task", "Missing estimate", {
+      status: "done",
+      now: new Date("2026-05-14T20:51:00Z"),
+    });
+    const missingStart = await createTicket(root, "task", "Missing start", {
+      status: "done",
+      now: new Date("2026-05-14T20:52:00Z"),
+    });
+    const full = await createTicket(root, "task", "Fully populated", {
+      status: "done",
+      now: new Date("2026-05-14T20:53:00Z"),
+    });
+    // missingEstimate: no estimate, but has timestamps
+    await replaceText(missingEstimate, "workStartedAt: null", "workStartedAt: 2026-05-14T21:00:00Z");
+    await replaceText(missingEstimate, "workCompletedAt: null", "workCompletedAt: 2026-05-14T22:00:00Z");
+    // missingStart: has estimate, but no workStartedAt
+    await replaceText(missingStart, "estimate: null", "estimate: 4");
+    await replaceText(missingStart, "estimateBasis: null", "estimateBasis: bootstrap");
+    // (and no work timestamps; workCompletedAt without workStartedAt would be a validate error,
+    //  so we leave both null here.)
+    await stampCalibrated(full, 2, "2026-05-14T21:00:00Z", "2026-05-14T22:00:00Z");
+
+    const fullId = path.basename(full).split("_", 1)[0];
+    const result = await suggestCalibration(root, targetId);
+
+    assert.equal(result.poolSize, 1);
+    assert.equal(result.calibration, fullId);
+  });
+});
+
+test("suggestCalibration excludes non-done statuses even when other fields are stamped", async () => {
+  await withBoard(async (root) => {
+    const targetPath = await createTicket(root, "task", "Status-filtered target", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:50:00Z"),
+    });
+    const targetId = path.basename(targetPath).split("_", 1)[0];
+
+    const notDone = await createTicket(root, "task", "Not done yet", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:51:00Z"),
+    });
+    await stampCalibrated(notDone, 4, "2026-05-14T21:00:00Z", "2026-05-14T22:00:00Z");
+
+    const result = await suggestCalibration(root, targetId);
+    assert.equal(result.calibration, "bootstrap");
+    assert.equal(result.poolSize, 0);
+  });
+});
+
+test("suggestCalibration excludes the target ticket from its own pool", async () => {
+  await withBoard(async (root) => {
+    const targetPath = await createTicket(root, "task", "Self-exclusion target", {
+      status: "done",
+      now: new Date("2026-05-14T20:50:00Z"),
+    });
+    const targetId = path.basename(targetPath).split("_", 1)[0];
+    await stampCalibrated(targetPath, 4, "2026-05-14T21:00:00Z", "2026-05-14T22:00:00Z");
+
+    const other = await createTicket(root, "task", "Other done", {
+      status: "done",
+      now: new Date("2026-05-14T20:51:00Z"),
+    });
+    await stampCalibrated(other, 2, "2026-05-14T21:00:00Z", "2026-05-14T22:01:00Z");
+
+    const otherId = path.basename(other).split("_", 1)[0];
+    const result = await suggestCalibration(root, targetId);
+
+    assert.equal(result.poolSize, 1);
+    assert.equal(result.calibration, otherId);
+  });
+});
+
+test("suggestCalibration throws for an unknown ticket id", async () => {
+  await withBoard(async (root) => {
+    // Seed at least one ticket so the ticket directory exists; the lookup itself should miss.
+    await createTicket(root, "task", "Existing ticket", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await assert.rejects(
+      suggestCalibration(root, "T20990101T0000Z"),
+      /ticket T20990101T0000Z not found/,
+    );
+  });
+});
+
+async function writeEstimationConfig(root, enabled) {
+  await mkdir(path.join(root, "plans"), { recursive: true });
+  await writeFile(
+    path.join(root, "plans", "local-board.config.jsonc"),
+    JSON.stringify({
+      estimation: { enabled, scale: [1, 2, 4, 8], bootstrapDefault: 4, splitThreshold: 16 },
+    }),
+    "utf8",
+  );
+}
+
+test("completeStep design refuses a task with null estimate when estimation is enabled", async () => {
+  await withBoard(async (root) => {
+    await writeEstimationConfig(root, true);
+    const ticketPath = await createTicket(root, "task", "Needs estimate", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await assert.rejects(
+      completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence."),
+      new RegExp(
+        `^Error: complete-step design refused: ticket has no estimate\\. Run local-board estimate ${ticketId} POINTS \\[--basis ID\\] before completing design \\(config\\.estimation\\.enabled is true\\)\\.$`,
+      ),
+    );
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \[\]$/m);
+    assert.doesNotMatch(text, /Completed design via/);
+  });
+});
+
+test("completeStep design refuses a bug with null estimate when estimation is enabled", async () => {
+  await withBoard(async (root) => {
+    await writeEstimationConfig(root, true);
+    const ticketPath = await createTicket(root, "bug", "Needs estimate bug", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await assert.rejects(
+      completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence."),
+      /complete-step design refused: ticket has no estimate/,
+    );
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \[\]$/m);
+  });
+});
+
+test("completeStep design accepts a story with null estimate when estimation is enabled", async () => {
+  await withBoard(async (root) => {
+    await writeEstimationConfig(root, true);
+    const ticketPath = await createTicket(root, "story", "Story design exempt", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Story design evidence.");
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \[design:claude-subagent:local-board-designer\]$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("completeStep design accepts an epic with null estimate when estimation is enabled", async () => {
+  await withBoard(async (root) => {
+    await writeEstimationConfig(root, true);
+    const ticketPath = await createTicket(root, "epic", "Epic design exempt", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Epic design evidence.");
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \[design:claude-subagent:local-board-designer\]$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("completeStep design accepts a task with a non-null estimate when estimation is enabled", async () => {
+  await withBoard(async (root) => {
+    await writeEstimationConfig(root, true);
+    const ticketPath = await createTicket(root, "task", "Task with estimate", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    await setTicketField(root, ticketId, "estimate", "4");
+
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence.");
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \[design:claude-subagent:local-board-designer\]$/m);
+    assert.match(text, /^estimate: 4$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("completeStep design accepts a task with null estimate when estimation is disabled", async () => {
+  await withBoard(async (root) => {
+    await writeEstimationConfig(root, false);
+    const ticketPath = await createTicket(root, "task", "Estimation disabled", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence.");
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \[design:claude-subagent:local-board-designer\]$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("completeStep implement is not gated by the design estimate check", async () => {
+  await withBoard(async (root) => {
+    await writeEstimationConfig(root, true);
+    const ticketPath = await createTicket(root, "task", "Implement without estimate", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer", "Implementation evidence.");
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \[implement:claude-subagent:local-board-implementer\]$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
   });
 });
 

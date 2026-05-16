@@ -1,18 +1,22 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import { appendTicketComment, findTicket, moveTicket, setTicketField } from "./tickets.js";
+import { appendTicketComment, findTicket, formatIsoSeconds, moveTicket, setTicketField } from "./tickets.js";
 
 const execFileAsync = promisify(execFile);
 
 export async function startTicketWork(root, ticketId, options = {}) {
   const { ticket } = await findTicket(root, ticketId);
+  const now = options.now ?? new Date();
   const branch = options.branch ?? ticket.frontMatter.branch ?? defaultBranchName(ticket);
   await assertBranchName(root, branch);
 
   const git = await ensureGitBranch(root, branch, { allowDirty: options.allowDirty ?? false });
-  const now = options.now ?? new Date();
   let ticketPath = ticket.path;
+
+  if (ticket.frontMatter.workStartedAt === null) {
+    ticketPath = await setTicketField(root, ticketId, "workStartedAt", formatIsoSeconds(now), { now });
+  }
 
   if (ticket.frontMatter.branch !== branch) {
     ticketPath = await setTicketField(root, ticketId, "branch", branch, { now });

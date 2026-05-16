@@ -97,6 +97,14 @@ Generated child tickets should link back to the parent and should be committed a
 11. Mark ticket done with `move <ticket-id> done`.
 12. Merge and push according to policy.
 
+## Wall-Clock Work Tracking
+
+`start-work` sets `workStartedAt` the first time it is called for a ticket. Later `start-work` calls leave the original timestamp unchanged, including after a ticket returns from `questions` or `blocked`.
+
+`move <ticket-id> done` sets `workCompletedAt` when the field is null and `workStartedAt` is already set. Later moves to `done` preserve the original completion timestamp. A direct move to `done` without prior `start-work` leaves both `workStartedAt` and `workCompletedAt` null to preserve the validator invariant that completion requires a start timestamp.
+
+Wall-clock actual is `workCompletedAt - workStartedAt`. It intentionally includes time spent in intermediate statuses such as `questions` and `blocked`. Archiving done tickets does not change either wall-clock field.
+
 ## Human Questions
 
 When work needs user input, set `status: questions` and write the questions in the `## Questions` section.
@@ -165,6 +173,236 @@ Bundled Claude agents:
 - `local-board-reviewer`
 - `local-board-tester`
 - `local-board-documenter`
+
+## Optional Steps
+
+`plans/local-board.config.jsonc` may include an `optionalSteps` catalog keyed by stage:
+
+```jsonc
+{
+  "optionalSteps": {
+    "design": [
+      {
+        "name": "security_threat_model",
+        "prompt": "plans/prompts/optional-steps/design/security_threat_model.md",
+        "triggers": "Auth, authorization, cryptography, external API integrations, PII handling, new attack surface."
+      }
+    ],
+    "implement": [],
+    "test": []
+  }
+}
+```
+
+Each stage contains entries shaped `{ name, prompt, triggers, agent? }`.
+
+- `name`: required lowercase snake_case identifier, unique within the stage. It cannot reuse a mandatory action name such as `design`, `implement`, `review`, or `test`.
+- `prompt`: required repo-relative path to the specialty prompt, normally under `plans/prompts/optional-steps/<stage>/`. Config loading validates the string but does not require the file to exist.
+- `triggers`: required human-readable guidance for deciding when the specialty applies.
+- `agent`: optional route override using the same conventions as mandatory action routing: `inline`, `claude-subagent:<agent-name>`, or `codex-task:<mode>`. Omitted entries run inline.
+
+### Catalog
+
+The v1 specialty prompt catalog is a snapshot ported from the task-board project.
+
+- `plans/prompts/optional-steps/design/security_threat_model.md`: design-stage threat model review for auth, authorization, cryptography, external integrations, PII, and new attack surface.
+- `plans/prompts/optional-steps/design/ui_component_review.md`: design-stage UI component review for component APIs, state, accessibility, reusability, and design-system fit.
+- `plans/prompts/optional-steps/design/ux_interaction_review.md`: design-stage interaction review for user flows, edge states, feedback, keyboard behavior, and workflow ergonomics.
+- `plans/prompts/optional-steps/impl/security_audit.md`: implementation-stage security audit for concrete code risks and severity-ranked findings.
+- `plans/prompts/optional-steps/impl/ui_visual_review.md`: implementation-stage visual review for rendered UI polish, layout, responsive behavior, accessibility, and regressions.
+
+### Gate-check
+
+Resolve the gate-check prompt and stage catalog with:
+
+```sh
+local-board gate-check <ticket-id> --stage <stage> [--json]
+```
+
+`<stage>` must be one of `design`, `implement`, or `test`.
+
+With `--json`, the command returns:
+
+```json
+{
+  "ticket": "<ticket-id>",
+  "stage": "implement",
+  "prompt": "<absolute-path-to-plans/prompts/steps/gate-check.md>",
+  "ticketPath": "plans/tickets/ready/<ticket-file>.md",
+  "ticketContext": {
+    "id": "<ticket-id>",
+    "type": "task",
+    "status": "ready_for_test",
+    "priority": "P2",
+    "path": "plans/tickets/ready/<ticket-file>.md",
+    "title": "<title>",
+    "currentAction": "test",
+    "requirement": "<Requirement section text>",
+    "acceptanceCriteria": "<Acceptance Criteria section text>"
+  },
+  "catalog": [
+    {
+      "name": "security_audit",
+      "prompt": "plans/prompts/optional-steps/implement/security_audit.md",
+      "triggers": "Auth, authorization, cryptography, external API integrations, PII handling, new attack surface."
+    }
+  ]
+}
+```
+
+The CLI is a read-only resolver. It does not invoke an agent and does not decide which optional steps are required. The orchestrator passes the returned `prompt`, `catalog`, and narrow `ticketContext` to a gate-check agent. That agent pattern-matches the completed work against the catalog trigger criteria and returns strict JSON shaped:
+
+```json
+{ "requestedSteps": ["security_audit"] }
+```
+
+An empty `requestedSteps` array means no specialty step is needed. T20260516T1552Z (`specialty-run` dispatcher) consumes each requested step name to resolve the specialty prompt/agent. T20260516T1554Z (`orchestrator wiring`) consumes the whole gate-check handoff pattern in the local-board orchestration flow.
+
+### Specialty-run
+
+Resolve one requested optional step with:
+
+```sh
+local-board specialty-run <ticket-id> <step-name> [--json]
+```
+
+The command derives the specialty stage from the ticket status:
+
+| Ticket status | Stage |
+|---|---|
+| `designing` | `design` |
+| `ready_for_design` | `design` |
+| `implementing` | `implement` |
+| `ready_for_implementation` | `implement` |
+| `testing` | `test` |
+| `ready_for_test` | `test` |
+
+Other statuses are rejected. `<step-name>` must match an entry in `config.optionalSteps[stage]`.
+
+With `--json`, the command returns:
+
+```json
+{
+  "ticket": "<ticket-id>",
+  "stage": "implement",
+  "step": "security_audit",
+  "prompt": "<absolute-path-to-specialty-prompt>",
+  "agent": "inline",
+  "ticketPath": "plans/tickets/ready/<ticket-file>.md",
+  "ticketContext": {
+    "id": "<ticket-id>",
+    "type": "task",
+    "status": "ready_for_implementation",
+    "priority": "P2",
+    "path": "plans/tickets/ready/<ticket-file>.md",
+    "title": "<title>",
+    "currentAction": "implement",
+    "requirement": "<Requirement section text>",
+    "acceptanceCriteria": "<Acceptance Criteria section text>"
+  }
+}
+```
+
+`agent` defaults to `inline` when the optional step entry has no override. The CLI is a read-only dispatcher: it does not invoke any agent. The orchestrator hands the returned `prompt`, `agent`, and `ticketContext` to the resolved execution route, then records completion with the normal step evidence flow. T20260516T1554Z (`orchestrator wiring`) will connect this resolver to the gate-check `requestedSteps` loop.
+
+## Estimation
+
+`plans/local-board.config.jsonc` may include an `estimation` block:
+
+```jsonc
+{
+  "estimation": {
+    "enabled": true,
+    "scale": [1, 2, 4, 8],
+    "bootstrapDefault": 4,
+    "splitThreshold": 16
+  }
+}
+```
+
+- `enabled`: turns estimation behavior on for projects that opt in.
+- `scale`: allowed relative story point values, as a strictly ascending array of positive integers.
+- `bootstrapDefault`: first-ticket anchor value when no calibration ticket exists. It must be a member of `scale`.
+- `splitThreshold`: value at or above which estimation should flag the ticket for decomposition.
+
+Legacy configs that omit `estimation` load with `enabled: false` so existing projects do not silently turn on estimation behavior during upgrade. Freshly initialized projects include the block with `enabled: true`.
+
+### Design-step enforcement
+
+`complete-step` enforces estimates at design completion. It refuses the call only when all four conditions are true:
+
+- the action is `design`;
+- the ticket type is `task` or `bug`;
+- `estimation.enabled` is `true`;
+- the ticket `estimate` is `null`.
+
+Stories and epics are exempt because they feed decomposition and planning decisions differently. Projects with `estimation.enabled: false` bypass the gate, and non-design actions continue through the normal routing evidence flow.
+
+When the gate refuses completion, it leaves the ticket unchanged and prints a clear message naming `local-board estimate` as the command to record the missing estimate. After recording an estimate, rerun `complete-step` with the same design evidence.
+
+### Prompts
+
+The estimator role prompt lives at `plans/prompts/roles/estimator.md`. It defines relative story point sizing against a calibration ticket or the `bootstrap` anchor.
+
+The estimate step prompt lives at `plans/prompts/steps/estimate.md`. The design prompt calls this step after writing the Technical Design and before the orchestrator runs `complete-step design`, so task and bug designs record an estimate before the enforcement gate.
+
+### CLI
+
+Record an estimate with:
+
+```sh
+local-board estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]
+```
+
+- `<ticket-id>` is the ticket to estimate.
+- `<points>` must be a value from `estimation.scale`.
+- `--basis <ticket-id-or-bootstrap>` records the calibration basis. It defaults to `bootstrap`.
+- `--force` overwrites an existing estimate and estimate basis.
+- `--json` prints the result as JSON.
+
+The command refuses to overwrite an existing estimate unless `--force` is supplied. It writes `estimate` first and `estimateBasis` second so the front matter remains in canonical field order.
+
+Example:
+
+```sh
+local-board estimate T20260516T1545Z 4 --basis bootstrap --json
+```
+
+### Calibration auto-pick
+
+Suggest a calibration basis with:
+
+```sh
+local-board calibration suggest <ticket-id> [--json]
+```
+
+The command builds a pool of `done` tickets with the same `type` as the target ticket. Pool tickets must have non-null `estimate`, `workStartedAt`, and `workCompletedAt` fields. It sorts the pool estimates and uses the lower median as the target value. For an even-sized pool, this means the lower of the two middle estimates.
+
+It returns the pool ticket whose estimate has the smallest absolute difference from the lower median. If multiple tickets tie, it picks the one with the most recent `workCompletedAt`. If the pool is empty, it returns the `bootstrap` sentinel so the estimator can use `estimation.bootstrapDefault`.
+
+Without `--json`, the command prints only the recommended calibration ticket ID or `bootstrap`.
+
+JSON output is shaped:
+
+```json
+{ "ticket": "<ticket-id>", "calibration": "<ticket-id-or-bootstrap>", "poolSize": 0, "median": null, "reason": "<reason>" }
+```
+
+Example:
+
+```sh
+local-board calibration suggest T20260516T1546Z --json
+```
+
+```json
+{
+  "ticket": "T20260516T1546Z",
+  "calibration": "T20260516T1545Z",
+  "poolSize": 5,
+  "median": 4,
+  "reason": "selected same-type done ticket nearest the lower median"
+}
+```
 
 ## Strict Routing
 

@@ -40,6 +40,9 @@ blockedBy: []
 blocks: []
 branch: null
 estimate: null
+estimateBasis: null
+workStartedAt: null
+workCompletedAt: null
 completedSteps: []
 routingApprovals: []
 created: 2026-05-14T12:34:00-04:00
@@ -47,6 +50,7 @@ updated: 2026-05-14T12:34:00-04:00
 ```
 
 `branch` is the git branch associated with task, bug, review, test, or documentation work. Prefer `local-board start-work <ticket-id>` over editing it manually; the command creates or switches branches and records the selected branch.
+`estimateBasis` records the ticket ID of the calibration ticket used for `estimate`, or `bootstrap` when no prior calibration ticket of the same type existed. It is null when `estimate` is null. `workStartedAt` is the ISO-8601 timestamp set by `start-work` the first time it is invoked on the ticket; later calls preserve it. `workCompletedAt` is the ISO-8601 timestamp set by `move <id> done` when it is null and `workStartedAt` is already set; direct move-to-done without prior `start-work` leaves both null. Wall-clock actual is `workCompletedAt - workStartedAt`, with pauses such as questions or blocked time intentionally included.
 `completedSteps` records deterministic workflow evidence as `<action>:<executor>` tokens. `routingApprovals` records explicit user-approved route deviations such as `review:inline`.
 
 Front matter is canonical. Folder placement is for humans and should match status.
@@ -114,7 +118,7 @@ The CLI validator checks:
 - parent/child link existence and reciprocity;
 - `blockedBy`/`blocks` link existence and reciprocity;
 - dependency-blocked tickets are not placed in `status: blocked`;
-- ISO-8601 `created` and `updated` values with timezone offsets or `Z`.
+- ISO-8601 `created`, `updated`, and non-null work timestamp values with timezone offsets or `Z`.
 
 ## Rewriting Front Matter
 
@@ -135,6 +139,7 @@ node ./bin/local-board.js block T20260514T1236Z T20260514T1235Z
 ```
 
 `move` updates `status`, rewrites `updated`, and relocates the file to the mapped status folder. With `git.autoMerge: true`, `move <ticket-id> done` also commits planning-only closeout changes and merges the recorded ticket branch into the configured or detected default branch. It refuses uncommitted non-planning changes.
+When the target is `done`, `move` stamps `workCompletedAt` only if it is null and `workStartedAt` is already set. It does not overwrite an existing completion timestamp.
 
 With `retention.archiveOnMoveDone: true`, `move <ticket-id> done` also moves older done tickets to `archived`. Archived tickets remain closed for dependency checks and are retained in `plans/tickets/archive/`.
 
