@@ -984,6 +984,24 @@ test("optionalSteps catalog prompt paths resolve to existing non-empty files on 
   assert.ok(entryCount >= 5, `expected at least 5 v1 prompt entries, saw ${entryCount}`);
 });
 
+test("estimation prompts are present and reference the estimate pipeline", async () => {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const roleText = await readFile(
+    path.join(repoRoot, "plans", "prompts", "roles", "estimator.md"),
+    "utf8",
+  );
+  assert.ok(roleText.trim().length > 0, "estimator role prompt is non-empty");
+  assert.ok(roleText.includes("bootstrap"), "estimator role mentions the bootstrap sentinel");
+
+  const stepText = await readFile(
+    path.join(repoRoot, "plans", "prompts", "steps", "estimate.md"),
+    "utf8",
+  );
+  assert.ok(stepText.trim().length > 0, "estimate step prompt is non-empty");
+  assert.ok(stepText.includes("local-board calibration suggest"), "estimate step references local-board calibration suggest");
+  assert.ok(stepText.includes("local-board estimate"), "estimate step references local-board estimate");
+});
+
 async function runCli(args) {
   const stdout = [];
   const stderr = [];
