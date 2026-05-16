@@ -1305,6 +1305,23 @@ test("completeStep design accepts a story with null estimate when estimation is 
   });
 });
 
+test("completeStep design accepts an epic with null estimate when estimation is enabled", async () => {
+  await withBoard(async (root) => {
+    await writeEstimationConfig(root, true);
+    const ticketPath = await createTicket(root, "epic", "Epic design exempt", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Epic design evidence.");
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \[design:claude-subagent:local-board-designer\]$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
 test("completeStep design accepts a task with a non-null estimate when estimation is enabled", async () => {
   await withBoard(async (root) => {
     await writeEstimationConfig(root, true);
