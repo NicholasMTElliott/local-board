@@ -23,6 +23,7 @@ node ./bin/local-board.js schema --json
 node ./bin/local-board.js create task "Implement ticket validator" --status ready_for_design --priority P1
 node ./bin/local-board.js estimate T20260514T1234Z 4 --basis bootstrap --json
 node ./bin/local-board.js calibration suggest T20260514T1234Z --json
+node ./bin/local-board.js gate-check T20260514T1234Z --stage implement --json
 node ./bin/local-board.js start-work T20260514T1234Z --json
 node ./bin/local-board.js begin-step T20260514T1234Z --json
 node ./bin/local-board.js complete-step T20260514T1234Z review --executor codex-task:read-only --evidence "Review notes added."

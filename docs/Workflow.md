@@ -201,7 +201,52 @@ Each stage contains entries shaped `{ name, prompt, triggers, agent? }`.
 - `triggers`: required human-readable guidance for deciding when the specialty applies.
 - `agent`: optional route override using the same conventions as mandatory action routing: `inline`, `claude-subagent:<agent-name>`, or `codex-task:<mode>`. Omitted entries run inline.
 
-The catalog is config surface only for now. Pending tickets T20260516T1551Z (`gate-check`) and T20260516T1552Z (`specialty-run`) add runtime behavior that reads this catalog from the schema/config output.
+### Gate-check
+
+Resolve the gate-check prompt and stage catalog with:
+
+```sh
+local-board gate-check <ticket-id> --stage <stage> [--json]
+```
+
+`<stage>` must be one of `design`, `implement`, or `test`.
+
+With `--json`, the command returns:
+
+```json
+{
+  "ticket": "<ticket-id>",
+  "stage": "implement",
+  "prompt": "<absolute-path-to-plans/prompts/steps/gate-check.md>",
+  "ticketPath": "plans/tickets/ready/<ticket-file>.md",
+  "ticketContext": {
+    "id": "<ticket-id>",
+    "type": "task",
+    "status": "ready_for_test",
+    "priority": "P2",
+    "path": "plans/tickets/ready/<ticket-file>.md",
+    "title": "<title>",
+    "currentAction": "test",
+    "requirement": "<Requirement section text>",
+    "acceptanceCriteria": "<Acceptance Criteria section text>"
+  },
+  "catalog": [
+    {
+      "name": "security_audit",
+      "prompt": "plans/prompts/optional-steps/implement/security_audit.md",
+      "triggers": "Auth, authorization, cryptography, external API integrations, PII handling, new attack surface."
+    }
+  ]
+}
+```
+
+The CLI is a read-only resolver. It does not invoke an agent and does not decide which optional steps are required. The orchestrator passes the returned `prompt`, `catalog`, and narrow `ticketContext` to a gate-check agent. That agent pattern-matches the completed work against the catalog trigger criteria and returns strict JSON shaped:
+
+```json
+{ "requestedSteps": ["security_audit"] }
+```
+
+An empty `requestedSteps` array means no specialty step is needed. T20260516T1552Z (`specialty-run` dispatcher) consumes each requested step name to resolve the specialty prompt/agent. T20260516T1554Z (`orchestrator wiring`) consumes the whole gate-check handoff pattern in the local-board orchestration flow.
 
 ## Estimation
 
