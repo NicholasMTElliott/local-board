@@ -122,3 +122,12 @@ Strict routing still applies while the specialty runs. A specialty with a non-in
 - Auto-rerunning specialty steps after a failed review verdict.
 - Per-ticket overrides that force or suppress a specific specialty regardless of the classifier.
 - Specialty support for `decompose` or `document` stages.
+
+## Related stories and tickets
+
+- Parent story: [S20260516T1538Z](../plans/tickets/done/S20260516T1538Z_conditional-specialty-review-steps-security-ui-ux.md) - Conditional specialty review steps (security, UI, UX).
+- [T20260516T1550Z](../plans/tickets/done/T20260516T1550Z_add-optionalsteps-config-block.md) - optionalSteps config block.
+- [T20260516T1551Z](../plans/tickets/done/T20260516T1551Z_add-gate-check-prompt-and-cli-command.md) - gate-check prompt and CLI.
+- [T20260516T1552Z](../plans/tickets/done/T20260516T1552Z_add-specialty-run-dispatcher-cli.md) - specialty-run dispatcher CLI.
+- [T20260516T1553Z](../plans/tickets/done/T20260516T1553Z_port-initial-specialty-prompts-from-task-board.md) - port initial specialty prompts.
+- Sibling story: [S20260516T1537Z](../plans/tickets/done/S20260516T1537Z_relative-sized-estimation-with-calibration-and-actuals.md) - Relative-sized estimation (separate feature in the same epic).
