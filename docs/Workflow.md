@@ -227,6 +227,28 @@ Legacy configs that omit `estimation` load with `enabled: false` so existing pro
 
 The block is config/schema surface now. T20260516T1548Z (`enforcement`) will make design completion consume `estimation.enabled`, and T20260516T1549Z (`estimator prompts`) will consume `scale`, `bootstrapDefault`, and `splitThreshold`.
 
+### CLI
+
+Record an estimate with:
+
+```sh
+local-board estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]
+```
+
+- `<ticket-id>` is the ticket to estimate.
+- `<points>` must be a value from `estimation.scale`.
+- `--basis <ticket-id-or-bootstrap>` records the calibration basis. It defaults to `bootstrap`.
+- `--force` overwrites an existing estimate and estimate basis.
+- `--json` prints the result as JSON.
+
+The command refuses to overwrite an existing estimate unless `--force` is supplied. It writes `estimate` first and `estimateBasis` second so the front matter remains in canonical field order.
+
+Example:
+
+```sh
+local-board estimate T20260516T1545Z 4 --basis bootstrap --json
+```
+
 ## Strict Routing
 
 `routing.strict: true` makes configured routing mandatory.
