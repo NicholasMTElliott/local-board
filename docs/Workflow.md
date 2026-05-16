@@ -327,7 +327,18 @@ With `--json`, the command returns:
 
 Legacy configs that omit `estimation` load with `enabled: false` so existing projects do not silently turn on estimation behavior during upgrade. Freshly initialized projects include the block with `enabled: true`.
 
-The block is config/schema surface now. T20260516T1548Z (`enforcement`) will make design completion consume `estimation.enabled`, and T20260516T1549Z (`estimator prompts`) will consume `scale`, `bootstrapDefault`, and `splitThreshold`.
+### Design-step enforcement
+
+`complete-step` enforces estimates at design completion. It refuses the call only when all four conditions are true:
+
+- the action is `design`;
+- the ticket type is `task` or `bug`;
+- `estimation.enabled` is `true`;
+- the ticket `estimate` is `null`.
+
+Stories and epics are exempt because they feed decomposition and planning decisions differently. Projects with `estimation.enabled: false` bypass the gate, and non-design actions continue through the normal routing evidence flow.
+
+When the gate refuses completion, it leaves the ticket unchanged and prints a clear message naming `local-board estimate` as the command to record the missing estimate. After recording an estimate, rerun `complete-step` with the same design evidence.
 
 ### CLI
 
