@@ -104,6 +104,12 @@ archived -> plans/tickets/archive
 Role prompts live in `plans/prompts/roles/`.
 Step prompts live in `plans/prompts/steps/`.
 
+Current required role prompts:
+- `plans/prompts/roles/estimator.md`: relative story point estimator guidance.
+
+Current required step prompts:
+- `plans/prompts/steps/estimate.md`: design-adjacent estimate procedure using `calibration suggest` and `estimate`.
+
 Skills should be orchestration entrypoints. Step behavior should live in prompt files and deterministic scripts where possible.
 
 The installable `local-board-orchestrator` skill is the portable entrypoint. Project-local prompts override bundled fallback prompts.

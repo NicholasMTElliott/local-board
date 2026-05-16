@@ -340,6 +340,12 @@ Stories and epics are exempt because they feed decomposition and planning decisi
 
 When the gate refuses completion, it leaves the ticket unchanged and prints a clear message naming `local-board estimate` as the command to record the missing estimate. After recording an estimate, rerun `complete-step` with the same design evidence.
 
+### Prompts
+
+The estimator role prompt lives at `plans/prompts/roles/estimator.md`. It defines relative story point sizing against a calibration ticket or the `bootstrap` anchor.
+
+The estimate step prompt lives at `plans/prompts/steps/estimate.md`. The design prompt calls this step after writing the Technical Design and before the orchestrator runs `complete-step design`, so task and bug designs record an estimate before the enforcement gate.
+
 ### CLI
 
 Record an estimate with:
