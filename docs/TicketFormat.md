@@ -40,6 +40,9 @@ blockedBy: []
 blocks: []
 branch: null
 estimate: null
+estimateBasis: null
+workStartedAt: null
+workCompletedAt: null
 completedSteps: []
 routingApprovals: []
 created: 2026-05-14T12:34:00-04:00
@@ -47,6 +50,7 @@ updated: 2026-05-14T12:34:00-04:00
 ```
 
 `branch` is the git branch associated with task, bug, review, test, or documentation work. Prefer `local-board start-work <ticket-id>` over editing it manually; the command creates or switches branches and records the selected branch.
+`estimateBasis` records the ticket ID of the calibration ticket used for `estimate`, or `bootstrap` when no prior calibration ticket of the same type existed. It is null when `estimate` is null. `workStartedAt` is the ISO-8601 timestamp set by `start-work` the first time it is invoked on the ticket; it records wall-clock work start. `workCompletedAt` is the ISO-8601 timestamp set by `move <id> done`; wall-clock actual is `workCompletedAt - workStartedAt`, with pauses such as questions or blocked time intentionally included.
 `completedSteps` records deterministic workflow evidence as `<action>:<executor>` tokens. `routingApprovals` records explicit user-approved route deviations such as `review:inline`.
 
 Front matter is canonical. Folder placement is for humans and should match status.
@@ -114,7 +118,7 @@ The CLI validator checks:
 - parent/child link existence and reciprocity;
 - `blockedBy`/`blocks` link existence and reciprocity;
 - dependency-blocked tickets are not placed in `status: blocked`;
-- ISO-8601 `created` and `updated` values with timezone offsets or `Z`.
+- ISO-8601 `created`, `updated`, and non-null work timestamp values with timezone offsets or `Z`.
 
 ## Rewriting Front Matter
 

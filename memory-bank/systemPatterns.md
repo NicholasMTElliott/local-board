@@ -54,6 +54,9 @@ Required fields:
 - `blocks`
 - `branch`
 - `estimate`
+- `estimateBasis`
+- `workStartedAt`
+- `workCompletedAt`
 - `created`
 - `updated`
 
