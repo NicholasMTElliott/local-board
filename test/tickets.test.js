@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import {
   appendTicketComment,
   approveInline,
+  archiveDoneTickets,
   beginStep,
   blockTicket,
   completeStep,
@@ -446,6 +447,103 @@ test("strict routing blocks done until required steps have completion evidence",
 
     assert.match(await readFile(moved, "utf8"), /^status: done$/m);
     assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("moveTicket to done stamps workCompletedAt when null", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Stamp completion", {
+      status: "ready_for_docs",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    await replaceText(ticketPath, "workStartedAt: null", "workStartedAt: 2026-05-14T21:00:00Z");
+
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer", "Implementation evidence.");
+    await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
+    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester", "Test evidence.");
+    await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
+
+    const moved = await moveTicket(root, ticketId, "done", { now: new Date("2026-05-16T15:37:00Z") });
+
+    const text = await readFile(moved, "utf8");
+    assert.match(text, /^workCompletedAt: 2026-05-16T15:37:00Z$/m);
+    assert.match(text, /^updated: 2026-05-16T15:37:00Z$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("moveTicket re-opening and returning to done preserves the original workCompletedAt", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Reopen preserve completion", {
+      status: "ready_for_docs",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    await replaceText(ticketPath, "workStartedAt: null", "workStartedAt: 2026-05-14T21:00:00Z");
+
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer", "Implementation evidence.");
+    await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
+    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester", "Test evidence.");
+    await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
+
+    await moveTicket(root, ticketId, "done", { now: new Date("2026-05-16T15:37:00Z") });
+    await moveTicket(root, ticketId, "ready_for_review", { now: new Date("2026-05-16T16:00:00Z") });
+    const reclosed = await moveTicket(root, ticketId, "done", { now: new Date("2026-05-16T17:00:00Z") });
+
+    const text = await readFile(reclosed, "utf8");
+    assert.match(text, /^workCompletedAt: 2026-05-16T15:37:00Z$/m);
+  });
+});
+
+test("moveTicket to done preserves a pre-existing workCompletedAt", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Preserve completion", {
+      status: "ready_for_docs",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    await replaceText(ticketPath, "workStartedAt: null", "workStartedAt: 2026-05-14T21:00:00Z");
+    await replaceText(ticketPath, "workCompletedAt: null", "workCompletedAt: 2026-05-14T22:00:00Z");
+
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer", "Implementation evidence.");
+    await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
+    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester", "Test evidence.");
+    await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
+
+    const moved = await moveTicket(root, ticketId, "done", { now: new Date("2026-05-16T15:37:00Z") });
+
+    const text = await readFile(moved, "utf8");
+    assert.match(text, /^workCompletedAt: 2026-05-14T22:00:00Z$/m);
+  });
+});
+
+test("archiveDoneTickets preserves workStartedAt and workCompletedAt", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Archive preserves timestamps", {
+      status: "done",
+      now: new Date("2026-01-01T00:00:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    await replaceText(ticketPath, "workStartedAt: null", "workStartedAt: 2026-01-01T01:00:00Z");
+    await replaceText(ticketPath, "workCompletedAt: null", "workCompletedAt: 2026-01-01T02:00:00Z");
+    await replaceText(ticketPath, "updated: 2026-01-01T00:00:00Z", "updated: 2026-01-01T03:00:00Z");
+
+    const archived = await archiveDoneTickets(root, {
+      archiveDoneAfterDays: 0,
+      now: new Date("2026-05-16T15:37:00Z"),
+    });
+
+    assert.equal(archived.length, 1);
+    const archivedPath = path.join(root, "plans", "tickets", "archive", path.basename(ticketPath));
+    const text = await readFile(archivedPath, "utf8");
+    assert.match(text, /^status: archived$/m);
+    assert.match(text, /^workStartedAt: 2026-01-01T01:00:00Z$/m);
+    assert.match(text, /^workCompletedAt: 2026-01-01T02:00:00Z$/m);
+    assert.equal(archived[0].ticket, ticketId);
   });
 });
 

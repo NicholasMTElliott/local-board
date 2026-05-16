@@ -280,8 +280,16 @@ export async function moveTicket(root, ticketId, status, options = {}) {
     throw new Error(`status must be one of ${[...STATUSES].sort().join(", ")}`);
   }
 
+  const now = options.now ?? new Date();
   const { board, ticket } = await findTicket(root, ticketId);
-  const frontMatter = withUpdated({ ...ticket.frontMatter, status }, options.now);
+  const frontMatter = withUpdated({ ...ticket.frontMatter, status }, now);
+  if (
+    status === "done" &&
+    frontMatter.workCompletedAt === null &&
+    typeof frontMatter.workStartedAt === "string"
+  ) {
+    frontMatter.workCompletedAt = formatIsoSeconds(now);
+  }
   if (status === "done") {
     const config = await loadConfig(board.root);
     const issues = validateRouting({ ...ticket, status, frontMatter }, config);
@@ -1245,7 +1253,7 @@ function formatTicketTimestamp(date) {
   return date.toISOString().replace(/[-:]/g, "").slice(0, 13) + "Z";
 }
 
-function formatIsoSeconds(date) {
+export function formatIsoSeconds(date) {
   return date.toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 

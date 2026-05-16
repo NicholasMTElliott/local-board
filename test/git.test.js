@@ -55,6 +55,26 @@ test("startTicketWork creates a branch, records it, and moves implementation tic
   });
 });
 
+test("startTicketWork stamps workStartedAt on first call and is idempotent thereafter", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Stamp work started", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const first = await startTicketWork(root, ticketId, { now: new Date("2026-05-16T15:37:00Z") });
+    const afterFirst = await readFile(first.path, "utf8");
+    assert.match(afterFirst, /^workStartedAt: 2026-05-16T15:37:00Z$/m);
+
+    const second = await startTicketWork(root, ticketId, { now: new Date("2026-05-16T16:00:00Z") });
+    const afterSecond = await readFile(second.path, "utf8");
+    assert.match(afterSecond, /^workStartedAt: 2026-05-16T15:37:00Z$/m);
+  });
+});
+
 test("startTicketWork switches to a recorded existing branch", { skip: !GIT_AVAILABLE }, async () => {
   await withRepo(async (root, baseBranch) => {
     const ticketPath = await createTicket(root, "task", "Review seeded branch", {
