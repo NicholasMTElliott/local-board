@@ -30,6 +30,8 @@ It defines:
 - `optionalSteps`: per-stage specialty review catalogs (`design`/`implement`/`test`)
 - `estimation`: relative-sized story points config (`enabled`, `scale`, `bootstrapDefault`, `splitThreshold`)
 
+V1 specialty prompts ship at `plans/prompts/optional-steps/{design,impl}/`.
+
 ## Ticket Types
 | Prefix | Type | Children |
 |---|---|---|

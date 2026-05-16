@@ -87,6 +87,8 @@ docs/                Human-facing documentation
 plans/               File-backed board: tickets, prompts, templates
 plans/tickets/       Ticket files grouped by human-friendly status folders
 plans/prompts/       Role and step prompts for delegated agents
+plans/prompts/optional-steps/
+                     Specialty review prompts for optional workflow steps
 plans/templates/     Reusable ticket templates
 plans/local-board.config.jsonc
 src/                 Node.js ESM ticket parser, validator, writer, picker, and CLI

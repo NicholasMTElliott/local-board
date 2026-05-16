@@ -201,6 +201,16 @@ Each stage contains entries shaped `{ name, prompt, triggers, agent? }`.
 - `triggers`: required human-readable guidance for deciding when the specialty applies.
 - `agent`: optional route override using the same conventions as mandatory action routing: `inline`, `claude-subagent:<agent-name>`, or `codex-task:<mode>`. Omitted entries run inline.
 
+### Catalog
+
+The v1 specialty prompt catalog is a snapshot ported from the task-board project.
+
+- `plans/prompts/optional-steps/design/security_threat_model.md`: design-stage threat model review for auth, authorization, cryptography, external integrations, PII, and new attack surface.
+- `plans/prompts/optional-steps/design/ui_component_review.md`: design-stage UI component review for component APIs, state, accessibility, reusability, and design-system fit.
+- `plans/prompts/optional-steps/design/ux_interaction_review.md`: design-stage interaction review for user flows, edge states, feedback, keyboard behavior, and workflow ergonomics.
+- `plans/prompts/optional-steps/impl/security_audit.md`: implementation-stage security audit for concrete code risks and severity-ranked findings.
+- `plans/prompts/optional-steps/impl/ui_visual_review.md`: implementation-stage visual review for rendered UI polish, layout, responsive behavior, accessibility, and regressions.
+
 ### Gate-check
 
 Resolve the gate-check prompt and stage catalog with:
