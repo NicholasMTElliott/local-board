@@ -113,6 +113,7 @@ Current required step prompts:
 Skills should be orchestration entrypoints. Step behavior should live in prompt files and deterministic scripts where possible.
 
 The installable `local-board-orchestrator` skill is the portable entrypoint. Project-local prompts override bundled fallback prompts.
+For design/implement/test stages, the orchestrator skill runs `gate-check` + `specialty-run` between mandatory action completion and stage transition.
 Bundled Claude agents live in `agents/claude/` and are installed to `~/.claude/agents/`.
 
 ## Safety Pattern
