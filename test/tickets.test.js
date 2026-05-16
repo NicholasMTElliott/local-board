@@ -772,6 +772,42 @@ test("legacy ticket without new estimation fields parses and validates via read-
   });
 });
 
+test("freshly-scaffolded ticket exposes new estimation fields as null in parsed front matter", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "All-null parsed front matter", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+
+    const board = await discover(root);
+    const ticket = board.tickets.find((entry) => entry.path === path.resolve(ticketPath));
+    assert.ok(ticket, "ticket discovered");
+    assert.equal(Object.hasOwn(ticket.frontMatter, "estimateBasis"), true);
+    assert.equal(Object.hasOwn(ticket.frontMatter, "workStartedAt"), true);
+    assert.equal(Object.hasOwn(ticket.frontMatter, "workCompletedAt"), true);
+    assert.equal(ticket.frontMatter.estimateBasis, null);
+    assert.equal(ticket.frontMatter.workStartedAt, null);
+    assert.equal(ticket.frontMatter.workCompletedAt, null);
+  });
+});
+
+test("validate rejects non-string YAML estimateBasis", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Non-string basis", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await replaceText(ticketPath, "estimate: null", "estimate: 2");
+    await replaceText(ticketPath, "estimateBasis: null", "estimateBasis: []");
+
+    const issues = validate(await discover(root));
+    assert.equal(
+      issues.some((issue) => issue.includes("estimateBasis must be null or a string")),
+      true,
+    );
+  });
+});
+
 test("initProject scaffolds a new local-board project idempotently", async () => {
   await withBoard(async (root) => {
     const first = await initProject(root);
