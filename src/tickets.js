@@ -460,6 +460,17 @@ export async function completeStep(root, ticketId, action, executor, evidence, o
     throw new Error(`routing validation failed:\n${routingIssues.join("\n")}`);
   }
 
+  if (
+    action === "design"
+    && (ticket.frontMatter.type === "task" || ticket.frontMatter.type === "bug")
+    && config.estimation?.enabled === true
+    && (ticket.frontMatter.estimate === null || ticket.frontMatter.estimate === undefined)
+  ) {
+    throw new Error(
+      `complete-step design refused: ticket has no estimate. Run local-board estimate ${ticket.id} POINTS [--basis ID] before completing design (config.estimation.enabled is true).`,
+    );
+  }
+
   const now = options.now ?? new Date();
   const frontMatter = withUpdated(
     {

@@ -1236,6 +1236,128 @@ test("suggestCalibration throws for an unknown ticket id", async () => {
   });
 });
 
+async function writeEstimationConfig(root, enabled) {
+  await mkdir(path.join(root, "plans"), { recursive: true });
+  await writeFile(
+    path.join(root, "plans", "local-board.config.jsonc"),
+    JSON.stringify({
+      estimation: { enabled, scale: [1, 2, 4, 8], bootstrapDefault: 4, splitThreshold: 16 },
+    }),
+    "utf8",
+  );
+}
+
+test("completeStep design refuses a task with null estimate when estimation is enabled", async () => {
+  await withBoard(async (root) => {
+    await writeEstimationConfig(root, true);
+    const ticketPath = await createTicket(root, "task", "Needs estimate", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await assert.rejects(
+      completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence."),
+      new RegExp(
+        `^Error: complete-step design refused: ticket has no estimate\\. Run local-board estimate ${ticketId} POINTS \\[--basis ID\\] before completing design \\(config\\.estimation\\.enabled is true\\)\\.$`,
+      ),
+    );
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \[\]$/m);
+    assert.doesNotMatch(text, /Completed design via/);
+  });
+});
+
+test("completeStep design refuses a bug with null estimate when estimation is enabled", async () => {
+  await withBoard(async (root) => {
+    await writeEstimationConfig(root, true);
+    const ticketPath = await createTicket(root, "bug", "Needs estimate bug", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await assert.rejects(
+      completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence."),
+      /complete-step design refused: ticket has no estimate/,
+    );
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \[\]$/m);
+  });
+});
+
+test("completeStep design accepts a story with null estimate when estimation is enabled", async () => {
+  await withBoard(async (root) => {
+    await writeEstimationConfig(root, true);
+    const ticketPath = await createTicket(root, "story", "Story design exempt", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Story design evidence.");
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \[design:claude-subagent:local-board-designer\]$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("completeStep design accepts a task with a non-null estimate when estimation is enabled", async () => {
+  await withBoard(async (root) => {
+    await writeEstimationConfig(root, true);
+    const ticketPath = await createTicket(root, "task", "Task with estimate", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    await setTicketField(root, ticketId, "estimate", "4");
+
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence.");
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \[design:claude-subagent:local-board-designer\]$/m);
+    assert.match(text, /^estimate: 4$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("completeStep design accepts a task with null estimate when estimation is disabled", async () => {
+  await withBoard(async (root) => {
+    await writeEstimationConfig(root, false);
+    const ticketPath = await createTicket(root, "task", "Estimation disabled", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence.");
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \[design:claude-subagent:local-board-designer\]$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("completeStep implement is not gated by the design estimate check", async () => {
+  await withBoard(async (root) => {
+    await writeEstimationConfig(root, true);
+    const ticketPath = await createTicket(root, "task", "Implement without estimate", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer", "Implementation evidence.");
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \[implement:claude-subagent:local-board-implementer\]$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
 async function replaceText(filePath, search, replacement) {
   const text = await readFile(filePath, "utf8");
   await writeFile(filePath, text.replace(search, replacement), "utf8");
