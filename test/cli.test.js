@@ -590,6 +590,232 @@ test("CLI gate-check rejects invalid stage, missing stage, and unknown ticket", 
   });
 });
 
+test("CLI specialty-run dispatches to optionalSteps catalog by status-derived stage", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    // Case 1: implementing status -> implement stage, step security_audit, agent default inline.
+    const implCreate = await runCli([
+      "--root",
+      root,
+      "create",
+      "task",
+      "Specialty implementing target",
+      "--status",
+      "implementing",
+      "--priority",
+      "P2",
+    ]);
+    assert.equal(implCreate.code, 0, implCreate.stderr);
+    const implId = path.basename(implCreate.stdout.trim()).split("_", 1)[0];
+
+    const impl = await runCli(["--root", root, "specialty-run", implId, "security_audit", "--json"]);
+    assert.equal(impl.code, 0, impl.stderr);
+    const implOut = JSON.parse(impl.stdout);
+    assert.equal(implOut.ticket, implId);
+    assert.equal(implOut.stage, "implement");
+    assert.equal(implOut.step, "security_audit");
+    assert.equal(implOut.agent, "inline");
+    assert.equal(typeof implOut.ticketPath, "string");
+    assert.equal(
+      implOut.prompt.endsWith(path.join("plans", "prompts", "optional-steps", "impl", "security_audit.md")),
+      true,
+    );
+    // ticketContext shape mirrors gate-check
+    assert.deepEqual(
+      Object.keys(implOut.ticketContext).sort(),
+      [
+        "acceptanceCriteria",
+        "currentAction",
+        "id",
+        "path",
+        "priority",
+        "requirement",
+        "status",
+        "title",
+        "type",
+      ],
+    );
+    assert.equal(implOut.ticketContext.id, implId);
+    assert.equal(implOut.ticketContext.status, "implementing");
+    assert.equal(implOut.ticketContext.currentAction, null);
+
+    // Case 10: re-run case 1 and deep-equal the parsed outputs to pin stability.
+    const implAgain = await runCli(["--root", root, "specialty-run", implId, "security_audit", "--json"]);
+    assert.equal(implAgain.code, 0, implAgain.stderr);
+    assert.deepEqual(JSON.parse(implAgain.stdout), implOut);
+
+    // Case 9: plain (non-JSON) output smoke test
+    const plain = await runCli(["--root", root, "specialty-run", implId, "security_audit"]);
+    assert.equal(plain.code, 0, plain.stderr);
+    const plainLines = plain.stdout.split("\n");
+    assert.match(plainLines[0], /^specialty-run .* step=security_audit stage=implement agent=inline$/);
+    assert.equal(
+      plainLines[1].endsWith(path.join("plans", "prompts", "optional-steps", "impl", "security_audit.md")),
+      true,
+    );
+
+    // Case 2: ready_for_design status -> design stage, step ui_component_review
+    const designCreate = await runCli([
+      "--root",
+      root,
+      "create",
+      "task",
+      "Specialty design target",
+      "--status",
+      "ready_for_design",
+      "--priority",
+      "P2",
+    ]);
+    assert.equal(designCreate.code, 0, designCreate.stderr);
+    const designId = path.basename(designCreate.stdout.trim()).split("_", 1)[0];
+
+    const design = await runCli(["--root", root, "specialty-run", designId, "ui_component_review", "--json"]);
+    assert.equal(design.code, 0, design.stderr);
+    const designOut = JSON.parse(design.stdout);
+    assert.equal(designOut.stage, "design");
+    assert.equal(designOut.step, "ui_component_review");
+    assert.equal(designOut.agent, "inline");
+    assert.equal(designOut.ticketContext.currentAction, "design");
+    assert.equal(
+      designOut.prompt.endsWith(path.join("plans", "prompts", "optional-steps", "design", "ui_component_review.md")),
+      true,
+    );
+
+    // Case 5: unknown step name rejected; error lists available names.
+    const unknownStep = await runCli(["--root", root, "specialty-run", designId, "nope_step"]);
+    assert.equal(unknownStep.code, 2);
+    assert.match(unknownStep.stderr, /step nope_step not found in optionalSteps\.design/);
+    assert.match(unknownStep.stderr, /security_threat_model/);
+    assert.match(unknownStep.stderr, /ui_component_review/);
+    assert.match(unknownStep.stderr, /ux_interaction_review/);
+
+    // Case 6: unmapped statuses rejected (ready_for_review, done, backlog, questions).
+    const reviewCreate = await runCli([
+      "--root",
+      root,
+      "create",
+      "task",
+      "Specialty review target",
+      "--status",
+      "ready_for_review",
+      "--priority",
+      "P2",
+    ]);
+    assert.equal(reviewCreate.code, 0, reviewCreate.stderr);
+    const reviewId = path.basename(reviewCreate.stdout.trim()).split("_", 1)[0];
+
+    const unmappedReview = await runCli(["--root", root, "specialty-run", reviewId, "security_audit"]);
+    assert.equal(unmappedReview.code, 2);
+    assert.match(unmappedReview.stderr, /status ready_for_review has no specialty stage/);
+
+    for (const status of ["done", "backlog", "questions"]) {
+      const c = await runCli([
+        "--root",
+        root,
+        "create",
+        "task",
+        `Specialty unmapped ${status}`,
+        "--status",
+        status,
+        "--priority",
+        "P2",
+      ]);
+      assert.equal(c.code, 0, c.stderr);
+      const tid = path.basename(c.stdout.trim()).split("_", 1)[0];
+      const result = await runCli(["--root", root, "specialty-run", tid, "security_audit"]);
+      assert.equal(result.code, 2);
+      assert.match(result.stderr, new RegExp(`status ${status} has no specialty stage`));
+    }
+
+    // Case 7: unknown ticket rejected.
+    const unknownTicket = await runCli(["--root", root, "specialty-run", "T20990101T0000Z", "security_audit"]);
+    assert.equal(unknownTicket.code, 2);
+    assert.match(unknownTicket.stderr, /ticket T20990101T0000Z not found/);
+
+    // Case 11: missing positional arguments rejected.
+    const noArgs = await runCli(["--root", root, "specialty-run"]);
+    assert.equal(noArgs.code, 2);
+    assert.match(noArgs.stderr, /specialty-run requires/);
+    const oneArg = await runCli(["--root", root, "specialty-run", implId]);
+    assert.equal(oneArg.code, 2);
+    assert.match(oneArg.stderr, /specialty-run requires/);
+  });
+});
+
+test("CLI specialty-run rejects when stage catalog is empty", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    // Default config has empty optionalSteps.test, so any step name lookup must fail.
+    const testCreate = await runCli([
+      "--root",
+      root,
+      "create",
+      "task",
+      "Specialty empty-test target",
+      "--status",
+      "ready_for_test",
+      "--priority",
+      "P2",
+    ]);
+    assert.equal(testCreate.code, 0, testCreate.stderr);
+    const testId = path.basename(testCreate.stdout.trim()).split("_", 1)[0];
+
+    const emptyResult = await runCli(["--root", root, "specialty-run", testId, "anything"]);
+    assert.equal(emptyResult.code, 2);
+    assert.match(emptyResult.stderr, /optionalSteps\.test \(available: none\)/);
+  });
+});
+
+test("CLI specialty-run returns per-entry agent override when configured", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    // Overwrite the seeded config with a minimal catalog that has a single design entry with an agent override.
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({
+        version: 1,
+        optionalSteps: {
+          design: [
+            {
+              name: "custom_review",
+              prompt: "plans/prompts/optional-steps/design/custom_review.md",
+              triggers: "Anything touched by the custom review.",
+              agent: "codex-task:read-only",
+            },
+          ],
+          implement: [],
+          test: [],
+        },
+      }),
+      "utf8",
+    );
+
+    const create = await runCli([
+      "--root",
+      root,
+      "create",
+      "task",
+      "Specialty override target",
+      "--status",
+      "ready_for_design",
+      "--priority",
+      "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const result = await runCli(["--root", root, "specialty-run", ticketId, "custom_review", "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.agent, "codex-task:read-only");
+    assert.equal(out.step, "custom_review");
+    assert.equal(out.stage, "design");
+  });
+});
+
 async function runCli(args) {
   const stdout = [];
   const stderr = [];

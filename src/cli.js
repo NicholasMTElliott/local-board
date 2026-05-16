@@ -111,6 +111,9 @@ export async function main(argv) {
     if (command === "gate-check") {
       return await commandGateCheck(root, args);
     }
+    if (command === "specialty-run") {
+      return await commandSpecialtyRun(root, args);
+    }
     if (command === "calibration") {
       const sub = args.shift();
       if (sub === "suggest") {
@@ -670,6 +673,84 @@ async function commandGateCheck(root, args) {
   return 0;
 }
 
+async function commandSpecialtyRun(root, args) {
+  const asJson = takeFlag(args, "--json");
+  const ticketId = args.shift();
+  const stepName = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined || stepName === undefined) {
+    throw new Error("specialty-run requires: <ticket-id> <step-name> [--json]");
+  }
+
+  const config = await loadConfig(root);
+  const { ticket } = await findTicket(root, ticketId);
+
+  const stage = statusToStage(ticket.status);
+  if (stage === null) {
+    throw new Error(
+      `specialty-run: status ${ticket.status} has no specialty stage (expected designing, ready_for_design, implementing, ready_for_implementation, testing, or ready_for_test)`,
+    );
+  }
+
+  const catalog = config.optionalSteps?.[stage] ?? [];
+  const entry = catalog.find((candidate) => candidate.name === stepName);
+  if (entry === undefined) {
+    const available = catalog.length === 0 ? "none" : catalog.map((c) => c.name).join(", ");
+    throw new Error(
+      `specialty-run: step ${stepName} not found in optionalSteps.${stage} (available: ${available})`,
+    );
+  }
+
+  const promptPath = path.resolve(root, entry.prompt);
+  const agent = Object.hasOwn(entry, "agent") ? entry.agent : "inline";
+
+  const baseRecord = ticketRecord(root, ticket);
+  const currentAction = config.workflow?.statusActions?.[ticket.status] ?? null;
+  const ticketContext = {
+    id: baseRecord.id,
+    type: baseRecord.type,
+    status: baseRecord.status,
+    priority: baseRecord.priority,
+    path: baseRecord.path,
+    title: baseRecord.title,
+    currentAction,
+    requirement: getSectionText(ticket.body, "Requirement") ?? "",
+    acceptanceCriteria: getSectionText(ticket.body, "Acceptance Criteria") ?? "",
+  };
+
+  const payload = {
+    ticket: ticket.id,
+    stage,
+    step: entry.name,
+    prompt: promptPath,
+    agent,
+    ticketPath: ticket.path,
+    ticketContext,
+  };
+
+  if (asJson) {
+    console.log(JSON.stringify(payload, null, 2));
+  } else {
+    console.log(`specialty-run ${ticket.id} step=${entry.name} stage=${stage} agent=${agent}`);
+    console.log(promptPath);
+  }
+  return 0;
+}
+
+function statusToStage(status) {
+  if (status === "designing" || status === "ready_for_design") {
+    return "design";
+  }
+  if (status === "implementing" || status === "ready_for_implementation") {
+    return "implement";
+  }
+  if (status === "testing" || status === "ready_for_test") {
+    return "test";
+  }
+  return null;
+}
+
 async function commandCalibrationSuggest(root, args) {
   const asJson = takeFlag(args, "--json");
   const ticketId = args.shift();
@@ -743,5 +824,6 @@ function printUsage() {
   local-board [--root <path>] unblock <ticket-id> <dependency-ticket-id>
   local-board [--root <path>] estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]
   local-board [--root <path>] gate-check <ticket-id> --stage <stage> [--json]
+  local-board [--root <path>] specialty-run <ticket-id> <step-name> [--json]
   local-board [--root <path>] calibration suggest <ticket-id> [--json]`);
 }
