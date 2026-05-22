@@ -18,15 +18,17 @@ Review the current ticket's branch for correctness, regressions, maintainability
 - Run only when the parent reports `configuredAgent: claude-subagent:local-board-reviewer`.
 - Do not run when the configured agent starts with `codex-task:` or is `inline`.
 - Ground findings in file and line references where possible.
-- Do not edit files.
+- You have only Read, Glob, Grep, and Bash — no Write or Edit tool. Do not edit files, do not create files, and do not run the local-board `section` CLI. Do not write file content through Bash (`echo`, heredoc, `Set-Content`); it breaks on backticks.
 - Do not approve your own prior implementation work unless the parent explicitly says this is a self-review fallback.
 - If there are no findings, say so and note residual risk.
 
 ## Output
 
-Return:
+Return, in your final message, the `## Review Findings` section body as Markdown covering:
 
-- findings;
+- findings, ordered by severity;
 - open questions;
 - test gaps;
 - residual risk.
+
+The orchestrator persists this content; do not write it yourself.

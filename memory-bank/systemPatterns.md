@@ -116,6 +116,19 @@ The installable `local-board-orchestrator` skill is the portable entrypoint. Pro
 For design/implement/test stages, the orchestrator skill runs `gate-check` + `specialty-run` between mandatory action completion and stage transition.
 Bundled Claude agents live in `agents/claude/` and are installed to `~/.claude/agents/`.
 
+## Delegation and Subagent Tools
+
+| Subagent | Tools | Persistence |
+|---|---|---|
+| `local-board-decomposer` | Read, Glob, Grep, Bash | Return-only; creates tickets via CLI |
+| `local-board-designer` | Read, Glob, Grep, Bash | Return-only |
+| `local-board-reviewer` | Read, Glob, Grep, Bash | Return-only |
+| `local-board-tester` | Read, Glob, Grep, Bash | Return-only |
+| `local-board-implementer` | Read, Glob, Grep, Bash, Edit, MultiEdit, Write | Writes its own file changes |
+| `local-board-documenter` | Read, Glob, Grep, Bash, Edit, MultiEdit, Write | Writes its own file changes |
+
+Return-only subagents have no Write or Edit tool. They return section content (Technical Design, Review Findings, Test Evidence) as Markdown in their final message; the orchestrator writes the temp file with the Write tool and runs `section --file`. Never instruct a return-only subagent to create a file — it falls back to Bash redirection (`echo`, heredoc, `Set-Content`), which breaks on backticks and code fences. The same return-only contract applies to `codex-task:read-only` routes.
+
 ## Safety Pattern
 LLMs write designs, code, reviews, tests, docs, and questions. Deterministic tooling validates ticket schema, dependency eligibility, status transitions, branch names, and commits.
 When `git.autoMerge` is true, `move ... done` validates routing, requires the current branch to match ticket `branch`, refuses uncommitted non-planning changes, commits planning-only closeout changes, and merges into the default branch.
@@ -130,7 +143,7 @@ Use `node ./bin/local-board.js validate`, `list`, `query-next`, `query-ticket`, 
 `estimate` records story points and an estimate basis, validates points against the configured scale, and requires `--force` to overwrite.
 `gate-check` returns the gate-check prompt path, stage specialty catalog, and narrow ticket context; the orchestrator dispatches the prompt and consumes its `requestedSteps` JSON.
 `specialty-run` resolves one configured optional step for the current stage without invoking an agent.
-`section --file <path>` is preferred for generated or multi-line Markdown; inline section text is for short edits.
+`section --file <path>` is preferred for generated or multi-line Markdown; inline section text is for short edits. Create the `--file` target with the Write tool, never with shell redirection.
 `query-next`, `query-ticket`, and `begin-step` return advisory transition guidance for the current status. The orchestrator should choose one returned status when moving after an action.
 `start-work` creates or switches to a ticket branch, records `branch`, logs the action, and moves `ready_for_implementation` tickets to `implementing`.
 `complete-step` records `<action>:<executor>` evidence. Strict routing rejects inline completion for delegated actions unless `approve-inline` has recorded user approval.

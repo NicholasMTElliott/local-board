@@ -135,7 +135,7 @@ node ./bin/local-board.js block T20260514T1237Z T20260514T1236Z
 ```
 
 Use `move` for status transitions. Do not use `set status`; it delegates to the same move behavior so folder placement stays consistent.
-Use `section --file <path>` for generated or multi-line Markdown. Inline `section <text>` is best for short one-line edits.
+Use `section --file <path>` for generated or multi-line Markdown. Inline `section <text>` is best for short one-line edits. Create the `--file` target with the Write tool; never build it with `echo`, heredoc, `Set-Content`, or `Out-File`.
 Use `block` and `unblock` for ticket dependencies. Do not move dependency-blocked tickets to `blocked`; that status is reserved for non-ticket blockers.
 
 ## Branch Handling

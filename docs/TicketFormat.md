@@ -145,7 +145,7 @@ With `retention.archiveOnMoveDone: true`, `move <ticket-id> done` also moves old
 
 `set` and `update-field` are aliases for front matter updates. `id`, `type`, `created`, and `updated` are managed fields and cannot be set directly.
 
-The writer emits required fields in canonical order and preserves the Markdown body. `section` replaces one Markdown section body by heading name. Inline text is supported for short updates; `section --file <path>` is preferred for multi-line Markdown.
+The writer emits required fields in canonical order and preserves the Markdown body. `section` replaces one Markdown section body by heading name. Inline text is supported for short updates; `section --file <path>` is preferred for multi-line Markdown. Create the `--file` target with the Write tool, never with shell redirection (`echo`, heredoc, `Set-Content`, `Out-File`).
 
 `link-parent` and `link-child` update reciprocal `parent`/`children` fields. `block` and `unblock` update reciprocal `blockedBy`/`blocks` fields.
 `block` does not move ticket status. Dependency-blocked tickets stay in their ready status and become eligible automatically when dependencies close.

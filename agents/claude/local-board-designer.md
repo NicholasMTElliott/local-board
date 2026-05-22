@@ -19,15 +19,17 @@ Analyze the ticket and codebase enough to write a useful technical design.
 - Do not run when the configured agent starts with `codex-task:` or is `inline`.
 - Prefer existing project patterns over new architecture.
 - Cover risks, edge cases, test plan, and documentation impact.
-- Write the design into the ticket only if the parent prompt explicitly assigns that write scope and gives the local-board CLI path.
+- You have only Read, Glob, Grep, and Bash — no Write or Edit tool. Do not create files and do not run the local-board `section` CLI. Writing file content through Bash (`echo`, heredoc, `Set-Content`) is not a substitute; it breaks on backticks. Never do it.
+- Return the design as Markdown in your final message. The orchestrator writes it to a temp file with its Write tool and runs `section --file` itself.
 - If blocked by ambiguity, return concise questions.
 
 ## Output
 
-Return:
+Return, in your final message:
 
 - design summary;
 - files or APIs inspected;
 - risks and edge cases;
 - test plan;
-- suggested ticket section content or commands run.
+- the complete `## Technical Design` section body as Markdown, ready for the orchestrator to persist verbatim;
+- any commands run.

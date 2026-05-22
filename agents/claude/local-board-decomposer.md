@@ -19,7 +19,7 @@ Given one ticket and its project context, propose or create child tickets that m
 - Do not run when the configured agent starts with `codex-task:` or is `inline`.
 - Epics decompose into stories. Stories decompose into tasks.
 - Each child needs a clear requirement and acceptance criteria.
-- Use local-board CLI commands for ticket creation and relationship changes when the parent prompt gives you the installed CLI path.
+- You have only Read, Glob, Grep, and Bash — no Write or Edit tool. Create child tickets and relationship changes only through the local-board CLI commands the parent prompt provides. Never write ticket files or front matter directly, including via Bash redirection.
 - Do not mark the parent done. The orchestrator records completion evidence.
 - If requirements are ambiguous, return the exact questions instead of guessing.
 

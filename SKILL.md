@@ -194,7 +194,21 @@ Bundled Claude subagent names:
 - `local-board-tester`
 - `local-board-documenter`
 
-Delegated agents may produce proposals or patches. The orchestrator remains responsible for canonical ticket state unless a delegated worker was explicitly assigned that write scope.
+### Persisting Delegated Output
+
+The `local-board-designer`, `local-board-reviewer`, `local-board-tester`, and `local-board-decomposer` subagents have only Read, Glob, Grep, and Bash. They have no Write or Edit tool and are return-only:
+
+- They return their section content — Technical Design, Review Findings, Test Evidence — as Markdown in their final message.
+- They do not create files and do not run `section` themselves.
+- The orchestrator takes that returned content, writes it to a temp file with the Write tool, and runs `section <ticket-id> --file <temp-path> --section "<Section>"` itself.
+
+Never instruct a return-only subagent to "write a temp file" or "use the Write tool". It cannot, and it falls back to Bash `echo`/heredoc/`Set-Content`, which loops endlessly on backtick and code-fence escaping. The same return-only contract applies to any `codex-task:read-only` route.
+
+The `local-board-implementer` and `local-board-documenter` subagents do have Write and Edit. They persist their own file changes — using Write and Edit, never Bash redirection.
+
+Whenever a CLI command needs a file argument (such as `section --file`), create that file with the Write tool. Never build it with `echo`, heredoc, `Set-Content`, or `Out-File`.
+
+The orchestrator remains responsible for canonical ticket state unless a delegated worker was explicitly assigned write scope.
 
 When recording completion evidence, use the exact configured executor string from `begin-step`, for example `claude-subagent:local-board-designer`.
 
@@ -235,5 +249,5 @@ node <<SCRIPT_PATH>> unblock <ticket-id> <dependency-id>
 ```
 
 Use `comment` for run-log style notes. Use `move` for status transitions. Use relationship commands for parent/child and dependency state.
-Use `section --file <path>` for generated or multi-line Markdown. Inline `section <text>` is only for short edits.
+Use `section --file <path>` for generated or multi-line Markdown. Inline `section <text>` is only for short edits. Create the `--file` target with the Write tool; never build it with `echo`, heredoc, `Set-Content`, or `Out-File`.
 Use `blockedBy` for ticket dependencies without moving the dependent ticket to `blocked`.
