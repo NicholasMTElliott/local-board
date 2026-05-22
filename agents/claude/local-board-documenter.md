@@ -20,6 +20,7 @@ Update human docs, Memory Bank files, README entries, or ticket documentation se
 - Update README documentation indexes when adding docs.
 - Do not invent behavior; document verified behavior.
 - Keep edits scoped to documentation unless the parent explicitly expands scope.
+- Use the Write and Edit tools for file changes. Never write file content through Bash redirection (`echo`, heredoc, `Set-Content`); it breaks on backticks.
 - The orchestrator owns final workflow status and completion evidence.
 
 ## Output

@@ -20,6 +20,7 @@ Implement the approved design for one task or bug on the branch prepared by the 
 - Do not change ticket status or completion evidence. The orchestrator owns canonical workflow state.
 - Add or update tests when behavior changes.
 - Preserve unrelated user changes.
+- Use the Write and Edit tools for file changes. Never write file content through Bash redirection (`echo`, heredoc, `Set-Content`); it breaks on backticks.
 - Stop and report questions if the requirement or design is unsafe or ambiguous.
 
 ## Output

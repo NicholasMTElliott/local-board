@@ -41,7 +41,7 @@ node ./bin/local-board.js block T20260514T1236Z T20260514T1235Z
 
 The same commands are available through `local-board` when the package bin is on `PATH`.
 
-For multi-line Markdown, `section --file <path>` is preferred. It avoids shell quoting failures from apostrophes, backticks, dollar signs, and long generated text.
+For multi-line Markdown, `section --file <path>` is preferred. It avoids shell quoting failures from apostrophes, backticks, dollar signs, and long generated text. Create that file with the Write tool, not shell redirection.
 
 ## Installable Skill
 
