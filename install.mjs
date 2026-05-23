@@ -25,6 +25,7 @@ const TARGETS = [
     id: "claude",
     label: "Claude Code",
     skillDir: join(HOME, ".claude", "skills", "local-board-orchestrator"),
+    teamSkillDir: join(HOME, ".claude", "skills", "local-board-team"),
     settingsPath: join(HOME, ".claude", "settings.json"),
     detectPath: join(HOME, ".claude"),
     defaultOn: true,
@@ -33,6 +34,7 @@ const TARGETS = [
     id: "opencode",
     label: "opencode",
     skillDir: join(HOME, ".config", "opencode", "skills", "local-board-orchestrator"),
+    teamSkillDir: join(HOME, ".config", "opencode", "skills", "local-board-team"),
     settingsPath: null,
     detectPath: join(HOME, ".config", "opencode"),
     defaultOn: false,
@@ -41,6 +43,7 @@ const TARGETS = [
     id: "cline",
     label: "Cline",
     skillDir: join(HOME, ".cline", "skills", "local-board-orchestrator"),
+    teamSkillDir: join(HOME, ".cline", "skills", "local-board-team"),
     settingsPath: null,
     detectPath: join(HOME, ".cline"),
     defaultOn: false,
@@ -49,6 +52,7 @@ const TARGETS = [
     id: "cursor",
     label: "Cursor",
     skillDir: join(HOME, ".cursor", "skills", "local-board-orchestrator"),
+    teamSkillDir: join(HOME, ".cursor", "skills", "local-board-team"),
     settingsPath: null,
     detectPath: join(HOME, ".cursor"),
     defaultOn: false,
@@ -57,6 +61,7 @@ const TARGETS = [
     id: "agents",
     label: "Agents (cross-harness)",
     skillDir: join(HOME, ".agents", "skills", "local-board-orchestrator"),
+    teamSkillDir: join(HOME, ".agents", "skills", "local-board-team"),
     settingsPath: null,
     detectPath: join(HOME, ".agents"),
     defaultOn: false,
@@ -97,6 +102,9 @@ function install() {
   copyFileSync(join(SCRIPT_DIR, "package.json"), join(INSTALL_DIR, "package.json"));
   copyFileSync(join(SCRIPT_DIR, "README.md"), join(INSTALL_DIR, "README.md"));
   copyFileSync(join(SCRIPT_DIR, "SKILL.md"), join(INSTALL_DIR, "SKILL.md"));
+  if (existsSync(join(SCRIPT_DIR, "SKILL_TEAM.md"))) {
+    copyFileSync(join(SCRIPT_DIR, "SKILL_TEAM.md"), join(INSTALL_DIR, "SKILL_TEAM.md"));
+  }
   copyDir("bin");
   copyDir("src");
   copyDir("agents");
@@ -104,11 +112,12 @@ function install() {
   copyDir(join("plans", "templates"), "templates");
 
   const scriptPath = join(INSTALL_DIR, "bin", "local-board.js").replace(/\\/g, "/");
-  const renderedSkill = readFileSync(join(SCRIPT_DIR, "SKILL.md"), "utf8")
-    .replace(/<<INSTALL_PATH>>/g, () => INSTALL_DIR.replace(/\\/g, "/"))
-    .replace(/<<SCRIPT_PATH>>/g, () => scriptPath);
+  const renderedSkill = renderSkill(join(SCRIPT_DIR, "SKILL.md"), scriptPath);
+  const renderedTeamSkill = existsSync(join(SCRIPT_DIR, "SKILL_TEAM.md"))
+    ? renderSkill(join(SCRIPT_DIR, "SKILL_TEAM.md"), scriptPath)
+    : null;
   const allowRule = `Bash(node ${scriptPath} *)`;
-  writeInstallInfo({ nodeVersion, scriptPath });
+  writeInstallInfo({ nodeVersion, scriptPath, teamSkillInstalled: renderedTeamSkill !== null });
 
   console.log(`local-board installer`);
   console.log(`node ${nodeVersion}`);
@@ -118,6 +127,11 @@ function install() {
     mkdirSync(target.skillDir, { recursive: true });
     writeFileSync(join(target.skillDir, "SKILL.md"), renderedSkill);
     console.log(`installed skill for ${target.label}: ${target.skillDir}`);
+    if (renderedTeamSkill !== null && target.teamSkillDir) {
+      mkdirSync(target.teamSkillDir, { recursive: true });
+      writeFileSync(join(target.teamSkillDir, "SKILL.md"), renderedTeamSkill);
+      console.log(`installed team skill for ${target.label}: ${target.teamSkillDir}`);
+    }
     if (target.id === "claude") {
       installClaudeAgents();
     }
@@ -127,7 +141,13 @@ function install() {
   }
 }
 
-function writeInstallInfo({ nodeVersion, scriptPath }) {
+function renderSkill(sourcePath, scriptPath) {
+  return readFileSync(sourcePath, "utf8")
+    .replace(/<<INSTALL_PATH>>/g, () => INSTALL_DIR.replace(/\\/g, "/"))
+    .replace(/<<SCRIPT_PATH>>/g, () => scriptPath);
+}
+
+function writeInstallInfo({ nodeVersion, scriptPath, teamSkillInstalled }) {
   writeFileSync(
     join(INSTALL_DIR, "install-info.json"),
     `${JSON.stringify(
@@ -138,6 +158,7 @@ function writeInstallInfo({ nodeVersion, scriptPath }) {
         scriptPath,
         nodeVersion,
         skillName: "local-board-orchestrator",
+        teamSkillName: teamSkillInstalled ? "local-board-team" : null,
         claudeAgents: claudeAgentNames(),
       },
       null,
@@ -183,6 +204,10 @@ function uninstall() {
     if (existsSync(target.skillDir)) {
       rmSync(target.skillDir, { recursive: true, force: true });
       console.log(`removed ${target.skillDir}`);
+    }
+    if (target.teamSkillDir && existsSync(target.teamSkillDir)) {
+      rmSync(target.teamSkillDir, { recursive: true, force: true });
+      console.log(`removed ${target.teamSkillDir}`);
     }
   }
   uninstallClaudeAgents();
@@ -262,7 +287,8 @@ function listTargets() {
   for (const target of TARGETS) {
     const state = existsSync(target.detectPath) ? "detected" : "not detected";
     const policy = target.explicitOnly ? "explicit-only" : target.defaultOn ? "default-on" : "detect-only";
-    console.log(`${target.id}\t${target.label}\t${state}\t${policy}\t${target.skillDir}`);
+    const teamPath = target.teamSkillDir ?? "(no team skill)";
+    console.log(`${target.id}\t${target.label}\t${state}\t${policy}\t${target.skillDir}\t${teamPath}`);
   }
 }
 
