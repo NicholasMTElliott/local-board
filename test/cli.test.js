@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 import { main } from "../src/cli.js";
 import { loadConfig } from "../src/config.js";
-import { createTicket, discover } from "../src/tickets.js";
+import { createTicket, discover, queryNext } from "../src/tickets.js";
 
 async function withBoard(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "local-board-cli-"));
@@ -128,6 +128,99 @@ test("CLI command surface supports init, create, query, mutate, relate, report, 
     assert.match(movedText, /Use the existing parser\./);
     assert.match(movedText, /Avoid shell quoting for long Markdown\./);
     assert.match(movedText, /CLI touched this\./);
+  });
+});
+
+test("list --ready uses config-aware eligibility, ordering, JSON shape, status filter, and limit", async () => {
+  await withBoard(async (root) => {
+    const readyImpl = await createTicket(root, "task", "Ready implementation", {
+      status: "ready_for_implementation",
+      priority: "P0",
+      now: new Date("2026-05-14T20:50:00Z"),
+    });
+    const readyDesign = await createTicket(root, "task", "Ready design", {
+      status: "ready_for_design",
+      priority: "P1",
+      now: new Date("2026-05-14T20:51:00Z"),
+    });
+    const implementing = await createTicket(root, "task", "Already implementing", {
+      status: "implementing",
+      priority: "P0",
+      now: new Date("2026-05-14T20:52:00Z"),
+    });
+    const done = await createTicket(root, "epic", "Already done", {
+      status: "done",
+      priority: "P0",
+      now: new Date("2026-05-14T20:53:00Z"),
+    });
+    await recordEpicDecomposition(done);
+    const dependency = await createTicket(root, "task", "Open dependency", {
+      status: "ready_for_design",
+      priority: "P3",
+      now: new Date("2026-05-14T20:54:00Z"),
+    });
+    const blocked = await createTicket(root, "task", "Blocked trigger status", {
+      status: "ready_for_implementation",
+      priority: "P0",
+      now: new Date("2026-05-14T20:55:00Z"),
+    });
+
+    const readyImplId = path.basename(readyImpl).split("_", 1)[0];
+    const readyDesignId = path.basename(readyDesign).split("_", 1)[0];
+    const implementingId = path.basename(implementing).split("_", 1)[0];
+    const doneId = path.basename(done).split("_", 1)[0];
+    const dependencyId = path.basename(dependency).split("_", 1)[0];
+    const blockedId = path.basename(blocked).split("_", 1)[0];
+    await replaceText(blocked, "blockedBy: []", `blockedBy: [${dependencyId}]`);
+    await replaceText(dependency, "blocks: []", `blocks: [${blockedId}]`);
+
+    const result = await runCli(["--root", root, "list", "--ready", "--json"]);
+
+    assert.equal(result.code, 0, result.stderr);
+    const rows = JSON.parse(result.stdout);
+    const ids = rows.map((row) => row.id);
+    assert.equal(ids.includes(readyImplId), true);
+    assert.equal(ids.includes(readyDesignId), true);
+    assert.equal(ids.includes(implementingId), false);
+    assert.equal(ids.includes(doneId), false);
+    assert.equal(ids.includes(blockedId), false);
+    assert.deepEqual(Object.keys(rows[0]), ["id", "type", "status", "priority", "branch", "title", "path", "action"]);
+    assert.equal(rows[0].id, (await queryNext(root))?.ticket);
+
+    const filtered = await runCli(["--root", root, "list", "--ready", "--status", "ready_for_design", "--json"]);
+    assert.equal(filtered.code, 0, filtered.stderr);
+    assert.deepEqual(JSON.parse(filtered.stdout).map((row) => row.id), [readyDesignId, dependencyId]);
+
+    const limited = await runCli(["--root", root, "list", "--ready", "--limit", "1", "--json"]);
+    assert.equal(limited.code, 0, limited.stderr);
+    assert.deepEqual(JSON.parse(limited.stdout).map((row) => row.id), [rows[0].id]);
+  });
+});
+
+test("list --limit caps default output and rejects non-positive values", async () => {
+  await withBoard(async (root) => {
+    await createTicket(root, "task", "First", {
+      status: "backlog",
+      now: new Date("2026-05-14T20:50:00Z"),
+    });
+    await createTicket(root, "task", "Second", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:51:00Z"),
+    });
+    await createTicket(root, "task", "Third", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:52:00Z"),
+    });
+
+    const limited = await runCli(["--root", root, "list", "--limit", "2", "--json"]);
+    assert.equal(limited.code, 0, limited.stderr);
+    assert.equal(JSON.parse(limited.stdout).length, 2);
+
+    for (const value of ["0", "-1"]) {
+      const result = await runCli(["--root", root, "list", "--limit", value]);
+      assert.notEqual(result.code, 0);
+      assert.match(result.stderr, /--limit must be a positive integer/);
+    }
   });
 });
 
@@ -1029,4 +1122,9 @@ async function recordEpicDecomposition(ticketPath) {
     text.replace("completedSteps: []", "completedSteps: [decompose:claude-subagent:local-board-decomposer]"),
     "utf8",
   );
+}
+
+async function replaceText(filePath, search, replacement) {
+  const text = await readFile(filePath, "utf8");
+  await writeFile(filePath, text.replace(search, replacement), "utf8");
 }

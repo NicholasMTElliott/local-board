@@ -17,6 +17,7 @@ import {
   nextTicket,
   parseScalar,
   queryNext,
+  queryReady,
   queryTicket,
   schemaRecord,
   setTicketField,
@@ -153,13 +154,32 @@ async function commandValidate(root, args) {
 
 async function commandList(root, args) {
   const asJson = takeFlag(args, "--json");
+  const ready = takeFlag(args, "--ready");
   const status = takeOption(args, "--status");
+  const limit = parseLimit(takeOption(args, "--limit"));
   ensureNoArgs(args);
+
+  if (ready) {
+    const records = (await queryReady(root))
+      .filter((record) => status === undefined || record.status === status)
+      .slice(0, limit ?? undefined);
+
+    if (asJson) {
+      console.log(JSON.stringify(records.map(readyListJsonRecord), null, 2));
+    } else {
+      for (const record of records) {
+        console.log(`${record.ticket} ${record.priority} ${record.status} ${record.path} ${record.title}`);
+      }
+    }
+
+    return 0;
+  }
 
   const board = await discover(root);
   const records = board.tickets
     .filter((ticket) => status === undefined || ticket.status === status)
-    .map((ticket) => ticketRecord(root, ticket));
+    .map((ticket) => ticketRecord(root, ticket))
+    .slice(0, limit ?? undefined);
 
   if (asJson) {
     console.log(JSON.stringify(records, null, 2));
@@ -170,6 +190,19 @@ async function commandList(root, args) {
   }
 
   return 0;
+}
+
+function readyListJsonRecord(record) {
+  return {
+    id: record.ticket,
+    type: record.type,
+    status: record.status,
+    priority: record.priority,
+    branch: record.branch,
+    title: record.title,
+    path: record.path,
+    action: record.action,
+  };
 }
 
 async function commandNext(root, args) {
@@ -791,6 +824,17 @@ function takeOption(args, name) {
   return value;
 }
 
+function parseLimit(value) {
+  if (value === undefined) {
+    return undefined;
+  }
+  const limit = Number.parseInt(value, 10);
+  if (Number.isNaN(limit) || !/^-?\d+$/.test(value) || limit <= 0) {
+    throw new Error("--limit must be a positive integer");
+  }
+  return limit;
+}
+
 function ensureNoArgs(args) {
   if (args.length > 0) {
     throw new Error(`unexpected argument: ${args[0]}`);
@@ -800,7 +844,7 @@ function ensureNoArgs(args) {
 function printUsage() {
   console.error(`Usage:
   local-board [--root <path>] validate [--json]
-  local-board [--root <path>] list [--status <status>] [--json]
+  local-board [--root <path>] list [--status <status>] [--ready] [--limit <N>] [--json]
   local-board [--root <path>] next [--json]
   local-board [--root <path>] query-next [--json]
   local-board [--root <path>] query-ticket <ticket-id> [--json]

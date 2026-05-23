@@ -802,6 +802,24 @@ export async function queryNext(root = ".") {
   return actionRecord(board.root, ticket, config, byId);
 }
 
+export async function queryReady(root = ".", { limit } = {}) {
+  if (limit !== undefined && (!Number.isInteger(limit) || limit <= 0)) {
+    throw new Error("--limit must be a positive integer");
+  }
+
+  const [board, config] = await Promise.all([discover(root), loadConfig(root)]);
+  const issues = validate(board, config);
+  if (issues.length > 0) {
+    throw new Error(`ticket validation failed:\n${issues.join("\n")}`);
+  }
+
+  const byId = byTicketId(board);
+  const eligible = board.tickets.filter((ticket) => isEligibleForConfig(ticket, byId, config));
+  eligible.sort((left, right) => compareTicketsForConfig(left, right, config));
+  const records = eligible.map((ticket) => actionRecord(board.root, ticket, config, byId));
+  return limit === undefined ? records : records.slice(0, limit);
+}
+
 export async function queryTicket(root = ".", ticketId) {
   const [board, config] = await Promise.all([discover(root), loadConfig(root)]);
   const issues = validate(board, config);
@@ -961,7 +979,7 @@ export function isEligible(ticket, byId) {
   return true;
 }
 
-function isEligibleForConfig(ticket, byId, config) {
+export function isEligibleForConfig(ticket, byId, config) {
   if (!Object.hasOwn(config.workflow.statusActions, ticket.status)) {
     return false;
   }
@@ -984,6 +1002,7 @@ function actionRecord(root, ticket, config, byId) {
   const action = config.workflow.statusActions[ticket.status] ?? null;
   const configuredAgent = action === null ? null : agentForAction(config, action);
   return {
+    // `ticket` is the stable ticket id; CLI ready JSON maps it to `id` for list output clarity.
     ticket: ticket.id,
     type: ticket.type,
     status: ticket.status,
@@ -1018,7 +1037,7 @@ function compareTicketsForSelection(left, right) {
   );
 }
 
-function compareTicketsForConfig(left, right, config) {
+export function compareTicketsForConfig(left, right, config) {
   return (
     priorityRank(left) - priorityRank(right) ||
     pipelineRank(left, config) - pipelineRank(right, config) ||
