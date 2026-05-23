@@ -50,6 +50,7 @@ export async function assertAutoMergeReady(root, ticketId, options = {}) {
 
   assertMergeBranch(ticketId, branch, defaultBranch, current);
   await assertNoNonPlanningChanges(root);
+  await assertTicketBranchUpToDate(root, branch, defaultBranch);
 
   return { ticket: ticket.id, branch, defaultBranch, current };
 }
@@ -62,6 +63,7 @@ export async function autoMergeTicketBranch(root, ticketId, options = {}) {
 
   assertMergeBranch(ticketId, branch, defaultBranch, current);
   await assertNoNonPlanningChanges(root);
+  await assertTicketBranchUpToDate(root, branch, defaultBranch);
 
   const now = options.now ?? new Date();
   await appendTicketComment(root, ticketId, "Run Log", `Auto-merge prepared for ${branch} into ${defaultBranch}.`, {
@@ -135,6 +137,16 @@ async function assertNoNonPlanningChanges(root) {
   if (nonPlanning.length > 0) {
     const paths = nonPlanning.flatMap((entry) => entry.paths).join(", ");
     throw new Error(`auto-merge requires non-planning changes to be committed first: ${paths}`);
+  }
+}
+
+async function assertTicketBranchUpToDate(root, branch, defaultBranch) {
+  const containsDefaultTip = await gitOk(root, ["merge-base", "--is-ancestor", defaultBranch, branch]);
+  if (!containsDefaultTip) {
+    throw new Error(
+      `auto-merge requires ticket branch ${branch} to contain the tip of ${defaultBranch}; ` +
+        `run \`git rebase ${defaultBranch}\` or \`git merge ${defaultBranch}\` on ${branch} and retry`,
+    );
   }
 }
 

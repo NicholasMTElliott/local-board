@@ -165,6 +165,7 @@ test("move done auto-merges the ticket branch when autoMerge is enabled", { skip
     assert.equal(output.autoMerge.planningCommit, "committed");
     assert.deepEqual(output.archived.map((record) => record.ticket), [oldDoneId]);
     assert.equal(await currentBranch(root), baseBranch);
+    assert.equal((await gitOutput(root, ["rev-list", "--parents", "-n", "1", "HEAD"])).split(" ").length, 3);
     assert.equal((await readFile(path.join(root, "feature.txt"), "utf8")).trim(), "implemented");
     assert.match(await readFile(output.path, "utf8"), /^status: done$/m);
     assert.match(
@@ -172,6 +173,113 @@ test("move done auto-merges the ticket branch when autoMerge is enabled", { skip
       /^status: archived$/m,
     );
     assert.equal(await gitOutput(root, ["status", "--porcelain"]), "");
+  });
+});
+
+test("move done refuses auto-merge when ticket branch is behind default branch and recovers after merge", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, baseBranch) => {
+    await writeAutoMergeConfig(root, baseBranch);
+    await git(root, ["add", "plans/local-board.config.jsonc"]);
+    await git(root, ["commit", "-m", "Enable auto merge"]);
+    const ticketPath = await createTicket(root, "task", "Stale auto merge", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add stale auto merge ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const work = await startTicketWork(root, ticketId, { now: new Date("2026-05-14T21:00:00Z") });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Start stale auto merge ticket"]);
+    await git(root, ["switch", baseBranch]);
+    await writeFile(path.join(root, "default.txt"), "default advanced\n", "utf8");
+    await git(root, ["add", "default.txt"]);
+    await git(root, ["commit", "-m", "Advance default branch"]);
+    await git(root, ["switch", work.branch]);
+    await completeRequiredTaskSteps(root, ticketId);
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Complete required steps"]);
+
+    const failed = await runCli(["--root", root, "move", ticketId, "done", "--json"]);
+
+    assert.equal(failed.code, 2);
+    assert.match(failed.stderr, new RegExp(`ticket branch ${escapeRegExp(work.branch)} to contain the tip of ${escapeRegExp(baseBranch)}`));
+    assert.match(failed.stderr, new RegExp(`git (rebase|merge) ${escapeRegExp(baseBranch)}`));
+    assert.equal(await currentBranch(root), work.branch);
+    assert.match(await readFile(work.path, "utf8"), /^status: implementing$/m);
+
+    await git(root, ["merge", baseBranch, "-m", "Merge default into ticket"]);
+    const recovered = await runCli(["--root", root, "move", ticketId, "done", "--json"]);
+
+    assert.equal(recovered.code, 0, recovered.stderr);
+    const output = JSON.parse(recovered.stdout);
+    assert.equal(output.autoMerge.branch, work.branch);
+    assert.equal(output.autoMerge.defaultBranch, baseBranch);
+    assert.equal(await currentBranch(root), baseBranch);
+    assert.match(await readFile(output.path, "utf8"), /^status: done$/m);
+    assert.equal((await readFile(path.join(root, "default.txt"), "utf8")).trim(), "default advanced");
+  });
+});
+
+test("move done skips stale branch precondition when autoMerge is disabled", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, baseBranch) => {
+    await writeAutoMergeConfig(root, baseBranch, false);
+    await git(root, ["add", "plans/local-board.config.jsonc"]);
+    await git(root, ["commit", "-m", "Disable auto merge"]);
+    const ticketPath = await createTicket(root, "task", "Manual stale done", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add manual stale ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const work = await startTicketWork(root, ticketId, { now: new Date("2026-05-14T21:00:00Z") });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Start manual stale ticket"]);
+    await git(root, ["switch", baseBranch]);
+    await writeFile(path.join(root, "default.txt"), "default advanced\n", "utf8");
+    await git(root, ["add", "default.txt"]);
+    await git(root, ["commit", "-m", "Advance default branch"]);
+    await git(root, ["switch", work.branch]);
+    await completeRequiredTaskSteps(root, ticketId);
+
+    const result = await runCli(["--root", root, "move", ticketId, "done", "--json"]);
+
+    assert.equal(result.code, 0, result.stderr);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.autoMerge, null);
+    assert.equal(await currentBranch(root), work.branch);
+    assert.match(await readFile(output.path, "utf8"), /^status: done$/m);
+  });
+});
+
+test("move done auto-merge allows ticket branch head equal to default branch head", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, baseBranch) => {
+    await writeAutoMergeConfig(root, baseBranch);
+    await git(root, ["add", "plans/local-board.config.jsonc"]);
+    await git(root, ["commit", "-m", "Enable auto merge"]);
+    const ticketPath = await createTicket(root, "task", "Equal head auto merge", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add equal head auto merge ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const work = await startTicketWork(root, ticketId, { now: new Date("2026-05-14T21:00:00Z") });
+    assert.equal(await gitOutput(root, ["rev-parse", "HEAD"]), await gitOutput(root, ["rev-parse", baseBranch]));
+    await completeRequiredTaskSteps(root, ticketId);
+
+    const result = await runCli(["--root", root, "move", ticketId, "done", "--json"]);
+
+    assert.equal(result.code, 0, result.stderr);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.autoMerge.branch, work.branch);
+    assert.equal(output.autoMerge.defaultBranch, baseBranch);
+    assert.equal(await currentBranch(root), baseBranch);
+    assert.match(await readFile(output.path, "utf8"), /^status: done$/m);
   });
 });
 
@@ -225,18 +333,22 @@ async function currentBranch(root) {
   return stdout.trim();
 }
 
-async function writeAutoMergeConfig(root, baseBranch) {
+async function writeAutoMergeConfig(root, baseBranch, autoMerge = true) {
   await writeFile(
     path.join(root, "plans", "local-board.config.jsonc"),
     `{
   "git": {
     "defaultBranch": "${baseBranch}",
-    "autoMerge": true
+    "autoMerge": ${JSON.stringify(autoMerge)}
   }
 }
 `,
     "utf8",
   );
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 async function completeRequiredTaskSteps(root, ticketId) {
