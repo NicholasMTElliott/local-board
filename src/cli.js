@@ -33,6 +33,12 @@ import {
 import { assertAutoMergeReady, autoMergeTicketBranch, startTicketWork } from "./git.js";
 import { loadConfig, OPTIONAL_STEP_STAGES } from "./config.js";
 import { initProject } from "./scaffold.js";
+import {
+  addTicketWorktree,
+  fastForwardDefaultBranch,
+  listTicketWorktrees,
+  removeTicketWorktree,
+} from "./worktrees.js";
 
 export async function main(argv) {
   const args = [...argv];
@@ -66,6 +72,18 @@ export async function main(argv) {
     }
     if (command === "start-work" || command === "ensure-branch") {
       return await commandStartWork(root, args);
+    }
+    if (command === "worktree-add") {
+      return await commandWorktreeAdd(root, args);
+    }
+    if (command === "worktree-remove") {
+      return await commandWorktreeRemove(root, args);
+    }
+    if (command === "worktree-list") {
+      return await commandWorktreeList(root, args);
+    }
+    if (command === "fast-forward") {
+      return await commandFastForward(root, args);
     }
     if (command === "begin-step") {
       return await commandBeginStep(root, args);
@@ -332,6 +350,74 @@ async function commandStartWork(root, args) {
     console.log(JSON.stringify(result, null, 2));
   } else {
     console.log(`${result.ticket} ${result.branch} ${result.gitAction} ${result.path}`);
+  }
+  return 0;
+}
+
+async function commandWorktreeAdd(root, args) {
+  const asJson = takeFlag(args, "--json");
+  const ticketId = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined) {
+    throw new Error("worktree-add requires: <ticket-id> [--json]");
+  }
+
+  const result = await addTicketWorktree(root, ticketId);
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(
+      `${result.ticketId} ${result.branch} ${result.created ? "created" : "existing"} ${result.worktreePath}`,
+    );
+  }
+  return 0;
+}
+
+async function commandWorktreeRemove(root, args) {
+  const asJson = takeFlag(args, "--json");
+  const force = takeFlag(args, "--force");
+  const ticketId = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined) {
+    throw new Error("worktree-remove requires: <ticket-id> [--force] [--json]");
+  }
+
+  const result = await removeTicketWorktree(root, ticketId, { force });
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`${result.ticketId} ${result.removed ? "removed" : "not-found"} ${result.worktreePath}`);
+  }
+  return 0;
+}
+
+async function commandWorktreeList(root, args) {
+  const asJson = takeFlag(args, "--json");
+  ensureNoArgs(args);
+
+  const result = await listTicketWorktrees(root);
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    for (const record of result) {
+      console.log(`${record.ticketId} ${record.branch ?? "(detached)"} ${record.locked ? "locked" : "unlocked"} ${record.worktreePath}`);
+    }
+  }
+  return 0;
+}
+
+async function commandFastForward(root, args) {
+  const asJson = takeFlag(args, "--json");
+  ensureNoArgs(args);
+
+  const config = await loadConfig(root);
+  const result = await fastForwardDefaultBranch(root, { defaultBranch: config.git.defaultBranch });
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`${result.defaultBranch} ${result.advanced ? "advanced" : "unchanged"} ${result.newHead}`);
   }
   return 0;
 }
@@ -853,6 +939,10 @@ function printUsage() {
   local-board [--root <path>] init [--overwrite] [--json]
   local-board [--root <path>] create <type> <title> [--status <status>] [--priority <priority>] [--parent <id>]
   local-board [--root <path>] start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--json]
+  local-board [--root <path>] worktree-add <ticket-id> [--json]
+  local-board [--root <path>] worktree-remove <ticket-id> [--force] [--json]
+  local-board [--root <path>] worktree-list [--json]
+  local-board [--root <path>] fast-forward [--json]
   local-board [--root <path>] begin-step <ticket-id> [--action <action>] [--json]
   local-board [--root <path>] complete-step <ticket-id> <action> --executor <executor> --evidence <text> [--json]
   local-board [--root <path>] approve-inline <ticket-id> <action> --reason <text> [--json]

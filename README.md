@@ -26,6 +26,10 @@ node ./bin/local-board.js calibration suggest T20260514T1234Z --json
 node ./bin/local-board.js gate-check T20260514T1234Z --stage implement --json
 node ./bin/local-board.js specialty-run T20260514T1234Z security_audit --json
 node ./bin/local-board.js start-work T20260514T1234Z --json
+node ./bin/local-board.js worktree-add T20260514T1234Z --json
+node ./bin/local-board.js worktree-list --json
+node ./bin/local-board.js worktree-remove T20260514T1234Z --json
+node ./bin/local-board.js fast-forward --json
 node ./bin/local-board.js begin-step T20260514T1234Z --json
 node ./bin/local-board.js complete-step T20260514T1234Z review --executor codex-task:read-only --evidence "Review notes added."
 node ./bin/local-board.js approve-inline T20260514T1234Z review --reason "User approved fallback."
@@ -72,7 +76,7 @@ npm test
 npm run validate
 ```
 
-The test suite includes function-level ticket kernel coverage and CLI command-surface coverage for init, create, list, validate, next/query, schema, state report, transition guidance, strict routing evidence, branch start-work, auto-merge closeout, done-ticket retention, field/section edits, comments, moves, parent-child links, and dependency links.
+The test suite includes function-level ticket kernel coverage and CLI command-surface coverage for init, create, list, validate, next/query, schema, state report, transition guidance, strict routing evidence, branch start-work, worktree helpers, fast-forward, auto-merge closeout, done-ticket retention, field/section edits, comments, moves, parent-child links, and dependency links.
 
 ## Documentation Index
 

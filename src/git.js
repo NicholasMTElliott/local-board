@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import path from "node:path";
 import { promisify } from "node:util";
 
 import { appendTicketComment, findTicket, formatIsoSeconds, moveTicket, setTicketField } from "./tickets.js";
@@ -8,7 +9,7 @@ const execFileAsync = promisify(execFile);
 export async function startTicketWork(root, ticketId, options = {}) {
   const { ticket } = await findTicket(root, ticketId);
   const now = options.now ?? new Date();
-  const branch = options.branch ?? ticket.frontMatter.branch ?? defaultBranchName(ticket);
+  const branch = ticketBranchName(ticket, options.branch);
   await assertBranchName(root, branch);
 
   const git = await ensureGitBranch(root, branch, { allowDirty: options.allowDirty ?? false });
@@ -18,9 +19,7 @@ export async function startTicketWork(root, ticketId, options = {}) {
     ticketPath = await setTicketField(root, ticketId, "workStartedAt", formatIsoSeconds(now), { now });
   }
 
-  if (ticket.frontMatter.branch !== branch) {
-    ticketPath = await setTicketField(root, ticketId, "branch", branch, { now });
-  }
+  ticketPath = await recordTicketBranch(root, ticketId, ticket, branch, { now, currentPath: ticketPath });
 
   ticketPath = await appendTicketComment(root, ticketId, "Run Log", `Ensured git branch ${branch} (${git.action}).`, {
     now,
@@ -71,6 +70,17 @@ export async function autoMergeTicketBranch(root, ticketId, options = {}) {
   });
 
   const planningCommit = await commitPlanningChanges(root, ticketId, options);
+  if (await branchCheckedOutElsewhere(root, defaultBranch)) {
+    await mergeBranchIntoDefaultRef(root, ticketId, branch, defaultBranch);
+    return {
+      ticket: ticket.id,
+      branch,
+      defaultBranch,
+      planningCommit,
+      action: "merged",
+    };
+  }
+
   await gitRun(root, ["switch", defaultBranch]);
 
   try {
@@ -131,13 +141,61 @@ function assertMergeBranch(ticketId, branch, defaultBranch, current) {
   }
 }
 
-async function assertNoNonPlanningChanges(root) {
+export async function assertNoNonPlanningChanges(root) {
   const entries = await workingTreeEntries(root);
   const nonPlanning = entries.filter((entry) => entry.paths.some((changedPath) => !isPlanningPath(changedPath)));
   if (nonPlanning.length > 0) {
     const paths = nonPlanning.flatMap((entry) => entry.paths).join(", ");
     throw new Error(`auto-merge requires non-planning changes to be committed first: ${paths}`);
   }
+}
+
+async function mergeBranchIntoDefaultRef(root, ticketId, branch, defaultBranch) {
+  const oldDefault = await gitOutput(root, ["rev-parse", defaultBranch]);
+  const mergeCommit = await gitOutput(root, [
+    "commit-tree",
+    `${branch}^{tree}`,
+    "-p",
+    oldDefault,
+    "-p",
+    branch,
+    "-m",
+    `Merge ${ticketId}`,
+  ]);
+  await gitRun(root, ["update-ref", `refs/heads/${defaultBranch}`, mergeCommit, oldDefault]);
+}
+
+async function branchCheckedOutElsewhere(root, branch) {
+  const currentRoot = path.resolve(await gitOutput(root, ["rev-parse", "--show-toplevel"]));
+  const output = await gitRawOutput(root, ["worktree", "list", "--porcelain"]);
+  let worktreePath = null;
+  let worktreeBranch = null;
+
+  const flush = () => {
+    const checkedOutElsewhere =
+      worktreePath !== null &&
+      worktreeBranch === `refs/heads/${branch}` &&
+      path.resolve(worktreePath) !== currentRoot;
+    worktreePath = null;
+    worktreeBranch = null;
+    return checkedOutElsewhere;
+  };
+
+  for (const line of output.split(/\r?\n/)) {
+    if (line === "") {
+      if (flush()) {
+        return true;
+      }
+      continue;
+    }
+    if (line.startsWith("worktree ")) {
+      worktreePath = line.slice("worktree ".length);
+    } else if (line.startsWith("branch ")) {
+      worktreeBranch = line.slice("branch ".length);
+    }
+  }
+
+  return flush();
 }
 
 async function assertTicketBranchUpToDate(root, branch, defaultBranch) {
@@ -197,7 +255,7 @@ function isPlanningPath(changedPath) {
   return changedPath.replace(/\\/g, "/").startsWith("plans/");
 }
 
-async function resolveDefaultBranch(root, configuredBranch) {
+export async function resolveDefaultBranch(root, configuredBranch) {
   if (typeof configuredBranch === "string" && configuredBranch.trim() !== "") {
     await assertBranchName(root, configuredBranch);
     return configuredBranch;
@@ -234,19 +292,19 @@ async function abortMergeAndReturn(root, branch) {
   }
 }
 
-async function assertBranchName(root, branch) {
+export async function assertBranchName(root, branch) {
   if (branch.trim() === "") {
     throw new Error("branch name is required");
   }
   await gitRun(root, ["check-ref-format", "--branch", branch]);
 }
 
-async function currentBranch(root) {
+export async function currentBranch(root) {
   const branch = await gitOutput(root, ["branch", "--show-current"]);
   return branch === "" ? await gitOutput(root, ["rev-parse", "--abbrev-ref", "HEAD"]) : branch;
 }
 
-async function gitRun(root, args) {
+export async function gitRun(root, args) {
   try {
     await execFileAsync("git", ["-C", root, ...args], { encoding: "utf8" });
   } catch (error) {
@@ -254,7 +312,7 @@ async function gitRun(root, args) {
   }
 }
 
-async function gitOutput(root, args) {
+export async function gitOutput(root, args) {
   try {
     const { stdout } = await execFileAsync("git", ["-C", root, ...args], { encoding: "utf8" });
     return stdout.trim();
@@ -263,7 +321,7 @@ async function gitOutput(root, args) {
   }
 }
 
-async function gitRawOutput(root, args) {
+export async function gitRawOutput(root, args) {
   try {
     const { stdout } = await execFileAsync("git", ["-C", root, ...args], { encoding: "utf8" });
     return stdout;
@@ -272,7 +330,7 @@ async function gitRawOutput(root, args) {
   }
 }
 
-async function gitOk(root, args) {
+export async function gitOk(root, args) {
   try {
     await execFileAsync("git", ["-C", root, ...args], { encoding: "utf8" });
     return true;
@@ -282,6 +340,17 @@ async function gitOk(root, args) {
     }
     throw new Error(formatGitError(args, error));
   }
+}
+
+export async function recordTicketBranch(root, ticketId, ticket, branch, options = {}) {
+  if (ticket.frontMatter.branch === branch) {
+    return options.currentPath ?? ticket.path;
+  }
+  return setTicketField(root, ticketId, "branch", branch, { now: options.now });
+}
+
+export function ticketBranchName(ticket, overrideBranch = undefined) {
+  return overrideBranch ?? ticket.frontMatter.branch ?? defaultBranchName(ticket);
 }
 
 function defaultBranchName(ticket) {

@@ -11,6 +11,7 @@ Team mode is most useful when:
 - You have several `ready_for_implementation` (or other ready-state) tickets that touch independent parts of the code.
 - The work is bounded enough that you trust each teammate to finish without constant intervention.
 - The auto-merge race avoidance matters to you — the CLI's rebase-onto-default precondition is what makes parallel auto-merge safe.
+- You want each teammate isolated in its own git worktree instead of sharing one checkout.
 
 Team mode is not useful when:
 
@@ -24,6 +25,7 @@ Team mode is not useful when:
 |---|---|---|
 | Claude Code v2.1.32 or later | Agent teams feature | `claude --version` |
 | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` | Enables the agent-teams primitives | `~/.claude/settings.json` `env` block, or shell env |
+| Lead checkout on default branch with a clean tree | Teammates may move the default-branch ref while they merge | `local-board fast-forward --json` |
 | `git.autoMerge: true` in `plans/local-board.config.jsonc` | Teammates auto-merge their own branches | Project config |
 | `git.commitPlanningChanges: true` in the same config | Closeout commits stay out of the way | Project config |
 
@@ -38,12 +40,49 @@ Ask Claude to run team mode:
 The lead session will:
 
 1. Validate the project.
-2. Run `local-board list --ready --limit 6 --json` to get the candidate batch.
-3. Stop with "no ready tickets" if the batch is empty.
-4. Fall back to the standard `local-board-orchestrator` skill if the batch has exactly one ticket.
-5. Otherwise spawn one teammate per ticket (up to six) and run the relay loop.
+2. Run `local-board fast-forward --json` to confirm the lead is on the default branch with a clean checkout.
+3. Run `local-board list --ready --limit 6 --json` to get the candidate batch.
+4. Stop with "no ready tickets" if the batch is empty.
+5. Fall back to the standard `local-board-orchestrator` skill if the batch has exactly one ticket.
+6. Otherwise spawn one teammate per ticket (up to six) and run the relay loop.
 
 The cap of six is hard-coded in the skill. The Anthropic agent-teams documentation recommends three to five teammates; six is the upper edge that still produces useful parallelism for this workflow.
+
+## Worktree model
+
+Each teammate gets a git worktree in a sibling directory of the project root. If the project root is:
+
+```text
+C:\work\local-board
+```
+
+then ticket worktrees are created as:
+
+```text
+C:\work\
+  local-board\
+  local-board-worktrees\
+    T20260522T1430Z\
+    T20260522T1432Z\
+```
+
+Teammates do not call `git worktree` directly. Their first command is:
+
+```sh
+local-board worktree-add <ticket-id> --json
+```
+
+The command returns the branch and `worktreePath`. Every later local-board command from that teammate passes `--root <worktreePath>`, including `start-work`, `begin-step`, `complete-step`, `move`, `section`, and `comment`. The teammate may `cd` into the worktree for editing and normal git commands, but `--root` is authoritative for local-board state.
+
+When a ticket has no recorded branch, `worktree-add` creates the branch using the same naming helper as `start-work` and stamps the branch field inside the worktree ticket file. It does not change status, `workStartedAt`, or the run log. `start-work` still owns those mutations.
+
+When `move ... done` auto-merges a teammate branch, the default-branch ref can move while the lead's default checkout still has the old files on disk. After each `DONE` message, and again before the final summary, the lead runs:
+
+```sh
+local-board fast-forward --json
+```
+
+This command refuses unless the lead is on the detected default branch and the checkout is clean. On success it runs a hard reset to the current default-branch ref, so the lead sees the merged files.
 
 ## What you will see
 
@@ -73,7 +112,7 @@ If two teammates touch the same files, the second one to reach the merge-with-pe
 2. The conflict is semantic and requires a choice. The teammate moves its ticket to `questions` and asks the lead, which surfaces the question to you.
 3. The two tickets were genuinely incompatible. You decide which to keep, move the other to `blocked`, and re-run team mode on the survivor.
 
-The CLI's rebase-onto-default precondition handles the auto-merge race separately. When teammate A's `move ... done` auto-merges to the default branch, teammate B's `move ... done` will refuse until B's branch contains A's merge. B either rebases or moves to `questions`.
+The CLI's rebase-onto-default precondition handles the auto-merge race separately. When teammate A's `move ... done` auto-merges to the default branch, teammate B's `move ... done` will refuse until B's branch contains A's merge. B either rebases, merges the default branch into its ticket branch, or moves to `questions`.
 
 ## Recovering from a stuck teammate
 
@@ -99,4 +138,6 @@ Team mode also adds its own constraints:
 
 - Maximum six teammates per run.
 - Each teammate is a separate Claude Code session with its own context window. Token cost scales linearly with batch size.
+- Worktrees live outside the repo in the sibling `<repo-name>-worktrees/` directory. Remove stale worktrees with `local-board worktree-remove <ticket-id>` or inspect them with `local-board worktree-list`.
+- `fast-forward` has no opt-out in team mode. Keep the lead checkout clean while teammates are running.
 - Team-mode configuration (the spawn rules, the cap of six) lives in the skill file, not in `plans/local-board.config.jsonc`. The agent-teams docs explicitly do not recognize a project-level team config.
