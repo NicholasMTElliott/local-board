@@ -24,8 +24,10 @@ const TARGETS = [
   {
     id: "claude",
     label: "Claude Code",
-    skillDir: join(HOME, ".claude", "skills", "local-board-orchestrator"),
-    teamSkillDir: join(HOME, ".claude", "skills", "local-board-team"),
+    skillDir: join(HOME, ".claude", "skills", "local-board"),
+    legacySkillDirs: [join(HOME, ".claude", "skills", "local-board-orchestrator")],
+    teamSkillDir: join(HOME, ".claude", "skills", "local-team"),
+    legacyTeamSkillDirs: [join(HOME, ".claude", "skills", "local-board-team")],
     settingsPath: join(HOME, ".claude", "settings.json"),
     detectPath: join(HOME, ".claude"),
     defaultOn: true,
@@ -33,8 +35,10 @@ const TARGETS = [
   {
     id: "opencode",
     label: "opencode",
-    skillDir: join(HOME, ".config", "opencode", "skills", "local-board-orchestrator"),
-    teamSkillDir: join(HOME, ".config", "opencode", "skills", "local-board-team"),
+    skillDir: join(HOME, ".config", "opencode", "skills", "local-board"),
+    legacySkillDirs: [join(HOME, ".config", "opencode", "skills", "local-board-orchestrator")],
+    teamSkillDir: join(HOME, ".config", "opencode", "skills", "local-team"),
+    legacyTeamSkillDirs: [join(HOME, ".config", "opencode", "skills", "local-board-team")],
     settingsPath: null,
     detectPath: join(HOME, ".config", "opencode"),
     defaultOn: false,
@@ -42,8 +46,10 @@ const TARGETS = [
   {
     id: "cline",
     label: "Cline",
-    skillDir: join(HOME, ".cline", "skills", "local-board-orchestrator"),
-    teamSkillDir: join(HOME, ".cline", "skills", "local-board-team"),
+    skillDir: join(HOME, ".cline", "skills", "local-board"),
+    legacySkillDirs: [join(HOME, ".cline", "skills", "local-board-orchestrator")],
+    teamSkillDir: join(HOME, ".cline", "skills", "local-team"),
+    legacyTeamSkillDirs: [join(HOME, ".cline", "skills", "local-board-team")],
     settingsPath: null,
     detectPath: join(HOME, ".cline"),
     defaultOn: false,
@@ -51,8 +57,10 @@ const TARGETS = [
   {
     id: "cursor",
     label: "Cursor",
-    skillDir: join(HOME, ".cursor", "skills", "local-board-orchestrator"),
-    teamSkillDir: join(HOME, ".cursor", "skills", "local-board-team"),
+    skillDir: join(HOME, ".cursor", "skills", "local-board"),
+    legacySkillDirs: [join(HOME, ".cursor", "skills", "local-board-orchestrator")],
+    teamSkillDir: join(HOME, ".cursor", "skills", "local-team"),
+    legacyTeamSkillDirs: [join(HOME, ".cursor", "skills", "local-board-team")],
     settingsPath: null,
     detectPath: join(HOME, ".cursor"),
     defaultOn: false,
@@ -60,8 +68,10 @@ const TARGETS = [
   {
     id: "agents",
     label: "Agents (cross-harness)",
-    skillDir: join(HOME, ".agents", "skills", "local-board-orchestrator"),
-    teamSkillDir: join(HOME, ".agents", "skills", "local-board-team"),
+    skillDir: join(HOME, ".agents", "skills", "local-board"),
+    legacySkillDirs: [join(HOME, ".agents", "skills", "local-board-orchestrator")],
+    teamSkillDir: join(HOME, ".agents", "skills", "local-team"),
+    legacyTeamSkillDirs: [join(HOME, ".agents", "skills", "local-board-team")],
     settingsPath: null,
     detectPath: join(HOME, ".agents"),
     defaultOn: false,
@@ -132,11 +142,29 @@ function install() {
       writeFileSync(join(target.teamSkillDir, "SKILL.md"), renderedTeamSkill);
       console.log(`installed team skill for ${target.label}: ${target.teamSkillDir}`);
     }
+    removeLegacyDirs(target, "legacySkillDirs", target.skillDir, "skill");
+    removeLegacyDirs(target, "legacyTeamSkillDirs", target.teamSkillDir, "team skill");
     if (target.id === "claude") {
       installClaudeAgents();
     }
     if (target.settingsPath !== null) {
       patchSettings(target.settingsPath, allowRule);
+    }
+  }
+}
+
+function removeLegacyDirs(target, field, currentDir, label) {
+  const dirs = target[field];
+  if (!Array.isArray(dirs)) {
+    return;
+  }
+  for (const legacyDir of dirs) {
+    if (legacyDir === currentDir) {
+      continue;
+    }
+    if (existsSync(legacyDir)) {
+      rmSync(legacyDir, { recursive: true, force: true });
+      console.log(`removed legacy ${label} for ${target.label}: ${legacyDir}`);
     }
   }
 }
@@ -157,8 +185,8 @@ function writeInstallInfo({ nodeVersion, scriptPath, teamSkillInstalled }) {
         installDir: INSTALL_DIR,
         scriptPath,
         nodeVersion,
-        skillName: "local-board-orchestrator",
-        teamSkillName: teamSkillInstalled ? "local-board-team" : null,
+        skillName: "local-board",
+        teamSkillName: teamSkillInstalled ? "local-team" : null,
         claudeAgents: claudeAgentNames(),
       },
       null,
@@ -209,6 +237,8 @@ function uninstall() {
       rmSync(target.teamSkillDir, { recursive: true, force: true });
       console.log(`removed ${target.teamSkillDir}`);
     }
+    removeLegacyDirs(target, "legacySkillDirs", target.skillDir, "skill");
+    removeLegacyDirs(target, "legacyTeamSkillDirs", target.teamSkillDir, "team skill");
   }
   uninstallClaudeAgents();
 }

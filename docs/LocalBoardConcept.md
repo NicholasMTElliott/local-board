@@ -6,7 +6,7 @@ Instead of cards in a remote board, tickets are Markdown files in `plans/tickets
 
 Claude Code acts as the first orchestrator. It reads the tickets, decides what is eligible next, delegates individual workflow steps to agents or prompts, and updates the ticket as work moves forward.
 
-An installable `local-board-orchestrator` skill makes this portable across projects. The skill teaches compatible agents to initialize a board, call deterministic query commands, load project-local prompts, delegate configured steps, and mutate canonical ticket state only through the CLI.
+An installable `local-board` skill makes this portable across projects. The skill teaches compatible agents to initialize a board, call deterministic query commands, load project-local prompts, delegate configured steps, and mutate canonical ticket state only through the CLI.
 
 ## Why Local Files
 

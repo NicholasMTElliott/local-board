@@ -1,5 +1,5 @@
 ---
-name: local-board-orchestrator
+name: local-board
 description: Operate a repo-native local-board planning system where tickets are Markdown files under plans/tickets. Use when the user asks to run local-board, work the next ticket, work a specific ticket, decompose an epic/story, initialize local-board in a repo, or continue a file-backed planning workflow. The skill validates tickets, queries deterministic workflow state through the local-board CLI, loads project prompts/config, delegates bounded steps when configured, and updates canonical ticket state through CLI commands.
 allowed-tools:
   - Bash(node <<SCRIPT_PATH>> *)
