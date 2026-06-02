@@ -133,6 +133,39 @@ export function ticketWorktreePath(repoRoot, ticketId) {
   return path.join(ticketWorktreesRoot(repoRoot), ticketId);
 }
 
+export async function ticketWorktreeMintOffsetMinutes(root) {
+  let records;
+  try {
+    records = await listRegisteredWorktrees(root);
+  } catch {
+    return 0;
+  }
+  if (records.length === 0) {
+    return 0;
+  }
+
+  const mainRoot = records[0].worktreePath;
+  const worktreesRoot = ticketWorktreesRoot(mainRoot);
+  const ticketIds = records
+    .filter((record) => isChildPath(worktreesRoot, record.worktreePath))
+    .map((record) => path.basename(record.worktreePath))
+    .sort();
+
+  if (ticketIds.length === 0) {
+    return 0;
+  }
+
+  let topLevel;
+  try {
+    topLevel = path.resolve(await gitOutput(root, ["rev-parse", "--show-toplevel"]));
+  } catch {
+    return 0;
+  }
+
+  const index = ticketIds.indexOf(path.basename(topLevel));
+  return index < 0 ? 0 : index;
+}
+
 async function cleanCheckoutHead(root, branch, newHead) {
   if (!(await gitOk(root, ["diff-files", "--quiet", "--"]))) {
     throw new Error("fast-forward requires a clean working tree; commit or stash changes first");

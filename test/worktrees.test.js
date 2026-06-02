@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -128,6 +128,47 @@ test("worktree-remove removes a ticket worktree and is idempotent", { skip: !GIT
       worktreePath: displayPath(worktreePath),
       removed: false,
     });
+  });
+});
+
+test("create from peer worktrees mints distinct timestamps via the worktree mint offset", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, _baseBranch, worktreesRoot) => {
+    const ticketAPath = await createTicket(root, "story", "Peer A", {
+      status: "ready_for_decomposition",
+      now: new Date("2026-05-22T14:10:00Z"),
+    });
+    const ticketBPath = await createTicket(root, "story", "Peer B", {
+      status: "ready_for_decomposition",
+      now: new Date("2026-05-22T14:11:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add peer stories"]);
+    const ticketA = path.basename(ticketAPath).split("_", 1)[0];
+    const ticketB = path.basename(ticketBPath).split("_", 1)[0];
+
+    const addA = await runCli(["--root", root, "worktree-add", ticketA, "--json"]);
+    assert.equal(addA.code, 0, addA.stderr);
+    const addB = await runCli(["--root", root, "worktree-add", ticketB, "--json"]);
+    assert.equal(addB.code, 0, addB.stderr);
+    const worktreeA = path.join(worktreesRoot, ticketA);
+    const worktreeB = path.join(worktreesRoot, ticketB);
+
+    const childA = await runCli([
+      "--root", worktreeA, "create", "task", "Child of A", "--status", "ready_for_design", "--parent", ticketA,
+    ]);
+    assert.equal(childA.code, 0, childA.stderr);
+    const childB = await runCli([
+      "--root", worktreeB, "create", "task", "Child of B", "--status", "ready_for_design", "--parent", ticketB,
+    ]);
+    assert.equal(childB.code, 0, childB.stderr);
+
+    const childAFile = (await readdir(path.join(worktreeA, "plans", "tickets", "ready"))).find((name) => name.endsWith("child-of-a.md"));
+    const childBFile = (await readdir(path.join(worktreeB, "plans", "tickets", "ready"))).find((name) => name.endsWith("child-of-b.md"));
+    assert.ok(childAFile, "child of A should exist in worktree A");
+    assert.ok(childBFile, "child of B should exist in worktree B");
+    const childAId = childAFile.split("_", 1)[0];
+    const childBId = childBFile.split("_", 1)[0];
+    assert.notEqual(childAId, childBId, "peer worktrees must mint distinct ticket IDs");
   });
 });
 

@@ -2,6 +2,7 @@ import { mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promi
 import path from "node:path";
 
 import { loadConfig } from "./config.js";
+import { ticketWorktreeMintOffsetMinutes } from "./worktrees.js";
 
 export const PREFIX_TYPES = new Map([
   ["E", "epic"],
@@ -1082,7 +1083,9 @@ export async function createTicket(root, ticketType, title, options = {}) {
     throw new Error(`parent ${parent} does not exist`);
   }
 
-  const timestamp = nextAvailableTimestamp(board, ticketType, now);
+  const offsetMinutes = options.now === undefined ? await ticketWorktreeMintOffsetMinutes(root) : 0;
+  const start = offsetMinutes > 0 ? new Date(now.getTime() + offsetMinutes * 60_000) : now;
+  const timestamp = nextAvailableTimestamp(board, ticketType, start);
   const ticketId = `${TYPE_PREFIXES.get(ticketType)}${formatTicketTimestamp(timestamp)}`;
   const slug = slugify(title);
   const folder = path.resolve(root, "plans", "tickets", STATUS_FOLDERS.get(status));
