@@ -112,7 +112,7 @@ Current required step prompts:
 
 Skills should be orchestration entrypoints. Step behavior should live in prompt files and deterministic scripts where possible.
 
-The installable `local-board-orchestrator` skill is the portable entrypoint. Project-local prompts override bundled fallback prompts.
+The installable `local-board` skill is the portable entrypoint. Project-local prompts override bundled fallback prompts.
 For design/implement/test stages, the orchestrator skill runs `gate-check` + `specialty-run` between mandatory action completion and stage transition.
 Bundled Claude agents live in `agents/claude/` and are installed to `~/.claude/agents/`.
 
@@ -126,15 +126,17 @@ Bundled Claude agents live in `agents/claude/` and are installed to `~/.claude/a
 | `local-board-tester` | Read, Glob, Grep, Bash | Return-only |
 | `local-board-implementer` | Read, Glob, Grep, Bash, Edit, MultiEdit, Write | Writes its own file changes |
 | `local-board-documenter` | Read, Glob, Grep, Bash, Edit, MultiEdit, Write | Writes its own file changes |
+| `local-board-teammate` | Read, Glob, Grep, Bash, Edit, MultiEdit, Write | Team-mode orchestrator; works one ticket at a time and accepts `WORK <id>` reassignments from the lead until the queue empties. Runs `/compact` between tickets. No `Task`: a teammate is itself a subagent and the harness forbids nested subagents, so `claude-subagent:*` steps run inline (`approve-inline` + `--executor inline`); `codex-task:*` routes still work. |
 
 Return-only subagents have no Write or Edit tool. They return section content (Technical Design, Review Findings, Test Evidence) as Markdown in their final message; the orchestrator writes the temp file with the Write tool and runs `section --file`. Never instruct a return-only subagent to create a file — it falls back to Bash redirection (`echo`, heredoc, `Set-Content`), which breaks on backticks and code fences. The same return-only contract applies to `codex-task:read-only` routes.
 
 ## Safety Pattern
 LLMs write designs, code, reviews, tests, docs, and questions. Deterministic tooling validates ticket schema, dependency eligibility, status transitions, branch names, and commits.
-When `git.autoMerge` is true, `move ... done` validates routing, requires the current branch to match ticket `branch`, refuses uncommitted non-planning changes, commits planning-only closeout changes, and merges into the default branch.
+When `git.autoMerge` is true, `move ... done` validates routing, requires the current branch to match ticket `branch`, refuses uncommitted non-planning changes, commits planning-only closeout changes, and merges into the default branch. When `git.pruneMergedBranches` is true (default), the merged ticket branch is then deleted with `git branch -d`; the worktree HEAD is detached first when the merge took the ref-only path so the branch is deletable.
 When `retention.archiveOnMoveDone` is true, `move ... done` archives other done tickets older than the configured retention window. Archived tickets count as closed dependencies.
 `start-work` stamps `workStartedAt` once. `move ... done` stamps `workCompletedAt` only when `workStartedAt` is set. Archive does not touch wall-clock fields.
 When estimation is enabled, `complete-step design` refuses tasks and bugs without an estimate.
+`create` derives a per-worktree minute offset when invoked from inside a registered ticket worktree (sorted-index position among sibling worktrees) and shifts the starting timestamp by that many minutes. Sibling teammates therefore mint distinct child IDs without coordinating. Test-mode invocations that pass `now` skip the offset to keep timestamps deterministic.
 
 ## MVP CLI
 Use `node ./bin/local-board.js validate`, `list`, `query-next`, `query-ticket`, `state-report`, `schema`, `create`, `estimate`, `calibration suggest`, `gate-check`, `specialty-run`, `start-work`, `begin-step`, `complete-step`, `approve-inline`, `move`, `set`, `section`, `comment`, `link-parent`, `link-child`, `block`, `unblock`, and `init`.

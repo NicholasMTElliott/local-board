@@ -1,8 +1,8 @@
 # Team Mode
 
-Team mode runs multiple local-board tickets in parallel using a Claude Code agent team. Each ready ticket gets its own teammate session, and every teammate is the orchestrator for exactly one ticket. The team lead coordinates spawn, relays teammate status to you, and synthesizes a final per-ticket summary.
+Team mode runs multiple local-board tickets in parallel using a Claude Code agent team. The lead spawns up to six teammate sessions, each one the orchestrator for one ticket at a time. As teammates finish, the lead reassigns them to additional ready tickets — including ones produced mid-run by a teammate's own `decompose` step — until the queue is exhausted. Each teammate runs `/compact` between tickets to keep its context window manageable.
 
-Team mode is opt-in. It does not change how single-ticket runs work — the standard `local-board-orchestrator` skill remains the entry point for sequential operation.
+Team mode is opt-in. It does not change how single-ticket runs work — the standard `local-board` skill remains the entry point for sequential operation.
 
 ## When to use it
 
@@ -41,12 +41,13 @@ The lead session will:
 
 1. Validate the project.
 2. Run `local-board fast-forward --json` to confirm the lead is on the default branch with a clean checkout.
-3. Run `local-board list --ready --limit 6 --json` to get the candidate batch.
+3. Run `local-board list --ready --limit 6 --json` to get the initial candidate batch.
 4. Stop with "no ready tickets" if the batch is empty.
-5. Fall back to the standard `local-board-orchestrator` skill if the batch has exactly one ticket.
-6. Otherwise spawn one teammate per ticket (up to six) and run the relay loop.
+5. Fall back to the standard `local-board` skill if the batch has exactly one ticket.
+6. Otherwise spawn one teammate per initial ticket (up to six) and run the relay loop.
+7. After each teammate's `DONE`, run `fast-forward` and pick the next ready ticket. Send `WORK <ticket-id>` to the freed teammate. When no ready ticket exists, the teammate idles; when every teammate is idle and the queue is empty, the lead sends `SHUTDOWN` to each idle teammate and produces the final summary.
 
-The cap of six is hard-coded in the skill. The Anthropic agent-teams documentation recommends three to five teammates; six is the upper edge that still produces useful parallelism for this workflow.
+The cap of six is hard-coded in the skill. The Anthropic agent-teams documentation recommends three to five teammates; six is the upper edge that still produces useful parallelism for this workflow. Endless mode reuses these six slots — it does not grow the team mid-run.
 
 ## Worktree model
 
@@ -84,23 +85,24 @@ local-board fast-forward --json
 
 This command refuses unless the lead is on the detected default branch and the checkout is clean. On success it runs a hard reset to the current default-branch ref, so the lead sees the merged files.
 
+Between a teammate's `DONE` and the lead's next `fast-forward`, `git status` in the lead checkout will show transient "modifications" or "deletions" against ticket files that the teammate's merge brought into the default branch. These are not real edits — they are the diff between the lead's stale working tree and the newly-advanced HEAD. Do not commit them or revert them manually; the next `fast-forward` reconciles the working tree by hard-resetting to HEAD.
+
 ## What you will see
 
-During the run, the lead relays each teammate message verbatim:
+During the run, the lead relays each teammate message verbatim. Status messages from teammates include the current ticket ID because each teammate may work several tickets across reassignments:
 
 ```
-[T20260522T1430Z] STARTED branch=task/T20260522T1430Z
-[T20260522T1432Z] STARTED branch=task/T20260522T1432Z
-[T20260522T1430Z] STEP design -> ready_for_implementation
-[T20260522T1432Z] STEP design -> ready_for_implementation
-[T20260522T1430Z] BRANCH-READY T20260522T1430Z branch=task/T20260522T1430Z
-[T20260522T1430Z] DONE
-[T20260522T1432Z] QUESTION conflicting refactor in src/cli.js
+[T20260522T1430Z] STARTED T20260522T1430Z branch=local-board/T20260522T1430Z-auth-fix
+[T20260522T1432Z] STARTED T20260522T1432Z branch=local-board/T20260522T1432Z-cache-rewrite
+[T20260522T1430Z] STEP T20260522T1430Z design -> ready_for_implementation
+[T20260522T1430Z] DONE T20260522T1430Z
+[T20260522T1430Z] STARTED T20260522T1500Z branch=local-board/T20260522T1500Z-followup
+[T20260522T1432Z] QUESTION T20260522T1432Z conflicting refactor in src/cli.js
 ```
 
-The lead does not interpret these messages — it surfaces them as a running log so you can intervene if needed.
+Note the teammate name (`T20260522T1430Z`) is just a session identifier — once reassigned, the same teammate can be working a different ticket (`T20260522T1500Z` above). The lead does not interpret these messages; it surfaces them as a running log so you can intervene if needed.
 
-When every teammate has shut down, the lead produces a final per-ticket summary table with columns for ticket ID, final status, branch, one-line evidence summary, and any questions or blockers.
+When every teammate has shut down, the lead produces a final per-ticket summary table covering *every* ticket processed during the session, with columns for ticket ID, the teammate that worked it, final status, branch, one-line evidence summary, and any questions or blockers.
 
 ## Conflict handling
 
@@ -132,12 +134,13 @@ Team mode inherits the agent-teams limitations:
 - One team at a time per lead session.
 - The lead is fixed for the team's lifetime.
 - Teammates cannot spawn their own teams.
+- Teammates cannot dispatch `claude-subagent:*` routes. A teammate is itself a subagent, and the harness forbids a subagent from spawning further subagents (the `Task` tool is not granted at runtime). Team mode runs those steps inline automatically — the teammate does the design/review/test work itself and records `approve-inline`. `codex-task:*` routes still work because they shell out via Bash, not `Task`. This restriction does not apply to single-ticket mode, where the top-level orchestrator session can dispatch subagents normally.
 - Permissions are set at spawn; per-teammate modes cannot be assigned at spawn time.
 
 Team mode also adds its own constraints:
 
-- Maximum six teammates per run.
-- Each teammate is a separate Claude Code session with its own context window. Token cost scales linearly with batch size.
+- Maximum six teammates per run. Endless mode reuses these slots; it does not grow the team mid-run.
+- Each teammate is a separate Claude Code session with its own context window. Teammates run `/compact` between tickets to keep context manageable across many reassignments, but token cost still scales with the number of tickets processed.
 - Worktrees live outside the repo in the sibling `<repo-name>-worktrees/` directory. Remove stale worktrees with `local-board worktree-remove <ticket-id>` or inspect them with `local-board worktree-list`.
 - `fast-forward` has no opt-out in team mode. Keep the lead checkout clean while teammates are running.
 - Team-mode configuration (the spawn rules, the cap of six) lives in the skill file, not in `plans/local-board.config.jsonc`. The agent-teams docs explicitly do not recognize a project-level team config.
