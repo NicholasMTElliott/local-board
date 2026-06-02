@@ -4,9 +4,40 @@ Repo-native planning and agent orchestration experiments.
 
 `local-board` explores a file-backed alternative to external kanban boards. Tickets live in the project repo under `plans/`, and Claude Code can act as the orchestrator that selects, decomposes, designs, implements, reviews, tests, documents, and closes work.
 
+## Why
+
+External kanban tools put your plan in a separate system from your code. local-board keeps tickets in the repo as Markdown, so the plan is versioned, diffable, and reviewable alongside the work — and an AI coding agent can drive the whole pipeline through a small deterministic CLI instead of a web API.
+
+## Requirements
+
+- [Node.js](https://nodejs.org/) 20 or later.
+- No runtime dependencies, no install step, no network access. The CLI is pure Node ESM.
+- Team mode additionally needs [Claude Code](https://claude.com/claude-code) v2.1.32+ with `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`.
+
+## Quick start
+
+```sh
+git clone https://github.com/NicholasMTElliott/local-board.git
+cd local-board
+
+# Try the CLI against this repo's own board:
+node ./bin/local-board.js validate
+node ./bin/local-board.js list --ready
+
+# Scaffold a board in another project:
+node ./bin/local-board.js --root /path/to/your/repo init
+```
+
+To use local-board as an agent orchestrator, install the skills into your coding agent:
+
+```sh
+node install.mjs                # install skills + agents
+node install.mjs --list-targets # see where they would go
+```
+
 ## Status
 
-Early MVP kernel. The repo now has a dependency-free Node.js ESM CLI for parsing, validating, listing, creating, and selecting Markdown tickets.
+Early MVP kernel. The repo has a dependency-free Node.js ESM CLI for parsing, validating, listing, creating, and selecting Markdown tickets, plus installable orchestration and team-mode skills.
 
 ## CLI
 
@@ -106,6 +137,14 @@ install.mjs          Cross-harness skill installer
 SKILL.md             Installable orchestration skill template
 SKILL_TEAM.md        Installable team-mode skill template (Claude Code agent teams)
 ```
+
+## Contributing & Security
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) — setup, tests, branch and PR conventions.
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — Contributor Covenant; expected conduct in community spaces.
+- [SECURITY.md](SECURITY.md) — security model and how to report a vulnerability privately.
+
+Issues and pull requests are welcome. Run `npm run check`, `npm test`, and `npm run validate` before opening a PR.
 
 ## License
 

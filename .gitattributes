@@ -1,0 +1,19 @@
+# Normalize all text to LF in the repository and on checkout.
+# This is a Node.js project that runs on Linux CI and macOS as well as Windows.
+# A CRLF in bin/local-board.js (or install.mjs) would break the #! shebang line
+# when executed on POSIX hosts, so keep these LF everywhere.
+* text=auto eol=lf
+
+# Explicit: executable entry points and scripts must stay LF.
+bin/* text eol=lf
+*.mjs text eol=lf
+*.js text eol=lf
+*.sh text eol=lf
+
+# Common binaries — never normalize.
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.gz binary

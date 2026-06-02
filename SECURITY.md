@@ -1,0 +1,32 @@
+# Security Policy
+
+## Supported Versions
+
+Versions are tagged on GitHub. For this small project, only the latest tagged release line receives security fixes.
+
+| Version | Supported |
+| --- | --- |
+| Latest GitHub release | Yes |
+| Older releases | No |
+
+## Reporting a Vulnerability
+
+Please report vulnerabilities privately through [GitHub Security Advisories](https://github.com/NicholasMTElliott/local-board/security/advisories/new). If that is not possible, email nicholasmtelliott@gmail.com.
+
+Target acknowledgment time: 48 hours.
+
+Do not disclose the issue publicly until a fix is shipped and a maintainer confirms disclosure timing.
+
+## Security Model
+
+local-board's CLI (`bin/`, `src/`) is dependency-free and makes no network calls. It reads and writes Markdown ticket files under `plans/` and performs local git operations (branch creation, worktrees, fast-forward, and — when `git.autoMerge` is enabled — merges into the default branch) within the repository you run it in.
+
+The risk surface is delegation, not the CLI itself:
+
+- The installable skills (`SKILL.md`, `SKILL_TEAM.md`) instruct an AI coding agent to design, implement, review, test, and document tickets, and to run git operations. That agent executes code and commands on your machine.
+- Routing entries of the form `codex-task:*` shell out to an external executor; `claude-subagent:*` routes delegate to Claude Code subagents. Both run AI-generated work locally.
+- `node install.mjs` writes skill and agent files into your home-directory agent config and patches the Claude Code settings allow-list.
+
+Use local-board only against repositories and workflows you control and review. Treat agent-proposed changes as untrusted until reviewed, the same as any pull request.
+
+local-board does not store credentials and ships no secrets. If you find a committed secret, report it as a vulnerability rather than opening a public issue.
