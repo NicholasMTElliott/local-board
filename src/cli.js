@@ -551,6 +551,7 @@ async function moveAndMaybeMerge(root, ticketId, status, options = {}) {
     ? await autoMergeTicketBranch(root, ticketId, {
         commitPlanningChanges: config.git.commitPlanningChanges,
         defaultBranch: config.git.defaultBranch,
+        pruneMergedBranches: config.git.pruneMergedBranches,
       })
     : null;
 

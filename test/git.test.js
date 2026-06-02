@@ -283,6 +283,75 @@ test("move done auto-merge allows ticket branch head equal to default branch hea
   });
 });
 
+test("move done prunes the merged ticket branch by default", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, baseBranch) => {
+    await writeAutoMergeConfig(root, baseBranch);
+    await git(root, ["add", "plans/local-board.config.jsonc"]);
+    await git(root, ["commit", "-m", "Enable auto merge"]);
+    const ticketPath = await createTicket(root, "task", "Prune me", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add prune ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const work = await startTicketWork(root, ticketId, { now: new Date("2026-05-14T21:00:00Z") });
+    await writeFile(path.join(root, "feature.txt"), "implemented\n", "utf8");
+    await git(root, ["add", "feature.txt"]);
+    await git(root, ["commit", "-m", "Implement ticket"]);
+    await completeRequiredTaskSteps(root, ticketId);
+
+    const result = await runCli(["--root", root, "move", ticketId, "done", "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.autoMerge.pruned, "deleted");
+
+    const refs = await gitOutput(root, ["for-each-ref", "--format=%(refname:short)", "refs/heads/"]);
+    assert.ok(!refs.split("\n").includes(work.branch), `expected ${work.branch} to be deleted, got refs: ${refs}`);
+  });
+});
+
+test("move done keeps the merged ticket branch when pruneMergedBranches is false", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, baseBranch) => {
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      `{
+  "git": {
+    "defaultBranch": "${baseBranch}",
+    "autoMerge": true,
+    "pruneMergedBranches": false
+  }
+}
+`,
+      "utf8",
+    );
+    await git(root, ["add", "plans/local-board.config.jsonc"]);
+    await git(root, ["commit", "-m", "Enable auto merge without prune"]);
+    const ticketPath = await createTicket(root, "task", "Keep my branch", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add keep-branch ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const work = await startTicketWork(root, ticketId, { now: new Date("2026-05-14T21:00:00Z") });
+    await writeFile(path.join(root, "feature.txt"), "implemented\n", "utf8");
+    await git(root, ["add", "feature.txt"]);
+    await git(root, ["commit", "-m", "Implement ticket"]);
+    await completeRequiredTaskSteps(root, ticketId);
+
+    const result = await runCli(["--root", root, "move", ticketId, "done", "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    const output = JSON.parse(result.stdout);
+    assert.equal(output.autoMerge.pruned, "skipped");
+
+    const refs = await gitOutput(root, ["for-each-ref", "--format=%(refname:short)", "refs/heads/"]);
+    assert.ok(refs.split("\n").includes(work.branch), `expected ${work.branch} to survive, got refs: ${refs}`);
+  });
+});
+
 test("move done refuses auto-merge when non-planning changes are uncommitted", { skip: !GIT_AVAILABLE }, async () => {
   await withRepo(async (root, baseBranch) => {
     await writeAutoMergeConfig(root, baseBranch);

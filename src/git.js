@@ -72,11 +72,15 @@ export async function autoMergeTicketBranch(root, ticketId, options = {}) {
   const planningCommit = await commitPlanningChanges(root, ticketId, options);
   if (await branchCheckedOutElsewhere(root, defaultBranch)) {
     await mergeBranchIntoDefaultRef(root, ticketId, branch, defaultBranch);
+    const pruned = await maybePruneMergedTicketBranch(root, branch, defaultBranch, options, {
+      stillOnTicketBranch: true,
+    });
     return {
       ticket: ticket.id,
       branch,
       defaultBranch,
       planningCommit,
+      pruned,
       action: "merged",
     };
   }
@@ -90,13 +94,45 @@ export async function autoMergeTicketBranch(root, ticketId, options = {}) {
     throw error;
   }
 
+  const pruned = await maybePruneMergedTicketBranch(root, branch, defaultBranch, options, {
+    stillOnTicketBranch: false,
+  });
   return {
     ticket: ticket.id,
     branch,
     defaultBranch,
     planningCommit,
+    pruned,
     action: "merged",
   };
+}
+
+async function maybePruneMergedTicketBranch(root, branch, defaultBranch, options, context) {
+  if (options.pruneMergedBranches === false) {
+    return "skipped";
+  }
+  if (branch === defaultBranch) {
+    return "skipped";
+  }
+
+  if (context.stillOnTicketBranch) {
+    try {
+      await gitRun(root, ["checkout", "--detach"]);
+    } catch {
+      return "skipped";
+    }
+  }
+
+  if (await branchCheckedOutElsewhere(root, branch)) {
+    return "skipped";
+  }
+
+  try {
+    await gitRun(root, ["branch", "-d", branch]);
+    return "deleted";
+  } catch {
+    return "skipped";
+  }
 }
 
 async function ensureGitBranch(root, branch, options) {

@@ -242,6 +242,7 @@ export const DEFAULT_CONFIG = {
     defaultBranch: null,
     commitPlanningChanges: true,
     autoMerge: false,
+    pruneMergedBranches: true,
   },
   optionalSteps: {
     design: [],
@@ -666,7 +667,8 @@ export function defaultConfigJsonc() {
   "git": {
     "defaultBranch": null,
     "commitPlanningChanges": true,
-    "autoMerge": false
+    "autoMerge": false,
+    "pruneMergedBranches": true
   },
 
   // Optional specialty review steps per stage. Each entry is shaped

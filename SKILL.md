@@ -133,7 +133,8 @@ When `git.autoMerge` is `true`, `move ... done` also:
 - refuses uncommitted non-planning changes;
 - commits planning-only ticket updates when `git.commitPlanningChanges` is `true`;
 - switches to `git.defaultBranch` or the detected default branch;
-- merges the ticket branch into the default branch.
+- merges the ticket branch into the default branch;
+- deletes the merged ticket branch when `git.pruneMergedBranches` is `true` (default).
 
 When `retention.archiveOnMoveDone` is `true`, `move ... done` also archives other `done` tickets whose `updated` timestamp is older than `retention.archiveDoneAfterDays`. Archived tickets remain closed and still satisfy dependencies.
 
