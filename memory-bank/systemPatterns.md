@@ -138,8 +138,11 @@ When `retention.archiveOnMoveDone` is true, `move ... done` archives other done 
 When estimation is enabled, `complete-step design` refuses tasks and bugs without an estimate.
 `create` derives a per-worktree minute offset when invoked from inside a registered ticket worktree (sorted-index position among sibling worktrees) and shifts the starting timestamp by that many minutes. Sibling teammates therefore mint distinct child IDs without coordinating. Test-mode invocations that pass `now` skip the offset to keep timestamps deterministic.
 
+## Team Mode Scaling
+Team mode grows the team on demand rather than spawning a fixed pool. The lead resolves a max team size with `team-config` (`resolveMaxTeammates` reads `LOCAL_BOARD_MAX_TEAMMATES`, default 6, falling back to the default for missing/invalid values). It spawns one teammate per initially-ready ticket, then after each `DONE` runs a rebalance: fast-forward, recompute the ready queue (ready tickets minus live assignments), reuse idle teammates first, and spawn additional teammates up to `<max>` when newly-unblocked work exceeds the idle pool. This is what scales a "one blocker, many dependents" graph from 1 teammate to `<max>` the moment the blocker completes. Only the lead spawns teammates; teammates are subagents and cannot.
+
 ## MVP CLI
-Use `node ./bin/local-board.js validate`, `list`, `query-next`, `query-ticket`, `state-report`, `schema`, `create`, `estimate`, `calibration suggest`, `gate-check`, `specialty-run`, `start-work`, `begin-step`, `complete-step`, `approve-inline`, `move`, `set`, `section`, `comment`, `link-parent`, `link-child`, `block`, `unblock`, and `init`.
+Use `node ./bin/local-board.js validate`, `list`, `query-next`, `query-ticket`, `state-report`, `schema`, `create`, `estimate`, `calibration suggest`, `gate-check`, `specialty-run`, `start-work`, `begin-step`, `complete-step`, `approve-inline`, `move`, `set`, `section`, `comment`, `link-parent`, `link-child`, `block`, `unblock`, `team-config`, and `init`.
 
 `move` changes status and relocates the ticket. `set` updates mutable front matter fields. `section` replaces section content. `comment` appends timestamped notes to a ticket section.
 `estimate` records story points and an estimate basis, validates points against the configured scale, and requires `--force` to overwrite.

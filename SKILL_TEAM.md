@@ -28,20 +28,26 @@ Operate in the user's current project unless they specify another root. Pass `--
 2. Read project instructions: `AGENTS.md`, `CLAUDE.md`, and `memory-bank/` when present.
 3. Run `node <<SCRIPT_PATH>> validate`. Stop on validation errors.
 4. Run `node <<SCRIPT_PATH>> fast-forward --json`. Stop if it refuses. This validates that the lead is on the detected default branch with a clean working tree before teammates can move the default-branch ref.
-5. Run `node <<SCRIPT_PATH>> list --ready --limit 6 --json` to get the initial candidate batch. The cap of 6 is intentional — beyond that, coordination overhead outweighs parallelism. Endless mode reuses these six slots as tickets complete; it does not grow the team mid-run.
-6. If the result is empty: report "no ready tickets" and stop.
-7. If the result has exactly one ticket: do not spawn a team. Tell the user team mode is overkill for a single ticket and invoke the standard `local-board` skill instead.
+5. Run `node <<SCRIPT_PATH>> team-config --json` to resolve `maxTeammates` (the maximum concurrent team size). It defaults to 6 and is overridden by the `LOCAL_BOARD_MAX_TEAMMATES` environment variable. Use this number as `<max>` everywhere below. Never spawn more than `<max>` live teammates at once.
+6. Run `node <<SCRIPT_PATH>> list --ready --limit <max> --json` to get the initial candidate batch.
+7. If the batch is empty: report "no ready tickets" and stop.
+8. If the batch has exactly one ticket, decide whether parallelism can still emerge:
+   - Run `node <<SCRIPT_PATH>> list --json` (the full board). If every other ticket is `done` or `archived`, there is no future parallelism — tell the user team mode is overkill for a single ticket and invoke the standard `local-board` skill instead.
+   - If other open tickets exist (blocked, backlog, or dependent on the one ready ticket), engage team mode anyway. Spawn one teammate now; the relay loop will grow the team as the first ticket's completion unblocks its dependents. This is the intended path for a "one blocker, many dependents" graph.
 
-## Spawn
+## Spawn procedure
 
-For each ticket in the initial batch:
+This procedure spawns one teammate bound to one ticket. The lead runs it once per ticket in the initial batch, and again whenever the relay loop decides to grow the team mid-run.
 
-- Name the teammate after its initial ticket ID (for example, `T20260522T1430Z`). This name persists across reassignments and is just a session identifier — it does not mean the teammate only works that ticket.
+To spawn a teammate for a ticket:
+
+- Name the teammate after that ticket ID (for example, `T20260522T1430Z`). This name persists across reassignments and is just a session identifier — it does not mean the teammate only works that ticket.
 - Use the agent type `local-board-teammate`.
+- Join it to the team (pass the team name when spawning) so the lead can reassign it later via `WORK`.
 - Do not require plan approval — the teammate's own orchestrator loop handles design and approval gating.
-- Send the spawn prompt below.
+- Send the spawn prompt below, with the ticket as its first assignment.
 
-Spawn all teammates in parallel, not sequentially.
+For the **initial batch**, spawn all teammates in parallel, not sequentially — one per ticket, capped at `<max>`. For **mid-run growth**, spawn only as many new teammates as the rebalance step calls for, never exceeding `<max>` live teammates total.
 
 ### Spawn prompt template
 
@@ -73,22 +79,31 @@ The lead substitutes `{ticket-id}`, `{N}`, `{peer-list}`, `{expected-worktree-pa
 
 ## Relay loop
 
-Maintain a per-teammate state map: `{ teammateName: "working" | "idle" | "shutdown" }`. Mark every teammate as `"working"` on spawn.
+Maintain a per-teammate state map: `{ teammateName: "working" | "idle" | "shutdown" }`, a live-assignment map `{ teammateName: currentTicketId | null }`, and a running list of every ticket assigned during the session (for the final summary). Mark every teammate as `"working"` and record its assignment on spawn.
 
 Loop until every teammate is `"shutdown"`:
 
 - When a teammate message arrives, surface it to the user verbatim as `[{teammate-name}] {message}`. Do not synthesize or paraphrase.
 - On `STARTED ...`, `STEP ...`, `BRANCH-READY ...`: no state change; just relay.
-- On `DONE <ticket-id>` from teammate T:
-  1. Run `node <<SCRIPT_PATH>> fast-forward --json` in the lead checkout. If it refuses, surface the error and ask the user how to proceed.
-  2. Run `node <<SCRIPT_PATH>> list --ready --limit 1 --json` to find the next ready ticket. Skip any ticket that another live teammate is already working (track currently-assigned ticket IDs alongside teammate state).
-  3. If a ticket is returned: send `WORK <new-ticket-id>` to teammate T. Keep T in `"working"` and update its currently-assigned ticket.
-  4. If no ticket is returned: mark T as `"idle"`. Do not send SHUTDOWN yet — a peer's DONE may produce new ready tickets (for example, decompose results) that T can pick up next round.
-- On `QUESTION ...` or `ERROR ...` from teammate T: surface to user. Mark T as `"shutdown"` (the teammate is exiting after a final summary). Do not reassign.
-- After processing a DONE: if every teammate is `"idle"` or `"shutdown"` and the next `list --ready --limit 1` is empty, send `SHUTDOWN` to every `"idle"` teammate and mark them `"shutdown"`.
+- On `DONE <ticket-id>` from teammate T: clear T's current assignment and mark it `"idle"`, then run the **Rebalance** routine below. A completed ticket may have unblocked several dependents at once, so rebalance both reassigns idle teammates and grows the team toward that new demand.
+- On `QUESTION ...` or `ERROR ...` from teammate T: surface to user. Mark T as `"shutdown"` (the teammate is exiting after a final summary). Clear its assignment. Do not reassign. Then run **Rebalance** (a freed-up dependency may still let other teammates proceed).
 - If two peers broadcast BRANCH-READY for branches the lead expects to conflict, surface a "potential conflict" note but let the teammates resolve.
 
 Do not do ticket work yourself. If a teammate stalls (no message for an unusually long period after a STARTED or after receiving WORK), prompt it to continue or ask the user how to proceed.
+
+### Rebalance (scale to demand)
+
+The goal: after every completion, make the number of actively-working teammates equal `min(<max>, tickets that can be worked right now)`. Grow the team when newly-unblocked tickets exceed the idle pool; never exceed `<max>` live teammates.
+
+1. Run `node <<SCRIPT_PATH>> fast-forward --json` in the lead checkout. If it refuses, surface the error and ask the user how to proceed before continuing.
+2. Run `node <<SCRIPT_PATH>> list --ready --limit <max> --json`. Remove any ticket already in the live-assignment map (a ticket some non-shutdown teammate is currently working). Call the remainder the **ready queue**.
+3. **Reuse idle teammates first** (free — no spawn cost): while the ready queue is non-empty and an `"idle"` teammate exists, send `WORK <ticket-id>` to that teammate, mark it `"working"`, record the assignment, and remove the ticket from the queue.
+4. **Grow the team** only if work remains: while the ready queue is non-empty and the live teammate count (non-shutdown) is below `<max>`, run the **Spawn procedure** for the next queued ticket as that new teammate's first assignment. Mark it `"working"`, record the assignment, and remove the ticket from the queue.
+5. If the ready queue still has tickets, every slot up to `<max>` is busy — leave them; the next `DONE` will pick them up.
+6. If the ready queue is empty and a teammate is idle, leave it idle. Do not shut it down yet: a peer still working may produce new ready tickets (for example, `decompose` children) that this teammate can pick up next round.
+7. **Shutdown check.** If, after the steps above, no teammate is `"working"` (all are `"idle"` or `"shutdown"`) and `list --ready --limit 1 --json` is empty, the queue is truly drained: send `SHUTDOWN` to every `"idle"` teammate and mark them `"shutdown"`. With no teammate working, no new tickets can appear, so this is safe.
+
+Worked example — one blocker, six dependents: the initial batch has one ready ticket, so the lead spawns one teammate. When that teammate reports `DONE`, fast-forward + `list --ready` now returns six newly-unblocked tickets. Rebalance reassigns the now-idle teammate to the first, then spawns five more (total six, the cap), and all six proceed in parallel.
 
 ## Final summary
 
@@ -102,7 +117,7 @@ When every teammate has reached `"shutdown"`:
 
 ## Hard limits
 
-- Maximum team size: 6 teammates. Hard-coded — the agent-teams docs recommend 3-5; 6 is the upper edge for this skill. Team size is fixed at spawn; endless mode reuses slots rather than growing the team.
+- Maximum team size: `<max>` teammates, resolved by `team-config` from `LOCAL_BOARD_MAX_TEAMMATES` (default 6). The agent-teams docs recommend 3-5; 6 is a sensible upper edge for this skill. The team grows on demand up to `<max>` and never beyond it — count non-shutdown teammates before every spawn.
 - One team at a time per lead session (an agent-teams limitation).
 - The lead is fixed for the team's lifetime (an agent-teams limitation).
 
@@ -110,6 +125,6 @@ When every teammate has reached `"shutdown"`:
 
 - Does not run `begin-step`, `complete-step`, `move`, or any other ticket-mutating CLI command. Teammates own ticket state.
 - Does not commit, merge, or push. Teammates' `move ... done` (with `git.autoMerge`) handles their own merges and prunes the merged branch. The CLI's rebase-onto-default precondition prevents stale-merge races. The lead only runs `fast-forward` to update its default-branch checkout after teammates move the shared ref.
-- Does not spawn additional teammates mid-run. Team size is fixed at spawn; reassignment is the mechanism for keeping the team busy.
+- Does not exceed `<max>` live teammates. The lead grows the team on demand (Rebalance) but always reuses idle teammates before spawning, and never spawns past `<max>`.
 - Does not enforce the rebase precondition itself — that is the CLI's job. The lead trusts the CLI.
 - Does not pick a ticket for reassignment that any other live teammate is currently working. Always check the live-assignment map before sending WORK.

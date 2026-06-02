@@ -39,6 +39,7 @@ import {
   listTicketWorktrees,
   removeTicketWorktree,
 } from "./worktrees.js";
+import { resolveMaxTeammates } from "./team.js";
 
 export async function main(argv) {
   const args = [...argv];
@@ -84,6 +85,9 @@ export async function main(argv) {
     }
     if (command === "fast-forward") {
       return await commandFastForward(root, args);
+    }
+    if (command === "team-config") {
+      return await commandTeamConfig(root, args);
     }
     if (command === "begin-step") {
       return await commandBeginStep(root, args);
@@ -418,6 +422,20 @@ async function commandFastForward(root, args) {
     console.log(JSON.stringify(result, null, 2));
   } else {
     console.log(`${result.defaultBranch} ${result.advanced ? "advanced" : "unchanged"} ${result.newHead}`);
+  }
+  return 0;
+}
+
+async function commandTeamConfig(root, args) {
+  const asJson = takeFlag(args, "--json");
+  ensureNoArgs(args);
+
+  const result = resolveMaxTeammates(process.env);
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    const suffix = result.source === "env" ? `(from ${result.envVar})` : `(default; ${result.envVar} unset or invalid)`;
+    console.log(`maxTeammates ${result.maxTeammates} ${suffix}`);
   }
   return 0;
 }
@@ -944,6 +962,7 @@ function printUsage() {
   local-board [--root <path>] worktree-remove <ticket-id> [--force] [--json]
   local-board [--root <path>] worktree-list [--json]
   local-board [--root <path>] fast-forward [--json]
+  local-board team-config [--json]
   local-board [--root <path>] begin-step <ticket-id> [--action <action>] [--json]
   local-board [--root <path>] complete-step <ticket-id> <action> --executor <executor> --evidence <text> [--json]
   local-board [--root <path>] approve-inline <ticket-id> <action> --reason <text> [--json]

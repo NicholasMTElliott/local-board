@@ -51,7 +51,7 @@ For multi-line Markdown, `section --file <path>` is preferred. It avoids shell q
 
 `SKILL.md` turns a compatible coding agent into a local-board orchestrator. It tells the agent to call `query-next` or `query-ticket` for deterministic workflow dispatch and transition guidance, then use CLI mutation commands for canonical state changes.
 
-`SKILL_TEAM.md` installs as the `local-team` skill on Claude Code and adds an opt-in team-mode entry point. The lead session uses `list --ready --limit 6 --json` to fan out an initial batch of ready tickets to teammate sessions in a Claude Code agent team. Each teammate is the orchestrator for one ticket at a time and the lead reassigns it to additional ready tickets as it finishes, until the queue is exhausted. Teammates use the bundled `local-board-teammate` subagent. Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` and Claude Code v2.1.32+. See [docs/TeamMode.md](docs/TeamMode.md).
+`SKILL_TEAM.md` installs as the `local-team` skill on Claude Code and adds an opt-in team-mode entry point. The lead session resolves a maximum team size with `team-config` (default 6, set by `LOCAL_BOARD_MAX_TEAMMATES`), then fans out the initially-ready tickets to teammate sessions in a Claude Code agent team. Each teammate is the orchestrator for one ticket at a time; as teammates finish, the lead reassigns idle ones and spawns additional teammates on demand — up to the maximum — as completed tickets unblock their dependents, until the queue is exhausted. Teammates use the bundled `local-board-teammate` subagent. Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` and Claude Code v2.1.32+. See [docs/TeamMode.md](docs/TeamMode.md).
 
 Workflow routing lives in `plans/local-board.config.jsonc`. Comments and trailing commas are allowed. Strict routing is enforced by `begin-step`, `complete-step`, `approve-inline`, `move ... done`, and `validate`.
 
@@ -84,7 +84,7 @@ The test suite includes function-level ticket kernel coverage and CLI command-su
 - [docs/TicketFormat.md](docs/TicketFormat.md) — ticket naming, front matter, sections, and state rules.
 - [docs/Workflow.md](docs/Workflow.md) — lifecycle from epic/story decomposition through implementation, review, test, docs, and closeout.
 - [docs/specialty-steps.md](docs/specialty-steps.md) — optional security, UI, and UX specialty review steps and how the gate-check classifier dispatches them.
-- [docs/TeamMode.md](docs/TeamMode.md) — opt-in agent-team mode that runs up to six ready tickets in parallel, one teammate per ticket.
+- [docs/TeamMode.md](docs/TeamMode.md) — opt-in agent-team mode that runs ready tickets in parallel, one teammate per ticket, growing the team on demand up to a configurable maximum (default six).
 
 ## Repository Layout
 

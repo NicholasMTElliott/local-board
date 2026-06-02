@@ -1,6 +1,6 @@
 # Team Mode
 
-Team mode runs multiple local-board tickets in parallel using a Claude Code agent team. The lead spawns up to six teammate sessions, each one the orchestrator for one ticket at a time. As teammates finish, the lead reassigns them to additional ready tickets — including ones produced mid-run by a teammate's own `decompose` step — until the queue is exhausted. Each teammate runs `/compact` between tickets to keep its context window manageable.
+Team mode runs multiple local-board tickets in parallel using a Claude Code agent team. The lead spawns teammate sessions on demand — one per ticket that can be worked right now — each the orchestrator for one ticket at a time. The team starts as small as the available work allows and grows after each completion as dependencies clear, up to a configurable maximum (default six). As teammates finish, the lead reassigns idle ones to additional ready tickets — including ones produced mid-run by a teammate's own `decompose` step — and spawns new teammates when newly-unblocked work exceeds the idle pool, until the queue is exhausted. Each teammate runs `/compact` between tickets to keep its context window manageable.
 
 Team mode is opt-in. It does not change how single-ticket runs work — the standard `local-board` skill remains the entry point for sequential operation.
 
@@ -25,6 +25,7 @@ Team mode is not useful when:
 |---|---|---|
 | Claude Code v2.1.32 or later | Agent teams feature | `claude --version` |
 | `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` | Enables the agent-teams primitives | `~/.claude/settings.json` `env` block, or shell env |
+| `LOCAL_BOARD_MAX_TEAMMATES` (optional) | Caps the maximum concurrent team size; defaults to 6 | `~/.claude/settings.json` `env` block, or shell env. Inspect with `local-board team-config --json` |
 | Lead checkout on default branch with a clean tree | Teammates may move the default-branch ref while they merge | `local-board fast-forward --json` |
 | `git.autoMerge: true` in `plans/local-board.config.jsonc` | Teammates auto-merge their own branches | Project config |
 | `git.commitPlanningChanges: true` in the same config | Closeout commits stay out of the way | Project config |
@@ -41,13 +42,14 @@ The lead session will:
 
 1. Validate the project.
 2. Run `local-board fast-forward --json` to confirm the lead is on the default branch with a clean checkout.
-3. Run `local-board list --ready --limit 6 --json` to get the initial candidate batch.
-4. Stop with "no ready tickets" if the batch is empty.
-5. Fall back to the standard `local-board` skill if the batch has exactly one ticket.
-6. Otherwise spawn one teammate per initial ticket (up to six) and run the relay loop.
-7. After each teammate's `DONE`, run `fast-forward` and pick the next ready ticket. Send `WORK <ticket-id>` to the freed teammate. When no ready ticket exists, the teammate idles; when every teammate is idle and the queue is empty, the lead sends `SHUTDOWN` to each idle teammate and produces the final summary.
+3. Run `local-board team-config --json` to resolve the maximum team size (`maxTeammates`, default 6, overridable by `LOCAL_BOARD_MAX_TEAMMATES`).
+4. Run `local-board list --ready --limit <max> --json` to get the initial candidate batch.
+5. Stop with "no ready tickets" if the batch is empty.
+6. If the batch has exactly one ready ticket and the rest of the board is already `done`/`archived`, fall back to the standard `local-board` skill. If other open tickets exist (blocked or dependent on that one), engage team mode with a single teammate — the team will grow as the first ticket unblocks its dependents.
+7. Otherwise spawn one teammate per initial ready ticket (up to `<max>`) and run the relay loop.
+8. After each teammate's `DONE`, run `fast-forward`, then **rebalance**: reassign idle teammates to newly-ready tickets, and spawn additional teammates (up to `<max>`) when the newly-unblocked work exceeds the idle pool. When no ready ticket exists, the teammate idles; when no teammate is working and the queue is empty, the lead sends `SHUTDOWN` to each idle teammate and produces the final summary.
 
-The cap of six is hard-coded in the skill. The Anthropic agent-teams documentation recommends three to five teammates; six is the upper edge that still produces useful parallelism for this workflow. Endless mode reuses these six slots — it does not grow the team mid-run.
+The maximum team size defaults to six and is configurable via `LOCAL_BOARD_MAX_TEAMMATES`. The Anthropic agent-teams documentation recommends three to five teammates; six is a sensible upper edge that still produces useful parallelism for this workflow. The lead grows the team on demand up to this maximum rather than spawning the full team upfront — a graph where one ticket gates many starts with a single teammate and scales out the moment that ticket completes.
 
 ## Worktree model
 
@@ -133,14 +135,14 @@ Team mode inherits the agent-teams limitations:
 - No session resumption with in-process teammates (`/resume` and `/rewind` do not restore them).
 - One team at a time per lead session.
 - The lead is fixed for the team's lifetime.
-- Teammates cannot spawn their own teams.
+- Teammates cannot spawn their own teams or teammates. Only the lead grows the team — teammates are themselves subagents, and the harness forbids a subagent from spawning further agents.
 - Teammates cannot dispatch `claude-subagent:*` routes. A teammate is itself a subagent, and the harness forbids a subagent from spawning further subagents (the `Task` tool is not granted at runtime). Team mode runs those steps inline automatically — the teammate does the design/review/test work itself and records `approve-inline`. `codex-task:*` routes still work because they shell out via Bash, not `Task`. This restriction does not apply to single-ticket mode, where the top-level orchestrator session can dispatch subagents normally.
 - Permissions are set at spawn; per-teammate modes cannot be assigned at spawn time.
 
 Team mode also adds its own constraints:
 
-- Maximum six teammates per run. Endless mode reuses these slots; it does not grow the team mid-run.
+- Maximum team size defaults to six per run, configurable via `LOCAL_BOARD_MAX_TEAMMATES`. The lead grows the team on demand up to this maximum and reuses idle teammates before spawning new ones.
 - Each teammate is a separate Claude Code session with its own context window. Teammates run `/compact` between tickets to keep context manageable across many reassignments, but token cost still scales with the number of tickets processed.
 - Worktrees live outside the repo in the sibling `<repo-name>-worktrees/` directory. Remove stale worktrees with `local-board worktree-remove <ticket-id>` or inspect them with `local-board worktree-list`.
 - `fast-forward` has no opt-out in team mode. Keep the lead checkout clean while teammates are running.
-- Team-mode configuration (the spawn rules, the cap of six) lives in the skill file, not in `plans/local-board.config.jsonc`. The agent-teams docs explicitly do not recognize a project-level team config.
+- Team-mode behavior (spawn rules, rebalance logic) lives in the skill file, not in `plans/local-board.config.jsonc`; the agent-teams docs do not recognize a project-level team config. The one tunable that survives across runs is the `LOCAL_BOARD_MAX_TEAMMATES` environment variable, resolved by `local-board team-config`.
