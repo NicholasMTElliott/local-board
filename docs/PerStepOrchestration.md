@@ -309,8 +309,41 @@ These figures are proxies; real section sizes vary widely. The *ratios* and the
   optimizations; plan periodic compaction at wave boundaries.
 - **Designer self-writes its section — yes (hybrid).** Reviewer and tester stay
   return-only.
+- **`maxInFlight` default — ≈3 (§5 real run).** The orchestrator real run drove
+  2 tickets concurrently and they were trivially manageable; 3 leaves headroom
+  before per-wave scheduling/conflict tracking gets hard to hold accurately.
 
-## 5. What is unchanged
+## 5. Real-run validation
+
+An end-to-end run drove **2 independent tickets × design/implement/test** through
+a throwaway git repo using the real worktree CLI and real subagent dispatch with
+per-step models. Confirmed working:
+
+- per-step model dispatch in-loop (designer `opus`, implementer `sonnet`, tester
+  `sonnet`), each running on the requested model;
+- wave-barrier concurrency (two executors per wave, in parallel);
+- designer **self-write** (its own `Technical Design` section, temp file outside
+  the worktree, terse return) and tester **return-only** (orchestrator persists);
+- `route@model` completion evidence and gate-check resolution (empty catalog →
+  skip the gate agent);
+- the **failure/loop-back path**: the tester caught an acceptance violation →
+  ticket returned to implementation → `approve-inline` fix → re-verify → advance;
+- closeout: auto-merge + branch prune + `fast-forward`, and the **Layer-2 rebase
+  backstop** firing when the second ticket's branch was behind the advanced
+  default, then succeeding after a rebase.
+
+Two ordering refinements the run surfaced (now folded into `SKILL_TEAM.md` and
+`SKILL.md`):
+
+1. **`begin-step` before `start-work`.** `start-work` moves
+   `ready_for_implementation → implementing`, and `implementing` has no
+   `statusActions` entry, so `begin-step` must resolve the step first (or pass
+   `--action`).
+2. **Commit planning changes before rebasing.** `move`/`complete-step` leave the
+   ticket file dirty; `git rebase` refuses a dirty tree, so the orchestrator must
+   commit planning state before rebasing in response to the precondition refusal.
+
+## 6. What is unchanged
 
 - Worktree-per-ticket isolation and the `worktree-add` / `worktree-remove` /
   `fast-forward` commands.

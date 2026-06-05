@@ -45,7 +45,7 @@ etc.). With a single ready ticket and nothing else open, prefer the standard
 1. Read project instructions: `AGENTS.md`, `CLAUDE.md`, and `memory-bank/` when present.
 2. `node <<SCRIPT_PATH>> validate`. Stop on validation errors.
 3. `node <<SCRIPT_PATH>> fast-forward --json`. This confirms you are on the detected default branch with a clean tree before any worktree merges move the default ref. Stop if it refuses.
-4. `node <<SCRIPT_PATH>> team-config --json` to resolve the concurrency cap. Treat the returned `maxTeammates` as **`maxInFlight`** — the maximum number of tickets you keep in flight at once. It defaults to 6 and is overridden by `LOCAL_BOARD_MAX_TEAMMATES`. The real limiter is your own context budget (every step result funnels into this one window), so a conservative cap (≈3) is reasonable; never exceed `maxInFlight`.
+4. `node <<SCRIPT_PATH>> team-config --json` to resolve the concurrency cap. Treat the returned `maxTeammates` as **`maxInFlight`** — the maximum number of tickets you keep in flight at once. It defaults to 6 and is overridden by `LOCAL_BOARD_MAX_TEAMMATES`. The real limiter is your own context budget (every step result funnels into this one window) and how many tickets you can schedule accurately at once, not raw tokens. A validation run confirmed 2 concurrent tickets are trivially manageable; **prefer ≈3** unless a project raises the cap deliberately. Never exceed `maxInFlight`.
 5. `node <<SCRIPT_PATH>> list --ready --limit <maxInFlight> --json` for the initial batch. If empty, report "no ready tickets" and stop.
 
 ## Execution profiles
@@ -95,11 +95,22 @@ a `branchReady` map (`ticketId -> changed files` once a ticket reaches
 final summary). The ticket files are the source of truth; this state is just a
 scheduling cache and is cheap to rebuild after a compaction.
 
-1. **Seed.** For up to `maxInFlight` ready tickets: `worktree-add`, then
-   `start-work --root <worktreePath>`. Add to the in-flight map.
+1. **Seed.** For up to `maxInFlight` ready tickets: `worktree-add` (this creates
+   and records the ticket branch). Add to the in-flight map. Do **not** run
+   `start-work` yet — see the ordering note in Dispatch.
 2. **Dispatch.** For each in-flight ticket with no outstanding executor and not
-   gated on a peer-merge: `begin-step --root <worktreePath> --json`, then dispatch
-   the step per its profile (background for concurrency). Record the executor.
+   gated on a peer-merge:
+   - `begin-step --root <worktreePath> --json` **first**, to resolve the action +
+     profile while the ticket is still in its `ready_*` status.
+   - Then `start-work --root <worktreePath>` (records the branch in the run log
+     and moves `ready_for_implementation → implementing`).
+   - Then dispatch the step per its profile (background for concurrency) and
+     record the executor.
+
+   Ordering matters: `start-work` moves `ready_for_implementation` to
+   `implementing`, and `implementing` has no `statusActions` entry, so a
+   `begin-step` run *after* `start-work` fails with "no configured action".
+   Resolve the step before `start-work`, or pass `begin-step --action <action>`.
 3. **Await.** Process executor completions as they arrive. Surface each result to
    the user tagged with the ticket id.
 4. **On completion** for a ticket:
@@ -110,7 +121,9 @@ scheduling cache and is cheap to rebuild after a compaction.
      already wrote its section/files in the worktree; just record
      `complete-step <action> --executor <route>[@<model>] --root <worktreePath> --evidence "..."`.
    - Run gate-check + specialty-run for `design`/`implement`/`test` stages (same
-     contract as single-ticket mode) before transitioning.
+     contract as single-ticket mode) before transitioning. When `gate-check`
+     returns an empty `catalog`, skip the gate-agent dispatch entirely — there is
+     nothing to classify.
    - Choose the next status from the returned `transitions` and `move`. If the
      ticket continues, dispatch its next step. If it hits `questions`/`blocked`,
      surface it and drop it from in-flight (keep in `assignedLog`).
@@ -125,13 +138,16 @@ scheduling cache and is cheap to rebuild after a compaction.
      scope) concurrently — serialize those.
 6. **Refill.** When an in-flight ticket terminates and the ready queue is
    non-empty and in-flight `< maxInFlight`, pull the next ready ticket
-   (`worktree-add` + `start-work`) and begin dispatching it. Newly-unblocked
-   dependents and `decompose` children appear on the next `list --ready`.
+   (`worktree-add`, then `begin-step` before `start-work` as in Dispatch) and
+   begin dispatching it. Newly-unblocked dependents and `decompose` children
+   appear on the next `list --ready`.
 7. **Closeout.** On a ticket's terminal step, run `move <ticket-id> done --root <worktreePath> --json`
    (auto-merge + rebase-onto-default precondition + prune). If it refuses because
-   the branch lacks the latest default, dispatch a rebase/merge step for that
-   ticket in its worktree, then retry; on an unresolvable conflict, `move` it to
-   `questions`. After each successful `move … done`, run
+   the branch lacks the latest default, rebase that ticket's branch onto the
+   default in its worktree, then retry. **Commit any planning-change edits in the
+   worktree before rebasing** — `move`/`complete-step` leave the ticket file
+   dirty, and `git rebase` refuses a dirty tree. On an unresolvable conflict,
+   `move` it to `questions`. After each successful `move … done`, run
    `node <<SCRIPT_PATH>> fast-forward --json` to reconcile your own checkout, then
    `worktree-remove`.
 8. **Terminate.** When the ready queue is empty and nothing is in flight, emit a

@@ -36,11 +36,12 @@ SKILL.md              installable orchestration skill template
 ## Open Decisions
 - Whether advisory transition guidance should become a hard transition validator.
 - Agent routing refinements after real orchestration runs.
-- `maxInFlight` default for the per-step orchestrator (`docs/PerStepOrchestration.md`):
-  deferred to a real multi-ticket run; currently reuses `team-config`
-  (`LOCAL_BOARD_MAX_TEAMMATES`, default 6) with a ≈3 working hypothesis. The
-  per-step routing-profile schema and orchestrator are implemented; the
-  context-budget spike is done (limiter is cumulative session tokens, not concurrency).
+- Per-step orchestrator (`docs/PerStepOrchestration.md`) is implemented and
+  validated by an end-to-end real run (2 tickets × design/implement/test with
+  per-step models, loop-back, and rebase backstop). `maxInFlight` reuses
+  `team-config` (`LOCAL_BOARD_MAX_TEAMMATES`, default 6); the run confirms a
+  preferred default of ≈3. Limiter is cumulative session tokens + scheduling
+  clarity, not raw concurrency.
 
 ## Verification
 - `npm run check`
