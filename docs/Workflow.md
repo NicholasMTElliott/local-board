@@ -155,24 +155,43 @@ Use `start-work` before implementation and before review/test/docs work that mus
 
 ## Agent Routing
 
-`plans/local-board.config.jsonc` maps actions to agents. Supported values are conventions interpreted by the orchestration skill and strict routing validator:
+`plans/local-board.config.jsonc` maps actions to agents. Each entry is a route
+string or a `{ route, model?, prompt? }` profile; a bare string is sugar for
+`{ route }`. Supported `route` values are conventions interpreted by the
+orchestration skill and strict routing validator:
 
 - `inline`
 - `claude-subagent:<agent-name>`
 - `codex-task:<mode>`
 
+`model` pins the per-step model for subagent and codex routes — a model alias
+(`opus`/`sonnet`/`haiku`) or a full id (`claude-opus-4-6`); for codex routes it is
+a codex model selector. A model on an `inline` route is rejected, because inline
+runs on the orchestrator's own model — route a step to a subagent to pin its
+model. `prompt` overrides `workflow.actionPrompts` for that action.
+
+`begin-step --json` resolves the entry to `configuredAgent` (route),
+`configuredModel`, and `configuredPrompt`. When the orchestrator dispatches a
+subagent route it pins the subagent to `configuredModel`; per-step models only
+take effect on subagent/codex routes. Completion evidence may record the model
+that ran as `<route>@<model>` (for example
+`design:claude-subagent:local-board-designer@opus`); strict routing matches the
+route part only.
+
 Current Codex examples include `codex-task:read-only` and `codex-task:workspace-write`; projects may add more specific modes.
 
 If a configured agent is unavailable, the orchestrator should ask the user before falling back. Inline fallback requires `approve-inline`.
 
-Bundled Claude agents:
+Bundled Claude agents (each pins a default model in its frontmatter; config
+`model` overrides it at dispatch):
 
-- `local-board-decomposer`
-- `local-board-designer`
-- `local-board-implementer`
-- `local-board-reviewer`
-- `local-board-tester`
-- `local-board-documenter`
+- `local-board-decomposer` (opus)
+- `local-board-designer` (opus; self-writes its `Technical Design` section)
+- `local-board-gatecheck` (haiku; returns specialty `requestedSteps` JSON)
+- `local-board-implementer` (sonnet)
+- `local-board-reviewer` (sonnet)
+- `local-board-tester` (sonnet)
+- `local-board-documenter` (sonnet)
 
 ## Optional Steps
 

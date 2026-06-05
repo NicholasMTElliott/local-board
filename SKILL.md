@@ -31,9 +31,9 @@ Operate in the user's current project unless they specify another root. Pass `--
 5. For whole-project work, run `node <<SCRIPT_PATH>> query-next --json`.
 6. For a specific ticket, run `node <<SCRIPT_PATH>> query-ticket <id> --json`.
 7. Read the returned ticket `path`, returned `prompt`, `branch`, `transitions`, and relevant project context.
-8. Run `node <<SCRIPT_PATH>> begin-step <ticket-id> --json`.
-9. Execute the returned `action` through the configured route. For `claude-subagent:<agent-name>`, delegate to the named Claude agent after the colon.
-10. Run `node <<SCRIPT_PATH>> complete-step <ticket-id> <action> --executor <configuredAgent> --evidence "<evidence>"`.
+8. Run `node <<SCRIPT_PATH>> begin-step <ticket-id> --json`. It returns `configuredAgent` (the route), `configuredModel` (the per-step model, or null), and `configuredPrompt`.
+9. Execute the returned `action` through the configured route. For `claude-subagent:<agent-name>`, dispatch the named Claude subagent after the colon and, when `configuredModel` is non-null, pin that subagent's model to `configuredModel` at dispatch. For `codex-task:<mode>`, shell out to codex in that mode. For `inline`, do the work yourself on your own model. Per-step models only take effect on subagent/codex routes — `inline` always runs on the orchestrator's model.
+10. Run `node <<SCRIPT_PATH>> complete-step <ticket-id> <action> --executor <configuredAgent>[@<configuredModel>] --evidence "<evidence>"`. Append `@<configuredModel>` when a model was pinned, so the evidence records which model ran. Strict routing compares the route part only and ignores the `@model` suffix.
 11. Mutate ticket state only through CLI commands.
 12. After the action, choose the next status from the returned `transitions` list and run `node <<SCRIPT_PATH>> move <ticket-id> <status> --json`.
 13. Choose `done` only when all required stages are complete.
@@ -150,9 +150,9 @@ Gate-check is not run after `decompose` or `document`.
 node <<SCRIPT_PATH>> gate-check <ticket-id> --stage <stage> --json
 ```
 
-`<stage>` must be one of `design`, `implement`, or `test`. The CLI returns the gate-check `prompt` path, a narrow `ticketContext`, and the stage `catalog` of available specialty entries. The CLI does not invoke an agent.
+`<stage>` must be one of `design`, `implement`, or `test`. The CLI returns the gate-check `prompt` path, the configured gate-check `agent` (route) and `model`, a narrow `ticketContext`, and the stage `catalog` of available specialty entries. The CLI does not invoke an agent.
 
-Dispatch the gate-check prompt through the configured agent (or inline) and parse the agent's strict JSON response:
+Dispatch the gate-check prompt through the returned `agent` route, pinning the subagent's model to the returned `model` when non-null (the bundled `local-board-gatecheck` agent runs on `haiku` by default). Parse the agent's strict JSON response:
 
 ```json
 { "requestedSteps": ["security_audit"] }
@@ -182,14 +182,17 @@ Specialty evidence is never gated by `routing.doneRequires`; it lives in `comple
 
 Use `plans/local-board.config.jsonc` to decide how each action is handled. Comments and trailing commas are valid:
 
-- `inline`: do the work in the current agent.
-- `claude-subagent:<agent-name>`: delegate to the named Claude subagent when the harness supports it.
+Each entry is a route string or a `{ route, model?, prompt? }` profile. `begin-step` resolves it to `configuredAgent` (route), `configuredModel`, and `configuredPrompt`.
+
+- `inline`: do the work in the current agent, on the orchestrator's model. `inline` cannot carry a per-step model.
+- `claude-subagent:<agent-name>`: dispatch the named Claude subagent. When `configuredModel` is set, pin the subagent's model to it at dispatch — this is how per-step models (haiku gate-check, opus design, sonnet implement, etc.) take effect.
 - `codex-task:<mode>`: use codex-task in the configured mode, such as `codex-task:read-only` or `codex-task:workspace-write`.
 
 Bundled Claude subagent names:
 
 - `local-board-decomposer`
 - `local-board-designer`
+- `local-board-gatecheck`
 - `local-board-implementer`
 - `local-board-reviewer`
 - `local-board-tester`
@@ -197,21 +200,21 @@ Bundled Claude subagent names:
 
 ### Persisting Delegated Output
 
-The `local-board-designer`, `local-board-reviewer`, `local-board-tester`, and `local-board-decomposer` subagents have only Read, Glob, Grep, and Bash. They have no Write or Edit tool and are return-only:
+The `local-board-reviewer`, `local-board-tester`, `local-board-decomposer`, and `local-board-gatecheck` subagents have only Read, Glob, Grep, and Bash. They have no Write or Edit tool and are return-only:
 
-- They return their section content — Technical Design, Review Findings, Test Evidence — as Markdown in their final message.
+- They return their section content — Review Findings, Test Evidence — or strict JSON (gate-check `requestedSteps`) in their final message.
 - They do not create files and do not run `section` themselves.
 - The orchestrator takes that returned content, writes it to a temp file with the Write tool, and runs `section <ticket-id> --file <temp-path> --section "<Section>"` itself.
 
 Never instruct a return-only subagent to "write a temp file" or "use the Write tool". It cannot, and it falls back to Bash `echo`/heredoc/`Set-Content`, which loops endlessly on backtick and code-fence escaping. The same return-only contract applies to any `codex-task:read-only` route.
 
-The `local-board-implementer` and `local-board-documenter` subagents do have Write and Edit. They persist their own file changes — using Write and Edit, never Bash redirection.
+The `local-board-designer`, `local-board-implementer`, and `local-board-documenter` subagents have Write and Edit. They persist their own output — the designer writes its own `Technical Design` section and returns a terse summary; the implementer and documenter write their file changes. All three use Write and Edit, never Bash redirection.
 
 Whenever a CLI command needs a file argument (such as `section --file`), create that file with the Write tool. Never build it with `echo`, heredoc, `Set-Content`, or `Out-File`.
 
 The orchestrator remains responsible for canonical ticket state unless a delegated worker was explicitly assigned write scope.
 
-When recording completion evidence, use the exact configured executor string from `begin-step`, for example `claude-subagent:local-board-designer`.
+When recording completion evidence, use the configured route from `begin-step`, suffixed with `@<configuredModel>` when a model was pinned — for example `claude-subagent:local-board-designer@opus`. Strict routing matches the route part only.
 
 If the configured agent is unavailable, do not continue inline by default. Ask the user for approval. If approved, run:
 

@@ -1,13 +1,22 @@
 ---
 name: local-team
-description: Run multiple local-board tickets in parallel using a Claude Code agent team. The lead session fans out ready tickets to teammate sessions, then reassigns each teammate to additional ready tickets as it finishes, until the queue is exhausted. Each teammate runs the local-board skill scoped to one ticket at a time. Use when the user asks to "work my tickets in parallel", "work the next N tickets at once", or otherwise requests team-mode local-board operation. Requires CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1 and Claude Code v2.1.32+.
+description: Work several local-board tickets in parallel from one top-level orchestrator session. The orchestrator keeps up to a configurable number of tickets in flight, dispatching each pipeline step to an ephemeral, model-specialized executor (subagent or codex), with the ticket file and a per-ticket git worktree as the durable baton. Use when the user asks to "work my tickets in parallel", "work the next N tickets at once", or otherwise requests parallel local-board operation.
 allowed-tools:
   - Bash(node <<SCRIPT_PATH>> *)
 ---
 
-# local-board team mode
+# local-board parallel orchestrator
 
-You are the team lead. Your job is to fan out ready tickets to teammate sessions, relay their progress, and reassign each teammate to additional ready tickets as it finishes. You do not work tickets yourself.
+You are the orchestrator. You run in the top-level session, so you can dispatch
+subagents and pin a different model per step — that is the whole point of this
+mode. You work several tickets concurrently by dispatching each step to an
+ephemeral executor and routing each ticket through the pipeline. You own all
+ticket-state mutations; executors only do the work and report back.
+
+This replaces the older agent-teams "one teammate per ticket" design. There are
+no teammate sessions and no `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` requirement.
+Parallelism comes from dispatching multiple step executors at once from this one
+session.
 
 Use the installed CLI:
 
@@ -20,111 +29,150 @@ Installation metadata:
 - Runtime directory: `<<INSTALL_PATH>>`
 - CLI entrypoint: `<<SCRIPT_PATH>>`
 
-Operate in the user's current project unless they specify another root. Pass `--root <path>` for non-current projects.
+Operate in the user's current project unless they specify another root. Pass
+`--root <path>` for non-current projects and `--root <worktreePath>` for all
+per-ticket calls (see Worktrees).
+
+## When to use it
+
+Best for a few tickets with deep pipelines where each step should run on its
+optimal model (haiku gate-check, opus design, sonnet implement, codex review,
+etc.). With a single ready ticket and nothing else open, prefer the standard
+`local-board` skill — it is the N=1 case of this same loop with less overhead.
 
 ## Preflight
 
-1. Verify `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` is set and Claude Code is v2.1.32 or later. If either is missing, stop and tell the user how to enable agent teams.
-2. Read project instructions: `AGENTS.md`, `CLAUDE.md`, and `memory-bank/` when present.
-3. Run `node <<SCRIPT_PATH>> validate`. Stop on validation errors.
-4. Run `node <<SCRIPT_PATH>> fast-forward --json`. Stop if it refuses. This validates that the lead is on the detected default branch with a clean working tree before teammates can move the default-branch ref.
-5. Run `node <<SCRIPT_PATH>> team-config --json` to resolve `maxTeammates` (the maximum concurrent team size). It defaults to 6 and is overridden by the `LOCAL_BOARD_MAX_TEAMMATES` environment variable. Use this number as `<max>` everywhere below. Never spawn more than `<max>` live teammates at once.
-6. Run `node <<SCRIPT_PATH>> list --ready --limit <max> --json` to get the initial candidate batch.
-7. If the batch is empty: report "no ready tickets" and stop.
-8. If the batch has exactly one ticket, decide whether parallelism can still emerge:
-   - Run `node <<SCRIPT_PATH>> list --json` (the full board). If every other ticket is `done` or `archived`, there is no future parallelism — tell the user team mode is overkill for a single ticket and invoke the standard `local-board` skill instead.
-   - If other open tickets exist (blocked, backlog, or dependent on the one ready ticket), engage team mode anyway. Spawn one teammate now; the relay loop will grow the team as the first ticket's completion unblocks its dependents. This is the intended path for a "one blocker, many dependents" graph.
+1. Read project instructions: `AGENTS.md`, `CLAUDE.md`, and `memory-bank/` when present.
+2. `node <<SCRIPT_PATH>> validate`. Stop on validation errors.
+3. `node <<SCRIPT_PATH>> fast-forward --json`. This confirms you are on the detected default branch with a clean tree before any worktree merges move the default ref. Stop if it refuses.
+4. `node <<SCRIPT_PATH>> team-config --json` to resolve the concurrency cap. Treat the returned `maxTeammates` as **`maxInFlight`** — the maximum number of tickets you keep in flight at once. It defaults to 6 and is overridden by `LOCAL_BOARD_MAX_TEAMMATES`. The real limiter is your own context budget (every step result funnels into this one window), so a conservative cap (≈3) is reasonable; never exceed `maxInFlight`.
+5. `node <<SCRIPT_PATH>> list --ready --limit <maxInFlight> --json` for the initial batch. If empty, report "no ready tickets" and stop.
 
-## Spawn procedure
+## Execution profiles
 
-This procedure spawns one teammate bound to one ticket. The lead runs it once per ticket in the initial batch, and again whenever the relay loop decides to grow the team mid-run.
+For each step, `begin-step <ticket-id> --json` returns:
 
-To spawn a teammate for a ticket:
+- `configuredAgent`: the route (`inline`, `claude-subagent:<name>`, `codex-task:<mode>`);
+- `configuredModel`: the per-step model, or null;
+- `configuredPrompt`: the step prompt path.
 
-- Name the teammate after that ticket ID (for example, `T20260522T1430Z`). This name persists across reassignments and is just a session identifier — it does not mean the teammate only works that ticket.
-- Use the agent type `local-board-teammate`.
-- Join it to the team (pass the team name when spawning) so the lead can reassign it later via `WORK`.
-- Do not require plan approval — the teammate's own orchestrator loop handles design and approval gating.
-- Send the spawn prompt below, with the ticket as its first assignment.
+Dispatch the step accordingly:
 
-For the **initial batch**, spawn all teammates in parallel, not sequentially — one per ticket, capped at `<max>`. For **mid-run growth**, spawn only as many new teammates as the rebalance step calls for, never exceeding `<max>` live teammates total.
+- `inline`: do it yourself, on your own model. `inline` cannot carry a per-step model.
+- `claude-subagent:<name>`: dispatch that subagent. When `configuredModel` is non-null, pin the subagent's model to it. Run it in the background so other tickets progress concurrently.
+- `codex-task:<mode>`: shell out to codex in that mode (a Bash call, so it works without the Task tool).
 
-### Spawn prompt template
+Whole steps can be delegated to an external agent purely by routing the action to
+`codex-task:*` in config — no special handling here.
 
-```
-You are the local-board orchestrator scoped to ticket {ticket-id} as your first assignment.
+## Worktrees
 
-Work this ticket through the local-board pipeline using the local-board skill. When you finish (DONE) and remove the worktree, idle and wait for the lead to send WORK <new-ticket-id> or SHUTDOWN. The lead may reassign you to additional ready tickets, one at a time, until the queue is exhausted.
+Each in-flight ticket gets its own git worktree in the sibling
+`<repo-name>-worktrees/<ticket-id>/` directory. Do not call `git worktree`
+directly. For each ticket, before its first step:
 
-You are one of {N} teammates in a parallel agent team. Your peers' current first tickets:
-{peer-list as "ticket-id => teammate-name" lines}
-
-Expected worktree path for {ticket-id}: {expected-worktree-path}
-Original project root: {project-root}
-
-Your first action must be:
-
-node <<SCRIPT_PATH>> worktree-add {ticket-id} --json
-
-Capture `worktreePath` from that JSON. For every later local-board CLI call on this ticket, pass `--root <worktreePath>`. Run `start-work` from that worktree root before ticket work. When removing the worktree (immediately after DONE), call `worktree-remove` with `--root {project-root}`, not with the worktree root.
-
-When reassigned via WORK <new-ticket-id>, run /compact, then re-enter the contract from the top for the new ticket — including a fresh worktree-add.
-
-You cannot spawn subagents (the Task tool is not available to a teammate). For any step the project config routes to a `claude-subagent:*` agent, run it inline yourself and record `approve-inline` before `complete-step --executor inline`. `codex-task:*` routes still work normally.
-
-Your coordination contract is in your subagent definition. Follow it.
+```sh
+node <<SCRIPT_PATH>> worktree-add <ticket-id> --json
 ```
 
-The lead substitutes `{ticket-id}`, `{N}`, `{peer-list}`, `{expected-worktree-path}`, and `{project-root}` for each teammate. The expected path uses the sibling convention `<parent-of-project-root>/<repo-dir-name>-worktrees/<ticket-id>/`. The rest is verbatim.
+Capture `worktreePath`. Pass `--root <worktreePath>` on every later local-board
+call for that ticket (`start-work`, `begin-step`, `complete-step`, `move`,
+`section`, `comment`). Each step executor you dispatch must also operate against
+that worktree (pass it the `worktreePath` and instruct it to use
+`--root <worktreePath>` and to `cd` there for edits and git). Remove the worktree
+right after the ticket reaches `done`:
 
-## Relay loop
+```sh
+node <<SCRIPT_PATH>> worktree-remove <ticket-id> --root <project-root>
+```
 
-Maintain a per-teammate state map: `{ teammateName: "working" | "idle" | "shutdown" }`, a live-assignment map `{ teammateName: currentTicketId | null }`, and a running list of every ticket assigned during the session (for the final summary). Mark every teammate as `"working"` and record its assignment on spawn.
+## Control loop
 
-Loop until every teammate is `"shutdown"`:
+Maintain small in-context state per in-flight ticket:
+`{ ticketId -> { action, status, branch, worktreePath, executorId | null, profile } }`,
+a `branchReady` map (`ticketId -> changed files` once a ticket reaches
+`ready_for_review`), and an `assignedLog` of every ticket processed (for the
+final summary). The ticket files are the source of truth; this state is just a
+scheduling cache and is cheap to rebuild after a compaction.
 
-- When a teammate message arrives, surface it to the user verbatim as `[{teammate-name}] {message}`. Do not synthesize or paraphrase.
-- On `STARTED ...`, `STEP ...`, `BRANCH-READY ...`: no state change; just relay.
-- On `DONE <ticket-id>` from teammate T: clear T's current assignment and mark it `"idle"`, then run the **Rebalance** routine below. A completed ticket may have unblocked several dependents at once, so rebalance both reassigns idle teammates and grows the team toward that new demand.
-- On `QUESTION ...` or `ERROR ...` from teammate T: surface to user. Mark T as `"shutdown"` (the teammate is exiting after a final summary). Clear its assignment. Do not reassign. Then run **Rebalance** (a freed-up dependency may still let other teammates proceed).
-- If two peers broadcast BRANCH-READY for branches the lead expects to conflict, surface a "potential conflict" note but let the teammates resolve.
+1. **Seed.** For up to `maxInFlight` ready tickets: `worktree-add`, then
+   `start-work --root <worktreePath>`. Add to the in-flight map.
+2. **Dispatch.** For each in-flight ticket with no outstanding executor and not
+   gated on a peer-merge: `begin-step --root <worktreePath> --json`, then dispatch
+   the step per its profile (background for concurrency). Record the executor.
+3. **Await.** Process executor completions as they arrive. Surface each result to
+   the user tagged with the ticket id.
+4. **On completion** for a ticket:
+   - Return-only result (reviewer, tester, gate-check, codex read-only) → write a
+     temp file with the Write tool, `section --file --root <worktreePath>`, then
+     `complete-step <action> --executor <route>[@<model>] --root <worktreePath> --evidence "..."`.
+   - Self-writing result (designer, implementer, documenter) → the executor
+     already wrote its section/files in the worktree; just record
+     `complete-step <action> --executor <route>[@<model>] --root <worktreePath> --evidence "..."`.
+   - Run gate-check + specialty-run for `design`/`implement`/`test` stages (same
+     contract as single-ticket mode) before transitioning.
+   - Choose the next status from the returned `transitions` and `move`. If the
+     ticket continues, dispatch its next step. If it hits `questions`/`blocked`,
+     surface it and drop it from in-flight (keep in `assignedLog`).
+5. **Conflict gate (two layers).**
+   - *Layer 1, best-effort:* when a ticket enters `ready_for_review`, record its
+     `git diff --name-only` in `branchReady`. Before dispatching an `implement`
+     step whose scope overlaps a `branchReady` peer, instruct that implement
+     executor to merge the peer branch(es) first and resolve conflicts.
+   - *Layer 2, backstop:* the CLI's rebase-onto-default precondition on
+     `move … done` is the guarantee. See Closeout.
+   - Avoid dispatching two implement steps you already know overlap (from design
+     scope) concurrently — serialize those.
+6. **Refill.** When an in-flight ticket terminates and the ready queue is
+   non-empty and in-flight `< maxInFlight`, pull the next ready ticket
+   (`worktree-add` + `start-work`) and begin dispatching it. Newly-unblocked
+   dependents and `decompose` children appear on the next `list --ready`.
+7. **Closeout.** On a ticket's terminal step, run `move <ticket-id> done --root <worktreePath> --json`
+   (auto-merge + rebase-onto-default precondition + prune). If it refuses because
+   the branch lacks the latest default, dispatch a rebase/merge step for that
+   ticket in its worktree, then retry; on an unresolvable conflict, `move` it to
+   `questions`. After each successful `move … done`, run
+   `node <<SCRIPT_PATH>> fast-forward --json` to reconcile your own checkout, then
+   `worktree-remove`.
+8. **Terminate.** When the ready queue is empty and nothing is in flight, emit a
+   final per-ticket summary table: ticket, model(s) used per step, final status,
+   branch, one-line evidence, and any questions/blockers.
 
-Do not do ticket work yourself. If a teammate stalls (no message for an unusually long period after a STARTED or after receiving WORK), prompt it to continue or ask the user how to proceed.
+## Concurrency mode
 
-### Rebalance (scale to demand)
+- **Wave-barrier (use this first):** dispatch every in-flight ticket's next step
+  as one parallel batch, await the whole batch, then advance + conflict-check +
+  refill. Deterministic and easy to keep correct. The gaps between waves are
+  natural, safe boundaries to run `/compact` when context grows.
+- **Event loop (optimization):** dispatch a ticket's next step as soon as its
+  previous step returns, without waiting for a barrier. Maximal pipelining; adopt
+  once the wave-barrier flow is solid.
 
-The goal: after every completion, make the number of actively-working teammates equal `min(<max>, tickets that can be worked right now)`. Grow the team when newly-unblocked tickets exceed the idle pool; never exceed `<max>` live teammates.
+## Context budget
 
-1. Run `node <<SCRIPT_PATH>> fast-forward --json` in the lead checkout. If it refuses, surface the error and ask the user how to proceed before continuing.
-2. Run `node <<SCRIPT_PATH>> list --ready --limit <max> --json`. Remove any ticket already in the live-assignment map (a ticket some non-shutdown teammate is currently working). Call the remainder the **ready queue**.
-3. **Reuse idle teammates first** (free — no spawn cost): while the ready queue is non-empty and an `"idle"` teammate exists, send `WORK <ticket-id>` to that teammate, mark it `"working"`, record the assignment, and remove the ticket from the queue.
-4. **Grow the team** only if work remains: while the ready queue is non-empty and the live teammate count (non-shutdown) is below `<max>`, run the **Spawn procedure** for the next queued ticket as that new teammate's first assignment. Mark it `"working"`, record the assignment, and remove the ticket from the queue.
-5. If the ready queue still has tickets, every slot up to `<max>` is busy — leave them; the next `DONE` will pick them up.
-6. If the ready queue is empty and a teammate is idle, leave it idle. Do not shut it down yet: a peer still working may produce new ready tickets (for example, `decompose` children) that this teammate can pick up next round.
-7. **Shutdown check.** If, after the steps above, no teammate is `"working"` (all are `"idle"` or `"shutdown"`) and `list --ready --limit 1 --json` is empty, the queue is truly drained: send `SHUTDOWN` to every `"idle"` teammate and mark them `"shutdown"`. With no teammate working, no new tickets can appear, so this is safe.
+Every step result lands in this one window, so the limiter is cumulative tokens
+across the session, not the number of concurrent tickets. Keep returns terse
+(the designer self-writes its large section and returns a summary; pass step
+prompts by reference where possible) and run `/compact` at wave boundaries on
+long runs. Your scheduling state is rebuildable from the ticket files, so it
+survives compaction cheaply.
 
-Worked example — one blocker, six dependents: the initial batch has one ready ticket, so the lead spawns one teammate. When that teammate reports `DONE`, fast-forward + `list --ready` now returns six newly-unblocked tickets. Rebalance reassigns the now-idle teammate to the first, then spawns five more (total six, the cap), and all six proceed in parallel.
+## What the orchestrator owns vs executors
 
-## Final summary
+- **You (orchestrator):** worktree lifecycle, `start-work`, `begin-step`,
+  `complete-step`, `move`, gate-check/specialty dispatch, conflict decisions,
+  closeout, `fast-forward`, and the final summary. You never let an executor own
+  a status transition.
+- **Executors:** do the actual design/implement/review/test/docs work in the
+  worktree and return a terse, structured result. The designer/implementer/
+  documenter write their own sections/files; return-only executors return content
+  for you to persist.
 
-When every teammate has reached `"shutdown"`:
+## What this mode does NOT do
 
-1. Run `node <<SCRIPT_PATH>> fast-forward --json` in the lead checkout one final time. If it refuses, surface the error before summarizing.
-2. For every ticket that was assigned during the session (initial batch plus all reassignments — track this list as you go), run `node <<SCRIPT_PATH>> query-ticket <id> --json` to get the final state.
-3. Produce a per-ticket summary table with columns: ticket ID, teammate that worked it, final status, branch, one-line evidence summary, questions or blockers if any.
-4. Explicitly call out any tickets that ended in `questions` or `blocked` as "needs user follow-up".
-5. Clean up the team per the agent-teams cleanup procedure.
-
-## Hard limits
-
-- Maximum team size: `<max>` teammates, resolved by `team-config` from `LOCAL_BOARD_MAX_TEAMMATES` (default 6). The agent-teams docs recommend 3-5; 6 is a sensible upper edge for this skill. The team grows on demand up to `<max>` and never beyond it — count non-shutdown teammates before every spawn.
-- One team at a time per lead session (an agent-teams limitation).
-- The lead is fixed for the team's lifetime (an agent-teams limitation).
-
-## What the lead does NOT do
-
-- Does not run `begin-step`, `complete-step`, `move`, or any other ticket-mutating CLI command. Teammates own ticket state.
-- Does not commit, merge, or push. Teammates' `move ... done` (with `git.autoMerge`) handles their own merges and prunes the merged branch. The CLI's rebase-onto-default precondition prevents stale-merge races. The lead only runs `fast-forward` to update its default-branch checkout after teammates move the shared ref.
-- Does not exceed `<max>` live teammates. The lead grows the team on demand (Rebalance) but always reuses idle teammates before spawning, and never spawns past `<max>`.
-- Does not enforce the rebase precondition itself — that is the CLI's job. The lead trusts the CLI.
-- Does not pick a ticket for reassignment that any other live teammate is currently working. Always check the live-assignment map before sending WORK.
+- Does not use agent-teams, teammate sessions, or a fixed lead. One orchestrator
+  session does it all.
+- Does not exceed `maxInFlight` tickets in flight.
+- Does not transition tickets by narrative text — only through CLI commands.
+- Does not enforce the rebase precondition itself — that is the CLI's job; you
+  react to its refusal.

@@ -1,5 +1,15 @@
 # Team Mode
 
+> **Superseded.** The agent-teams "one teammate per ticket" design described
+> below has been replaced by a single top-level **per-step orchestrator**: one
+> session works several tickets concurrently and dispatches each step to a
+> model-specialized executor, so every step can run on its own model. See
+> [PerStepOrchestration.md](PerStepOrchestration.md) for the design and
+> `SKILL_TEAM.md` for the operational contract. The parallelism, worktree
+> isolation, and `move … done` rebase-precondition safety described here still
+> apply; the teammate/lead mechanics and the `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`
+> requirement do not. This page is retained for historical context.
+
 Team mode runs multiple local-board tickets in parallel using a Claude Code agent team. The lead spawns teammate sessions on demand — one per ticket that can be worked right now — each the orchestrator for one ticket at a time. The team starts as small as the available work allows and grows after each completion as dependencies clear, up to a configurable maximum (default six). As teammates finish, the lead reassigns idle ones to additional ready tickets — including ones produced mid-run by a teammate's own `decompose` step — and spawns new teammates when newly-unblocked work exceeds the idle pool, until the queue is exhausted. Each teammate runs `/compact` between tickets to keep its context window manageable.
 
 Team mode is opt-in. It does not change how single-ticket runs work — the standard `local-board` skill remains the entry point for sequential operation.

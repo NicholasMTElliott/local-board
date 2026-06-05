@@ -1,10 +1,16 @@
 ---
 name: local-board-teammate
-description: Run as a teammate in a local-board agent team. Each teammate drives one ticket at a time and may be reassigned to additional tickets by the lead until the queue is exhausted. Spawned by the local-team skill; should not be invoked as a standalone subagent.
+description: DEPRECATED. Legacy agent-teams teammate that drove one ticket end-to-end. The current local-team skill is a top-level per-step orchestrator (see SKILL_TEAM.md and docs/PerStepOrchestration.md) and no longer spawns teammates. Retained only for backward compatibility; not part of the active flow.
 tools: Read, Glob, Grep, Bash, Edit, MultiEdit, Write
 ---
 
-# local-board teammate
+> **Deprecated.** The `local-team` skill no longer uses teammate sessions. Team
+> mode is now a single top-level orchestrator that dispatches each pipeline step
+> to a model-specialized executor (see `SKILL_TEAM.md` and
+> `docs/PerStepOrchestration.md`). This file is kept only so existing installs do
+> not break; nothing dispatches it. It may be removed in a future cleanup.
+
+# local-board teammate (legacy)
 
 You are one teammate in a parallel agent team running local-board.
 

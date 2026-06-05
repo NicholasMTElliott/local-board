@@ -147,18 +147,22 @@ When `retention.archiveOnMoveDone` is true, `move ... done` archives other done 
 When estimation is enabled, `complete-step design` refuses tasks and bugs without an estimate.
 `create` derives a per-worktree minute offset when invoked from inside a registered ticket worktree (sorted-index position among sibling worktrees) and shifts the starting timestamp by that many minutes. Sibling teammates therefore mint distinct child IDs without coordinating. Test-mode invocations that pass `now` skip the offset to keep timestamps deterministic.
 
-## Team Mode Scaling
-Team mode grows the team on demand rather than spawning a fixed pool. The lead resolves a max team size with `team-config` (`resolveMaxTeammates` reads `LOCAL_BOARD_MAX_TEAMMATES`, default 6, falling back to the default for missing/invalid values). It spawns one teammate per initially-ready ticket, then after each `DONE` runs a rebalance: fast-forward, recompute the ready queue (ready tickets minus live assignments), reuse idle teammates first, and spawn additional teammates up to `<max>` when newly-unblocked work exceeds the idle pool. This is what scales a "one blocker, many dependents" graph from 1 teammate to `<max>` the moment the blocker completes. Only the lead spawns teammates; teammates are subagents and cannot.
-
-Planned redesign (not yet implemented): `docs/PerStepOrchestration.md` replaces the
-teammate layer with a single top-level orchestrator that dispatches each step to an
-ephemeral, model-specialized executor. Rationale: a teammate is a subagent and cannot
-spawn per-step models, so today every step runs on the teammate's one model. The
-orchestrator stays top-level (retains spawn power), keeps the ticket file + worktree
-as the durable baton, gets cross-ticket concurrency from background-dispatched steps,
-and handles conflicts centrally with the `move … done` rebase precondition as the
-backstop. Worktree-per-ticket isolation is retained. This unifies single-ticket and
-team mode as the N=1 and N>1 cases of one orchestrator.
+## Parallel Mode (per-step orchestrator)
+The `local-team` skill is a single top-level orchestrator (the main session), not an
+agent-team. It works up to `maxInFlight` tickets concurrently and dispatches each
+pipeline step to an ephemeral, model-specialized executor (subagent or codex),
+pinning the per-step model from the routing profile. The ticket file + per-ticket
+worktree are the durable baton; the orchestrator owns all state mutations
+(`start-work`, `begin-step`, `complete-step`, `move`, gate-check/specialty,
+closeout), executors only do the work and return. Concurrency cap comes from
+`team-config` (`LOCAL_BOARD_MAX_TEAMMATES`, default 6), reinterpreted as
+`maxInFlight`; the real limiter is the orchestrator's context budget, so a low cap
+(≈3) plus `/compact` at wave boundaries is sensible. Conflicts: best-effort
+pre-merge of `branchReady` peers before an overlapping `implement`, with the
+`move … done` rebase-onto-default precondition as the mandatory backstop. This
+unifies single-ticket and parallel mode as the N=1 and N>1 cases of one orchestrator.
+See `SKILL_TEAM.md` and `docs/PerStepOrchestration.md`. The old agent-teams teammate
+flow (`local-board-teammate`) is deprecated; `docs/TeamMode.md` is historical.
 
 ## MVP CLI
 Use `node ./bin/local-board.js validate`, `list`, `query-next`, `query-ticket`, `state-report`, `schema`, `create`, `estimate`, `calibration suggest`, `gate-check`, `specialty-run`, `start-work`, `begin-step`, `complete-step`, `approve-inline`, `move`, `set`, `section`, `comment`, `link-parent`, `link-child`, `block`, `unblock`, `team-config`, and `init`.
