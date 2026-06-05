@@ -14,9 +14,16 @@ If requirements are ambiguous enough to block implementation, ask questions inst
 
 ## Output and Persistence
 
-Return the complete `## Technical Design` section body as Markdown.
+Persist the complete `## Technical Design` section body as Markdown with
+`section --file`, creating the temp file with the Write tool, never with shell
+redirection.
 
-When this step is delegated to a subagent, the subagent returns the design text and does not write any file — the `local-board-designer` subagent has no Write tool. The orchestrator persists the returned content with `section --file`, creating the temp file with the Write tool, never with shell redirection.
+- When this step is delegated to the `local-board-designer` subagent, that
+  subagent writes its own `Technical Design` section (it has a scoped Write tool)
+  and returns only a terse summary, so the large design body never funnels back
+  through the orchestrator.
+- When this step runs inline, the orchestrator composes the section, writes the
+  temp file with the Write tool, and runs `section --file` itself.
 
 ## Estimate after design
 

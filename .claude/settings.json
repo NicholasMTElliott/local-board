@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node ./bin/local-board.js *)",
+      "Bash(node bin/local-board.js *)"
+    ]
+  }
+}

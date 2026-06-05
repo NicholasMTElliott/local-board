@@ -121,7 +121,7 @@ Bundled Claude agents live in `agents/claude/` and are installed to `~/.claude/a
 | Subagent | Tools | Persistence |
 |---|---|---|
 | `local-board-decomposer` | Read, Glob, Grep, Bash | Return-only; creates tickets via CLI |
-| `local-board-designer` | Read, Glob, Grep, Bash | Return-only |
+| `local-board-designer` | Read, Glob, Grep, Bash, Write, Edit | Self-writes its own `Technical Design` section via scoped Write (keeps the large design payload out of the orchestrator window); returns a terse summary. Does not edit production source. |
 | `local-board-reviewer` | Read, Glob, Grep, Bash | Return-only |
 | `local-board-tester` | Read, Glob, Grep, Bash | Return-only |
 | `local-board-implementer` | Read, Glob, Grep, Bash, Edit, MultiEdit, Write | Writes its own file changes |
@@ -134,7 +134,10 @@ documenter/implementer/reviewer/tester `sonnet`, gatecheck `haiku`. The model
 applies when the orchestrator dispatches the agent from a top-level session;
 team-mode teammates ignore it because they run those steps inline.
 
-Return-only subagents have no Write or Edit tool. They return section content (Technical Design, Review Findings, Test Evidence) as Markdown in their final message; the orchestrator writes the temp file with the Write tool and runs `section --file`. Never instruct a return-only subagent to create a file — it falls back to Bash redirection (`echo`, heredoc, `Set-Content`), which breaks on backticks and code fences. The same return-only contract applies to `codex-task:read-only` routes.
+Return-only subagents (reviewer, tester, decomposer, gatecheck) have no Write or Edit tool. They return section content (Review Findings, Test Evidence) or JSON as Markdown in their final message; the orchestrator writes the temp file with the Write tool and runs `section --file`. Never instruct a return-only subagent to create a file — it falls back to Bash redirection (`echo`, heredoc, `Set-Content`), which breaks on backticks and code fences. The same return-only contract applies to `codex-task:read-only` routes. The designer is the exception: it has a scoped Write tool and self-writes its `Technical Design` section, returning only a terse summary, because that payload is the largest and the Write tool avoids the redirection bug.
+
+## Subagent CLI Permission
+Subagent frontmatter cannot carry Bash command-pattern permissions (only the `tools` list). Subagents inherit the session's `permissions.allow`, so the local-board CLI allow rule belongs in project `.claude/settings.json` (e.g. `Bash(node ./bin/local-board.js *)`). The installer adds the installed-path rule to `~/.claude/settings.json`; projects running from source need the project-level rule.
 
 ## Safety Pattern
 LLMs write designs, code, reviews, tests, docs, and questions. Deterministic tooling validates ticket schema, dependency eligibility, status transitions, branch names, and commits.
