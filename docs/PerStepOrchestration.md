@@ -132,10 +132,16 @@ cross-ticket coordination.
 
 ### Responsibility split
 
-- **Executor** does the actual work and returns a structured result. Self-writing
-  executors (implementer, documenter) edit files and commit **in the worktree**.
-  Return-only executors (designer, reviewer, tester, gate-check, codex read-only)
-  return section content / verdict JSON and write nothing.
+- **Executor** does the actual work and returns a structured result.
+  - Self-writing executors (implementer, documenter, and — per the context-budget
+    finding in §3 — the **designer**, scoped to its own Technical Design section)
+    edit files **in the worktree** with the `Write`/`Edit` tools and return only a
+    **terse summary**, keeping large payloads out of the orchestrator window.
+  - Return-only executors (reviewer, tester, gate-check, codex read-only) return
+    section content / verdict JSON and write nothing; the orchestrator records
+    their output via `section --file`. These stay return-only because their
+    payloads are small (~300 tokens) and the strict no-mutation guarantee is worth
+    keeping for review and test.
 - **Orchestrator** owns every CLI state mutation — `start-work`, `begin-step`,
   `complete-step`, `move`, `section` (for return-only output), `approve-inline`,
   closeout — plus conflict pre-merge decisions and worktree lifecycle.
@@ -229,12 +235,59 @@ ordered and deterministic:
   its previous step's notification arrives, never waiting for a barrier. Maximal
   pipelining; the spike confirms the mechanism. Adopt once wave-barrier is solid.
 
-## 3. Open decisions
+## 3. Context budget
 
-1. **`maxInFlight` semantics.** The real limiter is the orchestrator's context
-   budget (all step results flow into one window), not session count. Pick a
-   conservative default and document that it caps WIP. Reuse
-   `LOCAL_BOARD_MAX_TEAMMATES` or rename to `LOCAL_BOARD_MAX_INFLIGHT`.
+Because every step result funnels into one orchestrator window, context is the
+real scaling limit. Measured proxies from a representative rich ticket (~19k
+chars) and the live CLI:
+
+| Item | ≈ Tokens | Notes |
+|---|---|---|
+| `begin-step` / `query-ticket --json` | ~100 | per step, cheap |
+| `gate-check --json` input | ~375 | per gate |
+| `schema --json` | ~2,680 | once per session |
+| **Design** section payload | **~2,580** | the dominant item |
+| Implementation Notes | ~370 | |
+| Review Findings | ~310 | |
+| Test Evidence | ~365 | |
+| Documentation | ~155 | |
+
+**The limiter is cumulative session tokens, not concurrency.** Conversation
+history persists regardless of how many tickets are concurrent, so the binding
+constraint is *total tickets processed per orchestrator session*, while
+`maxInFlight` is really a reasoning-clarity / peak-returns cap.
+
+Two levers cut per-ticket cost ~5× (from ~7,100 to ~1,300 retained tokens —
+roughly 20 → 100+ tickets before compaction against a ~150k working budget):
+
+1. **Designer self-writes its section** (the ~2,580-token payload) via the
+   `Write` tool, scoped to its Technical Design section, returning a terse
+   summary. The Bash-redirection escaping bug that motivated the return-only
+   contract does not apply to the `Write` tool (implementer/documenter already
+   self-write this way). **Decided (hybrid):** apply this to the designer only;
+   reviewer and tester stay return-only — their payloads are small and the strict
+   no-mutation guarantee is worth keeping.
+2. **Prompts by reference.** `begin-step` already returns the prompt *path*; the
+   executor `Read`s it instead of the orchestrator inlining the full prompt text
+   into the dispatch call. Removes ~2,250 tokens/ticket.
+
+**Compaction.** Plan on periodic `/compact`. Wave-barrier mode is attractive here
+because the gaps between waves are natural, safe compaction boundaries — a single
+orchestrator juggling N concurrent tickets otherwise has no clean "between
+tickets" moment to compact at. Live coordination state (ticketId → status,
+branch, worktree, executorId) is small and re-derivable from ticket files, so it
+survives compaction cheaply.
+
+These figures are proxies; real section sizes vary widely. The *ratios* and the
+*cumulative-not-concurrent* conclusion are the durable findings.
+
+## 4. Open decisions
+
+1. **`maxInFlight` default — decide after a real run.** Per the §3 finding it is a
+   reasoning-clarity / peak cap, not the binding token limit. Leave it unset in
+   the design until an actual multi-ticket orchestrator run pins a sensible
+   default; ~3 is the working hypothesis. Reuse `LOCAL_BOARD_MAX_TEAMMATES` or
+   rename to `LOCAL_BOARD_MAX_INFLIGHT` when pinned.
 2. **Fate of `local-team` + `local-board-teammate`.** Deprecate/remove once the
    unified orchestrator lands, or keep as a thin compatibility wrapper.
 3. **Model in config vs frontmatter.** Config `model` overrides frontmatter at
@@ -242,20 +295,24 @@ ordered and deterministic:
    for standalone use of an agent.
 4. **Loss of live per-session intervention.** Accepted trade (interactivity is
    not typically required). The orchestrator still surfaces every step result.
-5. **Context-budget spike.** Validate a real run (e.g. 2 tickets × 3 steps
-   through the worktree CLI) before committing, to size `maxInFlight`.
 
 ### Resolved
 
 - **`local-board-gatecheck` agent — yes.** Added now, pinned to `haiku`, so
   gate-check classification runs off the orchestrator model.
 - **Worktree-per-ticket isolation — kept.** No evidence justifies changing it.
+- **Context-budget spike — done (§3).** Limiter is cumulative session tokens, not
+  concurrency. Adopt the hybrid self-write (designer only) + prompt-by-reference
+  optimizations; plan periodic compaction at wave boundaries.
+- **Designer self-writes its section — yes (hybrid).** Reviewer and tester stay
+  return-only.
 
-## 4. What is unchanged
+## 5. What is unchanged
 
 - Worktree-per-ticket isolation and the `worktree-add` / `worktree-remove` /
   `fast-forward` commands.
 - The `move … done` auto-merge + rebase-onto-default precondition + branch prune.
 - Ticket front matter as canonical state; the return-only section-content
-  contract; `approve-inline` for inline fallback of a delegated route.
+  contract for reviewer/tester/gate-check/codex-read-only (the designer becomes
+  self-writing per §3); `approve-inline` for inline fallback of a delegated route.
 - The single-ticket entry point — it becomes the N=1 case of this orchestrator.
