@@ -140,6 +140,35 @@ test("loadConfig rejects an invalid agent route", async () => {
   });
 });
 
+test("loadConfig replaces agent profiles wholesale (no inherited model)", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      agents: {
+        // default design profile carries model: opus — a route-only inline
+        // override must NOT inherit it (inline cannot carry a model).
+        design: { route: "inline" },
+        // default review profile has no model — a codex route-only override
+        // must NOT inherit a Claude model from anywhere.
+        implement: { route: "codex-task:read-only" },
+      },
+    }));
+    const config = await loadConfig(root);
+    assert.deepEqual(config.agents.design, { route: "inline" });
+    assert.deepEqual(config.agents.implement, { route: "codex-task:read-only" });
+  });
+});
+
+test("loadConfig rejects an agent object without a route", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      agents: { design: { model: "sonnet" } },
+    }));
+    await assert.rejects(loadConfig(root), /requires a valid route/);
+  });
+});
+
 test("loadConfig parses the v1 optionalSteps catalog from the default config", async () => {
   await withRoot(async (root) => {
     await writeConfig(root, defaultConfigJsonc());

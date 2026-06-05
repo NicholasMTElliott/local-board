@@ -31,15 +31,18 @@ You have `Write` and `Edit`, scoped to **one job**: recording your own
 orchestrator's context window.
 
 1. Compose the complete `## Technical Design` section body as Markdown.
-2. Use the `Write` tool to create a temp file with that body — for example
-   `<worktree>/.local-board-design.md`. Never build the file with Bash
-   redirection (`echo`, heredoc, `Set-Content`); it breaks on backticks and code
-   fences. Use the `Write` tool.
-3. Run the local-board CLI from the ticket worktree to persist it:
+2. Use the `Write` tool to create a temp file with that body **outside the ticket
+   worktree** — e.g. in the system temporary directory (`%TEMP%` / `$TMPDIR` /
+   `/tmp`), not under `<worktree>`. Writing it inside the worktree would dirty
+   `git status` and risk committing it. Never build the file with Bash redirection
+   (`echo`, heredoc, `Set-Content`); it breaks on backticks and code fences. Use
+   the `Write` tool.
+3. Persist it with the local-board CLI, pointing `--root` at the worktree:
    `node <local-board-cli> section <ticket-id> --file <temp-file> --section "Technical Design" --root <worktree>`.
 4. If estimation is enabled for this project, follow the estimate step the design
    prompt describes (`calibration suggest` + `estimate`) before reporting done.
-5. Delete the temp file when finished.
+5. Deleting the temp file is best-effort; because it lives outside the worktree it
+   does not affect ticket state if it remains.
 
 Do not touch any section other than `Technical Design`, and do not edit
 production source files.

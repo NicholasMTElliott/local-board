@@ -12,7 +12,7 @@ External kanban tools put your plan in a separate system from your code. local-b
 
 - [Node.js](https://nodejs.org/) 20 or later.
 - No runtime dependencies, no install step, no network access. The CLI is pure Node ESM.
-- Team mode additionally needs [Claude Code](https://claude.com/claude-code) v2.1.32+ with `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`.
+- Parallel mode runs on any harness whose orchestrator can dispatch subagents and pin a model per dispatch (e.g. [Claude Code](https://claude.com/claude-code)). It does not require agent teams or `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`.
 
 ## Quick start
 
@@ -82,7 +82,7 @@ For multi-line Markdown, `section --file <path>` is preferred. It avoids shell q
 
 `SKILL.md` turns a compatible coding agent into a local-board orchestrator. It tells the agent to call `query-next` or `query-ticket` for deterministic workflow dispatch and transition guidance, then use CLI mutation commands for canonical state changes.
 
-`SKILL_TEAM.md` installs as the `local-team` skill on Claude Code and adds an opt-in team-mode entry point. The lead session resolves a maximum team size with `team-config` (default 6, set by `LOCAL_BOARD_MAX_TEAMMATES`), then fans out the initially-ready tickets to teammate sessions in a Claude Code agent team. Each teammate is the orchestrator for one ticket at a time; as teammates finish, the lead reassigns idle ones and spawns additional teammates on demand — up to the maximum — as completed tickets unblock their dependents, until the queue is exhausted. Teammates use the bundled `local-board-teammate` subagent. Requires `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` and Claude Code v2.1.32+. See [docs/TeamMode.md](docs/TeamMode.md).
+`SKILL_TEAM.md` installs as the `local-team` skill and adds an opt-in parallel-work entry point. It is a single top-level orchestrator (not an agent team): it keeps up to `maxInFlight` tickets in flight (from `team-config`, default 6, set by `LOCAL_BOARD_MAX_TEAMMATES`) and dispatches each pipeline step to an ephemeral, model-specialized executor (subagent or codex), with the ticket file and a per-ticket git worktree as the durable baton. Per-step models work because the orchestrator is top-level. See [docs/PerStepOrchestration.md](docs/PerStepOrchestration.md); [docs/TeamMode.md](docs/TeamMode.md) is the superseded agent-teams design.
 
 Workflow routing lives in `plans/local-board.config.jsonc`. Comments and trailing commas are allowed. Strict routing is enforced by `begin-step`, `complete-step`, `approve-inline`, `move ... done`, and `validate`.
 
@@ -136,7 +136,7 @@ bin/                 CLI executable entrypoint
 test/                Unit tests for the ticket kernel
 install.mjs          Cross-harness skill installer
 SKILL.md             Installable orchestration skill template
-SKILL_TEAM.md        Installable team-mode skill template (Claude Code agent teams)
+SKILL_TEAM.md        Installable parallel-mode skill template (top-level per-step orchestrator)
 ```
 
 ## Contributing & Security

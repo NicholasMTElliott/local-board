@@ -578,6 +578,9 @@ test("CLI gate-check resolves catalog, prompt path, and ticket context per stage
     assert.equal(designOut.ticket, ticketId);
     assert.equal(designOut.stage, "design");
     assert.equal(designOut.prompt.endsWith(path.join("plans", "prompts", "steps", "gate-check.md")), true);
+    // gate-check resolves its configured agent profile (haiku in the default config).
+    assert.equal(designOut.agent, "claude-subagent:local-board-gatecheck");
+    assert.equal(designOut.model, "haiku");
     assert.equal(designOut.ticketContext.id, ticketId);
     assert.equal(designOut.ticketContext.status, "ready_for_design");
     assert.equal(designOut.ticketContext.currentAction, "design");
@@ -683,6 +686,47 @@ test("CLI gate-check rejects invalid stage, missing stage, and unknown ticket", 
     const unknown = await runCli(["--root", root, "gate-check", "T20990101T0000Z", "--stage", "design"]);
     assert.equal(unknown.code, 2);
     assert.match(unknown.stderr, /ticket T20990101T0000Z not found/);
+  });
+});
+
+test("CLI completes an optional specialty step and the board still validates", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    const create = await runCli([
+      "--root", root, "create", "task", "Specialty completion",
+      "--status", "ready_for_implementation", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const id = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    // security_audit is in the default optionalSteps.implement catalog and routes inline.
+    const done = await runCli([
+      "--root", root, "complete-step", id, "security_audit",
+      "--executor", "inline", "--evidence", "PASS: no findings",
+    ]);
+    assert.equal(done.code, 0, done.stderr);
+
+    const val = await runCli(["--root", root, "validate"]);
+    assert.equal(val.code, 0, val.stderr);
+  });
+});
+
+test("CLI complete-step rejects a model on an inline executor", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    const create = await runCli([
+      "--root", root, "create", "task", "Inline model rejection",
+      "--status", "ready_for_review", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const id = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const res = await runCli([
+      "--root", root, "complete-step", id, "review",
+      "--executor", "inline@opus", "--evidence", "x",
+    ]);
+    assert.notEqual(res.code, 0);
+    assert.match(res.stderr, /executor must be/);
   });
 });
 

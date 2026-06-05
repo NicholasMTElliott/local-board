@@ -754,14 +754,13 @@ function validateRouting(ticket, config) {
 
 function validateStepRouting(ticket, config, action, executor) {
   const issues = [];
-  const actions = new Set(Object.values(config.workflow.statusActions));
-  if (!actions.has(action)) {
+  if (!isKnownAction(config, action)) {
     return [`${ticket.path}: completedSteps entry uses unknown action ${action}`];
   }
   if (!isValidAgentValue(executor)) {
     return [`${ticket.path}: completedSteps entry for ${action} uses unknown executor ${executor}`];
   }
-  const configuredAgent = agentForAction(config, action);
+  const configuredAgent = configuredRouteForAction(config, action);
   const executorRoute = routeOf(executor);
   const approvals = asList(ticket.frontMatter.routingApprovals);
   if (
@@ -1211,10 +1210,41 @@ function asList(value) {
 }
 
 function assertAction(config, action) {
-  const actions = new Set(Object.values(config.workflow.statusActions));
-  if (!actions.has(action)) {
-    throw new Error(`action must be one of ${[...actions].sort().join(", ")}`);
+  if (!isKnownAction(config, action)) {
+    const mandatory = [...new Set(Object.values(config.workflow.statusActions))].sort();
+    throw new Error(
+      `action must be a mandatory action (${mandatory.join(", ")}) or a configured optional specialty step`,
+    );
   }
+}
+
+// Find an optional specialty step entry by name across all stages.
+function optionalStepEntry(config, name) {
+  const stages = config.optionalSteps ?? {};
+  for (const stage of Object.keys(stages)) {
+    const list = Array.isArray(stages[stage]) ? stages[stage] : [];
+    const entry = list.find((candidate) => candidate && candidate.name === name);
+    if (entry) {
+      return entry;
+    }
+  }
+  return null;
+}
+
+function isKnownAction(config, action) {
+  const actions = new Set(Object.values(config.workflow.statusActions));
+  return actions.has(action) || optionalStepEntry(config, action) !== null;
+}
+
+// The configured route for an action: mandatory actions use the agents map;
+// optional specialty steps use their catalog entry's `agent` (default inline).
+function configuredRouteForAction(config, action) {
+  const actions = new Set(Object.values(config.workflow.statusActions));
+  if (actions.has(action)) {
+    return agentForAction(config, action);
+  }
+  const entry = optionalStepEntry(config, action);
+  return entry ? entry.agent ?? "inline" : "inline";
 }
 
 // Resolve the full normalized profile { route, model?, prompt? } for an action.

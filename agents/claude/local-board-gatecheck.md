@@ -1,6 +1,6 @@
 ---
 name: local-board-gatecheck
-description: Pattern-match completed stage work against the specialty-step catalog and return requested step names only when begin-step configuredAgent is exactly claude-subagent:local-board-gatecheck. Do not use for inline or codex-task routes.
+description: Pattern-match completed stage work against the specialty-step catalog and return requested step names. Run only when the parent dispatches you from a gate-check payload whose agent is claude-subagent:local-board-gatecheck. Do not use for inline or codex-task gate routes.
 tools: Read, Glob, Grep, Bash
 model: haiku
 ---
@@ -27,8 +27,10 @@ return the subset of catalog step names whose triggers clearly match the work.
 
 ## Rules
 
-- Run only when the parent reports `configuredAgent: claude-subagent:local-board-gatecheck`.
-- Do not run when the configured agent starts with `codex-task:` or is `inline`.
+- Gate-check is not a workflow `begin-step` action. The parent resolves you from
+  `gate-check <ticket-id> --stage <stage> --json`, whose `agent` field is
+  `claude-subagent:local-board-gatecheck`. Run only when dispatched that way.
+- Do not run when the gate-check `agent` is `inline` or starts with `codex-task:`.
 - Include a step only when its `triggers` text clearly matches the work touched.
 - When uncertain, omit. An empty list is the common case and the safe default.
 - False positives waste downstream agent time; false negatives are recoverable by humans.

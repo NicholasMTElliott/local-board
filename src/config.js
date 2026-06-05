@@ -261,14 +261,28 @@ export const DEFAULT_CONFIG = {
 export async function loadConfig(root = ".") {
   const configPath = path.resolve(root, CONFIG_PATH);
   let merged;
+  let rawAgents = null;
   try {
     const parsed = parseJsonc(await readFile(configPath, "utf8"));
     merged = mergeConfig(DEFAULT_CONFIG, parsed);
+    if (isObject(parsed) && isObject(parsed.agents)) {
+      rawAgents = parsed.agents;
+    }
   } catch (error) {
     if (error.code === "ENOENT") {
       merged = structuredClone(DEFAULT_CONFIG);
     } else {
       throw new Error(`${configPath}: ${error.message}`);
+    }
+  }
+
+  // Agent profiles are replaced wholesale per action, not deep-merged. A user
+  // override like { design: { route: "inline" } } must NOT inherit the default
+  // profile's model (which would be invalid on inline) or carry a Claude model
+  // onto a codex route. mergeConfig deep-merged them; restore the raw entries.
+  if (rawAgents !== null) {
+    for (const key of Object.keys(rawAgents)) {
+      merged.agents[key] = structuredClone(rawAgents[key]);
     }
   }
 

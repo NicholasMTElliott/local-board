@@ -1,9 +1,11 @@
 # Per-Step Orchestration (Design Proposal)
 
-Status: **draft / brainstorming.** This proposes replacing the agent-teams
-teammate layer with a single top-level orchestrator that dispatches each
-pipeline step to an ephemeral, model-specialized executor. It is not yet
-implemented and the schema below is provisional.
+Status: **implemented** on branch `feature/per-step-orchestration`. The
+agent-teams teammate layer is replaced by a single top-level orchestrator that
+dispatches each pipeline step to an ephemeral, model-specialized executor. The
+routing-profile schema, designer self-write, gate-check agent, and the
+`SKILL_TEAM.md` orchestrator contract are live; `maxInFlight`'s default is still
+deferred to a real run (it currently reuses `team-config`).
 
 ## Motivation
 
@@ -171,7 +173,8 @@ executors are pure work units.
      (with `approve-inline` first when an executor had to run inline in a pinch).
    - Self-writing result → the executor already committed in the worktree;
      orchestrator records `complete-step` evidence.
-   - Choose the next status from `complete-step` transition guidance and `move`.
+   - Choose the next status from the `transitions` guidance returned by
+     `begin-step`/`query-ticket` and `move`.
    - If T continues to another ready step, leave it in-flight and dispatch its
      next step. If T reaches `questions`/`blocked`, surface it, drop from
      in-flight, keep in `assignedLog`.

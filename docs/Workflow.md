@@ -247,6 +247,8 @@ With `--json`, the command returns:
   "ticket": "<ticket-id>",
   "stage": "implement",
   "prompt": "<absolute-path-to-plans/prompts/steps/gate-check.md>",
+  "agent": "claude-subagent:local-board-gatecheck",
+  "model": "haiku",
   "ticketPath": "plans/tickets/ready/<ticket-file>.md",
   "ticketContext": {
     "id": "<ticket-id>",
@@ -269,7 +271,7 @@ With `--json`, the command returns:
 }
 ```
 
-The CLI is a read-only resolver. It does not invoke an agent and does not decide which optional steps are required. The orchestrator passes the returned `prompt`, `catalog`, and narrow `ticketContext` to a gate-check agent. That agent pattern-matches the completed work against the catalog trigger criteria and returns strict JSON shaped:
+The CLI is a read-only resolver. It does not invoke an agent and does not decide which optional steps are required. The orchestrator dispatches the returned `prompt`, `catalog`, and narrow `ticketContext` to the configured gate-check `agent`, pinning its `model` (the bundled `local-board-gatecheck` agent on `haiku` by default). That agent pattern-matches the completed work against the catalog trigger criteria and returns strict JSON shaped:
 
 ```json
 { "requestedSteps": ["security_audit"] }
