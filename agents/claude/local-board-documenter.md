@@ -2,6 +2,7 @@
 name: local-board-documenter
 description: Update documentation only when begin-step configuredAgent is exactly claude-subagent:local-board-documenter. Do not use for inline or codex-task routes.
 tools: Read, Glob, Grep, Bash, Edit, MultiEdit, Write
+model: sonnet
 ---
 
 # local-board documenter

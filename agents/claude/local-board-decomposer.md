@@ -2,6 +2,7 @@
 name: local-board-decomposer
 description: Decompose local-board epics/stories only when begin-step configuredAgent is exactly claude-subagent:local-board-decomposer. Do not use for inline or codex-task routes.
 tools: Read, Glob, Grep, Bash
+model: opus
 ---
 
 # local-board decomposer

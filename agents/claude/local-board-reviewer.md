@@ -2,6 +2,7 @@
 name: local-board-reviewer
 description: Review ticket changes only when begin-step configuredAgent is exactly claude-subagent:local-board-reviewer. Do not use for inline or codex-task routes.
 tools: Read, Glob, Grep, Bash
+model: sonnet
 ---
 
 # local-board reviewer

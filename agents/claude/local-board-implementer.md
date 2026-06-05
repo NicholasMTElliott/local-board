@@ -2,6 +2,7 @@
 name: local-board-implementer
 description: Implement scoped ticket work only when begin-step configuredAgent is exactly claude-subagent:local-board-implementer. Do not use for inline or codex-task routes.
 tools: Read, Glob, Grep, Bash, Edit, MultiEdit, Write
+model: sonnet
 ---
 
 # local-board implementer

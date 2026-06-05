@@ -2,6 +2,7 @@
 name: local-board-tester
 description: Verify ticket work only when begin-step configuredAgent is exactly claude-subagent:local-board-tester. Do not use for inline or codex-task routes.
 tools: Read, Glob, Grep, Bash
+model: sonnet
 ---
 
 # local-board tester

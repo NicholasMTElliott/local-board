@@ -2,6 +2,7 @@
 name: local-board-designer
 description: Write technical designs only when begin-step configuredAgent is exactly claude-subagent:local-board-designer. Do not use for inline or codex-task routes.
 tools: Read, Glob, Grep, Bash
+model: opus
 ---
 
 # local-board designer
