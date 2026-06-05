@@ -215,7 +215,7 @@ Bundled Claude agents (each pins a default model in its frontmatter; config
 
 Each stage contains entries shaped `{ name, prompt, triggers, agent? }`.
 
-- `name`: required lowercase snake_case identifier, unique within the stage. It cannot reuse a mandatory action name such as `design`, `implement`, `review`, or `test`.
+- `name`: required lowercase snake_case identifier, unique across all stages (routing resolves a specialty step by name across stages). It cannot reuse a mandatory action name such as `design`, `implement`, `review`, or `test`.
 - `prompt`: required repo-relative path to the specialty prompt, normally under `plans/prompts/optional-steps/<stage>/`. Config loading validates the string but does not require the file to exist.
 - `triggers`: required human-readable guidance for deciding when the specialty applies.
 - `agent`: optional route override using the same conventions as mandatory action routing: `inline`, `claude-subagent:<agent-name>`, or `codex-task:<mode>`. Omitted entries run inline.

@@ -258,6 +258,34 @@ test("loadConfig rejects duplicate optionalSteps names within a stage", async ()
   });
 });
 
+test("loadConfig rejects duplicate optionalSteps names across stages", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, `{
+  "version": 1,
+  "optionalSteps": {
+    "design": [
+      {
+        "name": "shared_step",
+        "prompt": "a.md",
+        "triggers": "design"
+      }
+    ],
+    "implement": [
+      {
+        "name": "shared_step",
+        "prompt": "b.md",
+        "triggers": "implement"
+      }
+    ]
+  }
+}
+`);
+    // Routing resolves a specialty step by name across stages, so names must be
+    // globally unique or completion validation could pick the wrong entry.
+    await assert.rejects(loadConfig(root), /unique across all stages/);
+  });
+});
+
 test("loadConfig rejects malformed optionalSteps entries", async () => {
   const cases = [
     {

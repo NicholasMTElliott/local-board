@@ -65,7 +65,7 @@ The classifier prompt at [`plans/prompts/steps/gate-check.md`](../plans/prompts/
 
 Two steps:
 
-1. Add an entry under the appropriate stage in `optionalSteps` in [`plans/local-board.config.jsonc`](../plans/local-board.config.jsonc). Required fields: `name` (lowercase snake_case, unique within stage, never a mandatory action name), `prompt` (repo-relative path), `triggers` (human-readable rule). Optional: `agent` to override the default `inline` route with `claude-subagent:<agent-name>` or `codex-task:<mode>`.
+1. Add an entry under the appropriate stage in `optionalSteps` in [`plans/local-board.config.jsonc`](../plans/local-board.config.jsonc). Required fields: `name` (lowercase snake_case, unique across all stages, never a mandatory action name), `prompt` (repo-relative path), `triggers` (human-readable rule). Optional: `agent` to override the default `inline` route with `claude-subagent:<agent-name>` or `codex-task:<mode>`.
 2. Create the prompt file at the configured path. Follow the verdict + findings contract used by the v1 catalog: prompts end with a strict JSON output block shaped `{ "verdict": "PASS" | "CONCERNS" | "FAIL", "findings": [...] }`.
 
 The next gate-check run that targets the entry's stage will see the new entry in its catalog automatically. No source code changes are required.

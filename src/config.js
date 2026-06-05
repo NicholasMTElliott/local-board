@@ -370,6 +370,10 @@ function normalizeOptionalSteps(merged, configPath) {
   }
 
   const normalized = {};
+  // Names must be unique across ALL stages, not just within one: routing
+  // resolves a specialty step by name across stages and uses the first match,
+  // so a cross-stage duplicate would route validation to the wrong entry.
+  const seenNames = new Set();
   for (const stage of OPTIONAL_STEP_STAGES) {
     const value = merged.optionalSteps[stage];
     if (value === undefined || value === null) {
@@ -379,7 +383,6 @@ function normalizeOptionalSteps(merged, configPath) {
     if (!Array.isArray(value)) {
       throw new Error(`optionalSteps.${stage} must be an array`);
     }
-    const seenNames = new Set();
     normalized[stage] = value.map((entry) => validateOptionalStepEntry(entry, stage, seenNames));
   }
 
@@ -464,7 +467,9 @@ function validateOptionalStepEntry(entry, stage, seenNames) {
     );
   }
   if (seenNames.has(name)) {
-    throw new Error(`optionalSteps.${stage} has duplicate name "${name}"`);
+    throw new Error(
+      `optionalSteps has duplicate name "${name}"; optional step names must be unique across all stages`,
+    );
   }
   seenNames.add(name);
 
