@@ -618,7 +618,7 @@ test("CLI gate-check resolves catalog, prompt path, and ticket context per stage
     const plain = await runCli(["--root", root, "gate-check", ticketId, "--stage", "design"]);
     assert.equal(plain.code, 0, plain.stderr);
     const plainLines = plain.stdout.split("\n");
-    assert.match(plainLines[0], /^gate-check .* stage=design catalog=3$/);
+    assert.match(plainLines[0], /^gate-check .* stage=design agent=\S+ catalog=3$/);
     assert.equal(plainLines[1].endsWith(path.join("plans", "prompts", "steps", "gate-check.md")), true);
   });
 });

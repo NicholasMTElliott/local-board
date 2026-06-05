@@ -218,12 +218,13 @@ export const DEFAULT_CONFIG = {
     },
   },
   agents: {
-    decompose: "claude-subagent:local-board-decomposer",
-    design: "claude-subagent:local-board-designer",
-    implement: "claude-subagent:local-board-implementer",
-    review: "codex-task:read-only",
-    test: "claude-subagent:local-board-tester",
-    document: "codex-task:workspace-write",
+    decompose: { route: "claude-subagent:local-board-decomposer", model: "opus" },
+    "gate-check": { route: "claude-subagent:local-board-gatecheck", model: "haiku" },
+    design: { route: "claude-subagent:local-board-designer", model: "opus" },
+    implement: { route: "claude-subagent:local-board-implementer", model: "sonnet" },
+    review: { route: "codex-task:read-only" },
+    test: { route: "claude-subagent:local-board-tester", model: "sonnet" },
+    document: { route: "codex-task:workspace-write" },
   },
   routing: {
     strict: true,
@@ -259,18 +260,93 @@ export const DEFAULT_CONFIG = {
 
 export async function loadConfig(root = ".") {
   const configPath = path.resolve(root, CONFIG_PATH);
+  let merged;
   try {
     const parsed = parseJsonc(await readFile(configPath, "utf8"));
-    const merged = mergeConfig(DEFAULT_CONFIG, parsed);
-    normalizeOptionalSteps(merged, configPath);
-    normalizeEstimation(merged);
-    return merged;
+    merged = mergeConfig(DEFAULT_CONFIG, parsed);
   } catch (error) {
     if (error.code === "ENOENT") {
-      return structuredClone(DEFAULT_CONFIG);
+      merged = structuredClone(DEFAULT_CONFIG);
+    } else {
+      throw new Error(`${configPath}: ${error.message}`);
     }
+  }
+
+  try {
+    normalizeOptionalSteps(merged, configPath);
+    normalizeEstimation(merged);
+    normalizeAgents(merged);
+  } catch (error) {
     throw new Error(`${configPath}: ${error.message}`);
   }
+  return merged;
+}
+
+// Normalize the agents map so every entry is a profile object
+// { route, model?, prompt? }. A bare string is sugar for { route }, so legacy
+// configs and DEFAULT_CONFIG (which use route strings) load unchanged.
+function normalizeAgents(merged) {
+  if (!isObject(merged.agents)) {
+    throw new Error("agents must be an object");
+  }
+  const normalized = {};
+  for (const [key, value] of Object.entries(merged.agents)) {
+    normalized[key] = normalizeAgentProfile(value, key);
+  }
+  merged.agents = normalized;
+}
+
+function normalizeAgentProfile(value, key) {
+  if (typeof value === "string") {
+    if (!isValidAgentRoute(value)) {
+      throw new Error(`agents.${key} route "${value}" is not a valid route`);
+    }
+    return { route: value };
+  }
+  if (!isObject(value)) {
+    throw new Error(
+      `agents.${key} must be a route string or a { route, model?, prompt? } object`,
+    );
+  }
+
+  const { route, model, prompt } = value;
+  if (typeof route !== "string" || !isValidAgentRoute(route)) {
+    throw new Error(
+      `agents.${key} requires a valid route string; got ${JSON.stringify(route)}`,
+    );
+  }
+  const profile = { route };
+
+  if (model !== undefined && model !== null) {
+    if (typeof model !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(model)) {
+      throw new Error(
+        `agents.${key} model must be a model alias or id; got ${JSON.stringify(model)}`,
+      );
+    }
+    if (route === "inline") {
+      throw new Error(
+        `agents.${key} route "inline" cannot carry a model; route the step to a subagent to pin a model`,
+      );
+    }
+    profile.model = model;
+  }
+
+  if (prompt !== undefined && prompt !== null) {
+    if (typeof prompt !== "string" || prompt.trim() === "") {
+      throw new Error(`agents.${key} prompt must be a non-empty string path`);
+    }
+    profile.prompt = prompt;
+  }
+
+  return profile;
+}
+
+export function isValidAgentRoute(value) {
+  return (
+    value === "inline" ||
+    /^claude-subagent:[a-z0-9][a-z0-9-]*$/.test(value) ||
+    /^codex-task:[a-z0-9][a-z0-9-]*$/.test(value)
+  );
 }
 
 function normalizeOptionalSteps(merged, configPath) {
@@ -391,11 +467,7 @@ function validateOptionalStepEntry(entry, stage, seenNames) {
 }
 
 function isValidOptionalStepAgent(value) {
-  return (
-    value === "inline" ||
-    /^claude-subagent:[a-z0-9][a-z0-9-]*$/.test(value) ||
-    /^codex-task:[a-z0-9][a-z0-9-]*$/.test(value)
-  );
+  return isValidAgentRoute(value);
 }
 
 export async function writeDefaultConfig(root = ".", overwrite = false) {
@@ -629,15 +701,20 @@ export function defaultConfigJsonc() {
   },
 
   // Agent routing is enforced by strict routing commands and validation.
-  // Available values: inline, claude-subagent:<agent-name>, codex-task:<mode>.
-  // Current Codex examples: codex-task:read-only, codex-task:workspace-write.
+  // Each entry is a route string or a { route, model?, prompt? } profile.
+  // A bare string is sugar for { route }. route values: inline,
+  // claude-subagent:<agent-name>, codex-task:<mode>. model pins the per-step
+  // model for subagent/codex routes (alias like opus/sonnet/haiku or a full id);
+  // it is rejected on inline routes. prompt overrides workflow.actionPrompts.
+  // Codex examples: codex-task:read-only, codex-task:workspace-write.
   "agents": {
-    "decompose": "claude-subagent:local-board-decomposer",
-    "design": "claude-subagent:local-board-designer",
-    "implement": "claude-subagent:local-board-implementer",
-    "review": "codex-task:read-only",
-    "test": "claude-subagent:local-board-tester",
-    "document": "codex-task:workspace-write"
+    "decompose": { "route": "claude-subagent:local-board-decomposer", "model": "opus" },
+    "gate-check": { "route": "claude-subagent:local-board-gatecheck", "model": "haiku" },
+    "design": { "route": "claude-subagent:local-board-designer", "model": "opus" },
+    "implement": { "route": "claude-subagent:local-board-implementer", "model": "sonnet" },
+    "review": { "route": "codex-task:read-only" },
+    "test": { "route": "claude-subagent:local-board-tester", "model": "sonnet" },
+    "document": { "route": "codex-task:workspace-write" }
   },
 
   // Routing policy is enforced by validate, complete-step, and move-to-done.

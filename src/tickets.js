@@ -414,6 +414,8 @@ export async function beginStep(root, ticketId, actionOverride = null) {
     status: ticket.status,
     transitions: transitionsForStatus(config, ticket.status),
     configuredAgent,
+    configuredModel: modelForAction(config, action),
+    configuredPrompt: promptForAction(config, action),
     strict: config.routing?.strict === true,
     delegationRequired: config.routing?.strict === true && configuredAgent !== "inline",
     branch: ticket.frontMatter.branch ?? null,
@@ -760,10 +762,15 @@ function validateStepRouting(ticket, config, action, executor) {
     return [`${ticket.path}: completedSteps entry for ${action} uses unknown executor ${executor}`];
   }
   const configuredAgent = agentForAction(config, action);
+  const executorRoute = routeOf(executor);
   const approvals = asList(ticket.frontMatter.routingApprovals);
-  if (configuredAgent !== executor && !approvals.includes(stepToken(action, executor))) {
+  if (
+    configuredAgent !== executorRoute
+    && !approvals.includes(stepToken(action, executorRoute))
+    && !approvals.includes(stepToken(action, executor))
+  ) {
     issues.push(
-      `${ticket.path}: ${action} completed by ${executor}, but configured agent is ${configuredAgent}; approve the deviation first`,
+      `${ticket.path}: ${action} completed by ${executorRoute}, but configured agent is ${configuredAgent}; approve the deviation first`,
     );
   }
   return issues;
@@ -950,6 +957,7 @@ export async function schemaRecord(root = ".") {
     claudeAgents: [
       "local-board-decomposer",
       "local-board-designer",
+      "local-board-gatecheck",
       "local-board-implementer",
       "local-board-reviewer",
       "local-board-tester",
@@ -1012,8 +1020,9 @@ function actionRecord(root, ticket, config, byId) {
     title: ticket.title,
     branch: ticket.frontMatter.branch ?? null,
     action,
-    prompt: action === null ? null : config.workflow.actionPrompts[action] ?? null,
+    prompt: action === null ? null : promptForAction(config, action),
     agent: configuredAgent,
+    model: action === null ? null : modelForAction(config, action),
     routing: action === null
       ? null
       : {
@@ -1208,8 +1217,28 @@ function assertAction(config, action) {
   }
 }
 
+// Resolve the full normalized profile { route, model?, prompt? } for an action.
+function profileForAction(config, action) {
+  const entry = config.agents[action] ?? config.agents.default ?? { route: "inline" };
+  return typeof entry === "string" ? { route: entry } : entry;
+}
+
+// agentForAction returns just the route string so all existing routing and
+// evidence comparisons keep working unchanged. Per-step model lives alongside it.
 function agentForAction(config, action) {
-  return config.agents[action] ?? config.agents.default ?? "inline";
+  return profileForAction(config, action).route;
+}
+
+function modelForAction(config, action) {
+  return profileForAction(config, action).model ?? null;
+}
+
+function promptForAction(config, action) {
+  return (
+    profileForAction(config, action).prompt
+    ?? config.workflow?.actionPrompts?.[action]
+    ?? null
+  );
 }
 
 function schemaAgentValues() {
@@ -1217,15 +1246,39 @@ function schemaAgentValues() {
     "inline",
     "claude-subagent:<agent-name>",
     "codex-task:<mode>",
+    "<route>@<model> (completion evidence may pin the model that ran)",
   ];
 }
 
+// An executor string is a route optionally suffixed with @<model> to record the
+// model that actually ran. Routing comparisons use the route part only.
+function routeOf(value) {
+  const at = value.indexOf("@");
+  return at === -1 ? value : value.slice(0, at);
+}
+
 function isValidAgentValue(value) {
-  return (
-    value === "inline" ||
-    /^codex-task:[a-z0-9][a-z0-9-]*$/.test(value) ||
-    /^claude-subagent:[a-z0-9][a-z0-9-]*$/.test(value)
-  );
+  if (typeof value !== "string") {
+    return false;
+  }
+  const at = value.indexOf("@");
+  const route = at === -1 ? value : value.slice(0, at);
+  const model = at === -1 ? null : value.slice(at + 1);
+  const routeValid =
+    route === "inline" ||
+    /^codex-task:[a-z0-9][a-z0-9-]*$/.test(route) ||
+    /^claude-subagent:[a-z0-9][a-z0-9-]*$/.test(route);
+  if (!routeValid) {
+    return false;
+  }
+  if (model === null) {
+    return true;
+  }
+  // inline runs on the orchestrator's own model and cannot pin one.
+  if (route === "inline") {
+    return false;
+  }
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(model);
 }
 
 function stepToken(action, executor) {

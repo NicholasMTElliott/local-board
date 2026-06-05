@@ -221,15 +221,20 @@
   },
 
   // Agent routing is enforced by strict routing commands and validation.
-  // Available values: inline, claude-subagent:<agent-name>, codex-task:<mode>.
-  // Current Codex examples: codex-task:read-only, codex-task:workspace-write.
+  // Each entry is a route string or a { route, model?, prompt? } profile.
+  // A bare string is sugar for { route }. route values: inline,
+  // claude-subagent:<agent-name>, codex-task:<mode>. model pins the per-step
+  // model for subagent/codex routes (alias like opus/sonnet/haiku or a full id);
+  // it is rejected on inline routes. prompt overrides workflow.actionPrompts.
+  // Codex examples: codex-task:read-only, codex-task:workspace-write.
   "agents": {
-    "decompose": "claude-subagent:local-board-decomposer",
-    "design": "claude-subagent:local-board-designer",
-    "implement": "claude-subagent:local-board-implementer",
-    "review": "codex-task:read-only",
-    "test": "claude-subagent:local-board-tester",
-    "document": "codex-task:workspace-write"
+    "decompose": { "route": "claude-subagent:local-board-decomposer", "model": "opus" },
+    "gate-check": { "route": "claude-subagent:local-board-gatecheck", "model": "haiku" },
+    "design": { "route": "claude-subagent:local-board-designer", "model": "opus" },
+    "implement": { "route": "claude-subagent:local-board-implementer", "model": "sonnet" },
+    "review": { "route": "codex-task:read-only" },
+    "test": { "route": "claude-subagent:local-board-tester", "model": "sonnet" },
+    "document": { "route": "codex-task:workspace-write" }
   },
 
   // Routing policy is enforced by validate, complete-step, and move-to-done.

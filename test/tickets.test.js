@@ -401,6 +401,44 @@ test("beginStep reports strict configured routing for a ticket action", async ()
   });
 });
 
+test("beginStep exposes the configured per-step model and prompt", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Needs design", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const result = await beginStep(root, ticketId);
+
+    assert.equal(result.action, "design");
+    assert.equal(result.configuredAgent, "claude-subagent:local-board-designer");
+    assert.equal(result.configuredModel, "opus");
+    assert.equal(result.configuredPrompt, "plans/prompts/steps/design.md");
+  });
+});
+
+test("completeStep accepts a route@model executor and validates by route only", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Review with pinned model", {
+      status: "ready_for_review",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    // Configured route is codex-task:read-only; the @model suffix records the
+    // model that ran and must not trigger a routing-deviation error.
+    await completeStep(root, ticketId, "review", "codex-task:read-only@gpt-5.5", "Review evidence.", {
+      now: new Date("2026-05-14T21:00:00Z"),
+    });
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \["review:codex-task:read-only@gpt-5\.5"\]$/m);
+    // Round-trips and passes validation (route comparison ignores the @model suffix).
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
 test("completeStep enforces configured routing unless inline is approved", async () => {
   await withBoard(async (root) => {
     const ticketPath = await createTicket(root, "task", "Review with approval", {
@@ -946,7 +984,10 @@ test("initProject scaffolds a new local-board project idempotently", async () =>
     assert.equal(first.created.includes(path.join(root, "plans", "local-board.config.jsonc")), true);
     assert.equal(second.created.length, 0);
     assert.equal(second.skipped.length > 0, true);
-    assert.equal((await loadConfig(root)).agents.implement, "claude-subagent:local-board-implementer");
+    assert.deepEqual((await loadConfig(root)).agents.implement, {
+      route: "claude-subagent:local-board-implementer",
+      model: "sonnet",
+    });
     assert.deepEqual(validate(await discover(root)), []);
   });
 });

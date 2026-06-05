@@ -454,7 +454,8 @@ async function commandBeginStep(root, args) {
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));
   } else {
-    console.log(`${result.ticket} ${result.action} ${result.configuredAgent}`);
+    const model = result.configuredModel ? `@${result.configuredModel}` : "";
+    console.log(`${result.ticket} ${result.action} ${result.configuredAgent}${model}`);
   }
   return 0;
 }
@@ -790,10 +791,13 @@ async function commandGateCheck(root, args) {
     acceptanceCriteria: getSectionText(ticket.body, "Acceptance Criteria") ?? "",
   };
 
+  const gateProfile = config.agents?.["gate-check"] ?? { route: "inline" };
   const payload = {
     ticket: ticket.id,
     stage,
     prompt: promptPath,
+    agent: gateProfile.route,
+    model: gateProfile.model ?? null,
     ticketPath: ticket.path,
     ticketContext,
     catalog,
@@ -802,7 +806,8 @@ async function commandGateCheck(root, args) {
   if (asJson) {
     console.log(JSON.stringify(payload, null, 2));
   } else {
-    console.log(`gate-check ${ticket.id} stage=${stage} catalog=${catalog.length}`);
+    const gateModel = gateProfile.model ? `@${gateProfile.model}` : "";
+    console.log(`gate-check ${ticket.id} stage=${stage} agent=${gateProfile.route}${gateModel} catalog=${catalog.length}`);
     console.log(promptPath);
     for (const entry of catalog) {
       console.log(`- ${entry.name}: ${entry.triggers}`);

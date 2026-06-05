@@ -51,9 +51,12 @@ test("loadConfig reads the commented default config", async () => {
     assert.equal(config.workflow.transitions.ready_for_review[0].status, "ready_for_test");
     assert.match(config.workflow.transitions.ready_for_review[1].when, /implementation defects/);
     assert.match(config.workflow.transitions.ready_for_review.at(-1).when, /non-ticket blocker/);
-    assert.equal(config.agents.implement, "claude-subagent:local-board-implementer");
-    assert.equal(config.agents.review, "codex-task:read-only");
-    assert.equal(config.agents.document, "codex-task:workspace-write");
+    assert.deepEqual(config.agents.implement, {
+      route: "claude-subagent:local-board-implementer",
+      model: "sonnet",
+    });
+    assert.deepEqual(config.agents.review, { route: "codex-task:read-only" });
+    assert.deepEqual(config.agents.document, { route: "codex-task:workspace-write" });
     assert.equal(config.routing.strict, true);
     assert.deepEqual(config.routing.doneRequires.task, ["design", "implement", "review", "test", "document"]);
     assert.equal(config.retention.archiveDoneAfterDays, 30);
@@ -66,11 +69,12 @@ test("default Claude subagent routes have matching agent definitions", async () 
   const agentDir = path.resolve("agents", "claude");
   const fileNames = new Set(await readdir(agentDir));
 
-  for (const value of Object.values(config.agents)) {
-    if (!value.startsWith("claude-subagent:")) {
+  for (const profile of Object.values(config.agents)) {
+    const route = profile.route;
+    if (!route.startsWith("claude-subagent:")) {
       continue;
     }
-    const agentName = value.slice("claude-subagent:".length);
+    const agentName = route.slice("claude-subagent:".length);
     assert.equal(fileNames.has(`${agentName}.md`), true, `${agentName}.md is missing`);
     const text = await readFile(path.join(agentDir, `${agentName}.md`), "utf8");
     assert.match(text, new RegExp(`^name: ${agentName}$`, "m"));
@@ -81,6 +85,60 @@ async function writeConfig(root, body) {
   await mkdir(path.join(root, "plans"), { recursive: true });
   await writeFile(path.join(root, "plans", "local-board.config.jsonc"), body, "utf8");
 }
+
+test("loadConfig normalizes a bare string agent route to a profile object", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      agents: { design: "claude-subagent:local-board-designer" },
+    }));
+    const config = await loadConfig(root);
+    assert.deepEqual(config.agents.design, { route: "claude-subagent:local-board-designer" });
+  });
+});
+
+test("loadConfig accepts { route, model, prompt } agent profiles", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      agents: {
+        design: {
+          route: "claude-subagent:local-board-designer",
+          model: "claude-opus-4-6",
+          prompt: "plans/prompts/steps/design.md",
+        },
+        review: { route: "codex-task:read-only", model: "gpt-5.5" },
+      },
+    }));
+    const config = await loadConfig(root);
+    assert.deepEqual(config.agents.design, {
+      route: "claude-subagent:local-board-designer",
+      model: "claude-opus-4-6",
+      prompt: "plans/prompts/steps/design.md",
+    });
+    assert.deepEqual(config.agents.review, { route: "codex-task:read-only", model: "gpt-5.5" });
+  });
+});
+
+test("loadConfig rejects a model on an inline route", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      agents: { design: { route: "inline", model: "opus" } },
+    }));
+    await assert.rejects(loadConfig(root), /inline.*cannot carry a model/);
+  });
+});
+
+test("loadConfig rejects an invalid agent route", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      agents: { design: { route: "wizard:cast" } },
+    }));
+    await assert.rejects(loadConfig(root), /valid route/);
+  });
+});
 
 test("loadConfig parses the v1 optionalSteps catalog from the default config", async () => {
   await withRoot(async (root) => {
