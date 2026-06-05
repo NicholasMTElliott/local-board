@@ -291,9 +291,7 @@ These figures are proxies; real section sizes vary widely. The *ratios* and the
    the design until an actual multi-ticket orchestrator run pins a sensible
    default; ~3 is the working hypothesis. Reuse `LOCAL_BOARD_MAX_TEAMMATES` or
    rename to `LOCAL_BOARD_MAX_INFLIGHT` when pinned.
-2. **Fate of `local-team` + `local-board-teammate`.** Deprecate/remove once the
-   unified orchestrator lands, or keep as a thin compatibility wrapper.
-3. **Model in config vs frontmatter.** Config `model` overrides frontmatter at
+2. **Model in config vs frontmatter.** Config `model` overrides frontmatter at
    dispatch (matches dispatch-param precedence). Keep frontmatter as the default
    for standalone use of an agent.
 4. **Loss of live per-session intervention.** Accepted trade (interactivity is
@@ -312,6 +310,9 @@ These figures are proxies; real section sizes vary widely. The *ratios* and the
 - **`maxInFlight` default — ≈3 (§5 real run).** The orchestrator real run drove
   2 tickets concurrently and they were trivially manageable; 3 leaves headroom
   before per-wave scheduling/conflict tracking gets hard to hold accurately.
+- **Fate of `local-team` + `local-board-teammate` — resolved.** `local-team` is
+  rewritten as this orchestrator; the `local-board-teammate` agent and the
+  agent-teams teammate flow are removed (`docs/TeamMode.md` kept as history).
 
 ## 5. Real-run validation
 

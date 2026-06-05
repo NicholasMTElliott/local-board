@@ -127,12 +127,11 @@ Bundled Claude agents live in `agents/claude/` and are installed to `~/.claude/a
 | `local-board-implementer` | Read, Glob, Grep, Bash, Edit, MultiEdit, Write | Writes its own file changes |
 | `local-board-documenter` | Read, Glob, Grep, Bash, Edit, MultiEdit, Write | Writes its own file changes |
 | `local-board-gatecheck` | Read, Glob, Grep, Bash | Return-only; pattern-matches stage work against the specialty catalog and returns `{ requestedSteps }` JSON. Pattern match, not quality eval. |
-| `local-board-teammate` | Read, Glob, Grep, Bash, Edit, MultiEdit, Write | Team-mode orchestrator; works one ticket at a time and accepts `WORK <id>` reassignments from the lead until the queue empties. Runs `/compact` between tickets. No `Task`: a teammate is itself a subagent and the harness forbids nested subagents, so `claude-subagent:*` steps run inline (`approve-inline` + `--executor inline`); `codex-task:*` routes still work. |
 
 Each bundled agent pins a model in frontmatter: decomposer/designer `opus`,
 documenter/implementer/reviewer/tester `sonnet`, gatecheck `haiku`. The model
-applies when the orchestrator dispatches the agent from a top-level session;
-team-mode teammates ignore it because they run those steps inline.
+applies whenever the orchestrator dispatches the agent (single-ticket or parallel
+mode); config `agents.<action>.model` overrides the frontmatter default.
 
 Return-only subagents (reviewer, tester, decomposer, gatecheck) have no Write or Edit tool. They return section content (Review Findings, Test Evidence) or JSON as Markdown in their final message; the orchestrator writes the temp file with the Write tool and runs `section --file`. Never instruct a return-only subagent to create a file — it falls back to Bash redirection (`echo`, heredoc, `Set-Content`), which breaks on backticks and code fences. The same return-only contract applies to `codex-task:read-only` routes. The designer is the exception: it has a scoped Write tool and self-writes its `Technical Design` section, returning only a terse summary, because that payload is the largest and the Write tool avoids the redirection bug.
 
@@ -147,7 +146,7 @@ When `git.autoMerge` is true, `move ... done` validates routing, requires the cu
 When `retention.archiveOnMoveDone` is true, `move ... done` archives other done tickets older than the configured retention window. Archived tickets count as closed dependencies.
 `start-work` stamps `workStartedAt` once. `move ... done` stamps `workCompletedAt` only when `workStartedAt` is set. Archive does not touch wall-clock fields.
 When estimation is enabled, `complete-step design` refuses tasks and bugs without an estimate.
-`create` derives a per-worktree minute offset when invoked from inside a registered ticket worktree (sorted-index position among sibling worktrees) and shifts the starting timestamp by that many minutes. Sibling teammates therefore mint distinct child IDs without coordinating. Test-mode invocations that pass `now` skip the offset to keep timestamps deterministic.
+`create` derives a per-worktree minute offset when invoked from inside a registered ticket worktree (sorted-index position among sibling worktrees) and shifts the starting timestamp by that many minutes. Sibling worktree workers therefore mint distinct child IDs without coordinating. Test-mode invocations that pass `now` skip the offset to keep timestamps deterministic.
 
 ## Parallel Mode (per-step orchestrator)
 The `local-team` skill is a single top-level orchestrator (the main session), not an
@@ -164,7 +163,8 @@ pre-merge of `branchReady` peers before an overlapping `implement`, with the
 `move … done` rebase-onto-default precondition as the mandatory backstop. This
 unifies single-ticket and parallel mode as the N=1 and N>1 cases of one orchestrator.
 See `SKILL_TEAM.md` and `docs/PerStepOrchestration.md`. The old agent-teams teammate
-flow (`local-board-teammate`) is deprecated; `docs/TeamMode.md` is historical.
+flow and its `local-board-teammate` agent have been removed; `docs/TeamMode.md` is
+retained only as historical context.
 
 ## MVP CLI
 Use `node ./bin/local-board.js validate`, `list`, `query-next`, `query-ticket`, `state-report`, `schema`, `create`, `estimate`, `calibration suggest`, `gate-check`, `specialty-run`, `start-work`, `begin-step`, `complete-step`, `approve-inline`, `move`, `set`, `section`, `comment`, `link-parent`, `link-child`, `block`, `unblock`, `team-config`, and `init`.
