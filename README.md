@@ -116,6 +116,7 @@ The test suite includes function-level ticket kernel coverage and CLI command-su
 - [docs/Workflow.md](docs/Workflow.md) — lifecycle from epic/story decomposition through implementation, review, test, docs, and closeout.
 - [docs/specialty-steps.md](docs/specialty-steps.md) — optional security, UI, and UX specialty review steps and how the gate-check classifier dispatches them.
 - [docs/TeamMode.md](docs/TeamMode.md) — opt-in agent-team mode that runs ready tickets in parallel, one teammate per ticket, growing the team on demand up to a configurable maximum (default six).
+- [docs/PerStepOrchestration.md](docs/PerStepOrchestration.md) — draft proposal to replace teammates with a single top-level orchestrator that dispatches each step to a model-specialized executor, enabling full per-step model/prompt/route variety.
 
 ## Repository Layout
 

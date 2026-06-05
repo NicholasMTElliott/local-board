@@ -36,6 +36,9 @@ SKILL.md              installable orchestration skill template
 ## Open Decisions
 - Whether advisory transition guidance should become a hard transition validator.
 - Agent routing refinements after real orchestration runs.
+- Per-step orchestration redesign (`docs/PerStepOrchestration.md`): extend the
+  `agents` map to `{ route, model, prompt }` profiles and replace teammates with a
+  single top-level orchestrator. Pending a context-budget spike to size `maxInFlight`.
 
 ## Verification
 - `npm run check`

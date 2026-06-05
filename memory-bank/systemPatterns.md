@@ -126,7 +126,13 @@ Bundled Claude agents live in `agents/claude/` and are installed to `~/.claude/a
 | `local-board-tester` | Read, Glob, Grep, Bash | Return-only |
 | `local-board-implementer` | Read, Glob, Grep, Bash, Edit, MultiEdit, Write | Writes its own file changes |
 | `local-board-documenter` | Read, Glob, Grep, Bash, Edit, MultiEdit, Write | Writes its own file changes |
+| `local-board-gatecheck` | Read, Glob, Grep, Bash | Return-only; pattern-matches stage work against the specialty catalog and returns `{ requestedSteps }` JSON. Pattern match, not quality eval. |
 | `local-board-teammate` | Read, Glob, Grep, Bash, Edit, MultiEdit, Write | Team-mode orchestrator; works one ticket at a time and accepts `WORK <id>` reassignments from the lead until the queue empties. Runs `/compact` between tickets. No `Task`: a teammate is itself a subagent and the harness forbids nested subagents, so `claude-subagent:*` steps run inline (`approve-inline` + `--executor inline`); `codex-task:*` routes still work. |
+
+Each bundled agent pins a model in frontmatter: decomposer/designer `opus`,
+documenter/implementer/reviewer/tester `sonnet`, gatecheck `haiku`. The model
+applies when the orchestrator dispatches the agent from a top-level session;
+team-mode teammates ignore it because they run those steps inline.
 
 Return-only subagents have no Write or Edit tool. They return section content (Technical Design, Review Findings, Test Evidence) as Markdown in their final message; the orchestrator writes the temp file with the Write tool and runs `section --file`. Never instruct a return-only subagent to create a file — it falls back to Bash redirection (`echo`, heredoc, `Set-Content`), which breaks on backticks and code fences. The same return-only contract applies to `codex-task:read-only` routes.
 
@@ -140,6 +146,16 @@ When estimation is enabled, `complete-step design` refuses tasks and bugs withou
 
 ## Team Mode Scaling
 Team mode grows the team on demand rather than spawning a fixed pool. The lead resolves a max team size with `team-config` (`resolveMaxTeammates` reads `LOCAL_BOARD_MAX_TEAMMATES`, default 6, falling back to the default for missing/invalid values). It spawns one teammate per initially-ready ticket, then after each `DONE` runs a rebalance: fast-forward, recompute the ready queue (ready tickets minus live assignments), reuse idle teammates first, and spawn additional teammates up to `<max>` when newly-unblocked work exceeds the idle pool. This is what scales a "one blocker, many dependents" graph from 1 teammate to `<max>` the moment the blocker completes. Only the lead spawns teammates; teammates are subagents and cannot.
+
+Planned redesign (not yet implemented): `docs/PerStepOrchestration.md` replaces the
+teammate layer with a single top-level orchestrator that dispatches each step to an
+ephemeral, model-specialized executor. Rationale: a teammate is a subagent and cannot
+spawn per-step models, so today every step runs on the teammate's one model. The
+orchestrator stays top-level (retains spawn power), keeps the ticket file + worktree
+as the durable baton, gets cross-ticket concurrency from background-dispatched steps,
+and handles conflicts centrally with the `move … done` rebase precondition as the
+backstop. Worktree-per-ticket isolation is retained. This unifies single-ticket and
+team mode as the N=1 and N>1 cases of one orchestrator.
 
 ## MVP CLI
 Use `node ./bin/local-board.js validate`, `list`, `query-next`, `query-ticket`, `state-report`, `schema`, `create`, `estimate`, `calibration suggest`, `gate-check`, `specialty-run`, `start-work`, `begin-step`, `complete-step`, `approve-inline`, `move`, `set`, `section`, `comment`, `link-parent`, `link-child`, `block`, `unblock`, `team-config`, and `init`.
