@@ -4,7 +4,7 @@
 AI-assisted development often loses planning state across sessions. External boards add setup, credentials, synchronization, and UI friction for local solo workflows.
 
 ## Solution
-Store planning state as versioned Markdown tickets in the repo. Claude Code acts as orchestrator. Specialized agents or prompts execute discrete workflow steps.
+Store planning state as versioned Markdown tickets in the repo. Claude Code or Codex acts as orchestrator. Specialized agents or prompts execute discrete workflow steps.
 
 ## Users
 - Primary: solo developer using Claude Code/Codex locally.

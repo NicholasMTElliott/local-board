@@ -4,7 +4,7 @@
 | Area | Choice |
 |---|---|
 | Ticket storage | Markdown + YAML front matter |
-| Orchestrator | Claude Code initially |
+| Orchestrator | Claude Code or Codex |
 | Delegated agents | Claude Code subagents, Codex, or prompt-directed external CLIs |
 | Automation | Dependency-free Node.js ESM CLI package |
 | VCS | Git |
@@ -14,6 +14,7 @@
 ```text
 memory-bank/          AI context
 agents/claude/        installable Claude subagent definitions
+agents/codex/         Codex executor prompt fragments
 docs/                 human docs
 plans/tickets/        local ticket board
 plans/prompts/roles/  durable role instructions
@@ -21,6 +22,7 @@ plans/prompts/steps/  durable step instructions
 plans/templates/      ticket templates
 plans/local-board.config.jsonc workflow and routing config
 src/                  parser, validator, writer, git workflow, priority picker, CLI
+skills/codex/         Codex skill templates and metadata
 bin/                  executable CLI entrypoint
 test/                 node:test unit tests
 install.mjs           cross-harness installer

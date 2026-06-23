@@ -33,6 +33,19 @@ const TARGETS = [
     defaultOn: true,
   },
   {
+    id: "codex",
+    label: "Codex",
+    skillDir: join(HOME, ".codex", "skills", "local-board"),
+    legacySkillDirs: [],
+    teamSkillDir: join(HOME, ".codex", "skills", "local-team"),
+    legacyTeamSkillDirs: [],
+    settingsPath: null,
+    detectPath: join(HOME, ".codex"),
+    defaultOn: false,
+    skillTemplate: join("skills", "codex", "local-board"),
+    teamSkillTemplate: join("skills", "codex", "local-team"),
+  },
+  {
     id: "opencode",
     label: "opencode",
     skillDir: join(HOME, ".config", "opencode", "skills", "local-board"),
@@ -118,28 +131,25 @@ function install() {
   copyDir("bin");
   copyDir("src");
   copyDir("agents");
+  copyDir("skills");
   copyDir(join("plans", "prompts"), "prompts");
   copyDir(join("plans", "templates"), "templates");
 
   const scriptPath = join(INSTALL_DIR, "bin", "local-board.js").replace(/\\/g, "/");
-  const renderedSkill = renderSkill(join(SCRIPT_DIR, "SKILL.md"), scriptPath);
-  const renderedTeamSkill = existsSync(join(SCRIPT_DIR, "SKILL_TEAM.md"))
-    ? renderSkill(join(SCRIPT_DIR, "SKILL_TEAM.md"), scriptPath)
-    : null;
   const allowRule = `Bash(node ${scriptPath} *)`;
-  writeInstallInfo({ nodeVersion, scriptPath, teamSkillInstalled: renderedTeamSkill !== null });
+  writeInstallInfo({ nodeVersion, scriptPath, teamSkillInstalled: existsSync(join(SCRIPT_DIR, "SKILL_TEAM.md")) });
 
   console.log(`local-board installer`);
   console.log(`node ${nodeVersion}`);
   console.log(`installed runtime at ${INSTALL_DIR}`);
 
   for (const target of targets) {
-    mkdirSync(target.skillDir, { recursive: true });
-    writeFileSync(join(target.skillDir, "SKILL.md"), renderedSkill);
+    const skillTemplate = resolveSkillTemplate(target, "skillTemplate", "SKILL.md");
+    const teamSkillTemplate = resolveSkillTemplate(target, "teamSkillTemplate", "SKILL_TEAM.md");
+    installRenderedSkillDir(skillTemplate, target.skillDir, scriptPath);
     console.log(`installed skill for ${target.label}: ${target.skillDir}`);
-    if (renderedTeamSkill !== null && target.teamSkillDir) {
-      mkdirSync(target.teamSkillDir, { recursive: true });
-      writeFileSync(join(target.teamSkillDir, "SKILL.md"), renderedTeamSkill);
+    if (teamSkillTemplate !== null && target.teamSkillDir) {
+      installRenderedSkillDir(teamSkillTemplate, target.teamSkillDir, scriptPath);
       console.log(`installed team skill for ${target.label}: ${target.teamSkillDir}`);
     }
     removeLegacyDirs(target, "legacySkillDirs", target.skillDir, "skill");
@@ -149,6 +159,42 @@ function install() {
     }
     if (target.settingsPath !== null) {
       patchSettings(target.settingsPath, allowRule);
+    }
+  }
+}
+
+function resolveSkillTemplate(target, field, fallbackFile) {
+  if (target[field]) {
+    const source = join(SCRIPT_DIR, target[field]);
+    if (!existsSync(source)) {
+      throw new Error(`${target.id} ${field} not found: ${source}`);
+    }
+    return source;
+  }
+  const fallback = join(SCRIPT_DIR, fallbackFile);
+  return existsSync(fallback) ? fallback : null;
+}
+
+function installRenderedSkillDir(source, targetDir, scriptPath) {
+  if (source === null) {
+    return;
+  }
+  mkdirSync(targetDir, { recursive: true });
+  if (existsSync(join(source, "SKILL.md"))) {
+    cpSync(source, targetDir, { recursive: true, force: true });
+    renderFilesInPlace(targetDir, scriptPath);
+  } else {
+    writeFileSync(join(targetDir, "SKILL.md"), renderSkill(source, scriptPath));
+  }
+}
+
+function renderFilesInPlace(dir, scriptPath) {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const entryPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      renderFilesInPlace(entryPath, scriptPath);
+    } else if (entry.isFile() && (entry.name.endsWith(".md") || entry.name.endsWith(".yaml") || entry.name.endsWith(".yml"))) {
+      writeFileSync(entryPath, renderSkill(entryPath, scriptPath));
     }
   }
 }
@@ -327,7 +373,7 @@ function printHelp() {
 
 Usage:
   node install.mjs
-  node install.mjs --target=claude,opencode,cline,cursor
+  node install.mjs --target=claude,codex,opencode,cline,cursor
   node install.mjs --all
   node install.mjs --no-opencode
   node install.mjs --list-targets

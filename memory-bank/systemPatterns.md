@@ -4,7 +4,7 @@
 `plans/` is the local board. Markdown tickets are the source of truth.
 
 ```text
-Claude Code orchestrator
+Claude Code or Codex orchestrator
   -> reads plans/tickets/**/*.md
   -> validates front matter + dependencies with local-board CLI
   -> queries next eligible action with local-board CLI
@@ -115,6 +115,7 @@ Skills should be orchestration entrypoints. Step behavior should live in prompt 
 The installable `local-board` skill is the portable entrypoint. Project-local prompts override bundled fallback prompts.
 For design/implement/test stages, the orchestrator skill runs `gate-check` + `specialty-run` between mandatory action completion and stage transition.
 Bundled Claude agents live in `agents/claude/` and are installed to `~/.claude/agents/`.
+Codex skill templates live in `skills/codex/` and install to `~/.codex/skills/local-board` and `~/.codex/skills/local-team`. Codex executor prompts live in `agents/codex/`.
 
 ## Delegation and Subagent Tools
 
@@ -132,6 +133,11 @@ Each bundled agent pins a model in frontmatter: decomposer/designer `opus`,
 documenter/implementer/reviewer/tester `sonnet`, gatecheck `haiku`. The model
 applies whenever the orchestrator dispatches the agent (single-ticket or parallel
 mode); config `agents.<action>.model` overrides the frontmatter default.
+
+Codex translates known `claude-subagent:local-board-*` routes to Codex spawned
+agents while preserving the configured logical route in `complete-step` evidence
+(`@codex-default` suffix when no valid Codex model id is used). This keeps
+Claude-first configs compatible without a schema migration.
 
 Return-only subagents (reviewer, tester, decomposer, gatecheck) have no Write or Edit tool. They return section content (Review Findings, Test Evidence) or JSON as Markdown in their final message; the orchestrator writes the temp file with the Write tool and runs `section --file`. Never instruct a return-only subagent to create a file — it falls back to Bash redirection (`echo`, heredoc, `Set-Content`), which breaks on backticks and code fences. The same return-only contract applies to `codex-task:read-only` routes. The designer is the exception: it has a scoped Write tool and self-writes its `Technical Design` section, returning only a terse summary, because that payload is the largest and the Write tool avoids the redirection bug.
 
@@ -162,7 +168,7 @@ closeout), executors only do the work and return. Concurrency cap comes from
 pre-merge of `branchReady` peers before an overlapping `implement`, with the
 `move … done` rebase-onto-default precondition as the mandatory backstop. This
 unifies single-ticket and parallel mode as the N=1 and N>1 cases of one orchestrator.
-See `SKILL_TEAM.md` and `docs/PerStepOrchestration.md`. The old agent-teams teammate
+See `SKILL_TEAM.md`, `skills/codex/local-team/SKILL.md`, and `docs/PerStepOrchestration.md`. The old agent-teams teammate
 flow and its `local-board-teammate` agent have been removed; `docs/TeamMode.md` is
 retained only as historical context.
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "local-team"
+  short_description: "Run parallel local-board tickets from Codex"
+  default_prompt: "Use $local-team to validate the local-board, create per-ticket worktrees, dispatch ready ticket steps to Codex agents in wave-barrier mode, and close tickets through the local-board CLI."

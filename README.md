@@ -33,6 +33,7 @@ To use local-board as an agent orchestrator, install the skills into your coding
 ```sh
 node install.mjs                # install skills + agents
 node install.mjs --list-targets # see where they would go
+node install.mjs --target=codex # install only Codex skills
 ```
 
 ## Status
@@ -92,7 +93,7 @@ When `git.autoMerge` is `true`, `move ... done` commits planning-only closeout c
 
 When `retention.archiveOnMoveDone` is `true`, `move ... done` also archives older done tickets after the configured retention window. Archived tickets remain closed for dependency checks.
 
-Claude subagent definitions live in `agents/claude/` and are installed to the user's Claude agents directory by `node install.mjs`.
+Claude subagent definitions live in `agents/claude/` and are installed to the user's Claude agents directory by `node install.mjs`. Codex executor prompt fragments live in `agents/codex/`; the Codex skill templates translate known `claude-subagent:local-board-*` routes to Codex spawned agents while preserving the configured route in strict-routing evidence. See [docs/CodexSupport.md](docs/CodexSupport.md).
 
 ```sh
 node install.mjs
@@ -114,6 +115,7 @@ The test suite includes function-level ticket kernel coverage and CLI command-su
 - [docs/LocalBoardConcept.md](docs/LocalBoardConcept.md) — human-readable overview of the repo-native board model, workflow, and tradeoffs.
 - [docs/TicketFormat.md](docs/TicketFormat.md) — ticket naming, front matter, sections, and state rules.
 - [docs/Workflow.md](docs/Workflow.md) — lifecycle from epic/story decomposition through implementation, review, test, docs, and closeout.
+- [docs/CodexSupport.md](docs/CodexSupport.md) — installing and using local-board directly in Codex, including route translation and parallel team mode.
 - [docs/specialty-steps.md](docs/specialty-steps.md) — optional security, UI, and UX specialty review steps and how the gate-check classifier dispatches them.
 - [docs/PerStepOrchestration.md](docs/PerStepOrchestration.md) — the parallel-work design: a single top-level orchestrator dispatches each pipeline step to a model-specialized executor, enabling full per-step model/prompt/route variety. Operational contract in `SKILL_TEAM.md`.
 - [docs/TeamMode.md](docs/TeamMode.md) — superseded historical context for the original agent-teams "one teammate per ticket" parallel mode.
@@ -123,6 +125,7 @@ The test suite includes function-level ticket kernel coverage and CLI command-su
 ```text
 memory-bank/         Token-optimized project context for AI agents
 agents/              Installable agent definitions
+skills/              Harness-specific skill templates
 docs/                Human-facing documentation
 plans/               File-backed board: tickets, prompts, templates
 plans/tickets/       Ticket files grouped by human-friendly status folders

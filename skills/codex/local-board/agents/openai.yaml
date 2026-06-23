@@ -1,0 +1,4 @@
+interface:
+  display_name: "local-board"
+  short_description: "Run repo-native Markdown tickets from Codex"
+  default_prompt: "Use $local-board to validate the board, query the next local-board action, translate configured routes to Codex agents when needed, and update ticket state through the local-board CLI."

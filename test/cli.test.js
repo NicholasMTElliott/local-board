@@ -226,19 +226,20 @@ test("list --limit caps default output and rejects non-positive values", async (
 
 test("move done archives old done tickets but leaves recent and current done tickets", async () => {
   await withBoard(async (root) => {
+    const daysAgo = (days) => new Date(Date.now() - days * 24 * 60 * 60 * 1000);
     const oldDonePath = await createTicket(root, "epic", "Old done ticket", {
       status: "done",
-      now: new Date("2026-03-01T12:00:00Z"),
+      now: daysAgo(60),
     });
     const recentDonePath = await createTicket(root, "epic", "Recent done ticket", {
       status: "done",
-      now: new Date("2026-05-10T12:00:00Z"),
+      now: daysAgo(1),
     });
     await recordEpicDecomposition(oldDonePath);
     await recordEpicDecomposition(recentDonePath);
     const currentPath = await createTicket(root, "epic", "Current closeout", {
       status: "ready_for_decomposition",
-      now: new Date("2026-05-14T12:00:00Z"),
+      now: new Date(),
     });
     const currentId = path.basename(currentPath).split("_", 1)[0];
     const oldDoneId = path.basename(oldDonePath).split("_", 1)[0];
