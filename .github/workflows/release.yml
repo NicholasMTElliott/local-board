@@ -11,7 +11,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: '20.x'
@@ -26,7 +26,7 @@ jobs:
       # Required so action-gh-release can create the GitHub release for the tag.
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
