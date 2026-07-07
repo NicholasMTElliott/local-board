@@ -1,7 +1,7 @@
 ---
 id: T20260707T1326Z
 type: task
-status: implementing
+status: ready_for_review
 priority: P1
 parent: null
 children: []
@@ -13,7 +13,7 @@ estimateBasis: T20260707T1325Z
 workStartedAt: 2026-07-07T18:06:04Z
 workCompletedAt: null
 created: 2026-07-07T13:26:41Z
-updated: 2026-07-07T18:39:02Z
+updated: 2026-07-07T18:43:52Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only]
 routingApprovals: []
 ---
@@ -141,7 +141,7 @@ All four export `handle(payload, deps)` for direct-import unit tests and wrap `m
 **`src/install.js`:**
 - `copyDir("hooks", "hooks", installDir)` — unconditional, hooks/ ships regardless of wiring.
 - `--hooks` / `--no-hooks` flags in `parseArgs` (default: neither set, i.e. hooks off). `--no-hooks` is checked before the generic `--no-<target>` fallback so it doesn't collide with target-exclusion parsing.
-- New `patchHooks(settingsPath, installDir, {remove})`: idempotent, dedup-by-exact-command-string patcher for `settings.hooks.{PreToolUse,PostToolUse}`, mirroring `patchSettings`'s atomic tmp+rename write. Registers `routing-validator.js` and `dispatch-ledger.js` each under their own `Task|Agent` matcher group, and `evidence-gate.js` + `approve-inline-consent.js` as two separate hook entries under one shared `Bash` matcher group (independent commands, not merged scripts, so one crashing can't disable the other). `remove: true` deletes only the managed command strings and prunes now-empty matcher groups/event arrays, leaving user-authored hooks untouched.
+- New `patchHooks(settingsPath, installDir, {remove})`: idempotent patcher for `settings.hooks.{PreToolUse,PostToolUse}`, mirroring `patchSettings`'s atomic tmp+rename write. Registers `routing-validator.js` and `dispatch-ledger.js` each under their own `Task|Agent` matcher group, and `evidence-gate.js` + `approve-inline-consent.js` as two separate hook entries under one shared `Bash` matcher group (independent commands, not merged scripts, so one crashing can't disable the other). `remove: true` deletes only the managed entries and prunes now-empty matcher groups/event arrays, leaving user-authored hooks untouched.
 - Default install prints a hint (`Run 'local-board install --hooks' to enable...`) when hooks weren't enabled and a Claude-like target was selected. `performUninstall` also removes wired hook entries from `settings.json` for any target with a `settingsPath`.
 
 **Skill mandate:** one-line addition to `SKILL.md` (step 9) and `SKILL_TEAM.md` (Execution profiles) requiring every Claude subagent dispatch prompt's first line be `Ticket: <id>`. Did not add this to the Codex skill templates (`skills/codex/**`) — Codex dispatch doesn't go through the Task/Agent tool the hooks match on, so the anchor has no consumer there; flagging as a minor scope call in case the ticket intended it for consistency.
@@ -152,7 +152,7 @@ All four export `handle(payload, deps)` for direct-import unit tests and wrap `m
 
 **Tests:**
 - `test/hooks.test.js` (new, 30 tests): direct `handle()` unit tests for every fast-path/deny/allow/fail-open branch in all four scripts (including "spawn not invoked" assertions via `deps` stubs), plus spawned-subprocess end-to-end tests (real `git` temp repos, real ledger files, a stub `check-dispatch` CLI via `LOCAL_BOARD_HOOK_CLI_PATH`) verifying the actual stdin-JSON -> exit-code/stdout-JSON contract. Note: the spawned-process test helper deliberately avoids `child_process.execFile`'s `input` option — on this Windows/Node (v24.14.0) combination that option hangs indefinitely (reproduced with a minimal isolated repro, independent of these hook scripts); it instead spawns and writes/closes `child.stdin` manually, which is the same pattern a real hook runner uses.
-- `test/install.test.js`: 6 new tests for `--hooks`/`--no-hooks` (opt-in hint, all-four-entries + idempotency, precise removal preserving user-authored hooks/allow-rule, non-Claude target no-op, uninstall removes wired entries).
+- `test/install.test.js`: tests for `--hooks`/`--no-hooks` (opt-in hint, all-four-entries + idempotency, precise removal preserving user-authored hooks/allow-rule, non-Claude target no-op, uninstall removes wired entries, quoted-command space-safe homes, and — added in the second rework pass — legacy-unquoted-entry recognition on reinstall and uninstall).
 - `test/pack.test.js` and the packaged-copy fixture list in `test/install.test.js`: added `hooks/`.
 
 **Verification:** `npm run check` (green), `npm test` — 241/241 passing (30 new in `hooks.test.js`, 6 new in `install.test.js`), `npm run validate` (green), `npm pack --dry-run` includes all four `hooks/*.js` files.
@@ -173,6 +173,8 @@ All four export `handle(payload, deps)` for direct-import unit tests and wrap `m
    - `dispatch-ledger: a Ticket: line with leading whitespace is still extracted` and `routing-validator: a Ticket: line with leading whitespace still triggers the check-dispatch spawn` — both hooks' `extractTicketId` already anchors `^\s*Ticket:` per-line in multiline mode, so leading whitespace was already tolerated; these tests just codify it.
 
 **Verification (rework pass):** `npm run check` (green, no output), `npm test` — 246/246 passing (up from 241; 5 new tests: 2 leading-whitespace Ticket: cases, 2 evidence-gate quoted-executor/Windows-path cases, 1 install spaces-in-home-dir case), `npm run validate` (green, "Ticket validation OK").
+
+**Rework pass 2 (2026-07-07, review finding: exact-string hook-command matching stranded pre-quoting entries):** `src/install.js`'s hook matching now recognizes a managed entry by its underlying script path, not the exact command string. New `isManagedHookCommand(command, scriptPath)` extracts the `node <path>` token (stripping one layer of optional surrounding quotes) and compares it to the script's expected path, so both quoted and unquoted forms of the same script are recognized as the same managed entry. `patchHooks` now dedupes every managed match for a script down to exactly one, refreshed to the current (quoted) command form, on install; `remove: true` strips every managed match regardless of quoting era on uninstall. Added two `test/install.test.js` cases: reinstalling over a hand-seeded unquoted (pre-rework) entry yields exactly one quoted entry (no duplicate); uninstalling with a hand-seeded unquoted entry removes it. `npm run check` (green), `npm test` — 248/248 passing (up from 246; +2), `npm run validate` (green, "Ticket validation OK").
 
 ## Review Findings
 
@@ -195,3 +197,5 @@ All four export `handle(payload, deps)` for direct-import unit tests and wrap `m
 - 2026-07-07T18:35:10Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) changes_requested: silent-allow contract violation in the ledger hook; three minor hardening items. Everything else verified including 10s timeout and opt-in wiring.
 
 - 2026-07-07T18:35:10Z: Ensured git branch local-board/T20260707T1326Z-enforce-claude-code-hooks-for-dispatch-ledger-evidence-gate-routing-validator-and-approve-inline-consent (already-current).
+
+- 2026-07-07T18:39:37Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework (sonnet): dispatch-ledger silent on all paths; hook commands quoted (space-safe homes) with matching uninstall; quoted-executor/Windows-path/whitespace-Ticket coverage; 246/246 green.

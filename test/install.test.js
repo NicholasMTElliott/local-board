@@ -424,6 +424,49 @@ test("install --hooks quotes the hook command path when the home dir contains sp
   });
 });
 
+test("install --hooks recognizes a hand-seeded unquoted (pre-rework) entry as managed: reinstall yields exactly one quoted entry per script, no duplicate", async () => {
+  await withHome(async (home) => {
+    const settingsPath = path.join(home, ".claude", "settings.json");
+    const installDir = path.join(home, ".local-board").replace(/\\/g, "/");
+
+    // First install (creates settings.json + install dir), then hand-seed an
+    // old-form unquoted managed entry alongside whatever the install wrote,
+    // simulating a settings.json produced by the pre-rework installer.
+    await runInstallCli(home, ["--target=claude", "--hooks"]);
+    const before = JSON.parse(await readFile(settingsPath, "utf8"));
+    const postTaskGroup = before.hooks.PostToolUse.find((entry) => entry.matcher === "Task|Agent");
+    postTaskGroup.hooks = [{ type: "command", command: `node ${installDir}/hooks/dispatch-ledger.js` }];
+    await writeFile(settingsPath, `${JSON.stringify(before, null, 2)}\n`, "utf8");
+
+    await runInstallCli(home, ["--target=claude", "--hooks"]);
+    const after = JSON.parse(await readFile(settingsPath, "utf8"));
+    const afterTaskGroup = after.hooks.PostToolUse.find((entry) => entry.matcher === "Task|Agent");
+    assert.deepEqual(
+      afterTaskGroup.hooks.map((hook) => hook.command),
+      [`node "${installDir}/hooks/dispatch-ledger.js"`],
+    );
+  });
+});
+
+test("install --uninstall removes a hand-seeded unquoted (pre-rework) entry too", async () => {
+  await withHome(async (home) => {
+    const settingsPath = path.join(home, ".claude", "settings.json");
+    const installDir = path.join(home, ".local-board").replace(/\\/g, "/");
+
+    await runInstallCli(home, ["--target=claude", "--hooks"]);
+    const before = JSON.parse(await readFile(settingsPath, "utf8"));
+    const postTaskGroup = before.hooks.PostToolUse.find((entry) => entry.matcher === "Task|Agent");
+    // Replace the (quoted) installed entry with an unquoted pre-rework form,
+    // so uninstall must recognize it purely by script path.
+    postTaskGroup.hooks = [{ type: "command", command: `node ${installDir}/hooks/dispatch-ledger.js` }];
+    await writeFile(settingsPath, `${JSON.stringify(before, null, 2)}\n`, "utf8");
+
+    await runInstallCli(home, ["--target=claude", "--uninstall"]);
+    const after = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.equal(after.hooks, undefined);
+  });
+});
+
 test("install --root is ignored; installs under redirected HOME", async () => {
   await withHome(async (home) => {
     const bogusRoot = path.join(home, "not-the-board-root");

@@ -467,20 +467,56 @@ const HOOK_SPECS = [
   { event: "PostToolUse", matcher: "Task|Agent", script: "dispatch-ledger.js" },
 ];
 
+function hookScriptPath(installDir, script) {
+  return join(installDir, "hooks", script).replace(/\\/g, "/");
+}
+
 function hookCommand(installDir, script) {
-  const scriptPath = join(installDir, "hooks", script).replace(/\\/g, "/");
   // Quoted so an install dir under a home directory containing spaces (e.g.
   // "C:\\Users\\Jane Doe\\.local-board") still shells out correctly. Both the
   // add path (patchHooks) and the remove path (uninstall) call this same
-  // function to build the command they match against, so idempotency and
-  // removal stay consistent with the quoted form.
-  return `node "${scriptPath}"`;
+  // function to build the command they write, but *matching* an existing
+  // entry against this exact string is unsafe -- see isManagedHookCommand.
+  return `node "${hookScriptPath(installDir, script)}"`;
 }
 
-// Idempotent, dedup-by-exact-command-string patcher for `settings.hooks`,
-// mirroring `patchSettings`'s atomic tmp+rename write. `remove: true` deletes
-// only the managed command entries (and prunes now-empty matcher groups /
-// event arrays), leaving any user-authored hooks untouched.
+// Extracts the path token from a `node <path>` hook command, stripping a
+// single layer of surrounding quotes (single or double) if present. Returns
+// null for commands that aren't `node`-prefixed (e.g. user-authored hooks).
+function extractHookCommandPath(command) {
+  if (typeof command !== "string") {
+    return null;
+  }
+  const match = command.match(/^node\s+(.*)$/);
+  if (!match) {
+    return null;
+  }
+  let token = match[1].trim();
+  if (token.length >= 2) {
+    const first = token[0];
+    const last = token[token.length - 1];
+    if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+      token = token.slice(1, -1);
+    }
+  }
+  return token;
+}
+
+// Recognizes a managed hook entry by its underlying script path rather than
+// by exact command string, so entries written by the pre-rework unquoted
+// form (`node <path>`, no quotes) are still recognized as managed after the
+// quoting fix -- avoiding duplicate entries on reinstall and stranded
+// entries on uninstall.
+function isManagedHookCommand(command, scriptPath) {
+  return extractHookCommandPath(command) === scriptPath;
+}
+
+// Idempotent patcher for `settings.hooks`, mirroring `patchSettings`'s atomic
+// tmp+rename write. Managed entries are matched by script path (see
+// isManagedHookCommand), not exact command string, so entries from either
+// quoting era are recognized. `remove: true` deletes every managed match
+// (and prunes now-empty matcher groups / event arrays), leaving any
+// user-authored hooks untouched.
 function patchHooks(settingsPath, installDir, { remove = false } = {}) {
   let settings = {};
   if (existsSync(settingsPath)) {
@@ -494,6 +530,7 @@ function patchHooks(settingsPath, installDir, { remove = false } = {}) {
   let changed = false;
 
   for (const spec of HOOK_SPECS) {
+    const scriptPath = hookScriptPath(installDir, spec.script);
     const command = hookCommand(installDir, spec.script);
     settings.hooks[spec.event] = Array.isArray(settings.hooks[spec.event]) ? settings.hooks[spec.event] : [];
     const events = settings.hooks[spec.event];
@@ -502,7 +539,7 @@ function patchHooks(settingsPath, installDir, { remove = false } = {}) {
     if (remove) {
       if (group && Array.isArray(group.hooks)) {
         const before = group.hooks.length;
-        group.hooks = group.hooks.filter((hook) => hook?.command !== command);
+        group.hooks = group.hooks.filter((hook) => !isManagedHookCommand(hook?.command, scriptPath));
         if (group.hooks.length !== before) {
           changed = true;
         }
@@ -516,7 +553,12 @@ function patchHooks(settingsPath, installDir, { remove = false } = {}) {
       continue;
     }
     group.hooks = Array.isArray(group.hooks) ? group.hooks : [];
-    if (!group.hooks.some((hook) => hook?.command === command)) {
+    const managedMatches = group.hooks.filter((hook) => isManagedHookCommand(hook?.command, scriptPath));
+    const alreadyCanonical = managedMatches.length === 1 && managedMatches[0].command === command;
+    if (!alreadyCanonical) {
+      // Dedupe every managed match for this script (whatever quoting era it
+      // came from) down to exactly one, refreshed to the current command form.
+      group.hooks = group.hooks.filter((hook) => !isManagedHookCommand(hook?.command, scriptPath));
       group.hooks.push({ type: "command", command });
       changed = true;
     }
