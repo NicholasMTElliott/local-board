@@ -1,19 +1,19 @@
 ---
 id: T20260707T1318Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P1
 parent: null
 children: []
 blockedBy: []
 blocks: [T20260707T1320Z]
-branch: null
+branch: local-board/T20260707T1318Z-npm-add-files-allowlist-and-move-runtime-prompts-and-templates-out-of-the-live-plans-tree
 estimate: 4
 estimateBasis: bootstrap
-workStartedAt: null
+workStartedAt: 2026-07-07T14:13:29Z
 workCompletedAt: null
 created: 2026-07-07T13:18:26Z
-updated: 2026-07-07T14:13:29Z
+updated: 2026-07-07T14:17:10Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
@@ -139,6 +139,30 @@ None blocking. Two low-stakes preferences for the implementer/maintainer:
 
 ## Implementation Notes
 
+Implemented per the Technical Design section, no deviations.
+
+**Changes:**
+- `resources/prompts/**` and `resources/templates/**` (new): byte-for-byte mirror of `plans/prompts` and `plans/templates` (16 files total: roles/, steps/, optional-steps/, templates/ticket.md).
+- `install.mjs`: repointed the two runtime-asset `copyDir` calls (was `plans/prompts` / `plans/templates`) to `resources/prompts` / `resources/templates`. Installed layout under `~/.local-board/` unchanged.
+- `package.json`: added `files` allowlist (`bin`, `src`, `resources`, `install.mjs`, `SKILL.md`, `SKILL_TEAM.md`, `agents`, `skills`); added `repository` (git+https://github.com/NicholasMTElliott/local-board.git); added `keywords` (kanban, tickets, board, ai-agents, workflow, orchestration, cli, markdown); minor `description` polish; added `sync-resources` script.
+- `scripts/sync-resources.mjs` (new): maintainer mirror generator, recursive copy `plans/prompts` -> `resources/prompts` and `plans/templates` -> `resources/templates` using `node:fs` `cpSync`/`rmSync` (no shell, Windows-safe).
+- `test/resources-sync.test.js` (new): drift guard — walks both tree pairs, asserts identical relative file sets and byte-identical contents; also asserts both resource dirs are non-empty.
+- `src/cli.js`, `src/config.js`, `src/scaffold.js`: untouched, per design (no CLI fallback-path logic exists; scaffold.js gap is owned by B20260707T1320Z).
+- `plans/prompts`, `plans/templates`: untouched — remain this repo's authoritative dogfooded board content.
+
+**Verification:**
+- `npm run check`: pass (all `node --check` targets clean, including `install.mjs`).
+- `npm test`: 142/142 pass, 0 fail (includes 3 new resources-sync tests: prompts mirror, templates mirror, non-empty guard).
+- `npm run validate`: "Ticket validation OK".
+- `npm pack --dry-run`: 48 files, 59.1 kB packed / 245.6 kB unpacked. Contents: `LICENSE`, `README.md`, `package.json` (npm auto-included) + `SKILL.md`, `SKILL_TEAM.md`, `agents/**` (14 files), `bin/local-board.js`, `install.mjs`, `resources/prompts/**` + `resources/templates/**` (16 files), `skills/codex/**` (4 files), `src/*.js` (7 files). No `plans/`, `memory-bank/`, `docs/`, `test/`, `tests/`, `local_board/`, or `.local-board/` present — confirms no live board/test content leaks into the tarball.
+- Installer smoke test: ran `node install.mjs --target=codex` against a throwaway `HOME` — confirmed `~/.local-board/prompts` (15 files) and `~/.local-board/templates` (1 file) populate correctly and match the `resources/` mirror exactly.
+- `npm run sync-resources`: ran manually — confirmed idempotent (re-copies cleanly, drift guard tests stay green afterward).
+
+**Risks / follow-ups (per design, none newly introduced):**
+- Drift between `plans/prompts` and `resources/` is now caught by the test guard; maintainers must remember to run `npm run sync-resources` after editing `plans/prompts`/`plans/templates` (not automated into `npm run check`, per design's stated preference for the `node --test` guard alone).
+- `~/.local-board/prompts`/`templates` remain vestigial (nothing in the CLI reads them back); left in place for reversibility per design decision.
+- T20260707T1319Z (install subcommand relocation) will touch the same two `copyDir` lines — flagged in the ticket for sequencing coordination.
+
 ## Review Findings
 
 ## Test Evidence
@@ -150,3 +174,5 @@ None blocking. Two low-stakes preferences for the implementer/maintainer:
 ## Run Log
 
 - 2026-07-07T14:12:22Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): resources/ mirror as packaged content with plans/prompts staying repo-authoritative, sync script + drift-guard test, files allowlist + metadata polish; found no CLI fallback-path logic needs changing. Estimate 4 (bootstrap).
+
+- 2026-07-07T14:13:29Z: Ensured git branch local-board/T20260707T1318Z-npm-add-files-allowlist-and-move-runtime-prompts-and-templates-out-of-the-live-plans-tree (created).
