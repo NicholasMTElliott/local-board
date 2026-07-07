@@ -1,7 +1,7 @@
 ---
 id: T20260707T1318Z
 type: task
-status: implementing
+status: done
 priority: P1
 parent: null
 children: []
@@ -11,10 +11,10 @@ branch: local-board/T20260707T1318Z-npm-add-files-allowlist-and-move-runtime-pro
 estimate: 4
 estimateBasis: bootstrap
 workStartedAt: 2026-07-07T14:13:29Z
-workCompletedAt: null
+workCompletedAt: 2026-07-07T14:26:39Z
 created: 2026-07-07T13:18:26Z
-updated: 2026-07-07T14:17:10Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-07T14:26:39Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # npm: add files allowlist and move runtime prompts and templates out of the live plans tree
@@ -165,9 +165,52 @@ Implemented per the Technical Design section, no deviations.
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) against commit 76781b5.
+
+No blocking findings.
+
+Non-blocking observations:
+- memory-bank/techContext.md:13 and README.md:123 list the repository layout but do not mention the new `resources/` package asset tree; `memory-bank/` is authoritative agent context and should record the packaging layout (defer to the document stage of this ticket).
+- package.json adds `npm run sync-resources`, but the `files` allowlist excludes `scripts/` from the tarball. Acceptable as source-repo-only maintainer tooling (useless in the package without `plans/`), but the packed package carries a script entry that cannot run.
+
+Review checks:
+- Allowlist completeness correct for installer runtime: install.mjs:125-136 copies package.json, README.md, SKILL.md, optional SKILL_TEAM.md, bin, src, agents, skills, resources/prompts, resources/templates; npm auto-includes package.json/README/LICENSE.
+- Installed layout unchanged: still ~/.local-board/prompts and ~/.local-board/templates; SKILL.md:90 fallback path expectations hold.
+- Line-ending flake risk addressed: .gitattributes:5 forces `* text=auto eol=lf` covering both trees identically; the drift test will not fail from platform line endings alone.
+- scripts/sync-resources.mjs:15-28 mirrors plans -> resources only, Node rmSync/cpSync, no shell.
+- test/resources-sync.test.js:26-44 compares relative file lists and per-file contents both directions; :48-61 covers prompts, templates, non-empty guards.
+- Scope tight; no unrelated product changes.
+
+Verification caveat: sandbox blocked independent `npm pack --dry-run` (npm cache write) and `node --test` (spawn EPERM); reviewer validated the mirror with an inline read-only Buffer comparison — 15 prompt files and 1 template file matched byte-for-byte. Full-suite verification delegated to the test stage.
+
+Verdict: pass
+
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/T20260707T1318Z-..., commit 76781b5.
+
+**Verification suite:** `npm run check` pass; `npm test` 142/142 pass (~12.5s) including the three new drift-guard tests; `npm run validate` pass.
+
+**Package boundary:** `npm pack --dry-run --json` -> 48 entries, 59,138 bytes packed. Full entry list inspected: only auto-included LICENSE/README/package.json plus SKILL.md, SKILL_TEAM.md, agents (14), bin, install.mjs, resources/prompts (15), resources/templates (1), skills/codex (4), src (7). Confirmed absent: plans/, memory-bank/, docs/, test/, .local-board/, scripts/. Matches implementer's claims exactly.
+
+**Independent install probe (throwaway HOME):** `node install.mjs --list-targets` resolved all 6 targets cleanly. With USERPROFILE redirected to a scratch dir, `node install.mjs --target=codex` exited 0 and populated `<scratch>\.local-board\prompts` (15 files) and `templates` (1 file); `diff -rq` against resources/ showed byte-identical copies. Scratch removed; `git status` confirmed no leaked artifacts.
+
+**Drift guard (read-only inspection):** assertMirrored does full-set equality on file lists plus per-file content equality — bidirectional; an edit/add/delete on either side fails the test.
+
+**Gaps / caveats:**
+- Reviewer's non-blocking observation re-confirmed: `sync-resources` script entry ships in the packed package.json while scripts/ is excluded from the tarball — fails if run from an installed package; accepted as maintainer-only tooling.
+- Only the codex target was installed in the probe; all targets share the same single resources/ copy step, so coverage is sufficient.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `memory-bank/techContext.md` — added `resources/` (packaged prompt/template mirror synced from plans/ via `npm run sync-resources`), `scripts/` (maintainer tooling, not packaged), and the package.json `files` allowlist constraint, in terse current-state form.
+- `README.md` — added `resources/` to the Repository Layout with a one-line description.
+- `memory-bank/systemPatterns.md` — checked, unchanged; no stale installer copy-source statement.
+- `docs/` — no narrative page covers packaging yet; the npm install story is deferred to T20260707T1338Z (docs/Install.md) and T20260707T1320Z (publish).
 
 ## Questions
 
@@ -176,3 +219,11 @@ Implemented per the Technical Design section, no deviations.
 - 2026-07-07T14:12:22Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): resources/ mirror as packaged content with plans/prompts staying repo-authoritative, sync script + drift-guard test, files allowlist + metadata polish; found no CLI fallback-path logic needs changing. Estimate 4 (bootstrap).
 
 - 2026-07-07T14:13:29Z: Ensured git branch local-board/T20260707T1318Z-npm-add-files-allowlist-and-move-runtime-prompts-and-templates-out-of-the-live-plans-tree (created).
+
+- 2026-07-07T14:17:41Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): resources/ mirror + files allowlist + metadata + sync script + 3 drift-guard tests; npm check/test/validate pass (142/142); npm pack --dry-run confirmed clean 48-file tarball; install smoke test against throwaway HOME populated prompts/templates from resources/.
+
+- 2026-07-07T14:21:45Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict pass: allowlist complete for installer runtime, CRLF risk covered by .gitattributes eol=lf, sync script safe, drift test bidirectional; two non-blocking doc observations deferred to document stage.
+
+- 2026-07-07T14:24:40Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): check/test/validate pass (142/142); npm pack --dry-run 48-entry list fully inspected with all exclusions confirmed; independent throwaway-HOME install probe byte-identical; drift guard verified bidirectional. Result: pass.
+
+- 2026-07-07T14:26:39Z: Completed document via codex-task:workspace-write: Codex (workspace-write): techContext layout gains resources/, scripts/, files-allowlist note; README layout gains resources/; systemPatterns checked unchanged.
