@@ -1,7 +1,7 @@
 ---
 id: T20260707T1327Z
 type: task
-status: implementing
+status: done
 priority: P2
 parent: null
 children: []
@@ -11,10 +11,10 @@ branch: local-board/T20260707T1327Z-enforce-record-gate-check-consultation-and-r
 estimate: 4
 estimateBasis: T20260707T1325Z
 workStartedAt: 2026-07-07T21:22:36Z
-workCompletedAt: null
+workCompletedAt: 2026-07-07T21:51:37Z
 created: 2026-07-07T13:27:41Z
-updated: 2026-07-07T21:39:25Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-07T21:51:37Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # enforce: record gate-check consultation and require it when leaving gated stages
@@ -143,9 +143,47 @@ Implemented per the Technical Design, resolving all three open questions as reco
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) against commit b4659ce.
+
+No blocking findings.
+
+- Routing isolation holds: completedStepRecords filters gate:(design|implement|test): before routing validation (src/tickets.js:1189); validateRouting/doneRequires see only action evidence.
+- Grammar collision contained: an action literally named "gate" can't match GATE_TOKEN_RE unless its executor starts with a stage name + colon, which the executor route grammar forbids (:1717).
+- Forward pairs exact (declared :80, enforced :414); loop-backs/questions/blocked/done/archive return null; a ticket born at ready_for_implementation still requires the implement consultation before ready_for_review.
+- Two-path honesty as designed; the self-reported gate-complete residual is documented in the ticket (hooks dispatch-ledger covers the Claude side).
+- gate-complete validates stage/executor/evidence via existing paths; addUnique prevents duplicate tokens (repeat calls do append extra Run Log lines — cosmetic).
+- Config split per the B1321 pattern with the guard allowlist updated; paired plans/resources prompt edits byte-identical and covered by the drift test.
+
+Verification caveat: reviewer inspected only (read-only sandbox); suite delegated to test stage.
+
+Verdict: pass
+
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/T20260707T1327Z-..., commit b4659ce.
+
+**Suite:** `npm run check` pass; `npm test` 302 pass / 1 gated-skip; `npm run validate` OK.
+
+**End-to-end probe (fresh scaffold board, switch ON):**
+- Forward moves refused without tokens at all three boundaries, each with the actionable message naming gate-check and gate-complete with exact next commands (full text captured for design; implement/test variants confirmed).
+- Non-empty catalogs (design, implement): gate-check is a pure read (no premature stamp); gate-complete stamps gate:<stage>:<route>@<model> and unblocks the move.
+- Empty catalog (test): gate:test:skipped-empty-catalog auto-stamped with zero agent dispatch; idempotent on re-run; move then succeeds.
+- Review boundary correctly ungated. Loop-backs (questions round-trip, explicit backward move) never gated. `set status` routes through moveTicket and is gated identically.
+- Switch-off board reproduces old behavior exactly.
+- Done-time invisibility verified live: a ticket carrying all three gate-token forms moved to done with clean validate.
+
+**Gaps / caveats:** review-stage inline variant untested (review is not a gated stage); switch-off edit used a scratch-board node script (tester lacks Write); no flakes.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `docs/Workflow.md` + `docs/specialty-steps.md` — gate-check narrative updated: consultations recorded as gate:<stage> tokens, empty catalogs self-certify, gate-complete records real consultations, requireGateConsultation gates forward stage moves, tokens invisible to routing evidence and doneRequires.
+- `README.md` — gate-complete added to the CLI list beside gate-check.
+- `memory-bank/systemPatterns.md` — verified the implementation-pass note already covers the scaffold/fallback defaults; unchanged.
+- SKILL.md, codex skill, and the paired prompt files were updated during implementation.
 
 ## Questions
 
@@ -154,3 +192,11 @@ Implemented per the Technical Design, resolving all three open questions as reco
 - 2026-07-07T21:21:40Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): gate tokens via honest two-path recording (auto-stamp skipped-empty-catalog; gate-complete verb after real dispatch), move-time enforcement on three forward pairs only, routing.requireGateConsultation defaulting per the B1321 pattern; gate-token filtering flagged as top regression risk. Estimate 4 (basis T20260707T1325Z).
 
 - 2026-07-07T21:22:36Z: Ensured git branch local-board/T20260707T1327Z-enforce-record-gate-check-consultation-and-require-it-when-leaving-gated-stages (created).
+
+- 2026-07-07T21:39:50Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): gate token grammar + auto-stamp + gate-complete verb + move-time precondition + config switch; 302 pass 1 gated-skip; repo config intentionally not flipped mid-run.
+
+- 2026-07-07T21:44:24Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict pass: routing isolation, grammar-collision containment, exact forward pairs, honest two-path recording all verified; duplicate-Run-Log nit noted.
+
+- 2026-07-07T21:49:23Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 302+1 gated; full pipeline probe hit all three refusals with actionable messages, verified pure-read non-empty gates, idempotent empty-catalog auto-stamp, ungated loop-backs, switch-off back-compat, and done-time invisibility live. Result: pass.
+
+- 2026-07-07T21:51:37Z: Completed document via codex-task:workspace-write: Codex (workspace-write): Workflow + specialty-steps narratives updated for consultation tokens; README gains gate-complete; systemPatterns verified current.
