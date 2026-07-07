@@ -16,7 +16,7 @@ The installer writes:
 ~/.local-board/
 ```
 
-`~/.local-board/` contains the installed CLI runtime and the Codex executor prompts under `agents/codex/`.
+Codex executor prompts resolve from the running CLI package reported by `local-board where --json`, using its `agentsDir` field. The `~/.local-board/` copy remains only for hooks and provenance.
 
 Use `node install.mjs --list-targets` to see detected targets. A normal `node install.mjs` includes Codex when `~/.codex/` exists.
 
