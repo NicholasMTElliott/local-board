@@ -2,7 +2,7 @@
 name: local-team
 description: Work several local-board tickets in parallel from one top-level orchestrator session. The orchestrator keeps up to a configurable number of tickets in flight, dispatching each pipeline step to an ephemeral, model-specialized executor (subagent or codex), with the ticket file and a per-ticket git worktree as the durable baton. Use when the user asks to "work my tickets in parallel", "work the next N tickets at once", or otherwise requests parallel local-board operation.
 allowed-tools:
-  - Bash(node <<SCRIPT_PATH>> *)
+  - Bash(local-board *)
 ---
 
 # local-board parallel orchestrator
@@ -18,16 +18,15 @@ no teammate sessions and no `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` requirement.
 Parallelism comes from dispatching multiple step executors at once from this one
 session.
 
-Use the installed CLI:
+Use the `local-board` command on PATH:
 
 ```sh
-node <<SCRIPT_PATH>>
+local-board
 ```
 
 Installation metadata:
 
 - Runtime directory: `<<INSTALL_PATH>>`
-- CLI entrypoint: `<<SCRIPT_PATH>>`
 
 Operate in the user's current project unless they specify another root. Pass
 `--root <path>` for non-current projects and `--root <worktreePath>` for all
@@ -43,10 +42,10 @@ etc.). With a single ready ticket and nothing else open, prefer the standard
 ## Preflight
 
 1. Read project instructions: `AGENTS.md`, `CLAUDE.md`, and `memory-bank/` when present.
-2. `node <<SCRIPT_PATH>> validate`. Stop on validation errors.
-3. `node <<SCRIPT_PATH>> fast-forward --json`. This confirms you are on the detected default branch with a clean tree before any worktree merges move the default ref. Stop if it refuses.
-4. `node <<SCRIPT_PATH>> team-config --json` to resolve the concurrency cap. Treat the returned `maxTeammates` as **`maxInFlight`** — the maximum number of tickets you keep in flight at once. It defaults to 6 and is overridden by `LOCAL_BOARD_MAX_TEAMMATES`. The real limiter is your own context budget (every step result funnels into this one window) and how many tickets you can schedule accurately at once, not raw tokens. A validation run confirmed 2 concurrent tickets are trivially manageable; **prefer ≈3** unless a project raises the cap deliberately. Never exceed `maxInFlight`.
-5. `node <<SCRIPT_PATH>> list --ready --limit <maxInFlight> --json` for the initial batch. If empty, report "no ready tickets" and stop.
+2. `local-board validate`. Stop on validation errors.
+3. `local-board fast-forward --json`. This confirms you are on the detected default branch with a clean tree before any worktree merges move the default ref. Stop if it refuses.
+4. `local-board team-config --json` to resolve the concurrency cap. Treat the returned `maxTeammates` as **`maxInFlight`** — the maximum number of tickets you keep in flight at once. It defaults to 6 and is overridden by `LOCAL_BOARD_MAX_TEAMMATES`. The real limiter is your own context budget (every step result funnels into this one window) and how many tickets you can schedule accurately at once, not raw tokens. A validation run confirmed 2 concurrent tickets are trivially manageable; **prefer ≈3** unless a project raises the cap deliberately. Never exceed `maxInFlight`.
+5. `local-board list --ready --limit <maxInFlight> --json` for the initial batch. If empty, report "no ready tickets" and stop.
 
 ## Execution profiles
 
@@ -72,7 +71,7 @@ Each in-flight ticket gets its own git worktree in the sibling
 directly. For each ticket, before its first step:
 
 ```sh
-node <<SCRIPT_PATH>> worktree-add <ticket-id> --json
+local-board worktree-add <ticket-id> --json
 ```
 
 Capture `worktreePath`. Pass `--root <worktreePath>` on every later local-board
@@ -83,7 +82,7 @@ that worktree (pass it the `worktreePath` and instruct it to use
 right after the ticket reaches `done`:
 
 ```sh
-node <<SCRIPT_PATH>> worktree-remove <ticket-id> --root <project-root>
+local-board worktree-remove <ticket-id> --root <project-root>
 ```
 
 ## Control loop
@@ -148,7 +147,7 @@ scheduling cache and is cheap to rebuild after a compaction.
    worktree before rebasing** — `move`/`complete-step` leave the ticket file
    dirty, and `git rebase` refuses a dirty tree. On an unresolvable conflict,
    `move` it to `questions`. After each successful `move … done`, run
-   `node <<SCRIPT_PATH>> fast-forward --json` to reconcile your own checkout, then
+   `local-board fast-forward --json` to reconcile your own checkout, then
    `worktree-remove`.
 8. **Terminate.** When the ready queue is empty and nothing is in flight, emit a
    final per-ticket summary table: ticket, model(s) used per step, final status,

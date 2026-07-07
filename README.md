@@ -28,15 +28,20 @@ node ./bin/local-board.js list --ready
 node ./bin/local-board.js --root /path/to/your/repo init
 ```
 
-To use local-board as an agent orchestrator, install the skills into your coding agent:
+To use local-board as an agent orchestrator, install it globally so the `local-board` command is on `PATH`, then run the installer to place skills and agents:
 
 ```sh
-node ./bin/local-board.js install                # install skills + agents
-node ./bin/local-board.js install --list-targets # see where they would go
-node ./bin/local-board.js install --target=codex # install only Codex skills
+npm install -g local-board            # or: npm install -g . / npm link, from a checkout
+local-board install                   # install skills + agents
+local-board install --list-targets    # see where they would go
+local-board install --target=codex    # install only Codex skills
 ```
 
-`node install.mjs` remains available as a deprecated alias for the same installer.
+Installed skill and agent text always invokes the `local-board` command on `PATH` — never an absolute script path — so it is byte-identical regardless of how or where it was installed. The installer verifies `local-board` resolves on `PATH` before installing and fails fast with targeted guidance (`npm install -g .` / `npm link` for a checkout, `npm install -g local-board` otherwise) if it does not.
+
+**`npx local-board` is not supported.** A first run of `npx` needs network access to fetch the package, which sandboxed environments (including the Codex sandbox) deny. Install the package globally first, as above.
+
+`node ./bin/local-board.js install` and `node install.mjs` remain available as deprecated aliases for running the installer from a checkout without a prior global install.
 
 ## Status
 
@@ -95,11 +100,11 @@ When `git.autoMerge` is `true`, `move ... done` commits planning-only closeout c
 
 When `retention.archiveOnMoveDone` is `true`, `move ... done` also archives older done tickets after the configured retention window. Archived tickets remain closed for dependency checks.
 
-Claude subagent definitions live in `agents/claude/` and are installed to the user's Claude agents directory by `node ./bin/local-board.js install`. Codex executor prompt fragments live in `agents/codex/`; the Codex skill templates translate known `claude-subagent:local-board-*` routes to Codex spawned agents while preserving the configured route in strict-routing evidence. See [docs/CodexSupport.md](docs/CodexSupport.md).
+Claude subagent definitions live in `agents/claude/` and are installed to the user's Claude agents directory by `local-board install`. Codex executor prompt fragments live in `agents/codex/`; the Codex skill templates translate known `claude-subagent:local-board-*` routes to Codex spawned agents while preserving the configured route in strict-routing evidence. See [docs/CodexSupport.md](docs/CodexSupport.md).
 
 ```sh
-node ./bin/local-board.js install
-node ./bin/local-board.js install --list-targets
+local-board install
+local-board install --list-targets
 ```
 
 ## Tests
@@ -152,6 +157,10 @@ SKILL_TEAM.md        Installable parallel-mode skill template (top-level per-ste
 - [SECURITY.md](SECURITY.md) — security model and how to report a vulnerability privately.
 
 Issues and pull requests are welcome. Run `npm run check`, `npm test`, and `npm run validate` before opening a PR.
+
+## Releasing
+
+Run `npm run check && npm test` (also enforced by the `prepublishOnly` script, so a broken tree cannot be published), inspect the publishable contents with `npm pack --dry-run`, then a maintainer with npm credentials runs `npm publish` (requires OTP) and tags the release. Version stays at the last published value unless the package name/version is already taken at publish time.
 
 ## License
 

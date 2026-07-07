@@ -98,6 +98,11 @@ export function buildTargets(home) {
  * Errors propagate (throw) rather than calling process.exit, so callers
  * (the CLI dispatcher or the install.mjs shim) control process exit
  * behaviour.
+ *
+ * `options.resolvesOnPath`, when supplied, overrides the real PATH-resolution
+ * check (a `(command: string) => boolean` predicate). This is a test seam for
+ * exercising the PATH-verification failure/success paths in-process without
+ * mutating the real process PATH.
  */
 export function runInstall(argv, options = {}) {
   const home = options.home ?? homedir();
@@ -118,11 +123,11 @@ export function runInstall(argv, options = {}) {
     performUninstall(targets, home, installDir);
     return 0;
   }
-  performInstall(args, targets, home, installDir);
+  performInstall(args, targets, home, installDir, options);
   return 0;
 }
 
-function performInstall(args, targets, home, installDir) {
+function performInstall(args, targets, home, installDir, options = {}) {
   const nodeVersion = getVersion("node");
   if (nodeVersion === null) {
     throw new Error("node not found on PATH");
@@ -131,6 +136,16 @@ function performInstall(args, targets, home, installDir) {
   const selected = resolveTargets(args, targets);
   if (selected.length === 0) {
     throw new Error("no install targets selected");
+  }
+
+  const checkResolvesOnPath = options.resolvesOnPath ?? resolvesOnPath;
+  const fromClone = existsSync(join(SCRIPT_DIR, ".git"));
+  if (!checkResolvesOnPath("local-board")) {
+    throw new Error(
+      fromClone
+        ? "local-board is not on PATH. From this checkout run: npm install -g . (or: npm link), then re-run local-board install."
+        : "local-board is not on PATH. Install it globally: npm install -g local-board, then re-run local-board install.",
+    );
   }
 
   mkdirSync(installDir, { recursive: true });
@@ -148,7 +163,7 @@ function performInstall(args, targets, home, installDir) {
   copyDir(join("resources", "templates"), "templates", installDir);
 
   const scriptPath = join(installDir, "bin", "local-board.js").replace(/\\/g, "/");
-  const allowRule = `Bash(node ${scriptPath} *)`;
+  const allowRule = "Bash(local-board *)";
   writeInstallInfo(installDir, {
     nodeVersion,
     scriptPath,
@@ -421,5 +436,15 @@ function getVersion(command) {
     return execSync(`${command} --version`, { stdio: ["ignore", "pipe", "ignore"] }).toString().trim();
   } catch {
     return null;
+  }
+}
+
+function resolvesOnPath(command) {
+  const resolver = process.platform === "win32" ? "where" : "command -v";
+  try {
+    execSync(`${resolver} ${command}`, { stdio: ["ignore", "pipe", "ignore"] });
+    return true;
+  } catch {
+    return false;
   }
 }

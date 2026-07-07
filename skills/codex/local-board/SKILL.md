@@ -5,26 +5,27 @@ description: Operate a repo-native local-board planning system from Codex where 
 
 # local-board for Codex
 
-Use the installed CLI:
+Use the `local-board` command on PATH:
 
 ```sh
-node <<SCRIPT_PATH>>
+local-board
 ```
 
 Installation metadata:
 
 - Runtime directory: `<<INSTALL_PATH>>`
-- CLI entrypoint: `<<SCRIPT_PATH>>`
 - Codex executor prompts: `<<INSTALL_PATH>>/agents/codex/`
+
+Do not search the filesystem for local-board source or scripts. Use the `local-board` command on PATH.
 
 Operate in the user's current project unless they specify another root. Pass `--root <path>` for non-current projects.
 
 ## Preflight
 
 1. Read project instructions: `AGENTS.md`, `CLAUDE.md`, and `memory-bank/` when present.
-2. If `plans/` is absent and the user asked to initialize, run `node <<SCRIPT_PATH>> init`.
-3. Run `node <<SCRIPT_PATH>> schema --json` when you need accepted statuses, priorities, actions, or agent values.
-4. Run `node <<SCRIPT_PATH>> validate`.
+2. If `plans/` is absent and the user asked to initialize, run `local-board init`.
+3. Run `local-board schema --json` when you need accepted statuses, priorities, actions, or agent values.
+4. Run `local-board validate`.
 
 Do not infer workflow state when `query-next` or `query-ticket` can answer it. Do not mutate ticket files directly. Use the CLI.
 
@@ -111,13 +112,13 @@ Run `begin-step` before `start-work` for implementation. `start-work` moves `rea
 Use:
 
 ```sh
-node <<SCRIPT_PATH>> start-work <ticket-id> --json
+local-board start-work <ticket-id> --json
 ```
 
 If the user pre-seeded work on a branch that is not recorded in the ticket, run:
 
 ```sh
-node <<SCRIPT_PATH>> start-work <ticket-id> --branch <branch-name> --json
+local-board start-work <ticket-id> --branch <branch-name> --json
 ```
 
 Do not use plain `git switch` for ticket work unless the CLI is unavailable or the user explicitly asks for manual git control.
@@ -127,7 +128,7 @@ Do not use plain `git switch` for ticket work unless the CLI is unavailable or t
 After mandatory `design`, `implement`, or `test` evidence is recorded and before moving:
 
 ```sh
-node <<SCRIPT_PATH>> gate-check <ticket-id> --stage <stage> --json
+local-board gate-check <ticket-id> --stage <stage> --json
 ```
 
 If the catalog is empty, skip dispatch. Otherwise dispatch through the returned route, translating `claude-subagent:local-board-gatecheck` to the Codex gate-check explorer prompt. Parse strict JSON:
@@ -139,13 +140,13 @@ If the catalog is empty, skip dispatch. Otherwise dispatch through the returned 
 For each requested step:
 
 ```sh
-node <<SCRIPT_PATH>> specialty-run <ticket-id> <step-name> --json
+local-board specialty-run <ticket-id> <step-name> --json
 ```
 
 Dispatch the returned prompt and agent route, then record:
 
 ```sh
-node <<SCRIPT_PATH>> complete-step <ticket-id> <step-name> --executor <logical-route> --evidence "<VERDICT>: <short summary>"
+local-board complete-step <ticket-id> <step-name> --executor <logical-route> --evidence "<VERDICT>: <short summary>"
 ```
 
 ## Done and Auto-Merge
@@ -155,27 +156,27 @@ Use `move <ticket-id> done --json` only after required design, implementation, r
 ## CLI Commands
 
 ```sh
-node <<SCRIPT_PATH>> validate
-node <<SCRIPT_PATH>> query-next --json
-node <<SCRIPT_PATH>> query-ticket <ticket-id> --json
-node <<SCRIPT_PATH>> state-report --json
-node <<SCRIPT_PATH>> schema --json
-node <<SCRIPT_PATH>> create <epic|story|task|bug> "<title>" --status <status> --priority <priority> [--parent <id>]
-node <<SCRIPT_PATH>> start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--json]
-node <<SCRIPT_PATH>> begin-step <ticket-id> [--action <action>] [--json]
-node <<SCRIPT_PATH>> complete-step <ticket-id> <action> --executor <executor> --evidence "<evidence>" [--json]
-node <<SCRIPT_PATH>> approve-inline <ticket-id> <action> --reason "<reason>" [--json]
-node <<SCRIPT_PATH>> gate-check <ticket-id> --stage <stage> [--json]
-node <<SCRIPT_PATH>> specialty-run <ticket-id> <step-name> [--json]
-node <<SCRIPT_PATH>> calibration suggest <ticket-id> [--json]
-node <<SCRIPT_PATH>> estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]
-node <<SCRIPT_PATH>> move <ticket-id> <status> [--json]
-node <<SCRIPT_PATH>> set <ticket-id> <field> <value>
-node <<SCRIPT_PATH>> section <ticket-id> "<text>" --section "<section>"
-node <<SCRIPT_PATH>> section <ticket-id> --file <path> --section "<section>"
-node <<SCRIPT_PATH>> comment <ticket-id> "<text>" [--section "<section>"]
-node <<SCRIPT_PATH>> link-parent <child-id> <parent-id>
-node <<SCRIPT_PATH>> link-child <parent-id> <child-id>
-node <<SCRIPT_PATH>> block <ticket-id> <dependency-id>
-node <<SCRIPT_PATH>> unblock <ticket-id> <dependency-id>
+local-board validate
+local-board query-next --json
+local-board query-ticket <ticket-id> --json
+local-board state-report --json
+local-board schema --json
+local-board create <epic|story|task|bug> "<title>" --status <status> --priority <priority> [--parent <id>]
+local-board start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--json]
+local-board begin-step <ticket-id> [--action <action>] [--json]
+local-board complete-step <ticket-id> <action> --executor <executor> --evidence "<evidence>" [--json]
+local-board approve-inline <ticket-id> <action> --reason "<reason>" [--json]
+local-board gate-check <ticket-id> --stage <stage> [--json]
+local-board specialty-run <ticket-id> <step-name> [--json]
+local-board calibration suggest <ticket-id> [--json]
+local-board estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]
+local-board move <ticket-id> <status> [--json]
+local-board set <ticket-id> <field> <value>
+local-board section <ticket-id> "<text>" --section "<section>"
+local-board section <ticket-id> --file <path> --section "<section>"
+local-board comment <ticket-id> "<text>" [--section "<section>"]
+local-board link-parent <child-id> <parent-id>
+local-board link-child <parent-id> <child-id>
+local-board block <ticket-id> <dependency-id>
+local-board unblock <ticket-id> <dependency-id>
 ```

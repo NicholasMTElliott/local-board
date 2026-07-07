@@ -1,19 +1,19 @@
 ---
 id: T20260707T1320Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P1
 parent: null
 children: []
 blockedBy: [T20260707T1318Z, T20260707T1319Z]
 blocks: []
-branch: null
+branch: local-board/T20260707T1320Z-npm-publish-package-and-rewrite-skills-and-allow-rules-to-invoke-local-board-on-path
 estimate: 4
 estimateBasis: T20260707T1319Z
-workStartedAt: null
+workStartedAt: 2026-07-07T16:14:58Z
 workCompletedAt: null
 created: 2026-07-07T13:20:26Z
-updated: 2026-07-07T16:14:57Z
+updated: 2026-07-07T16:27:21Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
@@ -283,6 +283,36 @@ Installer tests already redirect `HOME`; extend them:
 
 ## Implementation Notes
 
+Implemented exactly per the ticket's Technical Design.
+
+**Skill templates rewritten to the PATH constant** (`SKILL.md`, `SKILL_TEAM.md`, `skills/codex/local-board/SKILL.md`, `skills/codex/local-team/SKILL.md`): all `node <<SCRIPT_PATH>>` invocations became `local-board`; the "Use the installed CLI" block and "CLI entrypoint" metadata line were rewritten to "Use the `local-board` command on PATH" (added to the Codex templates too, which previously lacked that guidance); `<<INSTALL_PATH>>` lines are untouched. Claude `allowed-tools` frontmatter is now `Bash(local-board *)`; the Codex templates carry no `allowed-tools` (unchanged, matches existing test expectation).
+
+**Agents**: `agents/claude/local-board-designer.md` — `node <local-board-cli> section ...` → `local-board section ...`. Swept all `agents/claude/*.md` and `agents/codex/*.md`; no other literal invocation lines existed. Removed the now-unnecessary `- local-board CLI path;` bullet from the six `agents/codex/*.md` Inputs lists (decomposer, designer, documenter, implementer, reviewer, tester) — the codex designer/implementer agent bodies already reference the bare `local-board` command generically, consistent with dropping the path input.
+
+**`src/install.js`**: added `fromClone = existsSync(join(SCRIPT_DIR, ".git"))` and `resolvesOnPath(command)` (`where`/`command -v`), called in `performInstall` before any copying, throwing mode-specific guidance on failure (clone: `npm install -g .` / `npm link`; packaged: `npm install -g local-board`). Added an `options.resolvesOnPath` override seam (used only by in-process tests) so `runInstall`/`performInstall` can inject a stub predicate without touching real PATH. `allowRule` is now the constant `"Bash(local-board *)"` (dropped the interpolated `scriptPath`). `scriptPath`, `installDir`, `renderSkill`, `writeInstallInfo`, and the `~/.local-board` runtime copy are unchanged (INSTALL_PATH boundary honored — out of scope for this ticket).
+
+**`package.json`**: added `"prepublishOnly": "npm run check && npm test"`. Version stays `0.1.0`.
+
+**Tests** (`test/install.test.js`): added a stub `local-board` executable on a temp bin dir, prepended to PATH by default via an updated `installEnv(home, { includeLocalBoardStub })` helper (opt-out flag for negative tests). Updated existing assertions: allow-rule test now asserts the exact constant `["Bash(local-board *)"]`; rendered-skill tests assert `local-board ` invocations, absence of `<<SCRIPT_PATH>>`/`<<INSTALL_PATH>>`, and absence of `node .*local-board\.js`; replaced the old `expectedScriptPath` match with an `expectedInstallDir` (INSTALL_PATH) match since the script path is no longer rendered into skill bodies. Added: an in-process `resolvesOnPath` failure-throw test; a real-PATH clone-mode failure test (via this repo's own `.git`) asserting `npm install -g .` + `npm link` guidance; a packaged/no-`.git` failure test (copies the `files` allowlist into a fresh `.git`-free temp dir and runs its own copied `bin/local-board.js`) asserting `npm install -g local-board` guidance with no `npm link` mention; a positive stub-on-PATH success test; and a byte-identical-invocation-lines-across-homes test. Also strengthened the raw (unrendered) Codex-template test to check for `local-board ` and absence of `<<SCRIPT_PATH>>`/`node .*local-board\.js`.
+
+Added `test/pack.test.js`: runs `npm pack --dry-run --json` and asserts the tarball includes `bin/`, `src/`, `resources/`, `SKILL.md`, `SKILL_TEAM.md`, `agents/`, `skills/`, `install.mjs`, `package.json`, and excludes `plans/`, `test/`, `memory-bank/`, `docs/`, `scripts/`.
+
+**README.md**: rewrote the "install the skills" snippet to `npm install -g local-board` (or `npm install -g .` / `npm link` from a checkout) + `local-board install`, with a note that installed skill/agent text always invokes the bare `local-board` command (byte-identical regardless of install mode) and that the installer verifies PATH resolution first. Added a bold "npx local-board is not supported" callout (Codex sandbox denies the network access a first `npx` run needs). Kept the repo-dev `node ./bin/local-board.js <cmd>` snippets (Quick start, CLI reference) unchanged — those demonstrate running this checkout's own CLI, not the installed skill, and are out of this ticket's scope per the design's own instruction. Added a "Releasing" section (check + test via `prepublishOnly`, `npm pack --dry-run` inspection, human `npm publish` with OTP, tag). No new `docs/*.md` file was added, so no Documentation Index change was needed.
+
+**memory-bank/systemPatterns.md**: updated the "Subagent CLI Permission" fact — the installed allow rule is now the constant `Bash(local-board *)` (installer verifies PATH resolution first); the project-source rule `Bash(node ./bin/local-board.js *)` in this repo's own `.claude/settings.json` is unchanged and stays for repo-local dev, per the design's explicit note.
+
+**Not touched** (per design boundary / ticket scope): `<<INSTALL_PATH>>` rendering, the `~/.local-board` runtime copy, `where --json`, version stamping, `plans/` ticket content, `.claude/settings.json` (project-local dev rule).
+
+**Verification**:
+- `npm run check`: clean (all `node --check` targets pass).
+- `npm test`: 179/179 pass, 0 fail.
+- `npm run validate`: `Ticket validation OK`.
+- Real-machine PATH-shim validation (the one flagged risk): ran `npm link` in this checkout to produce a real Windows `local-board.cmd`/`local-board` shim, confirmed `where local-board` resolves both, ran `local-board validate` successfully through the Bash tool (confirms `Bash(local-board *)` is the correct allow-rule shape for how the Bash tool invokes global npm shims on Windows). Then ran a full throwaway-HOME `local-board install --all` (all 6 targets: Claude, Codex, opencode, Cline, Cursor, Agents) using that real shim. Grepped every installed skill/agent directory (excluding the internal `.local-board/src` runtime copy, which legitimately contains the `<<SCRIPT_PATH>>` string as installer source code, not rendered output) for `node C:` and `<<SCRIPT_PATH>>`: zero matches in both cases. The installed Claude `.claude/settings.json` allow rule was exactly `["Bash(local-board *)"]`. Cleaned up: removed the throwaway HOME and ran `npm unlink -g local-board`; confirmed `local-board` is off PATH again and the full test suite (179/179) still passes afterward (tests rely only on the stub bin dir, not the real link).
+
+**Deviations from the ticket's own exact wording**: none substantive. One judgment call: the design said the "local-board CLI path" Codex-agent Input bullet "becomes unnecessary; simplify to reference the local-board command" — I removed the bullet outright (rather than rewording it in place) since the surrounding agent bodies (e.g. designer, implementer) already reference the bare `local-board` command generically elsewhere in their Rules sections, so no replacement input line was needed.
+
+**Remaining risks** (matching the ticket's own Risks section, now with real-machine confirmation added): clone-dev friction (must `npm link`/`npm install -g .` first) is the deliberate tradeoff and is now covered by a passing test; Windows shim quirks were validated live via `npm link` + Bash-tool invocation as above; the scope-vs-acceptance gap (INSTALL_PATH lines survive until T1322) is unchanged and was out of scope here by design.
+
 ## Review Findings
 
 ## Test Evidence
@@ -294,3 +324,5 @@ Installer tests already redirect `HOME`; extend them:
 ## Run Log
 
 - 2026-07-07T16:14:04Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): always-PATH rendering + installer PATH verification with mode-specific guidance (.git detection); INSTALL_PATH + runtime copy stay until T1322; publish-ready deliverable (pack test, prepublishOnly, RELEASING note); B1323/B1327 flagged superseded. Estimate 4 (basis T20260707T1319Z).
+
+- 2026-07-07T16:14:58Z: Ensured git branch local-board/T20260707T1320Z-npm-publish-package-and-rewrite-skills-and-allow-rules-to-invoke-local-board-on-path (created).
