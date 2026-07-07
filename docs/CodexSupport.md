@@ -47,7 +47,7 @@ Existing projects can keep Claude-first config in `plans/local-board.config.json
 Strict routing still records the configured logical route. For example, if Codex physically runs the designer translated from a Claude route, completion evidence can be:
 
 ```sh
-node ~/.local-board/bin/local-board.js complete-step T123 design --executor claude-subagent:local-board-designer@codex-default --evidence "Design written by Codex worker."
+local-board complete-step T123 design --executor claude-subagent:local-board-designer@codex-default --evidence "Design written by Codex worker."
 ```
 
 Validation compares only the route before `@`, so existing configs continue to pass.
