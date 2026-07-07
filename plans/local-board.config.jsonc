@@ -242,6 +242,9 @@
   // or an explicit routing approval.
   "routing": {
     "strict": true,
+    // Forward moves out of design/implement/test require a recorded gate
+    // consultation token (gate-check auto-stamp or gate-complete).
+    "requireGateConsultation": true,
     "doneRequires": {
       "epic": ["decompose"],
       "story": ["decompose"],
