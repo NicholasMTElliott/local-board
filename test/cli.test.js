@@ -9,13 +9,14 @@ import assert from "node:assert/strict";
 import { commandWhere, main } from "../src/cli.js";
 import { loadConfig } from "../src/config.js";
 import { createTicket, discover, queryNext } from "../src/tickets.js";
+import { removeFixtureDir } from "./helpers/fixtures.js";
 
 async function withBoard(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "local-board-cli-"));
   try {
     await fn(root);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeFixtureDir(root);
   }
 }
 
@@ -204,7 +205,7 @@ test("where --json resolves the flattened ~/.local-board runtime layout via a pa
     assert.equal(info.templatesDir, path.join(fixtureRoot, "templates"));
     assert.equal(info.agentsDir, path.join(fixtureRoot, "agents", "codex"));
   } finally {
-    await rm(fixtureRoot, { recursive: true, force: true });
+    await removeFixtureDir(fixtureRoot);
   }
 });
 

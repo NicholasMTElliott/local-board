@@ -9,6 +9,7 @@ import { initProject, packagedResourceDir } from "../src/scaffold.js";
 import { loadConfig } from "../src/config.js";
 import { createTicket } from "../src/tickets.js";
 import { main } from "../src/cli.js";
+import { removeFixtureDir } from "./helpers/fixtures.js";
 
 const REPO_ROOT = path.resolve(".");
 
@@ -17,7 +18,7 @@ async function withBoard(fn) {
   try {
     await fn(root);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeFixtureDir(root);
   }
 }
 
@@ -251,7 +252,7 @@ test("packagedResourceDir resolves the flattened ~/.local-board runtime layout (
     const resolved = packagedResourceDir("prompts", fixtureRoot);
     assert.equal(resolved, path.join(fixtureRoot, "prompts"));
   } finally {
-    await rm(fixtureRoot, { recursive: true, force: true });
+    await removeFixtureDir(fixtureRoot);
   }
 });
 
@@ -264,7 +265,7 @@ test("packagedResourceDir prefers the dev-clone layout when both layouts are pre
     const resolved = packagedResourceDir("prompts", fixtureRoot);
     assert.equal(resolved, path.join(fixtureRoot, "resources", "prompts"));
   } finally {
-    await rm(fixtureRoot, { recursive: true, force: true });
+    await removeFixtureDir(fixtureRoot);
   }
 });
 
@@ -276,6 +277,6 @@ test("packagedResourceDir throws a clear packaging error when neither layout res
       /could not locate packaged "prompts" resources/,
     );
   } finally {
-    await rm(fixtureRoot, { recursive: true, force: true });
+    await removeFixtureDir(fixtureRoot);
   }
 });

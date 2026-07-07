@@ -38,6 +38,7 @@ import {
 } from "../src/tickets.js";
 import { initProject } from "../src/scaffold.js";
 import { loadConfig } from "../src/config.js";
+import { removeFixtureDir } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
 const CLI_PATH = path.resolve("bin", "local-board.js");
@@ -52,7 +53,7 @@ async function withBoard(fn) {
   try {
     await fn(root);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeFixtureDir(root);
   }
 }
 
