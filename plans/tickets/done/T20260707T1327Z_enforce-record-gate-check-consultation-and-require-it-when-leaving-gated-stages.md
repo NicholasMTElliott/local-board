@@ -1,20 +1,20 @@
 ---
 id: T20260707T1327Z
 type: task
-status: ready_for_implementation
+status: done
 priority: P2
 parent: null
 children: []
 blockedBy: []
 blocks: [T20260707T1333Z]
-branch: null
+branch: local-board/T20260707T1327Z-enforce-record-gate-check-consultation-and-require-it-when-leaving-gated-stages
 estimate: 4
 estimateBasis: T20260707T1325Z
-workStartedAt: null
-workCompletedAt: null
+workStartedAt: 2026-07-07T21:22:36Z
+workCompletedAt: 2026-07-07T21:51:37Z
 created: 2026-07-07T13:27:41Z
-updated: 2026-07-07T21:22:35Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-07T21:51:37Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # enforce: record gate-check consultation and require it when leaving gated stages
@@ -108,14 +108,95 @@ Only these three *forward* pairs return non-null. Backward moves (e.g. `ready_fo
 
 ## Implementation Notes
 
+Implemented per the Technical Design, resolving all three open questions as recommended (two-path recording; `completedSteps` per the requirement; dogfood config left untouched — see below).
+
+**src/tickets.js**
+- Added `gateConsultationRecords(ticket)` (parses `gate:<stage>:<executor>` via `/^gate:(design|implement|test):(.+)$/`) and `gateStageForForwardMove(fromStatus, toStatus)` (returns the stage for exactly the three forward pairs — `ready_for_design|designing`→`ready_for_implementation`, `ready_for_implementation|implementing`→`ready_for_review`, `ready_for_test|testing`→`ready_for_docs` — `null` otherwise, so backward/lateral/archive/done moves are never gated).
+- `completedStepRecords` now filters out `gate:` tokens before the first-`:` split, so they never surface as routing evidence (`validateStepRouting`/`doneRequires`/done-time `validate`).
+- `moveTicket` computes `gateStageForForwardMove` before the write; when non-null and `config.routing.requireGateConsultation === true`, it requires a matching `gateConsultationRecords` entry or throws an actionable error naming the stage and remedy (`gate-check` then `gate-complete`). Config is loaded once, only when the gate check or the done-time `validateRouting` needs it (unchanged perf characteristics for the common backward/lateral/in-stage move). `setTicketField(..., "status", ...)` routes through `moveTicket`, so `set <id> status <forward>` is gated too, as noted in the design.
+- Added exported writers `recordGateSkippedEmptyCatalog(root, ticketId, stage, options)` (stamps `gate:<stage>:skipped-empty-catalog`, no Run Log line — deterministic CLI self-certification) and `recordGateConsultation(root, ticketId, stage, executor, evidence, options)` (stamps `gate:<stage>:<executor>` and appends a Run Log line), both under `withTicketLock` via a shared `stampGateToken` helper, both idempotent via `addUnique`.
+
+**src/cli.js**
+- `commandGateCheck`: on the empty-catalog branch (and only there), calls `recordGateSkippedEmptyCatalog` before returning the payload; the non-empty branch stays a pure read.
+- New `commandGateComplete` + `gate-complete` switch case + `printUsage` line: `gate-complete <ticket-id> --stage <stage> --executor <executor> [--evidence <text>]` (evidence defaults to `"none"` when omitted, per the Technical Design's bracketed-optional signature).
+
+**src/config.js**
+- `DEFAULT_CONFIG.routing.requireGateConsultation = false` (ENOENT fallback / merge base — backward compat).
+- `defaultConfigJsonc()` routing block: `"requireGateConsultation": true` with an inline comment; updated the `DEFAULT_CONFIG` header comment to document this as the third intentional divergence (alongside `estimation.enabled` and `optionalSteps`).
+
+**test/config.test.js**
+- Guard test `defaultConfigJsonc matches DEFAULT_CONFIG except for documented differences`: added `expected.routing.requireGateConsultation = true` and `"routing.requireGateConsultation"` to the collapsed-diff allowlist (third entry, alphabetically after `optionalSteps`).
+
+**test/tickets.test.js** (11 new tests) — pure-function coverage for `gateConsultationRecords`/`gateStageForForwardMove`; `recordGateSkippedEmptyCatalog` (idempotent, no Run Log) and its bad-stage rejection; `recordGateConsultation` (route and route@model executor forms, Run Log line) and its bad-stage/invalid-executor/empty-evidence rejections; the token-collision regression test (hand-written `gate:design:...`/`gate:implement:...`/`gate:test:...` tokens alongside full mandatory evidence still `validate` clean and reach `done`); `moveTicket` refusal for all six from/to variants of the three gated pairs (refused without token, succeeds once `recordGateSkippedEmptyCatalog` runs) with one `writeConfig` helper added; a backward/lateral/archive/done non-gating test with the switch on; a switch-off test (both no-config-file default and explicit `false`); `set status` routing-through-`moveTicket` gating; and a back-compat test (pre-existing `ready_for_docs` ticket with no gate tokens still reaches `done` with the switch on, since `ready_for_docs`→`done` is not one of the three gated pairs).
+
+**test/cli.test.js** (8 new tests) — CLI-level empty-catalog auto-stamp + idempotency; non-empty-catalog pure-read (no stamp); `gate-complete` JSON + plain output covering both `route@model` and route-only executor forms plus the default `"none"` evidence; `gate-complete` argument/stage validation; an end-to-end `move` refusal-then-success test against the `init`-scaffolded config (switch on by default); and a switch-off override test.
+
+**Docs**: `SKILL.md` and `skills/codex/local-board/SKILL.md` document `gate-complete`, the move precondition, and correct the prior "never blocks closeout" line to distinguish gated *consultation* (now enforced) from non-gating specialty *evidence* (unchanged). `memory-bank/systemPatterns.md` updated (Config, Role/Step Prompts, MVP CLI sections). Added a short "record before move" note to `plans/prompts/steps/{design,test,gate-check}.md` and `plans/prompts/roles/implementer.md`, mirrored byte-for-byte into their `resources/prompts/...` counterparts (required by `test/resources-sync.test.js`).
+
+**Dogfood config — intentionally NOT changed**: per the dispatch instruction, this repo's own `plans/local-board.config.jsonc` routing block still omits `requireGateConsultation`, so it defaults to `false` (unaffected). The orchestrator will flip it to `true` after this ticket merges, to avoid refusing in-flight tickets mid-run.
+
+**Verification**: `npm run check` clean; `npm test` → 303 tests, 302 pass, 1 skipped (pre-existing opt-in slow smoke test, unrelated), 0 fail; `npm run validate` → "Ticket validation OK" against this repo's own live board (confirms the switch-off default leaves in-flight tickets, including this one, unaffected). Ran `resources-sync`/`prompt-scaffold`/`install` suites individually after doc edits to confirm the `plans/`↔`resources/` mirror and rendered-SKILL invariants still hold.
+
+**Deviations from the dispatch summary's paraphrase**: the dispatch text's prose sketch showed `gate-complete <ticket-id> <stage> --executor ...` (stage positional). The Technical Design section is explicit and authoritative on the actual signature — `gate-complete <ticket-id> --stage <stage> --executor <executor> [--evidence <text>]` — so that is what's implemented and tested; no ambiguity remained once the Technical Design was read.
+
+**No known remaining risks** beyond what the design flagged: the token-collision regression is covered directly; all three config states (unset/false/true) are covered; the three forward pairs and their active-status variants are covered individually.
+
 ## Review Findings
+
+Reviewed by codex-task:read-only (gpt-5.5) against commit b4659ce.
+
+No blocking findings.
+
+- Routing isolation holds: completedStepRecords filters gate:(design|implement|test): before routing validation (src/tickets.js:1189); validateRouting/doneRequires see only action evidence.
+- Grammar collision contained: an action literally named "gate" can't match GATE_TOKEN_RE unless its executor starts with a stage name + colon, which the executor route grammar forbids (:1717).
+- Forward pairs exact (declared :80, enforced :414); loop-backs/questions/blocked/done/archive return null; a ticket born at ready_for_implementation still requires the implement consultation before ready_for_review.
+- Two-path honesty as designed; the self-reported gate-complete residual is documented in the ticket (hooks dispatch-ledger covers the Claude side).
+- gate-complete validates stage/executor/evidence via existing paths; addUnique prevents duplicate tokens (repeat calls do append extra Run Log lines — cosmetic).
+- Config split per the B1321 pattern with the guard allowlist updated; paired plans/resources prompt edits byte-identical and covered by the drift test.
+
+Verification caveat: reviewer inspected only (read-only sandbox); suite delegated to test stage.
+
+Verdict: pass
 
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/T20260707T1327Z-..., commit b4659ce.
+
+**Suite:** `npm run check` pass; `npm test` 302 pass / 1 gated-skip; `npm run validate` OK.
+
+**End-to-end probe (fresh scaffold board, switch ON):**
+- Forward moves refused without tokens at all three boundaries, each with the actionable message naming gate-check and gate-complete with exact next commands (full text captured for design; implement/test variants confirmed).
+- Non-empty catalogs (design, implement): gate-check is a pure read (no premature stamp); gate-complete stamps gate:<stage>:<route>@<model> and unblocks the move.
+- Empty catalog (test): gate:test:skipped-empty-catalog auto-stamped with zero agent dispatch; idempotent on re-run; move then succeeds.
+- Review boundary correctly ungated. Loop-backs (questions round-trip, explicit backward move) never gated. `set status` routes through moveTicket and is gated identically.
+- Switch-off board reproduces old behavior exactly.
+- Done-time invisibility verified live: a ticket carrying all three gate-token forms moved to done with clean validate.
+
+**Gaps / caveats:** review-stage inline variant untested (review is not a gated stage); switch-off edit used a scratch-board node script (tester lacks Write); no flakes.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `docs/Workflow.md` + `docs/specialty-steps.md` — gate-check narrative updated: consultations recorded as gate:<stage> tokens, empty catalogs self-certify, gate-complete records real consultations, requireGateConsultation gates forward stage moves, tokens invisible to routing evidence and doneRequires.
+- `README.md` — gate-complete added to the CLI list beside gate-check.
+- `memory-bank/systemPatterns.md` — verified the implementation-pass note already covers the scaffold/fallback defaults; unchanged.
+- SKILL.md, codex skill, and the paired prompt files were updated during implementation.
 
 ## Questions
 
 ## Run Log
 
 - 2026-07-07T21:21:40Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): gate tokens via honest two-path recording (auto-stamp skipped-empty-catalog; gate-complete verb after real dispatch), move-time enforcement on three forward pairs only, routing.requireGateConsultation defaulting per the B1321 pattern; gate-token filtering flagged as top regression risk. Estimate 4 (basis T20260707T1325Z).
+
+- 2026-07-07T21:22:36Z: Ensured git branch local-board/T20260707T1327Z-enforce-record-gate-check-consultation-and-require-it-when-leaving-gated-stages (created).
+
+- 2026-07-07T21:39:50Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): gate token grammar + auto-stamp + gate-complete verb + move-time precondition + config switch; 302 pass 1 gated-skip; repo config intentionally not flipped mid-run.
+
+- 2026-07-07T21:44:24Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict pass: routing isolation, grammar-collision containment, exact forward pairs, honest two-path recording all verified; duplicate-Run-Log nit noted.
+
+- 2026-07-07T21:49:23Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 302+1 gated; full pipeline probe hit all three refusals with actionable messages, verified pure-read non-empty gates, idempotent empty-catalog auto-stamp, ungated loop-backs, switch-off back-compat, and done-time invisibility live. Result: pass.
+
+- 2026-07-07T21:51:37Z: Completed document via codex-task:workspace-write: Codex (workspace-write): Workflow + specialty-steps narratives updated for consultation tokens; README gains gate-complete; systemPatterns verified current.

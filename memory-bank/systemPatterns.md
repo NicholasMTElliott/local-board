@@ -24,7 +24,7 @@ It defines:
 - `workflow.actionPrompts`
 - `workflow.transitions`
 - `agents`
-- `routing.strict` and `routing.doneRequires`
+- `routing.strict`, `routing.doneRequires`, and `routing.requireGateConsultation`
 - retention policy: `archiveDoneAfterDays`, `archiveOnMoveDone`
 - git policy: `defaultBranch`, `commitPlanningChanges`, `autoMerge`
 - `optionalSteps`: per-stage specialty review catalogs (`design`/`implement`/`test`)
@@ -33,10 +33,10 @@ It defines:
 V1 specialty prompts ship at `plans/prompts/optional-steps/{design,impl}/`.
 
 In `src/config.js`, `DEFAULT_CONFIG` = ENOENT fallback + deep-merge base
-(`estimation.enabled: false`, `optionalSteps` empty, both intentional for
-backward compat); `defaultConfigJsonc()` = the `init` scaffold (estimation on,
-catalogs populated). A guard test (`test/config.test.js`) keeps the rest of
-the two defaults in sync.
+(`estimation.enabled: false`, `optionalSteps` empty, `routing.requireGateConsultation:
+false`, all three intentional for backward compat); `defaultConfigJsonc()` = the
+`init` scaffold (estimation on, catalogs populated, gate consultation required).
+A guard test (`test/config.test.js`) keeps the rest of the two defaults in sync.
 
 ## Ticket Types
 | Prefix | Type | Children |
@@ -123,6 +123,7 @@ Skills should be orchestration entrypoints. Step behavior should live in prompt 
 The installable `local-board` skill is the portable entrypoint. Project-local prompts are runtime inputs; missing configured prompts are loud CLI errors, not silent fallback behavior.
 `init` restores missing packaged prompts/templates but never overwrites existing prompt files, even with `--overwrite`.
 For design/implement/test stages with a non-empty specialty catalog, the orchestrator skill runs `gate-check` + `specialty-run` between mandatory action completion and stage transition.
+`gate-check` records that the consultation happened: on an empty stage catalog it auto-stamps `gate:<stage>:skipped-empty-catalog` in `completedSteps` (idempotent, no dispatch); on a non-empty catalog it stays a pure read and the orchestrator calls `gate-complete <ticket-id> --stage <stage> --executor <executor> [--evidence <text>]` after the gate agent answers. `gate:` tokens are excluded from routing evidence (`completedStepRecords`/`validateStepRouting`/`doneRequires`) via a dedicated parser (`gateConsultationRecords`) so they never trip done-time "unknown action" validation. When `routing.requireGateConsultation` is true, `moveTicket` refuses the three forward transitions out of a gated stage (`ready_for_design`/`designing`→`ready_for_implementation`, `ready_for_implementation`/`implementing`→`ready_for_review`, `ready_for_test`/`testing`→`ready_for_docs`) unless the matching `gate:` token is present; backward, lateral, and archive/done moves are never gated.
 Bundled Claude agents live in `agents/claude/` and are installed to `~/.claude/agents/`.
 Codex skill templates live in `skills/codex/` and install to `~/.codex/skills/local-board` and `~/.codex/skills/local-team`. Codex executor prompts resolve from `local-board where --json` `agentsDir`.
 The `~/.local-board` runtime copy remains only for hooks + provenance.
@@ -195,11 +196,12 @@ flow and its `local-board-teammate` agent have been removed; `docs/TeamMode.md` 
 retained only as historical context.
 
 ## MVP CLI
-Use `node ./bin/local-board.js version`, `where [--json]`, `validate`, `list`, `query-next`, `query-ticket`, `state-report`, `schema`, `create`, `estimate`, `calibration suggest`, `gate-check`, `specialty-run`, `start-work`, `begin-step`, `check-dispatch`, `complete-step`, `approve-inline`, `move`, `set`, `section`, `comment`, `link-parent`, `link-child`, `block`, `unblock`, `team-config`, and `init`.
+Use `node ./bin/local-board.js version`, `where [--json]`, `validate`, `list`, `query-next`, `query-ticket`, `state-report`, `schema`, `create`, `estimate`, `calibration suggest`, `gate-check`, `gate-complete`, `specialty-run`, `start-work`, `begin-step`, `check-dispatch`, `complete-step`, `approve-inline`, `move`, `set`, `section`, `comment`, `link-parent`, `link-child`, `block`, `unblock`, `team-config`, and `init`.
 
-`move` changes status and relocates the ticket. `set` updates mutable front matter fields. `section` replaces section content. `comment` appends timestamped notes to a ticket section.
+`move` changes status and relocates the ticket; when `routing.requireGateConsultation` is true it also refuses the three forward gated transitions above without a recorded consultation. `set` updates mutable front matter fields (routes through `move` for `status`, so it is gated too). `section` replaces section content. `comment` appends timestamped notes to a ticket section.
 `estimate` records story points and an estimate basis, validates points against the configured scale, and requires `--force` to overwrite.
-`gate-check` returns the gate-check prompt path, stage specialty catalog, and narrow ticket context; the orchestrator dispatches the prompt and consumes its `requestedSteps` JSON.
+`gate-check` returns the gate-check prompt path, stage specialty catalog, and narrow ticket context; the orchestrator dispatches the prompt and consumes its `requestedSteps` JSON. It also self-records the consultation on the empty-catalog branch (see Config above).
+`gate-complete <ticket-id> --stage <stage> --executor <executor> [--evidence <text>]` records a non-empty-catalog gate consultation after the gate agent answers.
 `specialty-run` resolves one configured optional step for the current stage without invoking an agent.
 `section --file <path>` is preferred for generated or multi-line Markdown; inline section text is for short edits. Create the `--file` target with the Write tool, never with shell redirection.
 `query-next`, `query-ticket`, and `begin-step` return advisory transition guidance for the current status. The orchestrator should choose one returned status when moving after an action.

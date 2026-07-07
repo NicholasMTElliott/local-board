@@ -321,13 +321,15 @@ With `--json`, the command returns:
 }
 ```
 
-The CLI is a read-only resolver. It does not invoke an agent and does not decide which optional steps are required. If `catalog` is empty, the orchestrator skips gate-agent dispatch. Otherwise it dispatches the returned `prompt`, `catalog`, and narrow `ticketContext` to the configured gate-check `agent`, pinning its `model` (the bundled `local-board-gatecheck` agent on `haiku` by default). That agent pattern-matches the completed work against the catalog trigger criteria and returns strict JSON shaped:
+The CLI does not invoke an agent and does not decide which optional steps are required. It records that consultation happened with a `gate:<stage>:...` token in `completedSteps`: if `catalog` is empty, `gate-check` self-certifies the empty catalog as `gate:<stage>:skipped-empty-catalog` and the orchestrator skips gate-agent dispatch. Otherwise it dispatches the returned `prompt`, `catalog`, and narrow `ticketContext` to the configured gate-check `agent`, pinning its `model` (the bundled `local-board-gatecheck` agent on `haiku` by default), then records the real consultation with `gate-complete`. That agent pattern-matches the completed work against the catalog trigger criteria and returns strict JSON shaped:
 
 ```json
 { "requestedSteps": ["security_audit"] }
 ```
 
 An empty `requestedSteps` array means no specialty step is needed. T20260516T1552Z (`specialty-run` dispatcher) consumes each requested step name to resolve the specialty prompt/agent. T20260516T1554Z (`orchestrator wiring`) consumes the whole gate-check handoff pattern in the local-board orchestration flow.
+
+When `routing.requireGateConsultation` is true, forward moves out of gated stages require the matching `gate:` token before `move` will advance to the next stage (`design` to implementation, `implement` to review, or `test` to docs). Gate tokens are ignored by normal routing evidence and `doneRequires`.
 
 ### Specialty-run
 

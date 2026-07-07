@@ -20,6 +20,8 @@ import {
   queryNext,
   queryReady,
   queryTicket,
+  recordGateConsultation,
+  recordGateSkippedEmptyCatalog,
   schemaRecord,
   setTicketField,
   setTicketSection,
@@ -151,6 +153,9 @@ export async function main(argv) {
     }
     if (command === "gate-check") {
       return await commandGateCheck(root, args);
+    }
+    if (command === "gate-complete") {
+      return await commandGateComplete(root, args);
     }
     if (command === "specialty-run") {
       return await commandSpecialtyRun(root, args);
@@ -911,6 +916,12 @@ async function commandGateCheck(root, args) {
   // empty-catalog result.
   if (catalog.length > 0) {
     await assertPromptExists(promptPath, "gate-check");
+  } else {
+    // Empty-catalog branch: the CLI itself has deterministically established
+    // there is nothing to consult, so it self-certifies the consultation by
+    // stamping gate:<stage>:skipped-empty-catalog. Idempotent (addUnique), so
+    // a re-run is safe and dispatches no agent (B1320).
+    await recordGateSkippedEmptyCatalog(root, ticket.id, stage);
   }
 
   const baseRecord = ticketRecord(root, ticket);
@@ -948,6 +959,30 @@ async function commandGateCheck(root, args) {
     for (const entry of catalog) {
       console.log(`- ${entry.name}: ${entry.triggers}`);
     }
+  }
+  return 0;
+}
+
+async function commandGateComplete(root, args) {
+  const asJson = takeFlag(args, "--json");
+  const stage = takeOption(args, "--stage");
+  const executor = takeOption(args, "--executor");
+  const evidence = takeOption(args, "--evidence") ?? "none";
+  const ticketId = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined || stage === undefined || executor === undefined) {
+    throw new Error("gate-complete requires: <ticket-id> --stage <stage> --executor <executor> [--evidence <text>]");
+  }
+  if (!OPTIONAL_STEP_STAGES.includes(stage)) {
+    throw new Error(`gate-complete --stage must be one of ${OPTIONAL_STEP_STAGES.join(", ")}`);
+  }
+
+  const result = await recordGateConsultation(root, ticketId, stage, executor, evidence);
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`${result.ticket} ${result.stage} ${result.executor} ${result.path}`);
   }
   return 0;
 }
@@ -1124,6 +1159,7 @@ function printUsage() {
   local-board [--root <path>] unblock <ticket-id> <dependency-ticket-id>
   local-board [--root <path>] estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]
   local-board [--root <path>] gate-check <ticket-id> --stage <stage> [--json]
+  local-board [--root <path>] gate-complete <ticket-id> --stage <stage> --executor <executor> [--evidence <text>] [--json]
   local-board [--root <path>] specialty-run <ticket-id> <step-name> [--json]
   local-board [--root <path>] calibration suggest <ticket-id> [--json]`);
 }

@@ -2,7 +2,7 @@ import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/p
 import path from "node:path";
 
 import { clearActiveStep, stampActiveStep } from "./active-steps.js";
-import { loadConfig } from "./config.js";
+import { loadConfig, OPTIONAL_STEP_STAGES } from "./config.js";
 import { withOrderedTicketLocks, withTicketLock } from "./lock.js";
 import { ticketWorktreeMintOffsetMinutes } from "./worktrees.js";
 
@@ -61,6 +61,62 @@ export const TRIGGER_STATUSES = new Set([
 ]);
 
 const CLOSED_STATUSES = new Set(["done", "archived"]);
+
+// Gate-consultation tokens (`gate:<stage>:<executor>`) record that gate-check
+// was actually consulted for a design/implement/test stage, distinct from a
+// specialty step's own completedSteps evidence. They deliberately live in the
+// same `completedSteps` list (per the requirement) but must never be parsed
+// as routing evidence: completedStepRecords/validateStepRouting split on the
+// FIRST ":", which would otherwise mis-parse "gate:design:skipped-empty-catalog"
+// as action="gate", executor="design:skipped-empty-catalog" and trip a
+// spurious "unknown action gate" issue at done-time validation.
+const GATE_TOKEN_RE = /^gate:(design|implement|test):(.+)$/;
+const GATE_SKIPPED_EMPTY_CATALOG_EXECUTOR = "skipped-empty-catalog";
+
+// The three forward transitions that require a recorded gate consultation for
+// the stage just completed (when config.routing.requireGateConsultation is
+// true). Backward, lateral (questions/blocked), and archive/done moves are
+// never gated: only these exact from/to pairs return non-null.
+const GATE_FORWARD_TRANSITIONS = [
+  { from: new Set(["ready_for_design", "designing"]), to: "ready_for_implementation", stage: "design" },
+  { from: new Set(["ready_for_implementation", "implementing"]), to: "ready_for_review", stage: "implement" },
+  { from: new Set(["ready_for_test", "testing"]), to: "ready_for_docs", stage: "test" },
+];
+
+function gateToken(stage, executor) {
+  return `gate:${stage}:${executor}`;
+}
+
+function isGateToken(token) {
+  return GATE_TOKEN_RE.test(token);
+}
+
+// Parses gate-consultation tokens out of a ticket's completedSteps, returning
+// { stage, executor } records. These are intentionally excluded from
+// completedStepRecords (routing evidence) — see the comment on GATE_TOKEN_RE.
+export function gateConsultationRecords(ticket) {
+  const records = [];
+  for (const token of asList(ticket.frontMatter.completedSteps)) {
+    const match = GATE_TOKEN_RE.exec(token);
+    if (match !== null) {
+      records.push({ stage: match[1], executor: match[2] });
+    }
+  }
+  return records;
+}
+
+// Returns the stage ("design" | "implement" | "test") that must have a
+// recorded gate consultation before this exact forward move is allowed, or
+// null when the move is not one of the three gated forward pairs (including
+// all backward, lateral, and archive/done moves).
+export function gateStageForForwardMove(fromStatus, toStatus) {
+  for (const transition of GATE_FORWARD_TRANSITIONS) {
+    if (transition.from.has(fromStatus) && transition.to === toStatus) {
+      return transition.stage;
+    }
+  }
+  return null;
+}
 
 export const PRIORITIES = ["P0", "P1", "P2", "P3", "P4"];
 
@@ -349,6 +405,28 @@ export async function moveTicket(root, ticketId, status, options = {}) {
       if (options.__afterRead) {
         await options.__afterRead();
       }
+
+      // Load config once for whichever move-time check(s) apply: the gate
+      // precondition (only for the three forward gated pairs) and/or the
+      // done-time routing re-validation (only when moving to done). Neither
+      // check applies to the vast majority of moves (backward/lateral/active
+      // in-stage), so config stays unloaded for those.
+      const gateStage = gateStageForForwardMove(ticket.status, status);
+      const needsConfig = gateStage !== null || status === "done";
+      const config = needsConfig ? await loadConfig(board.root) : null;
+
+      if (gateStage !== null && config.routing?.requireGateConsultation === true) {
+        const consulted = gateConsultationRecords(ticket).some((record) => record.stage === gateStage);
+        if (!consulted) {
+          throw new Error(
+            `${ticket.path}: move refused: ticket ${ticket.id} has no recorded gate consultation for stage "${gateStage}". ` +
+              `Run "gate-check ${ticket.id} --stage ${gateStage}" first; if the catalog is non-empty, dispatch the gate agent ` +
+              `and record the result with "gate-complete ${ticket.id} --stage ${gateStage} --executor <route> --evidence <summary>" ` +
+              `before moving to ${status}.`,
+          );
+        }
+      }
+
       const frontMatter = withUpdated({ ...ticket.frontMatter, status }, now);
       if (
         status === "done" &&
@@ -358,7 +436,6 @@ export async function moveTicket(root, ticketId, status, options = {}) {
         frontMatter.workCompletedAt = formatIsoSeconds(now);
       }
       if (status === "done") {
-        const config = await loadConfig(board.root);
         const issues = validateRouting({ ...ticket, status, frontMatter }, config);
         if (issues.length > 0) {
           throw new Error(`routing validation failed:\n${issues.join("\n")}`);
@@ -684,6 +761,71 @@ export async function completeStep(root, ticketId, action, executor, evidence, o
   );
   await clearActiveStep(root, result.ticket).catch(() => {});
   return result;
+}
+
+// Idempotent low-level writer shared by recordGateConsultation and the
+// empty-catalog auto-stamp: adds a gate token to completedSteps via
+// addUnique (safe to re-run) and, when a Run Log line is supplied, appends
+// it in the same locked span.
+async function stampGateToken(root, ticketId, token, runLogLine, options = {}) {
+  return withTicketLock(
+    root,
+    ticketId,
+    async () => {
+      const { ticket } = await findTicket(root, ticketId);
+      if (options.__afterRead) {
+        await options.__afterRead();
+      }
+      const now = options.now ?? new Date();
+      const frontMatter = withUpdated(
+        {
+          ...ticket.frontMatter,
+          completedSteps: addUnique(asList(ticket.frontMatter.completedSteps), token),
+        },
+        now,
+      );
+      const body = runLogLine === null ? ticket.body : appendToSection(ticket.body, "Run Log", runLogLine);
+      await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
+      return ticket.path;
+    },
+    options.lock,
+  );
+}
+
+// Called by `gate-check` on the empty-catalog branch only (the CLI's own "no
+// dispatch" path — B1320): records that the CLI itself determined there was
+// nothing to consult for this stage. No Run Log line: this is a deterministic,
+// idempotent CLI side effect, not an agent's recorded verdict.
+export async function recordGateSkippedEmptyCatalog(root, ticketId, stage, options = {}) {
+  if (!OPTIONAL_STEP_STAGES.includes(stage)) {
+    throw new Error(`stage must be one of ${OPTIONAL_STEP_STAGES.join(", ")}`);
+  }
+  const token = gateToken(stage, GATE_SKIPPED_EMPTY_CATALOG_EXECUTOR);
+  const writtenPath = await stampGateToken(root, ticketId, token, null, options);
+  return { ticket: ticketId, stage, path: writtenPath };
+}
+
+// Backs the `gate-complete` verb: records that a gate agent actually
+// consulted and answered for `stage`, after the orchestrator has already
+// received that answer. This is the only producer of a non-empty-catalog gate
+// token, so the token means "a consultation actually produced a result" (see
+// the rejected fetch-time-stamp alternative in the ticket's Technical Design).
+export async function recordGateConsultation(root, ticketId, stage, executor, evidence, options = {}) {
+  if (!OPTIONAL_STEP_STAGES.includes(stage)) {
+    throw new Error(`stage must be one of ${OPTIONAL_STEP_STAGES.join(", ")}`);
+  }
+  if (!isValidAgentValue(executor)) {
+    throw new Error(`executor must be one of ${schemaAgentValues().join(", ")}`);
+  }
+  if (evidence.trim() === "") {
+    throw new Error("gate-complete requires non-empty evidence");
+  }
+
+  const token = gateToken(stage, executor);
+  const now = options.now ?? new Date();
+  const runLogLine = `- ${formatIsoSeconds(now)}: Gate consultation ${stage} via ${executor}: ${evidence.trim()}`;
+  const writtenPath = await stampGateToken(root, ticketId, token, runLogLine, { ...options, now });
+  return { ticket: ticketId, stage, executor, path: writtenPath };
 }
 
 // linkParent/unlinkParent/blockTicket/unblockTicket each read-then-write two
@@ -1045,12 +1187,14 @@ function validateStepRouting(ticket, config, action, executor, { enforceModel = 
 }
 
 function completedStepRecords(ticket) {
-  return asList(ticket.frontMatter.completedSteps).map((token) => {
-    const separator = token.indexOf(":");
-    return separator === -1
-      ? { action: token, executor: "" }
-      : { action: token.slice(0, separator), executor: token.slice(separator + 1) };
-  });
+  return asList(ticket.frontMatter.completedSteps)
+    .filter((token) => !isGateToken(token))
+    .map((token) => {
+      const separator = token.indexOf(":");
+      return separator === -1
+        ? { action: token, executor: "" }
+        : { action: token.slice(0, separator), executor: token.slice(separator + 1) };
+    });
 }
 
 export function nextTicket(board) {

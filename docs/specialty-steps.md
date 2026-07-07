@@ -16,12 +16,14 @@ mandatory action -> gate-check --stage <stage> -> for each requested name:
 ```
 
 1. The orchestrator completes the mandatory action (`design`, `implement`, or `test`) and records evidence with `complete-step`.
-2. The orchestrator runs `local-board gate-check <ticket-id> --stage <stage> --json` and dispatches the returned `prompt` through the configured gate agent.
-3. The gate agent returns strict JSON: `{ "requestedSteps": ["security_audit", ...] }`. An empty array is the normal case.
+2. The orchestrator runs `local-board gate-check <ticket-id> --stage <stage> --json`. If the catalog is empty, the command self-certifies the stage with a `gate:<stage>:skipped-empty-catalog` token and there is no agent dispatch.
+3. If the catalog is non-empty, the orchestrator dispatches the returned `prompt` through the configured gate agent, then records that consultation with `local-board gate-complete <ticket-id> --stage <stage> --executor <executor>`. The gate agent returns strict JSON: `{ "requestedSteps": ["security_audit", ...] }`. An empty array is the normal case.
 4. For each requested name, the orchestrator runs `local-board specialty-run <ticket-id> <name> --json`, dispatches the resolved `prompt` through the resolved `agent`, parses the specialty agent's `verdict` (`PASS` / `CONCERNS` / `FAIL`) plus `findings`, and records evidence with `local-board complete-step <ticket-id> <name> --executor <executor> --evidence "<VERDICT>: <summary>"`.
 5. After every requested specialty completes, the orchestrator advances the ticket using `move`.
 
-`gate-check` and `specialty-run` are read-only resolvers. They never mutate ticket state. All ticket mutation happens through `complete-step` and `move`.
+`gate-check` and `specialty-run` do not invoke agents. `gate-check` mutates only for the empty-catalog self-certification path; non-empty consultations are recorded by `gate-complete`, and specialty evidence is recorded by `complete-step`.
+
+When `routing.requireGateConsultation` is true, `move` refuses the forward transition out of `design`, `implement`, or `test` until the matching `gate:<stage>:...` token exists. Those gate tokens are consultation evidence only; they are invisible to normal routing evidence and `doneRequires`.
 
 ## Stages where specialty steps run
 
@@ -47,7 +49,7 @@ The v1 catalog is shipped in [`plans/local-board.config.jsonc`](../plans/local-b
 | implement | `security_audit` | [`plans/prompts/optional-steps/impl/security_audit.md`](../plans/prompts/optional-steps/impl/security_audit.md) | Code-level security findings, severity-ranked. |
 | implement | `ui_visual_review` | [`plans/prompts/optional-steps/impl/ui_visual_review.md`](../plans/prompts/optional-steps/impl/ui_visual_review.md) | Visual review findings (layout, responsive, a11y markup, regressions). |
 
-The `test` catalog is intentionally empty in v1. `gate-check --stage test` will always return `requestedSteps: []` until entries are added.
+The `test` catalog is intentionally empty in v1. `gate-check --stage test` self-certifies the empty catalog and returns no requested specialties until entries are added.
 
 ## Trigger guidance
 

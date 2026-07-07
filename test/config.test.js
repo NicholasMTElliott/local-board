@@ -240,6 +240,9 @@ test("defaultConfigJsonc matches DEFAULT_CONFIG except for documented difference
   //   - optionalSteps: DEFAULT_CONFIG ships empty catalogs (arrays merge
   //     wholesale, so an empty default lets a user config omit a stage
   //     without inheriting built-ins); the scaffold ships the v1 catalogs.
+  //   - routing.requireGateConsultation: DEFAULT_CONFIG keeps it off for
+  //     backward compat with configs that omit the key; the scaffold enables
+  //     it for new repos.
   // Any OTHER difference here means someone edited one copy's shared blocks
   // (workflow, agents, routing, retention, git, worktrees) without updating
   // the other. Fix by updating both DEFAULT_CONFIG and defaultConfigJsonc(),
@@ -247,16 +250,17 @@ test("defaultConfigJsonc matches DEFAULT_CONFIG except for documented difference
   // genuinely intentional.
   expected.estimation.enabled = true;
   expected.optionalSteps = scaffolded.optionalSteps;
+  expected.routing.requireGateConsultation = true;
   assert.deepEqual(scaffolded, expected);
 
   // Guard against the allowlist above silently growing to mask unrelated
-  // drift: confirm these two paths are the *only* places DEFAULT_CONFIG and
+  // drift: confirm these three paths are the *only* places DEFAULT_CONFIG and
   // the scaffold differ.
   const rawDiffs = leafDiffPaths(DEFAULT_CONFIG, parseJsonc(defaultConfigJsonc()));
   const collapsed = [...new Set(
     rawDiffs.map((diffPath) => (diffPath.startsWith("optionalSteps") ? "optionalSteps" : diffPath)),
   )].sort();
-  assert.deepEqual(collapsed, ["estimation.enabled", "optionalSteps"]);
+  assert.deepEqual(collapsed, ["estimation.enabled", "optionalSteps", "routing.requireGateConsultation"]);
 });
 
 test("loadConfig preserves an optional agent override on optionalSteps entries", async () => {
