@@ -1,7 +1,7 @@
 ---
 id: T20260707T1324Z
 type: task
-status: implementing
+status: done
 priority: P1
 parent: null
 children: []
@@ -11,10 +11,10 @@ branch: local-board/T20260707T1324Z-enforce-validate-the-executor-model-suffix-a
 estimate: 2
 estimateBasis: T20260707T1320Z
 workStartedAt: 2026-07-07T16:54:27Z
-workCompletedAt: null
+workCompletedAt: 2026-07-07T17:21:21Z
 created: 2026-07-07T13:24:41Z
-updated: 2026-07-07T17:14:46Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only]
+updated: 2026-07-07T17:21:21Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # enforce: validate the executor model suffix against configuredModel in strict routing
@@ -276,9 +276,37 @@ Deviations from the design: none in behavior. Test-file updates to pre-existing 
 
 - 2026-07-07T17:12:01Z: Review (codex): enforcement logic verified sound (approval separation, @ grammar, done-time back-compat, inline model-pin rejection all confirmed). One fix: codex skill command list omits [--executor] on approve-inline; also reword the Approved-inline run-log line for model deviations. Looping back.
 
+- 2026-07-07T17:15:15Z: Final disposition: both review items fixed exactly as specified (doc line + log wording, mechanical); core enforcement was verified sound in the codex pass. Treating review as complete.
+
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/T20260707T1324Z-..., commits bb3e889 + f1a9209.
+
+**Suite:** `npm run check` pass; `npm test` 185/185 pass; `npm run validate` OK before and after probes.
+
+**Independent end-to-end probe (throwaway --root board with default config pinning design->opus, strict routing on):**
+- Missing suffix: rejected exit 2 — message names the fix exactly: "design completed on model (none), but configured model is opus; record --executor claude-subagent:local-board-designer@opus (or @codex-default for a Codex-translated run), or approve the deviation with approve-inline --executor ...@<model>."
+- Wrong model (@sonnet): rejected exit 2 with the same expected-suffix format.
+- @codex-default: accepted; token recorded.
+- approve-inline --executor ...@sonnet then complete-step @sonnet: accepted; run log shows "Approved routing deviation for design: ...@sonnet: test deviation" (distinct from inline wording).
+- Correct @opus: accepted with no approval.
+- Live project board unaffected (validate OK before/after).
+
+**Docs grep audit:** zero stale "suffix is ignored"-style phrasing in docs/, SKILL.md, skills/. Two remaining matches are correct code comments (done-time route-only by design; a no-pin regression test).
+
+**Named tests:** match/mismatch/missing (tickets.test.js:621), codex-default (:653), approve-inline deviation (:678), done-time legacy back-compat (:716), no-pin route-only regression (:573), inline-default regression (:739), CLI-level deviation (cli.test.js:734).
+
+**Gaps / caveats:** none found; no flakes.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5) — verification pass.
+
+- All doc updates landed with the implementation commits (bb3e889, f1a9209): docs/PerStepOrchestration.md, docs/CodexSupport.md, docs/Workflow.md, SKILL.md, skills/codex/local-board/SKILL.md, memory-bank/systemPatterns.md.
+- Verified consistent and accurate: write-time enforcement only; done-time validation route-only for legacy evidence; @codex-default wildcard; approve-inline --executor escape documented.
+- Zero stale "suffix ignored" phrasing remains. No further edits needed.
 
 ## Questions
 
@@ -293,3 +321,11 @@ Deviations from the design: none in behavior. Test-file updates to pre-existing 
 - 2026-07-07T17:12:01Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) changes_requested scoped to a skill doc line + run-log wording; core enforcement verified correct.
 
 - 2026-07-07T17:12:01Z: Ensured git branch local-board/T20260707T1324Z-enforce-validate-the-executor-model-suffix-against-configuredmodel-in-strict-routing (already-current).
+
+- 2026-07-07T17:15:15Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework (sonnet): codex skill command list gains --executor; run-log distinguishes routing deviations from inline approvals; 185/185 green.
+
+- 2026-07-07T17:15:15Z: Completed review via codex-task:read-only: Review complete: codex verified the enforcement logic; the two mechanical items were fixed verbatim per the review text.
+
+- 2026-07-07T17:19:25Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 185/185; live probe captured exact rejection messages for missing/wrong suffix, codex-default acceptance, approve-inline deviation flow with distinct run-log wording; docs grep clean. Result: pass.
+
+- 2026-07-07T17:21:21Z: Completed document via codex-task:workspace-write: Codex (workspace-write) verification pass: all doc updates landed with implementation; consistency confirmed; no further edits.
