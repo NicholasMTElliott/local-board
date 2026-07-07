@@ -16,10 +16,13 @@ local-board
 Installation metadata:
 
 - Runtime directory: `<<INSTALL_PATH>>`
+- Installed from local-board v<<VERSION>>
 
 Do not search the filesystem for local-board source or scripts. Use the `local-board` command on PATH.
 
 Operate in the user's current project unless they specify another root. Pass `--root <path>` for non-current projects.
+
+Version-skew check (advisory): this skill was installed from local-board `v<<VERSION>>`. If `local-board --version` prints a different version, the runtime was updated after this skill was installed — warn the user and suggest re-running `local-board install` to refresh the skills. This is advisory: warn and continue; never treat it as a hard gate or block the ticket.
 
 ## Core Loop
 
