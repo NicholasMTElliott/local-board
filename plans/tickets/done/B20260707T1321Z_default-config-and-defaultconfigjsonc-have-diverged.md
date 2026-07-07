@@ -1,7 +1,7 @@
 ---
 id: B20260707T1321Z
 type: bug
-status: implementing
+status: done
 priority: P2
 parent: null
 children: []
@@ -11,10 +11,10 @@ branch: local-board/B20260707T1321Z-default-config-and-defaultconfigjsonc-have-d
 estimate: 2
 estimateBasis: B20260707T1320Z
 workStartedAt: 2026-07-07T19:56:06Z
-workCompletedAt: null
+workCompletedAt: 2026-07-07T20:09:32Z
 created: 2026-07-07T13:21:54Z
-updated: 2026-07-07T20:00:12Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-07T20:09:32Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # DEFAULT_CONFIG and defaultConfigJsonc have diverged
@@ -244,9 +244,41 @@ Implemented per the ticket's Technical Design (documented-divergence + allowlist
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) against commit 54ad315.
+
+No blocking findings.
+
+- leafDiffPaths (test/config.test.js:218) recurses through object keys and array indices over the union of both sides' keys — one-sided additions and deep changes are detected.
+- The reconciled deepEqual (:248-250) locks the shared blocks; the raw diff assertion (:255-259) pins the divergence list to exactly estimation.enabled + optionalSteps.
+- The optionalSteps whole-subtree exception can mask nested catalog differences inside that subtree — acceptable per the accepted design (the subtree itself is the intentional divergence: empty fallback vs populated scaffold).
+- Source comments verified accurate against loadConfig (ENOENT fallback + merge base, src/config.js:287-299) and mergeConfig array-replacement semantics (:990-1003).
+- src/config.js diff confirmed comment-only; no behavior change.
+
+Verdict: pass
+
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/B20260707T1321Z-..., commit 54ad315.
+
+**Suite:** `npm run check` pass; `npm test` 262/262 pass; `npm run validate` OK.
+
+**Non-vacuity probes (tamper-and-restore, both restored clean via git checkout):**
+- Shared-block drift (DEFAULT_CONFIG git.autoMerge flipped): guard test failed naming git.autoMerge in the diff; other 29 tests unaffected; suite green after restore.
+- One-sided key (bogusExtraKey added only to the JSONC template): guard test failed showing the key present only on the scaffolded side. Suite 262/262 after restore.
+
+**Divergences confirmed real:** DEFAULT_CONFIG estimation.enabled false + empty catalogs (src/config.js:271-284); JSONC estimation true + populated catalogs (:827-858, :878-883); explanatory comments present at both definitions.
+
+**Gaps / caveats:** doc one-liners (systemPatterns/Workflow) not re-verified in this pass (covered by implementation + review); tamper edits used targeted sed (tester has no Write tool), fully reverted with clean status confirmed.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5) — verification pass.
+
+- All doc updates landed with the implementation commit (54ad315): source comments on both config definitions, memory-bank/systemPatterns.md role one-liner, docs/Workflow.md optional-step defaults note.
+- Verified accurate: DEFAULT_CONFIG = ENOENT fallback / merge base with intentionally-minimal values; defaultConfigJsonc = blessed init scaffold with rich defaults; Workflow.md correctly attributes rich catalogs to the scaffold.
+- No further edits needed.
 
 ## Questions
 
@@ -255,3 +287,11 @@ Implemented per the ticket's Technical Design (documented-divergence + allowlist
 - 2026-07-07T19:55:23Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): divergence is intentional and load-bearing (ENOENT fallback vs blessed init defaults, differing only in estimation.enabled and optionalSteps); design documents both roles at the source and adds an allowlist guard test locking all other keys in sync. Estimate 2 (basis B20260707T1320Z).
 
 - 2026-07-07T19:56:06Z: Ensured git branch local-board/B20260707T1321Z-default-config-and-defaultconfigjsonc-have-diverged (created).
+
+- 2026-07-07T20:00:43Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): source comments for both roles, allowlist guard test (verified non-vacuous by tampering probe), memory-bank + Workflow notes; 262/262 green.
+
+- 2026-07-07T20:03:56Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict pass: diff walk symmetric and deep, allowlist pinned to the two documented keys, comments accurate, config.js comment-only.
+
+- 2026-07-07T20:07:50Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 262/262; two tamper probes proved the guard catches shared-scalar drift and one-sided additions, both restored clean. Result: pass.
+
+- 2026-07-07T20:09:32Z: Completed document via codex-task:workspace-write: Codex (workspace-write) verification: all doc updates landed with implementation; accuracy confirmed; no edits.
