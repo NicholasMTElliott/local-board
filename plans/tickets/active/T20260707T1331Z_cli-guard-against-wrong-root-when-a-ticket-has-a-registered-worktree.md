@@ -1,19 +1,19 @@
 ---
 id: T20260707T1331Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260707T1331Z-cli-guard-against-wrong-root-when-a-ticket-has-a-registered-worktree
 estimate: 4
 estimateBasis: T20260707T1328Z
-workStartedAt: null
+workStartedAt: 2026-07-07T23:22:26Z
 workCompletedAt: null
 created: 2026-07-07T13:31:54Z
-updated: 2026-07-07T23:22:25Z
+updated: 2026-07-07T23:35:00Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -222,6 +222,40 @@ Reuse the `withRepo` git fixture in `test/worktrees.test.js` (real
 
 ## Implementation Notes
 
+Implemented per the Technical Design.
+
+**`src/worktrees.js`**
+- Imported `resolveMainRoot` from `./lock.js`.
+- Added exported `assertInvocationRootForTicket(root, ticketId, { allowMainRoot })`: no-op unless `config.worktrees.guardWrongRoot === true`; resolves the ticket's expected worktree path from `resolveMainRoot(root)`; no-op when no worktree is registered for the ticket; no-op when the invocation root's toplevel matches the expected worktree; no-op when `allowMainRoot` is set; otherwise throws `refusing to mutate <ticketId> from <invocationTop>: this ticket has a registered worktree at <expected>. Re-run with --root <expected>, or pass --allow-main-root to override.` `loadConfig` failure and any git failure (worktree-list, rev-parse) are swallowed (fail-open).
+- `removeTicketWorktree` now resolves its working root via `resolveMainRoot(root)` instead of `rev-parse --show-toplevel`, so `worktree-remove` works given either the main root or the ticket's own worktree root.
+
+**`src/cli.js`**
+- Parsed `--allow-main-root` in `main()` alongside `--root`, threaded to the 14 guarded handlers: `start-work`, `complete-step`, `move`, `set`/`update-field`, `comment`, `section`/`set-section`, `estimate`, `approve-inline`, `gate-complete`, `link-parent`, `link-child`, `unlink-parent`, `block`, `unblock`. Each calls `assertInvocationRootForTicket` right after parsing its ticket id(s) (two-ticket commands guard both ids) and before the mutation. `begin-step`, `gate-check`, `worktree-*`, `fast-forward`, `validate`, `list`, `create`, `specialty-run` are unguarded per the design.
+- `printUsage()` documents `--allow-main-root` on every guarded command line plus a trailing explanatory paragraph.
+
+**`src/config.js`**
+- `DEFAULTS.worktrees` gains `guardWrongRoot: false` (backward-compat default).
+- `normalizeWorktrees` now destructures and validates `guardWrongRoot` as a boolean (throws `worktrees.guardWrongRoot must be a boolean` otherwise) and carries it through instead of dropping it.
+- Scaffold `defaultConfigJsonc()`'s `"worktrees"` block now emits `"guardWrongRoot": true` with an explanatory comment — new boards get the guard on by default; this repo's own `plans/local-board.config.jsonc` was intentionally left untouched (only the scaffold template changed).
+
+**Docs**
+- `SKILL_TEAM.md`: noted the CLI-level backstop next to the `--root <worktreePath>` discipline; replaced the `worktree-remove --root <project-root>` "exception" example with `--root <worktreePath>` and a note that `worktree-remove` resolves the main root itself from either root.
+- `memory-bank/systemPatterns.md`: added one terse line documenting the guard + `worktree-remove`'s main-root resolution under Safety Pattern.
+
+**Tests**
+- `test/worktrees.test.js`: added `worktree-remove resolves the main root and succeeds when invoked with the ticket's own worktree root`; guard refuse (exact message pieces: ticketId, expected worktree path, `--allow-main-root`) with mainline-file-byte-unchanged assertion; `--allow-main-root` override; correct-root success; no-worktree no-op; `guardWrongRoot: false` non-breaking no-op; `assertInvocationRootForTicket` fail-open in a non-git directory (direct unit call, no `GIT_AVAILABLE` skip needed). Guard tests move to the lateral `questions` status (not a routing-gated forward transition) to isolate the guard from the pre-existing `routing.requireGateConsultation` gate unrelated to this ticket.
+- `test/config.test.js`: updated the two existing `worktrees` shape assertions to include `guardWrongRoot`; added `loadConfig preserves an explicit boolean worktrees.guardWrongRoot` and `loadConfig rejects a non-boolean worktrees.guardWrongRoot`; added `worktrees.guardWrongRoot` to both the `defaultConfigJsonc matches DEFAULT_CONFIG` allowlist and the collapsed-diff-paths assertion (the "guard-test allowlist").
+
+**Verification**
+- `npm run check`: pass.
+- `npm test`: 324 tests, 323 pass, 1 skip (pre-existing, unrelated "smoke (slow)" race test), 0 fail.
+- `npm run validate`: `Ticket validation OK`.
+
+**Deviations / notes**
+- `normalizeWorktrees` rejects an explicit `guardWrongRoot: null` as non-boolean (consistent with `estimation.enabled`'s existing strictness), rather than silently defaulting it — the design didn't specify null handling explicitly.
+- Guard tests move tickets to `questions` (lateral) instead of a forward `ready_*` status to avoid tripping the unrelated `routing.requireGateConsultation` gate that the scaffold also enables by default; this is a test-isolation choice, not a behavior change.
+- This repo's own `plans/local-board.config.jsonc` was not modified — only `DEFAULTS`/`defaultConfigJsonc()` in `src/config.js` changed, per the scaffold-only instruction.
+
 ## Review Findings
 
 ## Test Evidence
@@ -235,3 +269,5 @@ Reuse the `withRepo` git fixture in `test/worktrees.test.js` (real
 - 2026-07-07T23:21:33Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): worktrees.guardWrongRoot refuse-with-override on per-ticket mutations from a non-worktree root (no-op when the ticket has no worktree; fails open on git errors); worktree-remove auto-resolves the main root retiring the SKILL_TEAM exception. Estimate 4 (basis T20260707T1328Z).
 
 - 2026-07-07T23:22:25Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (internal CLI safety guard)
+
+- 2026-07-07T23:22:26Z: Ensured git branch local-board/T20260707T1331Z-cli-guard-against-wrong-root-when-a-ticket-has-a-registered-worktree (created).

@@ -247,6 +247,9 @@ test("defaultConfigJsonc matches DEFAULT_CONFIG except for documented difference
   //   - routing.invalidateOnLoopBack: DEFAULT_CONFIG keeps it off for
   //     backward compat with configs that omit the key; the scaffold enables
   //     it for new repos.
+  //   - worktrees.guardWrongRoot: DEFAULT_CONFIG keeps it off for backward
+  //     compat with boards that omit the key; the scaffold enables it for new
+  //     repos (a no-op without a matching ticket worktree).
   // Any OTHER difference here means someone edited one copy's shared blocks
   // (workflow, agents, routing, retention, git, worktrees) without updating
   // the other. Fix by updating both DEFAULT_CONFIG and defaultConfigJsonc(),
@@ -256,6 +259,7 @@ test("defaultConfigJsonc matches DEFAULT_CONFIG except for documented difference
   expected.optionalSteps = scaffolded.optionalSteps;
   expected.routing.requireGateConsultation = true;
   expected.routing.invalidateOnLoopBack = true;
+  expected.worktrees.guardWrongRoot = true;
   assert.deepEqual(scaffolded, expected);
 
   // Guard against the allowlist above silently growing to mask unrelated
@@ -270,6 +274,7 @@ test("defaultConfigJsonc matches DEFAULT_CONFIG except for documented difference
     "optionalSteps",
     "routing.invalidateOnLoopBack",
     "routing.requireGateConsultation",
+    "worktrees.guardWrongRoot",
   ]);
 });
 
@@ -626,22 +631,27 @@ test("loadConfig rejects invalid estimation.splitThreshold values", async () => 
   }
 });
 
-test("loadConfig defaults worktrees.location to sibling", async () => {
+test("loadConfig defaults worktrees.location to sibling and guardWrongRoot to false", async () => {
   await withRoot(async (root) => {
     await writeConfig(root, `{
   "version": 1
 }
 `);
     const config = await loadConfig(root);
-    assert.deepEqual(config.worktrees, { location: "sibling" });
+    assert.deepEqual(config.worktrees, { location: "sibling", guardWrongRoot: false });
+  });
+
+  // No config file at all: same ENOENT-fallback default as every other block.
+  await withRoot(async (root) => {
+    assert.deepEqual((await loadConfig(root)).worktrees, { location: "sibling", guardWrongRoot: false });
   });
 });
 
-test("loadConfig parses the shipped worktrees block", async () => {
+test("loadConfig parses the shipped worktrees block (guardWrongRoot true by default for new boards)", async () => {
   await withRoot(async (root) => {
     await writeConfig(root, defaultConfigJsonc());
     const config = await loadConfig(root);
-    assert.deepEqual(config.worktrees, { location: "sibling" });
+    assert.deepEqual(config.worktrees, { location: "sibling", guardWrongRoot: true });
   });
 });
 
@@ -651,7 +661,7 @@ test("loadConfig accepts worktrees.location \"inside\" and explicit paths", asyn
   "worktrees": { "location": "inside" }
 }
 `);
-    assert.deepEqual((await loadConfig(root)).worktrees, { location: "inside" });
+    assert.deepEqual((await loadConfig(root)).worktrees, { location: "inside", guardWrongRoot: false });
   });
 
   await withRoot(async (root) => {
@@ -659,7 +669,7 @@ test("loadConfig accepts worktrees.location \"inside\" and explicit paths", asyn
   "worktrees": { "location": "../custom-worktrees" }
 }
 `);
-    assert.deepEqual((await loadConfig(root)).worktrees, { location: "../custom-worktrees" });
+    assert.deepEqual((await loadConfig(root)).worktrees, { location: "../custom-worktrees", guardWrongRoot: false });
   });
 });
 
@@ -682,6 +692,34 @@ test("loadConfig rejects worktrees as a non-object", async () => {
     await writeConfig(root, `{ "worktrees": "sibling" }`);
     await assert.rejects(loadConfig(root), /worktrees must be an object/);
   });
+});
+
+test("loadConfig preserves an explicit boolean worktrees.guardWrongRoot", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, `{
+  "worktrees": { "location": "sibling", "guardWrongRoot": true }
+}
+`);
+    assert.deepEqual((await loadConfig(root)).worktrees, { location: "sibling", guardWrongRoot: true });
+  });
+
+  await withRoot(async (root) => {
+    await writeConfig(root, `{
+  "worktrees": { "location": "sibling", "guardWrongRoot": false }
+}
+`);
+    assert.deepEqual((await loadConfig(root)).worktrees, { location: "sibling", guardWrongRoot: false });
+  });
+});
+
+test("loadConfig rejects a non-boolean worktrees.guardWrongRoot", async () => {
+  const cases = [`"true"`, `1`, `null`, `{}`];
+  for (const rawValue of cases) {
+    await withRoot(async (root) => {
+      await writeConfig(root, `{ "worktrees": { "location": "sibling", "guardWrongRoot": ${rawValue} } }`);
+      await assert.rejects(loadConfig(root), /worktrees\.guardWrongRoot must be a boolean/, `case ${rawValue}`);
+    });
+  }
 });
 
 test("loadConfig warns about unknown optionalSteps stage keys without throwing", async () => {

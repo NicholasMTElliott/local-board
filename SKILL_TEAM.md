@@ -26,7 +26,10 @@ local-board
 
 Operate in the user's current project unless they specify another root. Pass
 `--root <path>` for non-current projects and `--root <worktreePath>` for all
-per-ticket calls (see Worktrees).
+per-ticket calls (see Worktrees). The CLI itself refuses wrong-root per-ticket
+mutations once a ticket has a registered worktree (`worktrees.guardWrongRoot`),
+naming the expected worktree; this is a backstop, not a reason to skip passing
+`--root <worktreePath>`.
 
 ## When to use it
 
@@ -78,8 +81,12 @@ that worktree (pass it the `worktreePath` and instruct it to use
 right after the ticket reaches `done`:
 
 ```sh
-local-board worktree-remove <ticket-id> --root <project-root>
+local-board worktree-remove <ticket-id> --root <worktreePath>
 ```
+
+`worktree-remove` resolves the repo's main root itself, so it works from
+either `--root <project-root>` or `--root <worktreePath>` — no special case to
+remember.
 
 ## Control loop
 

@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { main } from "../src/cli.js";
 import { initProject } from "../src/scaffold.js";
 import { createTicket, setTicketField } from "../src/tickets.js";
-import { worktreesRootFor } from "../src/worktrees.js";
+import { assertInvocationRootForTicket, worktreesRootFor } from "../src/worktrees.js";
 import { defaultConfigJsonc } from "../src/config.js";
 import { removeFixtureDir } from "./helpers/fixtures.js";
 
@@ -144,6 +144,155 @@ test("worktree-remove removes a ticket worktree and is idempotent", { skip: !GIT
       removed: false,
     });
   });
+});
+
+test("worktree-remove resolves the main root and succeeds when invoked with the ticket's own worktree root", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, _baseBranch, worktreesRoot) => {
+    const ticketPath = await createTicket(root, "task", "Remove from worktree root", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-22T14:04:30Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add removable ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    const worktreePath = path.join(worktreesRoot, ticketId);
+    assert.equal((await runCli(["--root", root, "worktree-add", ticketId, "--json"])).code, 0);
+
+    // Invoked with --root <worktreePath> (the "wrong" root for git's own
+    // rev-parse --show-toplevel, which would resolve to the worktree itself)
+    // -- removeTicketWorktree must resolve the shared main root instead, so
+    // `git worktree remove` targets the worktree from outside it.
+    const removed = await runCli(["--root", worktreePath, "worktree-remove", ticketId, "--json"]);
+    assert.equal(removed.code, 0, removed.stderr);
+    assert.deepEqual(JSON.parse(removed.stdout), {
+      ticketId,
+      worktreePath: displayPath(worktreePath),
+      removed: true,
+    });
+
+    const again = await runCli(["--root", root, "worktree-remove", ticketId, "--json"]);
+    assert.equal(again.code, 0, again.stderr);
+    assert.equal(JSON.parse(again.stdout).removed, false);
+  });
+});
+
+test("guard refuses a per-ticket mutation from the main root when the ticket has a registered worktree", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, _baseBranch, worktreesRoot) => {
+    // withRepo scaffolds the default config, whose worktrees block ships
+    // guardWrongRoot: true.
+    const ticketPath = await createTicket(root, "task", "Guard refuse ticket", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-22T16:00:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    assert.equal((await runCli(["--root", root, "worktree-add", ticketId, "--json"])).code, 0);
+    const worktreePath = path.join(worktreesRoot, ticketId);
+    const before = await readFile(ticketPath, "utf8");
+
+    const result = await runCli(["--root", root, "move", ticketId, "questions"]);
+
+    assert.equal(result.code, 2);
+    assert.match(result.stderr, new RegExp(`^refusing to mutate ${escapeRegExp(ticketId)} from `));
+    assert.match(
+      result.stderr,
+      new RegExp(`registered worktree at ${escapeRegExp(displayPath(worktreePath))}`),
+    );
+    assert.match(
+      result.stderr,
+      new RegExp(`Re-run with --root ${escapeRegExp(displayPath(worktreePath))}, or pass --allow-main-root to override\\.$`),
+    );
+
+    const after = await readFile(ticketPath, "utf8");
+    assert.equal(after, before, "mainline ticket file must be byte-unchanged after a refused mutation");
+  });
+});
+
+test("guard is overridden by --allow-main-root", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Guard override ticket", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-22T16:01:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    assert.equal((await runCli(["--root", root, "worktree-add", ticketId, "--json"])).code, 0);
+
+    const result = await runCli(["--root", root, "move", ticketId, "questions", "--allow-main-root"]);
+    assert.equal(result.code, 0, result.stderr);
+  });
+});
+
+test("guard allows a mutation from the ticket's own registered worktree root", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, _baseBranch, worktreesRoot) => {
+    const ticketPath = await createTicket(root, "task", "Guard correct root ticket", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-22T16:02:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    assert.equal((await runCli(["--root", root, "worktree-add", ticketId, "--json"])).code, 0);
+    const worktreePath = path.join(worktreesRoot, ticketId);
+
+    const result = await runCli(["--root", worktreePath, "move", ticketId, "questions"]);
+    assert.equal(result.code, 0, result.stderr);
+  });
+});
+
+test("guard no-ops when the ticket has no registered worktree (single-ticket mode)", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root) => {
+    const ticketPath = await createTicket(root, "task", "No worktree guard ticket", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-22T16:03:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const result = await runCli(["--root", root, "move", ticketId, "questions"]);
+    assert.equal(result.code, 0, result.stderr);
+  });
+});
+
+test("guard is a no-op when worktrees.guardWrongRoot is false (non-breaking default for older boards)", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root) => {
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      defaultConfigJsonc().replace('"guardWrongRoot": true', '"guardWrongRoot": false'),
+      "utf8",
+    );
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Disable guardWrongRoot"]);
+
+    const ticketPath = await createTicket(root, "task", "Guard disabled ticket", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-22T16:04:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    assert.equal((await runCli(["--root", root, "worktree-add", ticketId, "--json"])).code, 0);
+
+    // Wrong root (main checkout), guard disabled: succeeds despite the
+    // registered worktree.
+    const result = await runCli(["--root", root, "move", ticketId, "questions"]);
+    assert.equal(result.code, 0, result.stderr);
+  });
+});
+
+test("assertInvocationRootForTicket fails open when git resolution fails (non-git directory)", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "local-board-guard-nogit-"));
+  try {
+    await mkdir(path.join(root, "plans"), { recursive: true });
+    await writeFile(path.join(root, "plans", "local-board.config.jsonc"), defaultConfigJsonc(), "utf8");
+
+    await assert.doesNotReject(assertInvocationRootForTicket(root, "T20260101T0000Z", {}));
+  } finally {
+    await removeFixtureDir(root);
+  }
 });
 
 test("create from peer worktrees mints distinct timestamps via the worktree mint offset", { skip: !GIT_AVAILABLE }, async () => {
