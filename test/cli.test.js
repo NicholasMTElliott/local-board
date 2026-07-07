@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { main } from "../src/cli.js";
+import { commandWhere, main } from "../src/cli.js";
 import { loadConfig } from "../src/config.js";
 import { createTicket, discover, queryNext } from "../src/tickets.js";
 
@@ -143,6 +143,69 @@ test("--version and version subcommand each print the package.json version and e
   const subcommandResult = await runCli(["version"]);
   assert.equal(subcommandResult.code, 0);
   assert.equal(subcommandResult.stdout.trim(), packageJson.version);
+});
+
+test("where --json self-locates version, promptsDir, templatesDir, and agentsDir in the dev-clone layout", async () => {
+  const result = await runCli(["where", "--json"]);
+  assert.equal(result.code, 0);
+
+  const packageJson = JSON.parse(
+    await readFile(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8"),
+  );
+  const info = JSON.parse(result.stdout);
+
+  assert.equal(info.version, packageJson.version);
+  assert.match(info.promptsDir.replace(/\\/g, "/"), /resources\/prompts$/);
+  assert.match(info.templatesDir.replace(/\\/g, "/"), /resources\/templates$/);
+  assert.match(info.agentsDir.replace(/\\/g, "/"), /agents\/codex$/);
+  assert.ok(statSync(info.packageRoot).isDirectory());
+  assert.ok(statSync(info.promptsDir).isDirectory());
+  assert.ok(statSync(info.templatesDir).isDirectory());
+  assert.ok(statSync(info.agentsDir).isDirectory());
+  assert.ok(statSync(path.join(info.promptsDir, "steps", "gate-check.md")).isFile());
+  assert.ok(statSync(path.join(info.agentsDir, "local-board-designer.md")).isFile());
+});
+
+test("where (non-JSON) prints the same labelled fields", async () => {
+  const result = await runCli(["where"]);
+  assert.equal(result.code, 0);
+  assert.match(result.stdout, /^version: /m);
+  assert.match(result.stdout, /^packageRoot: /m);
+  assert.match(result.stdout, /^promptsDir: /m);
+  assert.match(result.stdout, /^templatesDir: /m);
+  assert.match(result.stdout, /^agentsDir: /m);
+});
+
+test("where --json resolves the flattened ~/.local-board runtime layout via a packageRoot override", async () => {
+  const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "local-board-where-flattened-"));
+  try {
+    await writeFile(path.join(fixtureRoot, "package.json"), JSON.stringify({ version: "9.9.9" }), "utf8");
+    await mkdir(path.join(fixtureRoot, "prompts", "steps"), { recursive: true });
+    await writeFile(path.join(fixtureRoot, "prompts", "steps", "gate-check.md"), "# Gate Check\n", "utf8");
+    await mkdir(path.join(fixtureRoot, "templates"), { recursive: true });
+    await mkdir(path.join(fixtureRoot, "agents", "codex"), { recursive: true });
+    await writeFile(path.join(fixtureRoot, "agents", "codex", "local-board-designer.md"), "# Designer\n", "utf8");
+
+    const stdout = [];
+    const originalLog = console.log;
+    console.log = (message = "") => stdout.push(String(message));
+    let code;
+    try {
+      code = await commandWhere(".", ["--json"], fixtureRoot);
+    } finally {
+      console.log = originalLog;
+    }
+
+    assert.equal(code, 0);
+    const info = JSON.parse(stdout.join("\n"));
+    assert.equal(info.version, "9.9.9");
+    assert.equal(info.packageRoot, fixtureRoot);
+    assert.equal(info.promptsDir, path.join(fixtureRoot, "prompts"));
+    assert.equal(info.templatesDir, path.join(fixtureRoot, "templates"));
+    assert.equal(info.agentsDir, path.join(fixtureRoot, "agents", "codex"));
+  } finally {
+    await rm(fixtureRoot, { recursive: true, force: true });
+  }
 });
 
 test("list --ready uses config-aware eligibility, ordering, JSON shape, status filter, and limit", async () => {

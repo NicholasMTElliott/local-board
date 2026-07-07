@@ -1,19 +1,19 @@
 ---
 id: T20260707T1322Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260707T1322Z-npm-add-where-json-and-absolute-fallback-prompt-paths-retire-install-path-placeholder
 estimate: 2
 estimateBasis: T20260707T1325Z
-workStartedAt: null
+workStartedAt: 2026-07-07T20:15:07Z
 workCompletedAt: null
 created: 2026-07-07T13:22:26Z
-updated: 2026-07-07T20:15:06Z
+updated: 2026-07-07T20:32:07Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
@@ -142,6 +142,44 @@ After these edits, no live skill template contains `<<INSTALL_PATH>>` (acceptanc
 
 ## Implementation Notes
 
+Implemented per Technical Design, following all four decisions and the recommended answers to the open questions.
+
+**`local-board where [--json]` (src/cli.js)**
+- Added `commandWhere(root, args, packageRootOverride)`, dispatched from `main` on `where`, and added to `printUsage`.
+- Self-locates via `selfPackageRoot()` (`path.resolve(fileURLToPath(new URL("..", import.meta.url)))`), reusing `readPackageVersion` (now accepts an optional `packageRoot` override, read via `path.join(packageRoot, "package.json")` instead of the `import.meta.url`-relative URL when overridden) and `packagedResourceDir` (imported from `./scaffold.js`) for `promptsDir`/`templatesDir`. `agentsDir` is `path.join(packageRoot, "agents", "codex")` (no dual-layout probe needed, per design).
+- JSON shape: `{ version, packageRoot, promptsDir, templatesDir, agentsDir }`. Non-JSON prints the same five fields as labelled lines.
+- `commandWhere` is exported (`export { commandWhere }`) so tests can pass a `packageRoot` override directly (mirrors `packagedResourceDir`'s test seam) without a CLI flag.
+- Does not read `~/.local-board/install-info.json` (Decision 1 / Open Question 1: recommended "no").
+
+**No new fallback plumbing** — `begin-step`/`gate-check`/`specialty-run` are unchanged (Decision 2). `where` alone satisfies the acceptance criterion.
+
+**INSTALL_PATH placeholder retirement (Decision 3)**
+- `SKILL.md`: replaced the `Runtime directory: <<INSTALL_PATH>>` line with a `Run local-board where --json for packaged asset locations...` pointer line (kept `Installed from local-board v<<VERSION>>`); rewrote the fallback-prompt sentence to point at `promptsDir` from `where --json`.
+- `SKILL_TEAM.md`: deleted the `Runtime directory: <<INSTALL_PATH>>` line (no replacement text needed here; it never had a `<<VERSION>>` line either).
+- `skills/codex/local-board/SKILL.md`: deleted `Runtime directory:` line; replaced the Codex-executor-prompts line with "run `local-board where --json` and read `agentsDir`."
+- `skills/codex/local-team/SKILL.md`: same two edits, plus the routing-table line ("translate to the matching Codex executor prompt in `<<INSTALL_PATH>>/agents/codex/`") now reads "...in the `agentsDir` reported by `local-board where --json`."
+- Confirmed no live skill template (or any non-ticket file) contains `<<INSTALL_PATH>>` (grep-verified; also covered by a new test).
+
+**src/install.js (Decision 4)**
+- Removed the `.replace(/<<INSTALL_PATH>>/g, ...)` line from `renderSkill`; kept `<<SCRIPT_PATH>>` and `<<VERSION>>` replacements untouched.
+- Took the recommended small cleanup: dropped the now-dead `installDir` argument from `renderSkill`, `installRenderedSkillDir`, and `renderFilesInPlace` (render-only threading). `installDir` remains used elsewhere in `install.js` for the copy/`writeInstallInfo`/hooks flow, unchanged.
+
+**Tests**
+- `test/cli.test.js`: added `commandWhere` to the import; three new tests — `where --json` in the repo/dev-clone layout (asserts version matches `package.json`, dirs end with `resources/prompts`/`resources/templates`/`agents/codex`, all exist on disk, and both a sample prompt file and `local-board-designer.md` resolve); `where` (non-JSON) labelled-line shape; `where --json` against a flattened-layout fixture via the `packageRoot` override parameter (mirrors the existing `packagedResourceDir` fixture tests).
+- `test/install.test.js`:
+  - Removed the two assertions that rendered skills matched the concrete `installDir` path (no longer true — INSTALL_PATH is never rendered); added `assert.doesNotMatch(..., /Runtime directory:/)` in both affected tests, alongside the existing `<<SCRIPT_PATH>>|<<INSTALL_PATH>>` negative assertion.
+  - New test: "no live skill template contains the retired `<<INSTALL_PATH>>` placeholder" — reads `SKILL.md`, `SKILL_TEAM.md`, and both `skills/codex/*/SKILL.md` directly and asserts neither `<<INSTALL_PATH>>` nor a `Runtime directory:` line survives.
+  - New test: "renderSkill no longer replaces `<<INSTALL_PATH>>`" — uses the existing `createPackagedCopy()` fixture helper, reintroduces a literal `<<INSTALL_PATH>>` token into a copied Codex `SKILL.md`, runs a real install from that packaged copy, and asserts the token survives verbatim in the rendered output (proves the replacement code path is actually gone, not just that current templates happen to lack the token).
+
+**Verification**
+- `npm run check`: clean (all `node --check` targets pass).
+- `npm test`: 267/267 passing (includes 5 new/changed assertions specific to this ticket: 3 in `cli.test.js`, 2 new + 2 edited in `install.test.js`).
+- `npm run validate`: `Ticket validation OK`.
+
+**Deviations from the design:** none. Took the recommended answer on all three Open Questions (no `installInfo` field; drop + pointer line; small `installDir`-arg cleanup in `renderSkill`).
+
+**Files touched:** `src/cli.js`, `src/install.js`, `SKILL.md`, `SKILL_TEAM.md`, `skills/codex/local-board/SKILL.md`, `skills/codex/local-team/SKILL.md`, `test/cli.test.js`, `test/install.test.js`.
+
 ## Review Findings
 
 ## Test Evidence
@@ -153,3 +191,5 @@ After these edits, no live skill template contains `<<INSTALL_PATH>>` (acceptanc
 ## Run Log
 
 - 2026-07-07T20:15:06Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): self-locating where --json from the running CLI's own assets (packagedResourceDir + readPackageVersion), INSTALL_PATH deleted from all templates and renderSkill; no new fallback plumbing (B1320's loud error is the contract); runtime copy noted as hooks+provenance only. Estimate 2 (basis T20260707T1325Z).
+
+- 2026-07-07T20:15:07Z: Ensured git branch local-board/T20260707T1322Z-npm-add-where-json-and-absolute-fallback-prompt-paths-retire-install-path-placeholder (created).
