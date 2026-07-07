@@ -1,7 +1,7 @@
 ---
 id: T20260707T1322Z
 type: task
-status: implementing
+status: done
 priority: P2
 parent: null
 children: []
@@ -11,10 +11,10 @@ branch: local-board/T20260707T1322Z-npm-add-where-json-and-absolute-fallback-pro
 estimate: 2
 estimateBasis: T20260707T1325Z
 workStartedAt: 2026-07-07T20:15:07Z
-workCompletedAt: null
+workCompletedAt: 2026-07-07T20:43:32Z
 created: 2026-07-07T13:22:26Z
-updated: 2026-07-07T20:32:07Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-07T20:43:32Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # npm: add where --json and absolute fallback prompt paths; retire INSTALL_PATH placeholder
@@ -182,9 +182,43 @@ Implemented per Technical Design, following all four decisions and the recommend
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) against commit c9edfa1.
+
+No blocking findings.
+
+- where dispatches before repo-dependent paths; reviewer verified it works from the repo and from $TEMP.
+- Reported dirs consistent with both layouts (agents copied verbatim; prompts/templates flattened) per src/install.js:160-166.
+- Residual <<INSTALL_PATH>> confined to tests and historical ticket prose; zero live template/agent/docs/source residue.
+- Codex skills keep the executor prompt filename convention alongside the agentsDir lookup — parallel orchestrator has everything it needs.
+- Installer cleanup removed only the retired rendering; version/script rendering, allow rule, and hooks wiring untouched.
+- Tests cover JSON/non-JSON/flattened shapes plus residue scans and the removed substitution.
+
+Verdict: pass
+
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/T20260707T1322Z-..., commit c9edfa1.
+
+**Suite:** `npm run check` pass; `npm test` 267/267 pass; `npm run validate` OK.
+
+**Probes:**
+- `where --json` from the repo and a temp cwd: identical absolute paths, all four dirs exist, version 0.1.0 — self-location via import.meta.url confirmed.
+- Throwaway-HOME `install --all --hooks` (npm link/unlink restored): zero `<<INSTALL_PATH>>` or `Runtime directory` matches ANYWHERE in the fake home (both rendered skill dirs and the raw ~/.local-board copy — the source templates themselves are clean now); residue confined to the intentional negative-assertion test fixture and historical ticket prose.
+- The INSTALLED runtime's own CLI (`<fakehome>/.local-board/bin/local-board.js where --json`) reported correctly flattened paths (prompts/templates at root, agents/codex present with all seven executor prompts) — live proof of dual-layout resolution, not a fixture.
+- Codex skill instructions verified: where --json -> agentsDir with the executor filename convention intact; local-team consistent; Claude skill points fallback prompts at promptsDir.
+
+**Gaps / caveats:** none; Windows homedir override needed both HOME and USERPROFILE (test-harness detail).
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `README.md` — where --json added to the CLI examples.
+- `memory-bank/systemPatterns.md` — where [--json] in the MVP CLI list; Codex executor prompts resolve via where --json agentsDir; ~/.local-board noted as hooks + provenance only.
+- `docs/CodexSupport.md` — stale installed-runtime executor-prompt wording replaced with the where --json contract.
+- Skill templates were rewritten during implementation.
 
 ## Questions
 
@@ -193,3 +227,11 @@ Implemented per Technical Design, following all four decisions and the recommend
 - 2026-07-07T20:15:06Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): self-locating where --json from the running CLI's own assets (packagedResourceDir + readPackageVersion), INSTALL_PATH deleted from all templates and renderSkill; no new fallback plumbing (B1320's loud error is the contract); runtime copy noted as hooks+provenance only. Estimate 2 (basis T20260707T1325Z).
 
 - 2026-07-07T20:15:07Z: Ensured git branch local-board/T20260707T1322Z-npm-add-where-json-and-absolute-fallback-prompt-paths-retire-install-path-placeholder (created).
+
+- 2026-07-07T20:32:31Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): where command with dual-layout resolution, INSTALL_PATH fully retired from templates and renderSkill, 5 net-new tests; 267/267 green.
+
+- 2026-07-07T20:35:46Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict pass: where works everywhere, dual-layout paths verified against installer behavior, zero live placeholder residue, codex skill instructions complete.
+
+- 2026-07-07T20:40:33Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 267/267; where verified in repo, temp cwd, and live from an installed flattened runtime; zero placeholder residue anywhere in a full fake-home install; codex instructions complete. Result: pass.
+
+- 2026-07-07T20:43:32Z: Completed document via codex-task:workspace-write: Codex (workspace-write): README/systemPatterns CLI lists gain where; CodexSupport executor-prompt wording updated; runtime-copy purpose noted.
