@@ -5,7 +5,7 @@ status: ready_for_design
 priority: P3
 parent: null
 children: []
-blockedBy: []
+blockedBy: [T20260707T1327Z]
 blocks: []
 branch: null
 estimate: null
@@ -13,7 +13,7 @@ estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-07T13:33:55Z
-updated: 2026-07-07T13:23:41Z
+updated: 2026-07-07T13:29:51Z
 completedSteps: []
 routingApprovals: []
 ---
