@@ -21,7 +21,7 @@ plans/prompts/roles/  durable role instructions
 plans/prompts/steps/  durable step instructions
 plans/templates/      ticket templates
 plans/local-board.config.jsonc workflow and routing config
-resources/            packaged prompt/template mirror synced from plans/ via npm run sync-resources
+resources/            packaged prompt/template mirror synced from plans/ via npm run sync-resources (sync writes LF; mirror comparison is line-ending-insensitive)
 src/                  parser, validator, writer, git workflow, priority picker, CLI
 skills/codex/         Codex skill templates and metadata
 scripts/              maintainer tooling, not packaged
