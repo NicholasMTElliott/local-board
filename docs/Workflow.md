@@ -205,6 +205,41 @@ Bundled Claude agents (each pins a default model in its frontmatter; config
 - `local-board-tester` (sonnet)
 - `local-board-documenter` (sonnet)
 
+### Dispatch enforcement hooks
+
+`local-board install --hooks` (opt-in; off by default) wires four Claude Code
+hooks into the user's `~/.claude/settings.json`, installed alongside the
+runtime at `~/.local-board/hooks/`:
+
+- **`dispatch-ledger.js`** (`PostToolUse`, matcher `Task|Agent`) appends
+  `{ts, subagent_type, model, ticketId, session_id}` to
+  `.local-board/dispatch-ledger.jsonl` for every subagent dispatch, keyed off a
+  `Ticket: <id>` first line in the dispatch prompt (see Agent Routing above).
+- **`routing-validator.js`** (`PreToolUse`, matcher `Task|Agent`) runs
+  `check-dispatch` before a `local-board-*` subagent dispatch and denies a
+  computed route/model mismatch.
+- **`evidence-gate.js`** (`PreToolUse`, matcher `Bash`) denies a `complete-step`
+  call claiming a `claude-subagent:*` executor with no matching dispatch-ledger
+  entry in the current session.
+- **`approve-inline-consent.js`** (`PreToolUse`, matcher `Bash`) turns
+  `approve-inline` into a `permissionDecision: "ask"`, making the Claude Code
+  permission prompt the deterministic human approval for that routing
+  deviation.
+
+All four hooks fail open: an unexpected error, a missing/unreachable CLI, or
+an ambiguous `check-dispatch` exit code (2) allows the dispatch rather than
+blocking it, with a warning reason surfaced to the model where applicable.
+`complete-step`'s own strict-routing validation remains the authoritative,
+CLI-side backstop regardless of hook state.
+
+Documented limits: inline work produces no tool call, so hooks cannot see it;
+a skipped step produces no event; a same-session loop-back through a step can
+still satisfy the evidence gate from an earlier iteration's ledger entry
+(CLI-side loop-back invalidation is a separate concern); Codex has no
+deny-hook equivalent, so Codex enforcement stays CLI-side. The ledger file is
+append-only JSONL with no rotation or write-locking in v1 — entries are small
+and unlocked concurrent writes are a known, low-impact race.
+
 ## Optional Steps
 
 `plans/local-board.config.jsonc` may include an `optionalSteps` catalog keyed by stage:

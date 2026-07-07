@@ -1,19 +1,19 @@
 ---
 id: T20260707T1326Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P1
 parent: null
 children: []
 blockedBy: [T20260707T1325Z]
 blocks: []
-branch: null
+branch: local-board/T20260707T1326Z-enforce-claude-code-hooks-for-dispatch-ledger-evidence-gate-routing-validator-and-approve-inline-consent
 estimate: 8
 estimateBasis: T20260707T1325Z
-workStartedAt: null
+workStartedAt: 2026-07-07T18:06:04Z
 workCompletedAt: null
 created: 2026-07-07T13:26:41Z
-updated: 2026-07-07T18:06:03Z
+updated: 2026-07-07T18:30:38Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
@@ -128,6 +128,41 @@ Each script exports `handle(payload, deps)` (deps = `{spawnSync, readLedger, app
 
 ## Implementation Notes
 
+Implemented all four self-contained hook scripts under `hooks/` per the Technical Design, plus install wiring, skill mandate, docs, and tests.
+
+**New files:**
+- `hooks/dispatch-ledger.js` (PostToolUse, matcher `Task|Agent`): appends `{ts, subagent_type, model, ticketId, session_id}` to `<mainRoot>/.local-board/dispatch-ledger.jsonl`; ticket id parsed from a `Ticket: <id>` first-matching line in `tool_input.prompt`; main-root resolved via an inline `git rev-parse --git-common-dir` shell-out (no `src/` import). Always exits 0.
+- `hooks/routing-validator.js` (PreToolUse, matcher `Task|Agent`): fast-paths on non-`local-board-*` subagents and missing `Ticket:` lines (no spawn); otherwise spawns `node <installDir>/bin/local-board.js check-dispatch --agent --model --ticket --root <cwd>` (installDir resolved as the hook's own parent dir, valid both in a dev checkout and an installed `~/.local-board/` tree); exit 0 -> allow, exit 1 -> deny with the JSON reason, exit 2/ENOENT/timeout -> fail-open allow with a warning `permissionDecisionReason`. `LOCAL_BOARD_HOOK_CLI_PATH` env var and `deps.spawnSync`/`deps.cliPath` are test seams.
+- `hooks/evidence-gate.js` (PreToolUse, matcher `Bash`): cheap substring fast-path on `complete-step`, then a whitespace-token-precise parse (locates the subcommand immediately after the `local-board`/`local-board.js` program token, skipping `--root <value>`) to avoid `--evidence`/`--reason` substring false positives; gates only `claude-subagent:*` executor claims (inline/codex-task:* pass through) on a session-scoped `dispatch-ledger.jsonl` match; missing/unreadable ledger fails open.
+- `hooks/approve-inline-consent.js` (PreToolUse, matcher `Bash`): same token-precise match for `approve-inline`; returns `permissionDecision: "ask"` with the specified reason string.
+
+All four export `handle(payload, deps)` for direct-import unit tests and wrap `main()` in try/catch, always exiting 0 (fail-open). **Notable fix during implementation:** stdin was originally read via `fs.readFileSync(0)`, which hangs indefinitely on Windows when the hook is launched by an async spawn (`child_process.execFile`/`spawn`) rather than a sync one (`execFileSync`/`spawnSync`) — reproduced independently of these scripts. Switched all four to async stream-based stdin reading (`process.stdin` `data`/`end` events), which works under both spawn styles. Recommend flagging this as a real risk for the live Claude Code hook runner if it uses async spawn internally.
+
+**`src/install.js`:**
+- `copyDir("hooks", "hooks", installDir)` — unconditional, hooks/ ships regardless of wiring.
+- `--hooks` / `--no-hooks` flags in `parseArgs` (default: neither set, i.e. hooks off). `--no-hooks` is checked before the generic `--no-<target>` fallback so it doesn't collide with target-exclusion parsing.
+- New `patchHooks(settingsPath, installDir, {remove})`: idempotent, dedup-by-exact-command-string patcher for `settings.hooks.{PreToolUse,PostToolUse}`, mirroring `patchSettings`'s atomic tmp+rename write. Registers `routing-validator.js` and `dispatch-ledger.js` each under their own `Task|Agent` matcher group, and `evidence-gate.js` + `approve-inline-consent.js` as two separate hook entries under one shared `Bash` matcher group (independent commands, not merged scripts, so one crashing can't disable the other). `remove: true` deletes only the managed command strings and prunes now-empty matcher groups/event arrays, leaving user-authored hooks untouched.
+- Default install prints a hint (`Run 'local-board install --hooks' to enable...`) when hooks weren't enabled and a Claude-like target was selected. `performUninstall` also removes wired hook entries from `settings.json` for any target with a `settingsPath`.
+
+**Skill mandate:** one-line addition to `SKILL.md` (step 9) and `SKILL_TEAM.md` (Execution profiles) requiring every Claude subagent dispatch prompt's first line be `Ticket: <id>`. Did not add this to the Codex skill templates (`skills/codex/**`) — Codex dispatch doesn't go through the Task/Agent tool the hooks match on, so the anchor has no consumer there; flagging as a minor scope call in case the ticket intended it for consistency.
+
+**`docs/Workflow.md`:** new "Dispatch enforcement hooks" subsection (under Agent Routing) documenting the four hooks, fail-open policy, and the documented residual limits (inline/skipped-step blindness, same-session loop-back residual, Codex has no deny-hook, unlocked/unrotated ledger).
+
+**`package.json`:** added `hooks` to the `files` allowlist and four `node --check` invocations to the `check` script.
+
+**Tests:**
+- `test/hooks.test.js` (new, 30 tests): direct `handle()` unit tests for every fast-path/deny/allow/fail-open branch in all four scripts (including "spawn not invoked" assertions via `deps` stubs), plus spawned-subprocess end-to-end tests (real `git` temp repos, real ledger files, a stub `check-dispatch` CLI via `LOCAL_BOARD_HOOK_CLI_PATH`) verifying the actual stdin-JSON -> exit-code/stdout-JSON contract. Note: the spawned-process test helper deliberately avoids `child_process.execFile`'s `input` option — on this Windows/Node (v24.14.0) combination that option hangs indefinitely (reproduced with a minimal isolated repro, independent of these hook scripts); it instead spawns and writes/closes `child.stdin` manually, which is the same pattern a real hook runner uses.
+- `test/install.test.js`: 6 new tests for `--hooks`/`--no-hooks` (opt-in hint, all-four-entries + idempotency, precise removal preserving user-authored hooks/allow-rule, non-Claude target no-op, uninstall removes wired entries).
+- `test/pack.test.js` and the packaged-copy fixture list in `test/install.test.js`: added `hooks/`.
+
+**Verification:** `npm run check` (green), `npm test` — 241/241 passing (30 new in `hooks.test.js`, 6 new in `install.test.js`), `npm run validate` (green), `npm pack --dry-run` includes all four `hooks/*.js` files.
+
+**Deviations / things to flag for review:**
+1. Chose a uniform hook-output contract (`{ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision, permissionDecisionReason } }`) for deny/ask/fail-open-with-warning, and print nothing for a plain allow. This wasn't spelled out verbatim in the design but follows its description closely; worth confirming against the live Claude Code hook JSON schema during the open-question validation pass.
+2. `routing-validator.js` resolves its own CLI path as `<its own dir>/../bin/local-board.js` rather than taking an explicit `installDir` argument — this is exact for both a dev checkout and an installed tree (hooks/ and bin/ are always siblings), but differs from the design's literal phrasing of a passed `<installDir>`. Added `LOCAL_BOARD_HOOK_CLI_PATH` as an override/test seam.
+3. Did not add the `Ticket: <id>` mandate to the Codex skill templates (see above).
+4. Open questions 1/3/4 from the ticket (exact Task-vs-Agent tool name, headless `ask` behavior, `model` presence reliability) are not resolvable from this implementation pass — matcher registers both names defensively; the rest is unverifiable without a live harness run.
+
 ## Review Findings
 
 ## Test Evidence
@@ -139,3 +174,5 @@ Each script exports `handle(payload, deps)` (deps = `{spawnSync, readLedger, app
 ## Run Log
 
 - 2026-07-07T18:04:53Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): four self-contained stdin-JSON hook scripts in hooks/, installed to ~/.local-board/hooks and wired via new patchHooks into user settings; opt-in --hooks flag; fail-open on errors (CLI validation is the backstop); session-scoped ledger gate. Estimate 8 (basis T20260707T1325Z).
+
+- 2026-07-07T18:06:04Z: Ensured git branch local-board/T20260707T1326Z-enforce-claude-code-hooks-for-dispatch-ledger-evidence-gate-routing-validator-and-approve-inline-consent (created).

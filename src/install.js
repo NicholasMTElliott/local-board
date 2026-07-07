@@ -137,6 +137,7 @@ function performInstall(args, targets, home, installDir, options = {}) {
   if (selected.length === 0) {
     throw new Error("no install targets selected");
   }
+  const hooksEnabled = args.hooks === true;
 
   const checkResolvesOnPath = options.resolvesOnPath ?? resolvesOnPath;
   const fromClone = existsSync(join(SCRIPT_DIR, ".git"));
@@ -159,6 +160,7 @@ function performInstall(args, targets, home, installDir, options = {}) {
   copyDir("src", "src", installDir);
   copyDir("agents", "agents", installDir);
   copyDir("skills", "skills", installDir);
+  copyDir("hooks", "hooks", installDir);
   copyDir(join("resources", "prompts"), "prompts", installDir);
   copyDir(join("resources", "templates"), "templates", installDir);
 
@@ -190,7 +192,16 @@ function performInstall(args, targets, home, installDir, options = {}) {
     }
     if (target.settingsPath !== null) {
       patchSettings(target.settingsPath, allowRule);
+      if (hooksEnabled) {
+        patchHooks(target.settingsPath, installDir);
+      } else if (args.hooks === false) {
+        patchHooks(target.settingsPath, installDir, { remove: true });
+      }
     }
+  }
+
+  if (!hooksEnabled && selected.some((target) => target.settingsPath !== null)) {
+    console.log(`Run 'local-board install --hooks' to enable Claude Code dispatch-enforcement hooks`);
   }
 }
 
@@ -316,6 +327,9 @@ function performUninstall(targets, home, installDir) {
     }
     removeLegacyDirs(target, "legacySkillDirs", target.skillDir, "skill");
     removeLegacyDirs(target, "legacyTeamSkillDirs", target.teamSkillDir, "team skill");
+    if (target.settingsPath !== null && existsSync(target.settingsPath)) {
+      patchHooks(target.settingsPath, installDir, { remove: true });
+    }
   }
   uninstallClaudeAgents(home);
 }
@@ -350,6 +364,7 @@ function parseArgs(argv, knownIds) {
     help: false,
     listTargets: false,
     uninstall: false,
+    hooks: undefined,
   };
 
   for (const arg of argv) {
@@ -357,6 +372,8 @@ function parseArgs(argv, knownIds) {
     else if (arg === "--help" || arg === "-h") parsed.help = true;
     else if (arg === "--list-targets") parsed.listTargets = true;
     else if (arg === "--uninstall") parsed.uninstall = true;
+    else if (arg === "--hooks") parsed.hooks = true;
+    else if (arg === "--no-hooks") parsed.hooks = false;
     else if (arg.startsWith("--target=")) {
       parsed.explicit = new Set(arg.slice("--target=".length).split(",").filter(Boolean));
       for (const id of parsed.explicit) {
@@ -407,8 +424,14 @@ Usage:
   node install.mjs --target=claude,codex,opencode,cline,cursor
   node install.mjs --all
   node install.mjs --no-opencode
+  node install.mjs --hooks
+  node install.mjs --no-hooks
   node install.mjs --list-targets
-  node install.mjs --uninstall`);
+  node install.mjs --uninstall
+
+--hooks installs Claude Code dispatch-enforcement hooks (dispatch ledger,
+routing validator, evidence gate, approve-inline consent) into the Claude
+target's settings.json. Off by default; --no-hooks removes them.`);
 }
 
 function patchSettings(settingsPath, allowRule) {
@@ -428,6 +451,96 @@ function patchSettings(settingsPath, allowRule) {
     writeFileSync(tmpPath, `${JSON.stringify(settings, null, 2)}\n`);
     renameSync(tmpPath, settingsPath);
     console.log(`added Claude allow rule to ${settingsPath}`);
+  }
+}
+
+// Managed Claude Code hook entries. `matcher` "Task|Agent" covers both the
+// current and (per Claude Code release notes) possibly-renamed subagent
+// dispatch tool name -- see T20260707T1326Z's open question. `evidence-gate`
+// and `approve-inline-consent` share the `Bash` matcher but are registered as
+// two separate hook commands under it (not merged into one script) so a crash
+// in one cannot disable the other.
+const HOOK_SPECS = [
+  { event: "PreToolUse", matcher: "Task|Agent", script: "routing-validator.js" },
+  { event: "PreToolUse", matcher: "Bash", script: "evidence-gate.js" },
+  { event: "PreToolUse", matcher: "Bash", script: "approve-inline-consent.js" },
+  { event: "PostToolUse", matcher: "Task|Agent", script: "dispatch-ledger.js" },
+];
+
+function hookCommand(installDir, script) {
+  const scriptPath = join(installDir, "hooks", script).replace(/\\/g, "/");
+  return `node ${scriptPath}`;
+}
+
+// Idempotent, dedup-by-exact-command-string patcher for `settings.hooks`,
+// mirroring `patchSettings`'s atomic tmp+rename write. `remove: true` deletes
+// only the managed command entries (and prunes now-empty matcher groups /
+// event arrays), leaving any user-authored hooks untouched.
+function patchHooks(settingsPath, installDir, { remove = false } = {}) {
+  let settings = {};
+  if (existsSync(settingsPath)) {
+    settings = JSON.parse(readFileSync(settingsPath, "utf8"));
+  }
+  if (typeof settings !== "object" || settings === null) {
+    throw new Error(`${settingsPath} is not a JSON object`);
+  }
+
+  settings.hooks ??= {};
+  let changed = false;
+
+  for (const spec of HOOK_SPECS) {
+    const command = hookCommand(installDir, spec.script);
+    settings.hooks[spec.event] = Array.isArray(settings.hooks[spec.event]) ? settings.hooks[spec.event] : [];
+    const events = settings.hooks[spec.event];
+    const group = events.find((entry) => entry && entry.matcher === spec.matcher);
+
+    if (remove) {
+      if (group && Array.isArray(group.hooks)) {
+        const before = group.hooks.length;
+        group.hooks = group.hooks.filter((hook) => hook?.command !== command);
+        if (group.hooks.length !== before) {
+          changed = true;
+        }
+      }
+      continue;
+    }
+
+    if (!group) {
+      events.push({ matcher: spec.matcher, hooks: [{ type: "command", command }] });
+      changed = true;
+      continue;
+    }
+    group.hooks = Array.isArray(group.hooks) ? group.hooks : [];
+    if (!group.hooks.some((hook) => hook?.command === command)) {
+      group.hooks.push({ type: "command", command });
+      changed = true;
+    }
+  }
+
+  // Prune matcher groups left with no hooks, then event arrays left empty.
+  for (const event of Object.keys(settings.hooks)) {
+    if (!Array.isArray(settings.hooks[event])) {
+      continue;
+    }
+    const before = settings.hooks[event].length;
+    settings.hooks[event] = settings.hooks[event].filter((entry) => Array.isArray(entry?.hooks) && entry.hooks.length > 0);
+    if (settings.hooks[event].length !== before) {
+      changed = true;
+    }
+    if (settings.hooks[event].length === 0) {
+      delete settings.hooks[event];
+    }
+  }
+  if (Object.keys(settings.hooks).length === 0) {
+    delete settings.hooks;
+  }
+
+  if (changed) {
+    mkdirSync(dirname(settingsPath), { recursive: true });
+    const tmpPath = `${settingsPath}.tmp-${process.pid}`;
+    writeFileSync(tmpPath, `${JSON.stringify(settings, null, 2)}\n`);
+    renameSync(tmpPath, settingsPath);
+    console.log(`${remove ? "removed" : "added"} Claude Code dispatch-enforcement hooks in ${settingsPath}`);
   }
 }
 
