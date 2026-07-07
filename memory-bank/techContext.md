@@ -21,8 +21,10 @@ plans/prompts/roles/  durable role instructions
 plans/prompts/steps/  durable step instructions
 plans/templates/      ticket templates
 plans/local-board.config.jsonc workflow and routing config
+resources/            packaged prompt/template mirror synced from plans/ via npm run sync-resources
 src/                  parser, validator, writer, git workflow, priority picker, CLI
 skills/codex/         Codex skill templates and metadata
+scripts/              maintainer tooling, not packaged
 bin/                  executable CLI entrypoint
 test/                 node:test unit tests
 install.mjs           cross-harness installer
@@ -34,6 +36,7 @@ SKILL.md              installable orchestration skill template
 - Prefer schemas and small scripts over hidden convention.
 - Avoid external services for core workflow.
 - Preserve portability across Windows/macOS/Linux.
+- `package.json` `files` allowlist defines the npm package surface.
 
 ## Open Decisions
 - Whether advisory transition guidance should become a hard transition validator.

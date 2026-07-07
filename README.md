@@ -128,6 +128,7 @@ agents/              Installable agent definitions
 skills/              Harness-specific skill templates
 docs/                Human-facing documentation
 plans/               File-backed board: tickets, prompts, templates
+resources/           Packaged prompt/template mirror synced from plans/
 plans/tickets/       Ticket files grouped by human-friendly status folders
 plans/prompts/       Role and step prompts for delegated agents, including estimator and estimate prompts
 plans/prompts/optional-steps/
