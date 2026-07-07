@@ -33,6 +33,7 @@ To use local-board as an agent orchestrator, install it globally so the `local-b
 ```sh
 npm install -g local-board            # or: npm install -g . / npm link, from a checkout
 local-board install                   # install skills + agents
+local-board install --hooks           # opt in to Claude Code dispatch-enforcement hooks
 local-board install --list-targets    # see where they would go
 local-board install --target=codex    # install only Codex skills
 ```
@@ -122,6 +123,7 @@ The test suite includes function-level ticket kernel coverage and CLI command-su
 - [docs/LocalBoardConcept.md](docs/LocalBoardConcept.md) — human-readable overview of the repo-native board model, workflow, and tradeoffs.
 - [docs/TicketFormat.md](docs/TicketFormat.md) — ticket naming, front matter, sections, and state rules.
 - [docs/Workflow.md](docs/Workflow.md) — lifecycle from epic/story decomposition through implementation, review, test, docs, and closeout.
+- [docs/EnforcementHooks.md](docs/EnforcementHooks.md) — Claude Code hook enforcement for dispatch routing, evidence gating, and inline-fallback consent.
 - [docs/CodexSupport.md](docs/CodexSupport.md) — installing and using local-board directly in Codex, including route translation and parallel team mode.
 - [docs/specialty-steps.md](docs/specialty-steps.md) — optional security, UI, and UX specialty review steps and how the gate-check classifier dispatches them.
 - [docs/PerStepOrchestration.md](docs/PerStepOrchestration.md) — the parallel-work design: a single top-level orchestrator dispatches each pipeline step to a model-specialized executor, enabling full per-step model/prompt/route variety. Operational contract in `SKILL_TEAM.md`.

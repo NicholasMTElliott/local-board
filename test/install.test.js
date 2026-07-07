@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { chmodSync, cpSync, existsSync, mkdtempSync, writeFileSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -68,6 +68,18 @@ async function withHome(fn) {
   }
 }
 
+// Regression seam for the hook-command quoting fix: the prefix deliberately
+// contains a space so the resulting HOME (and therefore the install dir
+// nested under it) reproduces "home dir with spaces" installs.
+async function withHomeContainingSpace(fn) {
+  const home = await mkdtemp(path.join(os.tmpdir(), "local board install "));
+  try {
+    await fn(home);
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+}
+
 function findPathKey(env) {
   return Object.keys(env).find((key) => key.toLowerCase() === "path") ?? "PATH";
 }
@@ -127,6 +139,7 @@ function createPackagedCopy() {
     "resources",
     "agents",
     "skills",
+    "hooks",
   ];
   for (const entry of entries) {
     const source = path.resolve(entry);
@@ -286,6 +299,171 @@ test("settings.json allow-rule patch is idempotent, uses the constant local-boar
     const secondRun = JSON.parse(await readFile(settingsPath, "utf8"));
     assert.deepEqual(secondRun.permissions.allow, ["Bash(local-board *)"]);
     assert.deepEqual(secondRun.permissions.allow, firstRun.permissions.allow);
+  });
+});
+
+test("install --hooks is opt-in: plain install writes no hooks and prints the enable hint", async () => {
+  await withHome(async (home) => {
+    const settingsPath = path.join(home, ".claude", "settings.json");
+    const { stdout } = await runInstallCli(home, ["--target=claude"]);
+
+    assert.match(stdout, /Run 'local-board install --hooks' to enable Claude Code dispatch-enforcement hooks/);
+    const settings = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.equal(settings.hooks, undefined);
+  });
+});
+
+test("install --hooks writes all four managed hook entries and is idempotent", async () => {
+  await withHome(async (home) => {
+    const settingsPath = path.join(home, ".claude", "settings.json");
+    const installDir = path.join(home, ".local-board").replace(/\\/g, "/");
+    const { stdout } = await runInstallCli(home, ["--target=claude", "--hooks"]);
+    assert.doesNotMatch(stdout, /Run 'local-board install --hooks'/);
+
+    const firstRun = JSON.parse(await readFile(settingsPath, "utf8"));
+    const preToolMatchers = firstRun.hooks.PreToolUse.map((entry) => entry.matcher).sort();
+    assert.deepEqual(preToolMatchers, ["Bash", "Task|Agent"]);
+    assert.deepEqual(
+      firstRun.hooks.PostToolUse.map((entry) => entry.matcher),
+      ["Task|Agent"],
+    );
+
+    const bashGroup = firstRun.hooks.PreToolUse.find((entry) => entry.matcher === "Bash");
+    const bashCommands = bashGroup.hooks.map((hook) => hook.command).sort();
+    assert.deepEqual(bashCommands, [
+      `node "${installDir}/hooks/approve-inline-consent.js"`,
+      `node "${installDir}/hooks/evidence-gate.js"`,
+    ]);
+
+    const taskGroupPre = firstRun.hooks.PreToolUse.find((entry) => entry.matcher === "Task|Agent");
+    assert.deepEqual(
+      taskGroupPre.hooks.map((hook) => hook.command),
+      [`node "${installDir}/hooks/routing-validator.js"`],
+    );
+    const taskGroupPost = firstRun.hooks.PostToolUse.find((entry) => entry.matcher === "Task|Agent");
+    assert.deepEqual(
+      taskGroupPost.hooks.map((hook) => hook.command),
+      [`node "${installDir}/hooks/dispatch-ledger.js"`],
+    );
+
+    // Existing allow-rule patch must coexist untouched.
+    assert.deepEqual(firstRun.permissions.allow, ["Bash(local-board *)"]);
+
+    // Re-run --hooks: no duplicate entries.
+    await runInstallCli(home, ["--target=claude", "--hooks"]);
+    const secondRun = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.deepEqual(secondRun.hooks, firstRun.hooks);
+  });
+});
+
+test("install --no-hooks removes the managed hook entries and leaves the allow rule and other settings alone", async () => {
+  await withHome(async (home) => {
+    const settingsPath = path.join(home, ".claude", "settings.json");
+    await runInstallCli(home, ["--target=claude", "--hooks"]);
+
+    // Simulate a user-authored hook entry that must survive removal.
+    const before = JSON.parse(await readFile(settingsPath, "utf8"));
+    before.hooks.PreToolUse.push({ matcher: "WebFetch", hooks: [{ type: "command", command: "node user-hook.js" }] });
+    await writeFile(settingsPath, `${JSON.stringify(before, null, 2)}\n`, "utf8");
+
+    await runInstallCli(home, ["--target=claude", "--no-hooks"]);
+    const after = JSON.parse(await readFile(settingsPath, "utf8"));
+
+    assert.equal(after.hooks.PostToolUse, undefined);
+    const remainingPreMatchers = after.hooks.PreToolUse.map((entry) => entry.matcher);
+    assert.deepEqual(remainingPreMatchers, ["WebFetch"]);
+    assert.deepEqual(after.permissions.allow, ["Bash(local-board *)"]);
+  });
+});
+
+test("install --hooks on a non-Claude-only target leaves settings untouched (no settingsPath)", async () => {
+  await withHome(async (home) => {
+    await runInstallCli(home, ["--target=codex", "--hooks"]);
+    assert.equal(existsSync(path.join(home, ".claude", "settings.json")), false);
+    // hooks/ still ships to the install dir regardless of wiring.
+    assert.equal(existsSync(path.join(home, ".local-board", "hooks", "dispatch-ledger.js")), true);
+  });
+});
+
+test("install --uninstall removes wired hook entries from settings.json", async () => {
+  await withHome(async (home) => {
+    const settingsPath = path.join(home, ".claude", "settings.json");
+    await runInstallCli(home, ["--target=claude", "--hooks"]);
+    assert.ok((await readFile(settingsPath, "utf8")).includes("dispatch-ledger.js"));
+
+    await runInstallCli(home, ["--target=claude", "--uninstall"]);
+    const after = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.equal(after.hooks, undefined);
+  });
+});
+
+test("install --hooks quotes the hook command path when the home dir contains spaces, and --uninstall still removes it", async () => {
+  await withHomeContainingSpace(async (home) => {
+    assert.match(home, / /); // sanity: the fixture actually reproduces a space in the path
+
+    const settingsPath = path.join(home, ".claude", "settings.json");
+    const installDir = path.join(home, ".local-board").replace(/\\/g, "/");
+    await runInstallCli(home, ["--target=claude", "--hooks"]);
+
+    const afterInstall = JSON.parse(await readFile(settingsPath, "utf8"));
+    const taskGroupPost = afterInstall.hooks.PostToolUse.find((entry) => entry.matcher === "Task|Agent");
+    assert.deepEqual(
+      taskGroupPost.hooks.map((hook) => hook.command),
+      [`node "${installDir}/hooks/dispatch-ledger.js"`],
+    );
+
+    // Re-running --hooks must not duplicate the (quoted) entry.
+    await runInstallCli(home, ["--target=claude", "--hooks"]);
+    const afterSecondRun = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.deepEqual(afterSecondRun.hooks, afterInstall.hooks);
+
+    // Uninstall must match and remove the quoted command form.
+    await runInstallCli(home, ["--target=claude", "--uninstall"]);
+    const afterUninstall = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.equal(afterUninstall.hooks, undefined);
+  });
+});
+
+test("install --hooks recognizes a hand-seeded unquoted (pre-rework) entry as managed: reinstall yields exactly one quoted entry per script, no duplicate", async () => {
+  await withHome(async (home) => {
+    const settingsPath = path.join(home, ".claude", "settings.json");
+    const installDir = path.join(home, ".local-board").replace(/\\/g, "/");
+
+    // First install (creates settings.json + install dir), then hand-seed an
+    // old-form unquoted managed entry alongside whatever the install wrote,
+    // simulating a settings.json produced by the pre-rework installer.
+    await runInstallCli(home, ["--target=claude", "--hooks"]);
+    const before = JSON.parse(await readFile(settingsPath, "utf8"));
+    const postTaskGroup = before.hooks.PostToolUse.find((entry) => entry.matcher === "Task|Agent");
+    postTaskGroup.hooks = [{ type: "command", command: `node ${installDir}/hooks/dispatch-ledger.js` }];
+    await writeFile(settingsPath, `${JSON.stringify(before, null, 2)}\n`, "utf8");
+
+    await runInstallCli(home, ["--target=claude", "--hooks"]);
+    const after = JSON.parse(await readFile(settingsPath, "utf8"));
+    const afterTaskGroup = after.hooks.PostToolUse.find((entry) => entry.matcher === "Task|Agent");
+    assert.deepEqual(
+      afterTaskGroup.hooks.map((hook) => hook.command),
+      [`node "${installDir}/hooks/dispatch-ledger.js"`],
+    );
+  });
+});
+
+test("install --uninstall removes a hand-seeded unquoted (pre-rework) entry too", async () => {
+  await withHome(async (home) => {
+    const settingsPath = path.join(home, ".claude", "settings.json");
+    const installDir = path.join(home, ".local-board").replace(/\\/g, "/");
+
+    await runInstallCli(home, ["--target=claude", "--hooks"]);
+    const before = JSON.parse(await readFile(settingsPath, "utf8"));
+    const postTaskGroup = before.hooks.PostToolUse.find((entry) => entry.matcher === "Task|Agent");
+    // Replace the (quoted) installed entry with an unquoted pre-rework form,
+    // so uninstall must recognize it purely by script path.
+    postTaskGroup.hooks = [{ type: "command", command: `node ${installDir}/hooks/dispatch-ledger.js` }];
+    await writeFile(settingsPath, `${JSON.stringify(before, null, 2)}\n`, "utf8");
+
+    await runInstallCli(home, ["--target=claude", "--uninstall"]);
+    const after = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.equal(after.hooks, undefined);
   });
 });
 

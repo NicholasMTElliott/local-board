@@ -58,7 +58,7 @@ For each step, `begin-step <ticket-id> --json` returns:
 Dispatch the step accordingly:
 
 - `inline`: do it yourself, on your own model. `inline` cannot carry a per-step model.
-- `claude-subagent:<name>`: dispatch that subagent. When `configuredModel` is non-null, pin the subagent's model to it. Run it in the background so other tickets progress concurrently.
+- `claude-subagent:<name>`: dispatch that subagent. When `configuredModel` is non-null, pin the subagent's model to it. Run it in the background so other tickets progress concurrently. **Every dispatch prompt must begin with a first line of the exact form `Ticket: <id>`** — the machine-readable anchor the optional dispatch-ledger/routing-validator hooks (`local-board install --hooks`) parse to verify the dispatch happened.
 - `codex-task:<mode>`: shell out to codex in that mode (a Bash call, so it works without the Task tool).
 
 Whole steps can be delegated to an external agent purely by routing the action to

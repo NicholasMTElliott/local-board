@@ -21,7 +21,7 @@ test("npm pack --dry-run --json includes the publishable tree and excludes dev-o
     assert.ok(files.includes(expected), `expected packed tree to include ${expected}`);
   }
 
-  const includedPrefixes = ["bin/", "src/", "resources/", "agents/", "skills/"];
+  const includedPrefixes = ["bin/", "src/", "resources/", "agents/", "skills/", "hooks/"];
   for (const prefix of includedPrefixes) {
     assert.ok(
       files.some((file) => file.startsWith(prefix)),
