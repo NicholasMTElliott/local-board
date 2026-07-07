@@ -55,3 +55,4 @@ SKILL.md              installable orchestration skill template
 - `npm run check`
 - `npm test`
 - `npm run validate`
+- Git temp fixtures set `gc.auto=0` and `gc.autoDetach=false`; recursive fixture teardown must use `test/helpers/fixtures.js` `removeFixtureDir` for retried `fs.rm`.

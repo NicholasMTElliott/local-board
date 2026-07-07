@@ -27,6 +27,7 @@ npm run validate  # validate this repo's own plans/ board
 ```
 
 All three must pass. The test suite is plain `node --test`; no framework, no network.
+Git temp fixtures set `gc.auto=0` and `gc.autoDetach=false`; recursive fixture teardown must use `test/helpers/fixtures.js` `removeFixtureDir` for retried `fs.rm`.
 
 ## Branches and Pull Requests
 
