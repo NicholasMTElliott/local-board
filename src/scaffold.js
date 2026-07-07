@@ -1,19 +1,18 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { defaultConfigJsonc } from "./config.js";
 
 const TICKET_FOLDERS = ["backlog", "ready", "active", "questions", "blocked", "review", "done", "archive"];
 
-const FILES = new Map([
-  [
-    ".gitignore",
-    `# local-board ticket worktrees (see plans/local-board.config.jsonc: worktrees.location).
+const GITIGNORE_WORKTREE_ENTRY = ".worktrees/";
+const GITIGNORE_TEMPLATE = `# local-board ticket worktrees (see plans/local-board.config.jsonc: worktrees.location).
 # Only used by the "inside" layout, but seeded regardless of the chosen layout so
 # switching to it later never needs a manual .gitignore edit.
-.worktrees/
-`,
-  ],
+${GITIGNORE_WORKTREE_ENTRY}
+`;
+
+const FILES = new Map([
   [
     "plans/README.md",
     `# Plans
@@ -200,6 +199,8 @@ export async function initProject(root = ".", options = {}) {
     await writeScaffoldFile(path.join(rootPath, relativePath), content, overwrite, created, skipped);
   }
 
+  await writeGitignore(path.join(rootPath, ".gitignore"), created, skipped);
+
   await writeScaffoldFile(
     path.join(rootPath, "plans", "local-board.config.jsonc"),
     defaultConfigJsonc(),
@@ -222,4 +223,38 @@ async function writeScaffoldFile(filePath, content, overwrite, created, skipped)
     }
     throw error;
   }
+}
+
+// .gitignore is handled outside the generic FILES scaffold path (which writes
+// with flag "w" under --overwrite and would replace a user's existing file
+// wholesale). A user's root .gitignore may carry unrelated project rules that
+// must survive `init --overwrite`. So regardless of the overwrite flag: if the
+// file is absent, seed it with the full template; if present, append the
+// .worktrees/ ignore line idempotently and never touch any other line.
+async function writeGitignore(filePath, created, skipped) {
+  let current = null;
+  try {
+    current = await readFile(filePath, "utf8");
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  if (current === null) {
+    await writeFile(filePath, GITIGNORE_TEMPLATE, "utf8");
+    created.push(filePath);
+    return;
+  }
+
+  const lines = current.split(/\r?\n/);
+  if (lines.some((line) => line.trim() === GITIGNORE_WORKTREE_ENTRY)) {
+    skipped.push(filePath);
+    return;
+  }
+
+  const needsNewlineBefore = current.length > 0 && !current.endsWith("\n");
+  const prefix = needsNewlineBefore ? "\n" : "";
+  await writeFile(filePath, `${current}${prefix}${GITIGNORE_WORKTREE_ENTRY}\n`, "utf8");
+  created.push(filePath);
 }

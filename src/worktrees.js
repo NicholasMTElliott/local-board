@@ -14,8 +14,6 @@ import {
   ticketBranchName,
 } from "./git.js";
 
-const WORKTREE_GITIGNORE_ENTRY = ".worktrees/";
-
 export async function addTicketWorktree(root, ticketId) {
   const repoRoot = await gitOutput(root, ["rev-parse", "--show-toplevel"]);
   const { ticket } = await findTicket(repoRoot, ticketId);
@@ -24,7 +22,8 @@ export async function addTicketWorktree(root, ticketId) {
 
   const config = await loadConfig(repoRoot);
   const location = config.worktrees.location;
-  const worktreePath = ticketWorktreePath(repoRoot, ticketId, location);
+  const worktreesRoot = worktreesRootFor(repoRoot, location);
+  const worktreePath = path.join(worktreesRoot, ticketId);
   const existing = await findRegisteredWorktree(repoRoot, worktreePath);
   if (existing !== null) {
     if (existing.branch !== branch) {
@@ -43,8 +42,8 @@ export async function addTicketWorktree(root, ticketId) {
   }
 
   await mkdir(path.dirname(worktreePath), { recursive: true });
-  if (location === "inside") {
-    await ensureWorktreeIgnore(repoRoot);
+  if (isChildPath(repoRoot, worktreesRoot)) {
+    await ensureWorktreeIgnore(repoRoot, worktreesRoot);
   }
   if (ticket.frontMatter.branch === null) {
     await gitRun(repoRoot, ["worktree", "add", "-b", branch, worktreePath]);
@@ -57,11 +56,20 @@ export async function addTicketWorktree(root, ticketId) {
   return worktreeAddRecord(ticketId, branch, worktreePath, true);
 }
 
-// Idempotently appends the .worktrees/ ignore entry to <repoRoot>/.gitignore when
-// absent. Append-only; never rewrites or reorders existing lines. Does not commit
-// the edit — that is left to the user/orchestrator so worktree-add never produces
-// a surprise commit.
-async function ensureWorktreeIgnore(repoRoot) {
+// Idempotently appends the repo-relative worktrees-root ignore entry to
+// <repoRoot>/.gitignore when absent. Append-only; never rewrites or reorders
+// existing lines. Does not commit the edit — that is left to the
+// user/orchestrator so worktree-add never produces a surprise commit.
+//
+// Called for ANY resolved worktrees root that lives inside the repo (the
+// "inside" layout and any explicit in-repo location), not just the literal
+// "inside" constant, so a custom in-repo location gets the same protection
+// against dirtying the parent checkout with untracked nested worktree
+// contents.
+async function ensureWorktreeIgnore(repoRoot, worktreesRoot) {
+  const relative = path.relative(path.resolve(repoRoot), path.resolve(worktreesRoot)).split(path.sep).join("/");
+  const entry = `${relative}/`;
+
   const gitignorePath = path.join(repoRoot, ".gitignore");
   let current = "";
   try {
@@ -73,13 +81,13 @@ async function ensureWorktreeIgnore(repoRoot) {
   }
 
   const lines = current.length === 0 ? [] : current.split(/\r?\n/);
-  if (lines.some((line) => line.trim() === WORKTREE_GITIGNORE_ENTRY)) {
+  if (lines.some((line) => line.trim() === entry)) {
     return;
   }
 
   const needsNewlineBefore = current.length > 0 && !current.endsWith("\n");
   const prefix = needsNewlineBefore ? "\n" : "";
-  await writeFile(gitignorePath, `${current}${prefix}${WORKTREE_GITIGNORE_ENTRY}\n`, "utf8");
+  await writeFile(gitignorePath, `${current}${prefix}${entry}\n`, "utf8");
 }
 
 async function commitBranchStamp(worktreePath, ticketId, branch) {

@@ -478,6 +478,78 @@ test("worktree-add supports an explicit relative worktrees.location outside the 
   }, { location: "../explicit-worktrees" });
 });
 
+test("worktree-add ignore-guards an explicit in-repo worktrees.location and leaves git status clean", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, _baseBranch, worktreesRoot) => {
+    const ticketPath = await createTicket(root, "task", "Explicit in-repo path ticket", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-22T15:08:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add explicit in-repo path ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    assert.equal(worktreesRoot, path.resolve(root, "custom-worktrees"));
+
+    const add = await runCli(["--root", root, "worktree-add", ticketId, "--json"]);
+    assert.equal(add.code, 0, add.stderr);
+    const out = JSON.parse(add.stdout);
+    assert.equal(out.worktreePath, displayPath(path.join(worktreesRoot, ticketId)));
+    assert.equal(await currentBranch(path.join(worktreesRoot, ticketId)), out.branch);
+
+    const gitignoreAfter = await readFile(path.join(root, ".gitignore"), "utf8");
+    assert.match(gitignoreAfter, /^custom-worktrees\/$/m);
+
+    // Same clean-status guarantee as the "inside" layout: the nested worktree's
+    // contents must not surface as untracked entries in the parent checkout.
+    const status = await gitOutput(root, ["status", "--porcelain"]);
+    for (const line of status.split(/\r?\n/).filter((line) => line !== "")) {
+      assert.equal(line.includes("custom-worktrees"), false, `unexpected worktrees entry in status: ${line}`);
+    }
+  }, { location: "custom-worktrees" });
+});
+
+test("worktree-add appends the ignore entry to a board with no existing .gitignore", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, _baseBranch) => {
+    await rm(path.join(root, ".gitignore"), { force: true });
+    await git(root, ["add", "-A"]);
+    await git(root, ["commit", "-m", "Remove scaffolded gitignore for this test"]);
+
+    const ticketPath = await createTicket(root, "task", "No gitignore ticket", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-22T15:09:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    assert.equal((await runCli(["--root", root, "worktree-add", ticketId, "--json"])).code, 0);
+
+    const gitignoreAfter = await readFile(path.join(root, ".gitignore"), "utf8");
+    assert.equal(gitignoreAfter, ".worktrees/\n");
+  }, { location: "inside" });
+});
+
+test("worktree-add appends the ignore entry to an existing .gitignore lacking a trailing newline", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, _baseBranch) => {
+    await writeFile(path.join(root, ".gitignore"), "node_modules/\n*.log", "utf8");
+    await git(root, ["add", "-A"]);
+    await git(root, ["commit", "-m", "Rewrite gitignore without trailing newline"]);
+
+    const ticketPath = await createTicket(root, "task", "No trailing newline ticket", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-22T15:09:30Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    assert.equal((await runCli(["--root", root, "worktree-add", ticketId, "--json"])).code, 0);
+
+    const gitignoreAfter = await readFile(path.join(root, ".gitignore"), "utf8");
+    assert.equal(gitignoreAfter, "node_modules/\n*.log\n.worktrees/\n");
+  }, { location: "inside" });
+});
+
 test("worktree-add rejects an explicit worktrees.location resolving inside plans/", { skip: !GIT_AVAILABLE }, async () => {
   await withRepo(async (root) => {
     const ticketPath = await createTicket(root, "task", "Rejected explicit path ticket", {
