@@ -65,7 +65,7 @@ Required fields:
 - `updated`
 
 ## Atomic Writes
-All canonical ticket writes go through `writeTicketFile` (`src/tickets.js`): write to a same-directory temp file (name never ends in `.md`, so discovery ignores it), then `rename()` over the target with bounded retry on Windows `EPERM`/`EBUSY`/`EACCES`. Never `writeFile` directly to a live ticket path. Covers `moveTicket`'s in-place rewrite, `setTicketField`/`setTicketSection`/`appendTicketComment`, `approveInline`, `completeStep`, and `linkParent`/`unlinkParent`/`blockTicket`/`unblockTicket` (via `writeTicketUpdate`). This gives crash-consistency (atomic rename), not mutual exclusion or fsync durability: `moveTicket`'s cross-folder rename ordering and two-file update races are separate open concerns.
+Existing ticket rewrites go through `writeTicketFile` (`src/tickets.js`): same-directory temp file (name never ends in `.md`), then `rename()` over the target with bounded retry on Windows `EPERM`/`EBUSY`/`EACCES`; `createTicket` uses exclusive `wx` create for new files. This gives crash-consistency (atomic rename), not mutual exclusion or fsync durability: `moveTicket`'s cross-folder rename ordering and two-file update races are separate open concerns.
 
 ## Status Folders
 ```text
