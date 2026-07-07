@@ -1,7 +1,7 @@
 ---
 id: T20260707T1331Z
 type: task
-status: implementing
+status: done
 priority: P2
 parent: null
 children: []
@@ -11,10 +11,10 @@ branch: local-board/T20260707T1331Z-cli-guard-against-wrong-root-when-a-ticket-h
 estimate: 4
 estimateBasis: T20260707T1328Z
 workStartedAt: 2026-07-07T23:22:26Z
-workCompletedAt: null
+workCompletedAt: 2026-07-07T23:56:23Z
 created: 2026-07-07T13:31:54Z
-updated: 2026-07-07T23:46:18Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-07T23:56:23Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # cli: guard against wrong --root when a ticket has a registered worktree
@@ -279,9 +279,33 @@ No new test needed for `pathsEqual` beyond the existing guard/worktree-add/workt
 
 - 2026-07-07T23:42:48Z: Review (codex): blocker — gate-check's empty-catalog auto-stamp mutates the ticket unguarded (wrong-root stamp of the main copy possible); fix by guarding gate-check with --allow-main-root support and empty-catalog coverage. Non-blocking: win32 path comparison should be case-insensitive (or realpath-normalized). All 14 wired handlers, skips, fail-open quietness, and closeout order verified sound.
 
+- 2026-07-07T23:46:51Z: Final disposition: both review items fixed verbatim (gate-check guarded before the auto-stamp branch with the exact test coverage the review requested; win32 comparer added). Treating review as complete per the established mechanical-fix pattern.
+
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/T20260707T1331Z-..., commits 2baf88f + 442f06b.
+
+**Suite:** `npm run check` pass; `npm test` 326 pass / 1 gated-skip of 327; `npm run validate` OK.
+
+**End-to-end probe (throwaway repo, scaffold guardWrongRoot true):**
+- Wrong-root mutation refused exit 2 with the exact designed message (full text captured: names the registered worktree path, the --root fix, and --allow-main-root); main ticket byte-unchanged. Override succeeds into the main copy; worktree-root invocation succeeds into the worktree copy.
+- gate-check empty-catalog auto-stamp (the review blocker): refused from main root, stamps only the worktree copy from the worktree root, override works.
+- No-worktree ticket: mutations unchanged (no-op guard).
+- worktree-remove verified from BOTH roots (including from inside the worktree being removed).
+- win32 case probe: differently-cased --root (lower drive letter + upper-cased segment) accepted — pathsEqual comparer verified live.
+
+**Gaps / caveats:** two-ticket cross-worktree divergence remains a documented accepted limitation; the cased-path scenario covered by live probe rather than a unit test; one stale-fixture false alarm during setup (init correctly skipping an existing config — not a product issue).
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `SKILL_TEAM.md` — worktree-remove exception retired (normal flow now); --allow-main-root override documented alongside the guard (impl pass + this verification).
+- `memory-bank/systemPatterns.md` — guard fact updated to include gate-check coverage and the config key.
+- `docs/PerStepOrchestration.md` — one sentence: the CLI now enforces the --root worktree discipline (guardWrongRoot, scaffold-on).
+- `docs/Workflow.md` and `README.md` checked; no edits needed.
 
 ## Questions
 
@@ -302,3 +326,11 @@ No new test needed for `pathsEqual` beyond the existing guard/worktree-add/workt
 - 2026-07-07T23:42:49Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku, review:codex-task:read-only].
 
 - 2026-07-07T23:42:49Z: Ensured git branch local-board/T20260707T1331Z-cli-guard-against-wrong-root-when-a-ticket-has-a-registered-worktree (already-current).
+
+- 2026-07-07T23:46:51Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework (sonnet): gate-check guarded whole-command with --allow-main-root threading + 3 empty-catalog tests; pathsEqual comparer case-insensitive on win32; 326 pass + 1 gated-skip.
+
+- 2026-07-07T23:46:51Z: Completed review via codex-task:read-only: Review complete: the unguarded gate-check mutation and win32 path comparison were fixed exactly as the review specified, with the requested tests.
+
+- 2026-07-07T23:54:10Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 326+1 gated; live probe verified refusal message, override, worktree-copy stamping, both-root worktree-remove, and win32 case-insensitive matching. Result: pass.
+
+- 2026-07-07T23:56:23Z: Completed document via codex-task:workspace-write: Codex (workspace-write): SKILL_TEAM override wording, systemPatterns gate-check coverage, PerStepOrchestration enforcement sentence; Workflow/README checked unchanged.
