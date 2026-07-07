@@ -78,13 +78,14 @@ done-time validation remain the backstop.
 The CLI owns `.local-board/active-steps.json`. `begin-step` records the active
 ticket action, configured route, and configured model there. `check-dispatch`
 reads that file for hook decisions. `complete-step` and `approve-inline` clear
-the active entry.
+the active entry. Stamps and clears are lock-serialized by the CLI.
 
 The hooks own `.local-board/dispatch-ledger.jsonl`. It is append-only JSONL in
-v1. Entries are small, there is no rotation, and appends are unlocked. A long
-running project can delete old ledger entries when no Claude Code session needs
-them, but do not delete entries in the middle of an active session if
-`evidence-gate` still needs to verify a subagent completion.
+v1. Entries are small and there is no rotation. The dispatch ledger is
+best-effort hook evidence, not the canonical mutation ledger. A long running
+project can delete old ledger entries when no Claude Code session needs them,
+but do not delete entries in the middle of an active session if `evidence-gate`
+still needs to verify a subagent completion.
 
 Both paths live under `.local-board/`, which is machine-local runtime state.
 
