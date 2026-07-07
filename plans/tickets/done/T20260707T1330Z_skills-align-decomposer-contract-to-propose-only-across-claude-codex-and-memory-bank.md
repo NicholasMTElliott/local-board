@@ -1,7 +1,7 @@
 ---
 id: T20260707T1330Z
 type: task
-status: ready_for_docs
+status: done
 priority: P2
 parent: null
 children: []
@@ -11,10 +11,10 @@ branch: local-board/T20260707T1330Z-skills-align-decomposer-contract-to-propose-
 estimate: 2
 estimateBasis: T20260707T1328Z
 workStartedAt: 2026-07-07T22:27:23Z
-workCompletedAt: null
+workCompletedAt: 2026-07-07T22:47:45Z
 created: 2026-07-07T13:30:54Z
-updated: 2026-07-07T22:39:08Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+updated: 2026-07-07T22:47:45Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # skills: align decomposer contract to propose-only across Claude, Codex, and memory-bank
@@ -275,6 +275,11 @@ Result: pass
 
 ## Documentation Updates
 
+Documented by codex-task:workspace-write (gpt-5.5) — verification pass.
+
+- All contract alignment landed with the implementation commits (agents, SKILL texts, memory-bank, mirrored prompts).
+- docs/ verified: no page says the decomposer creates tickets or runs mutation commands; TeamMode.md is explicitly historical. No edits needed.
+
 ## Questions
 
 ## Run Log
@@ -300,3 +305,5 @@ Result: pass
 - 2026-07-07T22:36:22Z: Completed review via codex-task:read-only: Review complete: both findings fixed exactly as specified; shared step prompt carries the section instruction for all harnesses.
 
 - 2026-07-07T22:39:08Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): full-text audit across 15 files found zero contradicting sentences; proposal shapes match; mirror content-identical. Result: pass.
+
+- 2026-07-07T22:47:45Z: Completed document via codex-task:workspace-write: Codex (workspace-write) verification: docs contain no contradicting decomposer narrative; no edits needed.
