@@ -13,7 +13,7 @@ estimateBasis: T20260707T1328Z
 workStartedAt: 2026-07-07T22:27:23Z
 workCompletedAt: null
 created: 2026-07-07T13:30:54Z
-updated: 2026-07-07T22:30:02Z
+updated: 2026-07-07T22:35:48Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -243,7 +243,19 @@ Deviations from design: none. Included the low-priority `SKILL_TEAM.md` item 7
 edit since it was cheap, per the ticket's open-questions note leaving it to
 implementer judgment.
 
+- 2026-07-07: Rework pass — rewrote the systemPatterns:173 Subagent CLI Permission
+  clause to remove "the decomposer legitimately needs mutating commands" (now rests
+  the coarse-grant risk on the orchestrator/other Bash-capable agents and notes the
+  opt-in enforcement hooks as the tightening mechanism), and added the missing
+  per-child `section --file` persistence step (Requirement + acceptance criteria)
+  to `SKILL.md` (:85, :224) and the mirrored `plans/prompts/steps/decompose.md` /
+  `resources/prompts/steps/decompose.md` pair; `npm run check`, `npm test`
+  (313/314 pass, 1 skipped), and `npm run validate` all green; grep for
+  "legitimately needs" across memory-bank returns no matches.
+
 ## Review Findings
+
+- 2026-07-07T22:33:17Z: Review (codex): two prose gaps — systemPatterns:173 still says the decomposer needs mutating commands (contradicts the new contract), and decompose-time orchestrator instructions omit the per-child section step so proposed requirement bodies could be dropped. Looping back.
 
 ## Test Evidence
 
@@ -258,3 +270,13 @@ implementer judgment.
 - 2026-07-07T22:27:22Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (prose-only contract alignment)
 
 - 2026-07-07T22:27:23Z: Ensured git branch local-board/T20260707T1330Z-skills-align-decomposer-contract-to-propose-only-across-claude-codex-and-memory-bank (created).
+
+- 2026-07-07T22:30:25Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): propose-only wording aligned across 7 files with codex text as canonical; grep proves zero contradicting residue; 313+1 green, drift test green.
+
+- 2026-07-07T22:31:07Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (prose-only contract alignment)
+
+- 2026-07-07T22:33:17Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) changes_requested: one contradicting memory-bank sentence + missing per-child section step in orchestrator instructions; proposal shapes, mirror identity, and dispatch guards verified.
+
+- 2026-07-07T22:33:17Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku, review:codex-task:read-only].
+
+- 2026-07-07T22:33:17Z: Ensured git branch local-board/T20260707T1330Z-skills-align-decomposer-contract-to-propose-only-across-claude-codex-and-memory-bank (already-current).
