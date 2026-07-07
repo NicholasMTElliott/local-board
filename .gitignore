@@ -6,8 +6,7 @@ Thumbs.db
 
 # Agent/runtime scratch
 .aiboard/
-.local-board/tmp/
-.local-board/runs/
+.local-board/
 
 # Build outputs (Node project — bin/ holds the hand-written CLI entry, do not ignore it)
 dist/

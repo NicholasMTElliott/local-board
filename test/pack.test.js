@@ -29,7 +29,7 @@ test("npm pack --dry-run --json includes the publishable tree and excludes dev-o
     );
   }
 
-  const excludedPrefixes = ["plans/", "test/", "memory-bank/", "docs/", "scripts/"];
+  const excludedPrefixes = ["plans/", "test/", "memory-bank/", "docs/", "scripts/", ".local-board/"];
   for (const prefix of excludedPrefixes) {
     assert.ok(
       !files.some((file) => file.startsWith(prefix)),

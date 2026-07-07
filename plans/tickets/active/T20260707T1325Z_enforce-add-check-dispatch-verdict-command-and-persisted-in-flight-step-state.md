@@ -1,19 +1,19 @@
 ---
 id: T20260707T1325Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P1
 parent: null
 children: []
 blockedBy: []
 blocks: [T20260707T1326Z]
-branch: null
+branch: local-board/T20260707T1325Z-enforce-add-check-dispatch-verdict-command-and-persisted-in-flight-step-state
 estimate: 4
 estimateBasis: T20260707T1320Z
-workStartedAt: null
+workStartedAt: 2026-07-07T17:26:56Z
 workCompletedAt: null
 created: 2026-07-07T13:25:41Z
-updated: 2026-07-07T17:26:56Z
+updated: 2026-07-07T17:40:48Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
@@ -144,6 +144,34 @@ Keyed by ticket id: exactly one active step per ticket; parallel mode is many ke
 
 ## Implementation Notes
 
+Implemented per the Technical Design.
+
+**New module `src/active-steps.js`:**
+- `ledgerPath(root)` resolves `<mainCheckout>/.local-board/active-steps.json` via `git rev-parse --git-common-dir` (parent = main worktree root); falls back to `path.resolve(root)` when git resolution fails (non-git dirs).
+- `readActiveSteps(root)`: strict read — missing file reads as `{}`, but an unparseable file throws `active-steps ledger at <path> is corrupt (...)`. Used by `checkDispatch` so a corrupt ledger fails loudly (exit 2), not silently.
+- `stampActiveStep`/`clearActiveStep`: read via a self-healing variant (corrupt/unreadable ledger treated as `{}`, next write repairs it), then an atomic whole-file write (`writeTicketFile` from `tickets.js`, temp+rename). `clearActiveStep` is a no-op when the key is absent.
+- `checkDispatch(root, {agent, model, ticketId})`: pure verdict resolver, returns `{ code, body }`. Strips `claude-subagent:` from the configured route only (per design, `--agent` is already the bare `subagent_type`). Non-`local-board-*` agents pass through immediately (`not-local-board-agent`). With `--ticket`: prefers the ledger record; falls back to `resolveExpectedStep` (new pure export from `tickets.js`) when no record exists, catching ticket-not-found into `{code:2, reason:"ticket-not-found"}`. Model gate: null-pin always passes; omitted `--model` passes with `model-unverifiable`; mismatch denies with `model-mismatch` via the existing `modelSatisfies`. Without `--ticket`: scans all ledger entries for a bare-route+model match, `no-active-step-for-agent` on miss.
+
+**`src/tickets.js`:** extracted `resolveStepFromBoard` (private) and exported `resolveExpectedStep` (pure, no board-wide `validate`, so an unrelated ticket's validation issue can't block a hook's `check-dispatch`). `beginStep` unchanged in return shape; now also unconditionally stamps the ledger after resolving action/route/model (not swallowed — a ledger write failure surfaces). `completeStep` and `approveInline` call `clearActiveStep(...).catch(() => {})` after their existing ticket-file write (best-effort, matches "Clearing is best-effort" in the design).
+
+Note: `active-steps.js` imports `resolveExpectedStep`/`modelSatisfies`/`writeTicketFile` from `tickets.js`, and `tickets.js` imports `stampActiveStep`/`clearActiveStep` from `active-steps.js` — a circular ESM import. Verified safe: both only invoke the imported bindings inside async function bodies, never at module-evaluation time. Confirmed via test run (circular-import failures would show up immediately as `undefined is not a function`).
+
+**`src/cli.js`:** added `check-dispatch` command. Always emits JSON to stdout (per design, the hook needs deterministic parsing); `--json` accepted as a no-op flag. Missing `--agent` throws (bad args → existing outer catch → stderr, exit 2, no JSON) — this is the one case that does NOT get JSON on stdout, matching "matches the existing CLI catch that returns 2." `ticket-not-found` is caught inside `checkDispatch` itself and DOES get JSON + exit 2, since the design's `--root` section explicitly shows `{reason:"ticket-not-found"}` as a verdict body, not a bare error.
+
+**Gitignore:** `.local-board/` (whole directory, not just `tmp/`/`runs/`) added to this repo's own `.gitignore` and to `scaffold.js`'s `GITIGNORE_TEMPLATE`/idempotent-append logic (`writeGitignore` now appends any of `[.worktrees/, .local-board/]` that's missing, individually idempotent). `test/pack.test.js` asserts `.local-board/` is excluded from `npm pack`.
+
+**Corruption handling (design was open on this):** chose "self-heal on write, error on read" — `begin-step`/`complete-step`/`approve-inline` never fail due to a corrupt ledger (self-heals to `{}` and overwrites), but `check-dispatch` (the query the hook depends on) throws a clear, path-carrying error on a corrupt ledger, surfacing as stderr + exit 2 rather than a silent false pass or false deny.
+
+**Tests** (`test/active-steps.test.js`, 20 new; all pass): ledger path fallback in non-git dirs; stamp/read/clear round-trip and RMW preserves other tickets' keys; stamp idempotency (re-stamp overwrites only its own key, verified via `--action implement` override rather than a timing-based `ts` diff — `formatIsoSeconds` truncates to whole seconds, so a millisecond-scale re-stamp can land on the same second); corruption tolerance (self-heal on write, throw on read, both directions); begin-step→complete-step and begin-step→approve-inline clear round-trips via the CLI; a real `git worktree` fixture proving a worktree-invoked `begin-step` stamps the MAIN checkout's ledger (not the worktree's) and that a main-checkout-invoked `check-dispatch` sees it; the full check-dispatch verdict matrix (right agent+model, wrong agent, wrong model, model-omitted-with-pin, configured-model-null via a hand-crafted ledger record, no-active-step scan miss, non-local-board passthrough, `--ticket` vs scan, ledger-snapshot-beats-live-config, ticket-not-found, bad-args, corrupt-ledger).
+
+**Existing-test updates:** two scaffold `.gitignore` tests in `test/tickets.test.js` updated for the new `.local-board/` entry (one now also asserts `.local-board` bare-form recognition; one asserts no duplication across repeated `--overwrite`).
+
+**Verification:** `npm run check` — clean. `npm test` — 205/205 pass (185 pre-existing + 20 new), zero regressions. `npm run validate` — OK. Live check on this repo's own ledger: `begin-step T20260707T1325Z --action implement --json` stamped `.local-board/active-steps.json` (confirmed via `cat`, and confirmed absent from `git status --short` — properly ignored); `check-dispatch --agent local-board-implementer --model sonnet --ticket T20260707T1325Z` → exit 0, `{ok:true, reason:"match"}`; `check-dispatch --agent local-board-reviewer --ticket T20260707T1325Z` → exit 1, `{ok:false, reason:"agent-mismatch"}`.
+
+**Deviation from the literal live-check instruction:** `begin-step T20260707T1325Z --json` (no `--action`) fails with "ticket ... has no configured action for status implementing" — this ticket's current front-matter status is `implementing`, which (pre-existing, unrelated to this ticket) has no `statusActions` mapping; only `ready_for_*` statuses do. This is unrelated to the change under test (same behavior existed before this ticket). Ran with the explicit `--action implement` override instead, which mirrors what the orchestrator's own begin-step dispatch would have used (`configuredAgent: claude-subagent:local-board-implementer`). Did not run `complete-step` or otherwise clear this ticket's active-step entry, per instructions — the orchestrator owns that.
+
+**Remaining risk (accepted per design, not addressed here):** the ledger read-modify-write is atomic per-write but not lock-protected across concurrent `begin-step` calls for different tickets in parallel mode; a lost-update is possible (design flags this, defers the fix to B20260707T1322Z). Also flagged: `begin-step` gaining a ledger-write side effect means any script treating it as a pure query now also writes `.local-board/`.
+
 ## Review Findings
 
 ## Test Evidence
@@ -155,3 +183,5 @@ Keyed by ticket id: exactly one active step per ticket; parallel mode is many ke
 ## Run Log
 
 - 2026-07-07T17:26:04Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): main-checkout sidecar ledger (worktree-invisibility of front matter to hooks is decisive), git-common-dir resolution, unconditional idempotent stamp on begin-step, best-effort clear, pass-with-reason for unverifiable models, exit 0/1/2 JSON verdicts. Estimate 4 (basis T20260707T1320Z).
+
+- 2026-07-07T17:26:56Z: Ensured git branch local-board/T20260707T1325Z-enforce-add-check-dispatch-verdict-command-and-persisted-in-flight-step-state (created).
