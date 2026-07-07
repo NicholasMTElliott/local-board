@@ -131,6 +131,20 @@ test("CLI command surface supports init, create, query, mutate, relate, report, 
   });
 });
 
+test("--version and version subcommand each print the package.json version and exit 0", async () => {
+  const packageJson = JSON.parse(
+    await readFile(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8"),
+  );
+
+  const flagResult = await runCli(["--version"]);
+  assert.equal(flagResult.code, 0);
+  assert.equal(flagResult.stdout.trim(), packageJson.version);
+
+  const subcommandResult = await runCli(["version"]);
+  assert.equal(subcommandResult.code, 0);
+  assert.equal(subcommandResult.stdout.trim(), packageJson.version);
+});
+
 test("list --ready uses config-aware eligibility, ordering, JSON shape, status filter, and limit", async () => {
   await withBoard(async (root) => {
     const readyImpl = await createTicket(root, "task", "Ready implementation", {

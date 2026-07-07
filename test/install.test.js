@@ -198,6 +198,46 @@ test("installer writes rendered Codex skills and uninstall removes them", async 
   });
 });
 
+test("installer stamps the package version into rendered skills, install-info.json, and the runtime --version output", async () => {
+  await withHome(async (home) => {
+    const packageJson = JSON.parse(await readFile(path.resolve("package.json"), "utf8"));
+
+    await runInstallCli(home, ["--target=claude"]);
+
+    const skillPath = path.join(home, ".claude", "skills", "local-board", "SKILL.md");
+    const skill = await readFile(skillPath, "utf8");
+    assert.match(skill, new RegExp(escapeRegExp(`local-board v${packageJson.version}`)));
+    assert.doesNotMatch(skill, /<<VERSION>>/);
+    // The command-invocation lines stay byte-identical across versions; only
+    // the metadata/preflight stamp lines vary.
+    assert.match(skill, /\blocal-board /);
+
+    const installInfo = JSON.parse(await readFile(path.join(home, ".local-board", "install-info.json"), "utf8"));
+    assert.equal(installInfo.version, packageJson.version);
+
+    const { stdout } = await execFileAsync(
+      process.execPath,
+      [path.join(home, ".local-board", "bin", "local-board.js"), "--version"],
+      { encoding: "utf8" },
+    );
+    assert.equal(stdout.trim(), packageJson.version);
+  });
+});
+
+test("installer stamps the package version into the Codex skill render and preflight", async () => {
+  await withHome(async (home) => {
+    const packageJson = JSON.parse(await readFile(path.resolve("package.json"), "utf8"));
+
+    await runInstallCli(home, ["--target=codex"]);
+
+    const skillPath = path.join(home, ".codex", "skills", "local-board", "SKILL.md");
+    const skill = await readFile(skillPath, "utf8");
+    assert.match(skill, new RegExp(escapeRegExp(`local-board v${packageJson.version}`)));
+    assert.doesNotMatch(skill, /<<VERSION>>/);
+    assert.match(skill, /Version-skew check \(advisory\)/);
+  });
+});
+
 test("Codex skill templates have valid frontmatter and route translation guidance", async () => {
   const skill = await readFile(path.resolve("skills", "codex", "local-board", "SKILL.md"), "utf8");
   const teamSkill = await readFile(path.resolve("skills", "codex", "local-team", "SKILL.md"), "utf8");

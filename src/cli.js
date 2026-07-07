@@ -49,6 +49,10 @@ export async function main(argv) {
   const command = args.shift();
 
   try {
+    if (command === "--version" || command === "version") {
+      console.log(await readPackageVersion());
+      return 0;
+    }
     if (command === "validate") {
       return await commandValidate(root, args);
     }
@@ -159,6 +163,18 @@ export async function main(argv) {
     console.error(error.message);
     return 2;
   }
+}
+
+// Reads the package `version` field via new URL("../package.json",
+// import.meta.url), which resolves in both layouts this file ships in:
+// the repo checkout (<root>/src/cli.js -> <root>/package.json) and the
+// flattened runtime copy the installer writes (~/.local-board/src/cli.js ->
+// ~/.local-board/package.json, since install.js copies package.json to the
+// install dir root and src/ beneath it). Never depends on process.cwd().
+async function readPackageVersion() {
+  const packageJsonUrl = new URL("../package.json", import.meta.url);
+  const contents = await readFile(packageJsonUrl, "utf8");
+  return JSON.parse(contents).version;
 }
 
 async function commandValidate(root, args) {
@@ -1023,6 +1039,7 @@ function ensureNoArgs(args) {
 
 function printUsage() {
   console.error(`Usage:
+  local-board --version
   local-board [--root <path>] validate [--json]
   local-board [--root <path>] list [--status <status>] [--ready] [--limit <N>] [--json]
   local-board [--root <path>] next [--json]
