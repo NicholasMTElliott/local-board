@@ -155,7 +155,7 @@ When `git.autoMerge` is true, `move ... done` validates routing, requires the cu
 When `retention.archiveOnMoveDone` is true, `move ... done` archives other done tickets older than the configured retention window. Archived tickets count as closed dependencies.
 `start-work` stamps `workStartedAt` once. `move ... done` stamps `workCompletedAt` only when `workStartedAt` is set. Archive does not touch wall-clock fields.
 When estimation is enabled, `complete-step design` refuses tasks and bugs without an estimate.
-`create` derives a per-worktree minute offset when invoked from inside a registered ticket worktree (sorted-index position among sibling worktrees) and shifts the starting timestamp by that many minutes. Sibling worktree workers therefore mint distinct child IDs without coordinating. Test-mode invocations that pass `now` skip the offset to keep timestamps deterministic.
+`create` derives a per-worktree minute offset when invoked from inside a registered ticket worktree (sorted-index position among ticket worktrees under the configured root) and shifts the starting timestamp by that many minutes. Peer worktree workers therefore mint distinct child IDs without coordinating. Test-mode invocations that pass `now` skip the offset to keep timestamps deterministic.
 
 ## Parallel Mode (per-step orchestrator)
 The `local-team` skill is a single top-level orchestrator (the main session), not an

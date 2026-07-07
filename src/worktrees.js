@@ -1,7 +1,8 @@
-import { mkdir, access } from "node:fs/promises";
+import { mkdir, access, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { discover, findTicket, setTicketField } from "./tickets.js";
+import { loadConfig } from "./config.js";
 import {
   assertBranchName,
   currentBranch,
@@ -19,7 +20,10 @@ export async function addTicketWorktree(root, ticketId) {
   const branch = ticketBranchName(ticket);
   await assertBranchName(repoRoot, branch);
 
-  const worktreePath = ticketWorktreePath(repoRoot, ticketId);
+  const config = await loadConfig(repoRoot);
+  const location = config.worktrees.location;
+  const worktreesRoot = worktreesRootFor(repoRoot, location);
+  const worktreePath = path.join(worktreesRoot, ticketId);
   const existing = await findRegisteredWorktree(repoRoot, worktreePath);
   if (existing !== null) {
     if (existing.branch !== branch) {
@@ -38,6 +42,9 @@ export async function addTicketWorktree(root, ticketId) {
   }
 
   await mkdir(path.dirname(worktreePath), { recursive: true });
+  if (isChildPath(repoRoot, worktreesRoot)) {
+    await ensureWorktreeIgnore(repoRoot, worktreesRoot);
+  }
   if (ticket.frontMatter.branch === null) {
     await gitRun(repoRoot, ["worktree", "add", "-b", branch, worktreePath]);
     await setTicketField(worktreePath, ticketId, "branch", branch);
@@ -47,6 +54,45 @@ export async function addTicketWorktree(root, ticketId) {
   }
 
   return worktreeAddRecord(ticketId, branch, worktreePath, true);
+}
+
+// Idempotently appends the repo-relative worktrees-root ignore entry to
+// <repoRoot>/.gitignore when absent. Append-only; never rewrites or reorders
+// existing lines. Does not commit the edit — that is left to the
+// user/orchestrator so worktree-add never produces a surprise commit.
+//
+// Called for ANY resolved worktrees root that lives inside the repo (the
+// "inside" layout and any explicit in-repo location), not just the literal
+// "inside" constant, so a custom in-repo location gets the same protection
+// against dirtying the parent checkout with untracked nested worktree
+// contents.
+async function ensureWorktreeIgnore(repoRoot, worktreesRoot) {
+  const relative = path.relative(path.resolve(repoRoot), path.resolve(worktreesRoot)).split(path.sep).join("/");
+  const entry = `${relative}/`;
+
+  const gitignorePath = path.join(repoRoot, ".gitignore");
+  let current = "";
+  try {
+    current = await readFile(gitignorePath, "utf8");
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      throw error;
+    }
+  }
+
+  // A pre-existing line matches whether or not it carries the trailing
+  // slash we always append for new entries (".worktrees" and ".worktrees/"
+  // are equivalent gitignore patterns), so idempotency checks must accept
+  // either form.
+  const bareEntry = entry.replace(/\/$/, "");
+  const lines = current.length === 0 ? [] : current.split(/\r?\n/);
+  if (lines.some((line) => line.trim() === entry || line.trim() === bareEntry)) {
+    return;
+  }
+
+  const needsNewlineBefore = current.length > 0 && !current.endsWith("\n");
+  const prefix = needsNewlineBefore ? "\n" : "";
+  await writeFile(gitignorePath, `${current}${prefix}${entry}\n`, "utf8");
 }
 
 async function commitBranchStamp(worktreePath, ticketId, branch) {
@@ -60,7 +106,8 @@ async function commitBranchStamp(worktreePath, ticketId, branch) {
 export async function removeTicketWorktree(root, ticketId, options = {}) {
   const repoRoot = await gitOutput(root, ["rev-parse", "--show-toplevel"]);
   await findTicket(repoRoot, ticketId);
-  const worktreePath = ticketWorktreePath(repoRoot, ticketId);
+  const config = await loadConfig(repoRoot);
+  const worktreePath = ticketWorktreePath(repoRoot, ticketId, config.worktrees.location);
   const existing = await findRegisteredWorktree(repoRoot, worktreePath);
   if (existing === null) {
     return {
@@ -80,7 +127,8 @@ export async function removeTicketWorktree(root, ticketId, options = {}) {
 
 export async function listTicketWorktrees(root) {
   const repoRoot = await gitOutput(root, ["rev-parse", "--show-toplevel"]);
-  const worktreesRoot = ticketWorktreesRoot(repoRoot);
+  const config = await loadConfig(repoRoot);
+  const worktreesRoot = worktreesRootFor(repoRoot, config.worktrees.location);
   if (!(await pathExists(worktreesRoot))) {
     return [];
   }
@@ -124,13 +172,41 @@ export async function fastForwardDefaultBranch(root, options = {}) {
   };
 }
 
-export function ticketWorktreesRoot(repoRoot) {
-  const resolved = path.resolve(repoRoot);
-  return path.join(path.dirname(resolved), `${path.basename(resolved)}-worktrees`);
+// Pure placement resolver, given the resolved location string. "sibling" and
+// "inside" are fixed layouts; any other non-empty string is an explicit path
+// (absolute as-is, relative resolved against repoRoot). Explicit paths resolving
+// inside <repoRoot>/plans are rejected — that placement would make ticket
+// discovery walk the nested checkout's plans/tickets and double-count tickets.
+export function worktreesRootFor(repoRoot, location) {
+  const resolvedRepoRoot = path.resolve(repoRoot);
+  if (location === "sibling") {
+    return path.join(path.dirname(resolvedRepoRoot), `${path.basename(resolvedRepoRoot)}-worktrees`);
+  }
+  if (location === "inside") {
+    return path.join(resolvedRepoRoot, ".worktrees");
+  }
+
+  const resolved = path.isAbsolute(location)
+    ? path.resolve(location)
+    : path.resolve(resolvedRepoRoot, location);
+  const plansRoot = path.join(resolvedRepoRoot, "plans");
+  if (resolved === path.resolve(plansRoot) || isChildPath(plansRoot, resolved)) {
+    throw new Error(
+      `worktrees.location "${location}" resolves inside plans/ (${displayPath(plansRoot)}); choose a location outside plans/`,
+    );
+  }
+  return resolved;
 }
 
-export function ticketWorktreePath(repoRoot, ticketId) {
-  return path.join(ticketWorktreesRoot(repoRoot), ticketId);
+// Thin back-compat wrapper defaulting to the "sibling" layout. Kept so any
+// external caller that only passes repoRoot keeps working unchanged; real call
+// sites in this module route through the config-aware worktreesRootFor.
+export function ticketWorktreesRoot(repoRoot) {
+  return worktreesRootFor(repoRoot, "sibling");
+}
+
+export function ticketWorktreePath(repoRoot, ticketId, location = "sibling") {
+  return path.join(worktreesRootFor(repoRoot, location), ticketId);
 }
 
 export async function ticketWorktreeMintOffsetMinutes(root) {
@@ -145,7 +221,15 @@ export async function ticketWorktreeMintOffsetMinutes(root) {
   }
 
   const mainRoot = records[0].worktreePath;
-  const worktreesRoot = ticketWorktreesRoot(mainRoot);
+  let worktreesRoot;
+  try {
+    const location = (await loadConfig(mainRoot)).worktrees.location;
+    worktreesRoot = worktreesRootFor(mainRoot, location);
+  } catch {
+    // Config-load or resolution failure degrades safely to the sibling default;
+    // this hot path must never block ticket creation.
+    worktreesRoot = worktreesRootFor(mainRoot, "sibling");
+  }
   const ticketIds = records
     .filter((record) => isChildPath(worktreesRoot, record.worktreePath))
     .map((record) => path.basename(record.worktreePath))

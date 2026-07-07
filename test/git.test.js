@@ -25,7 +25,7 @@ async function withRepo(fn) {
     await git(root, ["commit", "-m", "Initial commit"]);
     const baseBranch = await currentBranch(root);
     await initProject(root);
-    await git(root, ["add", "plans"]);
+    await git(root, ["add", "plans", ".gitignore"]);
     await git(root, ["commit", "-m", "Initialize local board"]);
     await fn(root, baseBranch);
   } finally {

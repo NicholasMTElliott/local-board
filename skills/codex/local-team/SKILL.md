@@ -45,7 +45,9 @@ Do not use event-loop pipelining in v1. The barrier keeps scheduling, conflict c
 
 ## Worktrees
 
-Every in-flight ticket uses a separate sibling worktree:
+Every in-flight ticket uses a separate worktree (location per `worktrees.location`;
+see `docs/CodexSupport.md` "Worktrees and the sandbox" — set
+`worktrees.location: "inside"` to avoid `workspace-write` sandbox escalations):
 
 ```sh
 node <<SCRIPT_PATH>> worktree-add <ticket-id> --json
