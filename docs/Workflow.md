@@ -242,7 +242,10 @@ and unlocked concurrent writes are a known, low-impact race.
 
 ## Optional Steps
 
-`plans/local-board.config.jsonc` may include an `optionalSteps` catalog keyed by stage:
+`plans/local-board.config.jsonc` may include an `optionalSteps` catalog keyed by stage. The
+`init` scaffold ships the v1 catalog below populated; a repo with no config file (or a config
+that omits `optionalSteps`) falls back to empty catalogs for every stage, by design, so an
+omitted stage never silently inherits built-in specialties.
 
 ```jsonc
 {

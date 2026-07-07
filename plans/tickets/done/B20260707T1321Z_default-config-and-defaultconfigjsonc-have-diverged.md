@@ -1,20 +1,20 @@
 ---
 id: B20260707T1321Z
 type: bug
-status: ready_for_implementation
+status: done
 priority: P2
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/B20260707T1321Z-default-config-and-defaultconfigjsonc-have-diverged
 estimate: 2
 estimateBasis: B20260707T1320Z
-workStartedAt: null
-workCompletedAt: null
+workStartedAt: 2026-07-07T19:56:06Z
+workCompletedAt: 2026-07-07T20:09:32Z
 created: 2026-07-07T13:21:54Z
-updated: 2026-07-07T19:56:06Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-07T20:09:32Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # DEFAULT_CONFIG and defaultConfigJsonc have diverged
@@ -211,14 +211,87 @@ maintainer to "fix" them by breaking backward-compat.
 
 ## Implementation Notes
 
+Implemented per the ticket's Technical Design (documented-divergence + allowlisted guard test; no behavioral change).
+
+**src/config.js**
+- Added a block comment above `DEFAULT_CONFIG` (was line 16) explaining its two runtime roles (ENOENT fallback; deep-merge base) and that it intentionally differs from `defaultConfigJsonc()` in exactly `estimation.enabled` (false, backward-compat) and `optionalSteps` (empty, so omitted stages don't inherit catalogs), with a pointer to the guard test.
+- Added a one-line pointer comment above `defaultConfigJsonc()` back to `DEFAULT_CONFIG`.
+- No behavioral changes; no rename (kept `DEFAULT_CONFIG` per the ticket's recommendation to avoid import churn).
+
+**test/config.test.js**
+- Imported `DEFAULT_CONFIG` alongside the existing `defaultConfigJsonc`/`loadConfig`/`parseJsonc` imports.
+- Added `leafDiffPaths(a, b, prefix)`, a small recursive helper that walks two values (objects and arrays alike, via `Object.keys`) and returns the leaf-level key paths where they differ.
+- Added test `defaultConfigJsonc matches DEFAULT_CONFIG except for documented differences`:
+  1. Reconciles the two known differences (`estimation.enabled`, `optionalSteps`) onto a clone of `DEFAULT_CONFIG` and asserts `deepEqual` against the parsed scaffold — this locks all shared blocks (workflow, agents, routing, retention, git, worktrees) in sync.
+  2. A companion strict check: diffs the raw (unreconciled) `DEFAULT_CONFIG` against the parsed scaffold with `leafDiffPaths`, collapses any path starting with `optionalSteps` to the single token `optionalSteps`, and asserts the resulting sorted set equals exactly `["estimation.enabled", "optionalSteps"]` — this prevents the allowlist from silently growing to mask new drift.
+- Did not touch the two pinned tests (`loadConfig returns empty optionalSteps catalog...`, `...backward-compat disabled`) per the ticket's instruction.
+
+**memory-bank/systemPatterns.md**
+- Added a terse fact under the existing `## Config` section distinguishing `DEFAULT_CONFIG` (fallback/merge base) from `defaultConfigJsonc()` (init scaffold), and noting the guard test.
+
+**docs/Workflow.md**
+- Added a sentence in the `## Optional Steps` section clarifying that the `init` scaffold ships the v1 catalog populated, while a missing config (or a config omitting `optionalSteps`) falls back to empty catalogs by design. (The `## Estimation` section already documented the fallback-vs-scaffold `enabled` distinction; no change needed there.)
+
+**Verification**
+- `npm run check`: pass (all `node --check` targets clean).
+- `npm test`: 262/262 pass, 0 fail (includes the new guard test, confirmed running and passing in isolation via `node --test test/config.test.js`: 30/30).
+- `npm run validate`: `Ticket validation OK`.
+- Extra sanity check (ad hoc, not committed): tampered a clone of `DEFAULT_CONFIG`'s `git.autoMerge` in a scratch script and confirmed the reconciled-deepEqual approach fails loudly on that unrelated drift — the guard is not vacuous.
+
+**Deviations from design:** none. Did not take either optional path (no rename to `FALLBACK_CONFIG`; did include the optional strict "only these two paths differ" assertion, since the design said to include it if cheap and it was).
+
+**Remaining risks:** none new. This is comment + test + doc only, no production behavior change, consistent with the ticket's "Low" risk assessment.
+
 ## Review Findings
+
+Reviewed by codex-task:read-only (gpt-5.5) against commit 54ad315.
+
+No blocking findings.
+
+- leafDiffPaths (test/config.test.js:218) recurses through object keys and array indices over the union of both sides' keys — one-sided additions and deep changes are detected.
+- The reconciled deepEqual (:248-250) locks the shared blocks; the raw diff assertion (:255-259) pins the divergence list to exactly estimation.enabled + optionalSteps.
+- The optionalSteps whole-subtree exception can mask nested catalog differences inside that subtree — acceptable per the accepted design (the subtree itself is the intentional divergence: empty fallback vs populated scaffold).
+- Source comments verified accurate against loadConfig (ENOENT fallback + merge base, src/config.js:287-299) and mergeConfig array-replacement semantics (:990-1003).
+- src/config.js diff confirmed comment-only; no behavior change.
+
+Verdict: pass
 
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/B20260707T1321Z-..., commit 54ad315.
+
+**Suite:** `npm run check` pass; `npm test` 262/262 pass; `npm run validate` OK.
+
+**Non-vacuity probes (tamper-and-restore, both restored clean via git checkout):**
+- Shared-block drift (DEFAULT_CONFIG git.autoMerge flipped): guard test failed naming git.autoMerge in the diff; other 29 tests unaffected; suite green after restore.
+- One-sided key (bogusExtraKey added only to the JSONC template): guard test failed showing the key present only on the scaffolded side. Suite 262/262 after restore.
+
+**Divergences confirmed real:** DEFAULT_CONFIG estimation.enabled false + empty catalogs (src/config.js:271-284); JSONC estimation true + populated catalogs (:827-858, :878-883); explanatory comments present at both definitions.
+
+**Gaps / caveats:** doc one-liners (systemPatterns/Workflow) not re-verified in this pass (covered by implementation + review); tamper edits used targeted sed (tester has no Write tool), fully reverted with clean status confirmed.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5) — verification pass.
+
+- All doc updates landed with the implementation commit (54ad315): source comments on both config definitions, memory-bank/systemPatterns.md role one-liner, docs/Workflow.md optional-step defaults note.
+- Verified accurate: DEFAULT_CONFIG = ENOENT fallback / merge base with intentionally-minimal values; defaultConfigJsonc = blessed init scaffold with rich defaults; Workflow.md correctly attributes rich catalogs to the scaffold.
+- No further edits needed.
 
 ## Questions
 
 ## Run Log
 
 - 2026-07-07T19:55:23Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): divergence is intentional and load-bearing (ENOENT fallback vs blessed init defaults, differing only in estimation.enabled and optionalSteps); design documents both roles at the source and adds an allowlist guard test locking all other keys in sync. Estimate 2 (basis B20260707T1320Z).
+
+- 2026-07-07T19:56:06Z: Ensured git branch local-board/B20260707T1321Z-default-config-and-defaultconfigjsonc-have-diverged (created).
+
+- 2026-07-07T20:00:43Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): source comments for both roles, allowlist guard test (verified non-vacuous by tampering probe), memory-bank + Workflow notes; 262/262 green.
+
+- 2026-07-07T20:03:56Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict pass: diff walk symmetric and deep, allowlist pinned to the two documented keys, comments accurate, config.js comment-only.
+
+- 2026-07-07T20:07:50Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 262/262; two tamper probes proved the guard catches shared-scalar drift and one-sided additions, both restored clean. Result: pass.
+
+- 2026-07-07T20:09:32Z: Completed document via codex-task:workspace-write: Codex (workspace-write) verification: all doc updates landed with implementation; accuracy confirmed; no edits.

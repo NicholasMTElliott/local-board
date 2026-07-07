@@ -32,6 +32,12 @@ It defines:
 
 V1 specialty prompts ship at `plans/prompts/optional-steps/{design,impl}/`.
 
+In `src/config.js`, `DEFAULT_CONFIG` = ENOENT fallback + deep-merge base
+(`estimation.enabled: false`, `optionalSteps` empty, both intentional for
+backward compat); `defaultConfigJsonc()` = the `init` scaffold (estimation on,
+catalogs populated). A guard test (`test/config.test.js`) keeps the rest of
+the two defaults in sync.
+
 ## Ticket Types
 | Prefix | Type | Children |
 |---|---|---|
