@@ -543,6 +543,64 @@ test("loadConfig rejects invalid estimation.splitThreshold values", async () => 
   }
 });
 
+test("loadConfig defaults worktrees.location to sibling", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, `{
+  "version": 1
+}
+`);
+    const config = await loadConfig(root);
+    assert.deepEqual(config.worktrees, { location: "sibling" });
+  });
+});
+
+test("loadConfig parses the shipped worktrees block", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, defaultConfigJsonc());
+    const config = await loadConfig(root);
+    assert.deepEqual(config.worktrees, { location: "sibling" });
+  });
+});
+
+test("loadConfig accepts worktrees.location \"inside\" and explicit paths", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, `{
+  "worktrees": { "location": "inside" }
+}
+`);
+    assert.deepEqual((await loadConfig(root)).worktrees, { location: "inside" });
+  });
+
+  await withRoot(async (root) => {
+    await writeConfig(root, `{
+  "worktrees": { "location": "../custom-worktrees" }
+}
+`);
+    assert.deepEqual((await loadConfig(root)).worktrees, { location: "../custom-worktrees" });
+  });
+});
+
+test("loadConfig rejects invalid worktrees.location values", async () => {
+  const cases = [
+    { label: "empty string", body: `{ "worktrees": { "location": "" } }` },
+    { label: "whitespace only", body: `{ "worktrees": { "location": "   " } }` },
+    { label: "non-string", body: `{ "worktrees": { "location": 1 } }` },
+  ];
+  for (const testCase of cases) {
+    await withRoot(async (root) => {
+      await writeConfig(root, testCase.body);
+      await assert.rejects(loadConfig(root), /worktrees\.location must be a non-empty string/, `case ${testCase.label}`);
+    });
+  }
+});
+
+test("loadConfig rejects worktrees as a non-object", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, `{ "worktrees": "sibling" }`);
+    await assert.rejects(loadConfig(root), /worktrees must be an object/);
+  });
+});
+
 test("loadConfig warns about unknown optionalSteps stage keys without throwing", async () => {
   await withRoot(async (root) => {
     await writeConfig(root, `{

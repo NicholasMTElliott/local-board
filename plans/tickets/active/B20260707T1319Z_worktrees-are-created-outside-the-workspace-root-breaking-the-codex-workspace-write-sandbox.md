@@ -1,19 +1,19 @@
 ---
 id: B20260707T1319Z
 type: bug
-status: ready_for_implementation
+status: implementing
 priority: P1
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/B20260707T1319Z-worktrees-are-created-outside-the-workspace-root-breaking-the-codex-workspace-write-sandbox
 estimate: 4
 estimateBasis: B20260707T1318Z
-workStartedAt: null
+workStartedAt: 2026-07-07T15:34:40Z
 workCompletedAt: null
 created: 2026-07-07T13:19:54Z
-updated: 2026-07-07T15:34:40Z
+updated: 2026-07-07T15:42:21Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
@@ -268,6 +268,93 @@ before the callback.
 
 ## Implementation Notes
 
+Implemented per the approved technical design.
+
+**Config (`src/config.js`)**
+- Added `DEFAULT_CONFIG.worktrees = { location: "sibling" }`.
+- Added `normalizeWorktrees(merged)` (type/emptiness check only; the `plans/`-interior
+  guard needs `repoRoot`, which is not known at config-load time, so it is enforced in
+  `worktreesRootFor`), wired into `loadConfig` alongside `normalizeEstimation`.
+- `defaultConfigJsonc()` now emits a documented `worktrees` block (values, defaults,
+  Codex sandbox note) so `init` scaffolds it.
+
+**Placement (`src/worktrees.js`)**
+- Added pure `worktreesRootFor(repoRoot, location)`: `"sibling"` (unchanged
+  computation), `"inside"` -> `<repoRoot>/.worktrees`, otherwise an explicit path
+  (absolute as-is, relative resolved against `repoRoot`); throws if the resolved path
+  is inside `<repoRoot>/plans`.
+- `ticketWorktreesRoot(repoRoot)` kept as a thin back-compat wrapper defaulting to
+  `"sibling"`.
+- `ticketWorktreePath(repoRoot, ticketId, location = "sibling")` now takes the resolved
+  location.
+- `addTicketWorktree`, `removeTicketWorktree`, `listTicketWorktrees` now `loadConfig`
+  from `repoRoot` and route through `worktreesRootFor`/`ticketWorktreePath`.
+- `ticketWorktreeMintOffsetMinutes` loads config from the main worktree root and falls
+  back to the sibling default on any config-load or resolution failure (never blocks
+  ticket creation).
+- Added `ensureWorktreeIgnore(repoRoot)`: appends `.worktrees/` to `<repoRoot>/.gitignore`
+  only if absent (append-only, idempotent, no auto-commit). Called from
+  `addTicketWorktree` only when the resolved location is `"inside"`.
+
+**Scaffold (`src/scaffold.js`)**
+- `initProject` now seeds a repo-root `.gitignore` containing `.worktrees/` (via the
+  existing `FILES` map / `writeScaffoldFile`, so it respects the existing
+  create/skip/overwrite semantics and never clobbers a pre-existing `.gitignore`).
+
+**Docs**
+- `docs/CodexSupport.md`: new "Worktrees and the sandbox" section explaining the
+  writable-root requirement for the default `sibling` layout under Codex
+  `workspace-write`, and recommending `worktrees.location: "inside"` for Codex
+  parallel runs. Updated the "Limits" note — Codex support no longer claims "no new
+  config schema" (this ticket adds `worktrees.location`); it still adds no new route
+  grammar.
+- `skills/codex/local-team/SKILL.md`: generalized "Every in-flight ticket uses a
+  separate sibling worktree" to reference `worktrees.location` and the new
+  CodexSupport doc section.
+- Memory Bank (`techContext.md`/`systemPatterns.md`): left untouched — the design
+  flags this as "documenter step to confirm," out of implementer scope.
+
+**Tests**
+- `test/config.test.js`: 5 new tests — default `worktrees.location` is `"sibling"`;
+  shipped config parses it; `"inside"` and explicit relative paths are accepted;
+  empty/whitespace/non-string values are rejected; a non-object `worktrees` block is
+  rejected.
+- `test/worktrees.test.js`: `withRepo` now takes `{ location }` and computes
+  `worktreesRoot` via the real `worktreesRootFor` (self-consistent with production
+  code), and rewrites `plans/local-board.config.jsonc` post-`initProject` for
+  non-sibling layouts. Also now stages `.gitignore` in the initial commit (scaffold
+  change — see below). 10 new tests: inside-layout `worktree-add` (created path,
+  branch stamp, idempotency, path-under-repo-root invariant), `.gitignore` seed +
+  idempotent append + `git status --porcelain` clean-tree assertion, `worktree-list`
+  under inside layout, `worktree-remove` under inside layout, peer mint-offset under
+  inside layout, discovery double-count guard (`validate`/`list` count once), explicit
+  relative path layout, and rejection of an explicit path resolving inside `plans/`.
+- `test/git.test.js`: fixed `withRepo` to stage the new scaffold `.gitignore` in the
+  initial commit (`git add plans .gitignore`) — without this, the untracked
+  `.gitignore` file scaffolding now produces made pre-existing git.test.js tests fail
+  with "working tree has uncommitted changes" in `ensureGitBranch`. No test logic
+  changed, just the fixture setup.
+
+**Deviations from the design**
+- None substantive. One documentation wording choice: the "Limits" bullet in
+  `docs/CodexSupport.md` was reworded to "does not add a new route grammar" (dropping
+  "config schema" entirely) rather than a softer rewording, since this ticket does add
+  one config key.
+
+**Verification**
+- `npm run check`: pass (all `node --check` targets clean).
+- `npm test`: 167/167 pass (0 fail, 0 skipped).
+- `npm run validate`: `Ticket validation OK`.
+
+**Remaining risks** (carried from the design, no code changes made for these):
+- Mixed-mode drift if `worktrees.location` changes while old-layout worktrees are
+  still registered (`list`/`remove` will not see stranded worktrees under the old
+  root).
+- `git clean -fdx` in the main root would delete `.worktrees/` and orphan registered
+  inside-layout worktrees.
+- Windows `MAX_PATH` exposure is marginally higher for the inside layout in already-deep
+  repo paths.
+
 ## Review Findings
 
 ## Test Evidence
@@ -279,3 +366,5 @@ before the callback.
 ## Run Log
 
 - 2026-07-07T15:33:49Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): worktrees.location config (sibling default | inside .worktrees | explicit path), threading through four placement consumers, gitignore seeding, CodexSupport doc for writable roots; discovery verified safe from double-count. Estimate 4 (basis B20260707T1318Z).
+
+- 2026-07-07T15:34:40Z: Ensured git branch local-board/B20260707T1319Z-worktrees-are-created-outside-the-workspace-root-breaking-the-codex-workspace-write-sandbox (created).

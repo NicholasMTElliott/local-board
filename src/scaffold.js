@@ -7,6 +7,14 @@ const TICKET_FOLDERS = ["backlog", "ready", "active", "questions", "blocked", "r
 
 const FILES = new Map([
   [
+    ".gitignore",
+    `# local-board ticket worktrees (see plans/local-board.config.jsonc: worktrees.location).
+# Only used by the "inside" layout, but seeded regardless of the chosen layout so
+# switching to it later never needs a manual .gitignore edit.
+.worktrees/
+`,
+  ],
+  [
     "plans/README.md",
     `# Plans
 

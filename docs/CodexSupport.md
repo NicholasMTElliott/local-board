@@ -52,6 +52,24 @@ node ~/.local-board/bin/local-board.js complete-step T123 design --executor clau
 
 Validation compares only the route before `@`, so existing configs continue to pass.
 
+## Worktrees and the sandbox
+
+`worktree-add` and every worker edit inside a ticket worktree must land inside a
+writable root. `worktrees.location` in `plans/local-board.config.jsonc` controls
+where ticket worktrees are created:
+
+- `"sibling"` (default): `<dirname(repoRoot)>/<basename(repoRoot)>-worktrees`. This
+  is outside the repo. Under Codex's default `workspace-write` sandbox, writes
+  outside the workspace root are blocked or trigger approval escalations. To use
+  the sibling layout under Codex, add the sibling directory as an additional
+  writable root (Codex `sandbox_workspace_write.writable_roots`, or the equivalent
+  `-c` override) pointing at `<repo>-worktrees`.
+- `"inside"`: `<repoRoot>/.worktrees`, git-ignored. This is under the workspace
+  root, so `workspace-write` needs no extra configuration. **Recommended for
+  Codex parallel (`local-team`) runs.**
+- any other non-empty string: an explicit path (absolute, or relative to
+  repoRoot), rejected if it resolves inside `plans/`.
+
 ## Models
 
 Do not pass Claude aliases such as `opus`, `sonnet`, or `haiku` to Codex spawned agents. The Codex skill inherits the parent Codex model unless the configured model is already a valid Codex model id. When a Claude route is translated without a valid Codex model id, evidence uses `@codex-default`.
@@ -87,4 +105,5 @@ The first Codex team mode uses wave-barrier scheduling. It waits for a batch of 
 - Unknown `claude-subagent:*` routes need user approval before inline fallback.
 - Return-only executors must not edit files or run ticket mutation commands.
 - Workers must stay in their assigned worktree and must not revert unrelated edits.
-- Codex support does not add a new config schema or route grammar.
+- Codex support does not add a new route grammar. `worktrees.location` is a
+  general config key (see "Worktrees and the sandbox" above), not Codex-specific.

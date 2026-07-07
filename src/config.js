@@ -250,6 +250,9 @@ export const DEFAULT_CONFIG = {
     implement: [],
     test: [],
   },
+  worktrees: {
+    location: "sibling",
+  },
   estimation: {
     enabled: false,
     scale: [1, 2, 4, 8],
@@ -289,6 +292,7 @@ export async function loadConfig(root = ".") {
   try {
     normalizeOptionalSteps(merged, configPath);
     normalizeEstimation(merged);
+    normalizeWorktrees(merged);
     normalizeAgents(merged);
   } catch (error) {
     throw new Error(`${configPath}: ${error.message}`);
@@ -442,6 +446,26 @@ function normalizeEstimation(merged) {
       `estimation.splitThreshold must be a positive integer; got ${JSON.stringify(splitThreshold)}`,
     );
   }
+}
+
+// Type/emptiness only. The plans/-interior guard needs repoRoot, which is not
+// known at config-load time; it is enforced in worktreesRootFor (src/worktrees.js)
+// once repoRoot is resolved.
+function normalizeWorktrees(merged) {
+  if (merged.worktrees === undefined || merged.worktrees === null) {
+    merged.worktrees = { location: "sibling" };
+    return;
+  }
+  if (!isObject(merged.worktrees)) {
+    throw new Error("worktrees must be an object");
+  }
+  const { location } = merged.worktrees;
+  if (typeof location !== "string" || location.trim() === "") {
+    throw new Error(
+      `worktrees.location must be a non-empty string; got ${JSON.stringify(location)}`,
+    );
+  }
+  merged.worktrees = { location };
 }
 
 function validateOptionalStepEntry(entry, stage, seenNames) {
@@ -804,6 +828,19 @@ export function defaultConfigJsonc() {
       }
     ],
     "test": []
+  },
+
+  // Placement for ticket worktrees created by worktree-add.
+  // location: "sibling" (default) places worktrees at
+  // <dirname(repoRoot)>/<basename(repoRoot)>-worktrees, outside the repo. Under a Codex
+  // workspace-write sandbox this directory is outside the writable workspace root and
+  // needs an additional writable root (see docs/CodexSupport.md).
+  // "inside" places worktrees at <repoRoot>/.worktrees (git-ignored), which is under the
+  // workspace root and needs no extra sandbox config — recommended for Codex parallel runs.
+  // Any other non-empty string is an explicit path (absolute, or relative to repoRoot);
+  // it is rejected if it resolves inside plans/.
+  "worktrees": {
+    "location": "sibling"
   },
 
   // Relative-sized estimation. Sized after design; enforced on complete-step
