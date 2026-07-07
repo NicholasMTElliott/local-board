@@ -2,40 +2,39 @@
 name: local-board
 description: Operate a repo-native local-board planning system where tickets are Markdown files under plans/tickets. Use when the user asks to run local-board, work the next ticket, work a specific ticket, decompose an epic/story, initialize local-board in a repo, or continue a file-backed planning workflow. The skill validates tickets, queries deterministic workflow state through the local-board CLI, loads project prompts/config, delegates bounded steps when configured, and updates canonical ticket state through CLI commands.
 allowed-tools:
-  - Bash(node <<SCRIPT_PATH>> *)
+  - Bash(local-board *)
 ---
 
 # local-board orchestrator
 
-Use the installed CLI:
+Use the `local-board` command on PATH:
 
 ```sh
-node <<SCRIPT_PATH>>
+local-board
 ```
 
 Installation metadata:
 
 - Runtime directory: `<<INSTALL_PATH>>`
-- CLI entrypoint: `<<SCRIPT_PATH>>`
 
-Do not search the filesystem for local-board source or scripts. Use the CLI entrypoint above.
+Do not search the filesystem for local-board source or scripts. Use the `local-board` command on PATH.
 
 Operate in the user's current project unless they specify another root. Pass `--root <path>` for non-current projects.
 
 ## Core Loop
 
 1. Read project instructions: `AGENTS.md`, `CLAUDE.md`, and `memory-bank/` when present.
-2. If `plans/` is absent and the user asked to initialize, run `node <<SCRIPT_PATH>> init`.
-3. Run `node <<SCRIPT_PATH>> schema --json` when you need accepted statuses, priorities, actions, or agent values.
-4. Run `node <<SCRIPT_PATH>> validate`.
-5. For whole-project work, run `node <<SCRIPT_PATH>> query-next --json`.
-6. For a specific ticket, run `node <<SCRIPT_PATH>> query-ticket <id> --json`.
+2. If `plans/` is absent and the user asked to initialize, run `local-board init`.
+3. Run `local-board schema --json` when you need accepted statuses, priorities, actions, or agent values.
+4. Run `local-board validate`.
+5. For whole-project work, run `local-board query-next --json`.
+6. For a specific ticket, run `local-board query-ticket <id> --json`.
 7. Read the returned ticket `path`, returned `prompt`, `branch`, `transitions`, and relevant project context.
-8. Run `node <<SCRIPT_PATH>> begin-step <ticket-id> --json`. It returns `configuredAgent` (the route), `configuredModel` (the per-step model, or null), and `configuredPrompt`.
+8. Run `local-board begin-step <ticket-id> --json`. It returns `configuredAgent` (the route), `configuredModel` (the per-step model, or null), and `configuredPrompt`.
 9. Execute the returned `action` through the configured route. For `claude-subagent:<agent-name>`, dispatch the named Claude subagent after the colon and, when `configuredModel` is non-null, pin that subagent's model to `configuredModel` at dispatch. For `codex-task:<mode>`, shell out to codex in that mode. For `inline`, do the work yourself on your own model. Per-step models only take effect on subagent/codex routes — `inline` always runs on the orchestrator's model.
-10. Run `node <<SCRIPT_PATH>> complete-step <ticket-id> <action> --executor <configuredAgent>[@<configuredModel>] --evidence "<evidence>"`. Append `@<configuredModel>` when a model was pinned, so the evidence records which model ran. Strict routing compares the route part only and ignores the `@model` suffix.
+10. Run `local-board complete-step <ticket-id> <action> --executor <configuredAgent>[@<configuredModel>] --evidence "<evidence>"`. Append `@<configuredModel>` when a model was pinned, so the evidence records which model ran. Strict routing compares the route part only and ignores the `@model` suffix.
 11. Mutate ticket state only through CLI commands.
-12. After the action, choose the next status from the returned `transitions` list and run `node <<SCRIPT_PATH>> move <ticket-id> <status> --json`.
+12. After the action, choose the next status from the returned `transitions` list and run `local-board move <ticket-id> <status> --json`.
 13. Choose `done` only when all required stages are complete.
 14. Run `validate` again before reporting completion.
 
@@ -110,7 +109,7 @@ Use those statuses after completing the action. Examples:
 Before `implement`, `review`, `test`, or `document`, run:
 
 ```sh
-node <<SCRIPT_PATH>> start-work <ticket-id> --json
+local-board start-work <ticket-id> --json
 ```
 
 `start-work` creates a branch when the ticket has no `branch`, switches to a recorded existing branch when it exists, records the selected branch in front matter, appends a run-log entry, and moves `ready_for_implementation` tickets to `implementing`.
@@ -120,7 +119,7 @@ Run `begin-step` (to resolve the action and its `configuredAgent`/`configuredMod
 If the user pre-seeded work on a branch that is not yet recorded in the ticket, run:
 
 ```sh
-node <<SCRIPT_PATH>> start-work <ticket-id> --branch <branch-name> --json
+local-board start-work <ticket-id> --branch <branch-name> --json
 ```
 
 When switching to an existing branch, `start-work` refuses a dirty worktree unless `--allow-dirty` is supplied. Do not use plain `git switch` for ticket work unless the CLI command is unavailable or the user explicitly asks for manual git control.
@@ -149,7 +148,7 @@ After the mandatory action for a `design`, `implement`, or `test` stage complete
 Gate-check is not run after `decompose` or `document`.
 
 ```sh
-node <<SCRIPT_PATH>> gate-check <ticket-id> --stage <stage> --json
+local-board gate-check <ticket-id> --stage <stage> --json
 ```
 
 `<stage>` must be one of `design`, `implement`, or `test`. The CLI returns the gate-check `prompt` path, the configured gate-check `agent` (route) and `model`, a narrow `ticketContext`, and the stage `catalog` of available specialty entries. The CLI does not invoke an agent.
@@ -165,13 +164,13 @@ An empty `requestedSteps` array is the normal case; skip the specialty pass and 
 For each name in `requestedSteps`, resolve the specialty:
 
 ```sh
-node <<SCRIPT_PATH>> specialty-run <ticket-id> <step-name> --json
+local-board specialty-run <ticket-id> <step-name> --json
 ```
 
 `specialty-run` derives the stage automatically from ticket status; do not pass `--stage`. It returns the resolved `prompt`, the `agent` route (defaulting to `inline`), and a narrow `ticketContext`. Dispatch the prompt through that route, parse the specialty agent's `verdict` (`PASS` / `CONCERNS` / `FAIL`) plus `findings`, then record evidence:
 
 ```sh
-node <<SCRIPT_PATH>> complete-step <ticket-id> <step-name> --executor <executor> --evidence "<VERDICT>: <short summary>"
+local-board complete-step <ticket-id> <step-name> --executor <executor> --evidence "<VERDICT>: <short summary>"
 ```
 
 Use the exact `<step-name>` returned by gate-check. `specialty-run` rejects unknown names. Use the resolved executor string (the `agent` value from `specialty-run`, or `inline`) so the `<step-name>:<executor>` evidence pair satisfies strict routing.
@@ -221,7 +220,7 @@ When recording completion evidence, use the configured route from `begin-step`, 
 If the configured agent is unavailable, do not continue inline by default. Ask the user for approval. If approved, run:
 
 ```sh
-node <<SCRIPT_PATH>> approve-inline <ticket-id> <action> --reason "<user-approved reason>"
+local-board approve-inline <ticket-id> <action> --reason "<user-approved reason>"
 ```
 
 Then run `complete-step` with `--executor inline`. If the user does not approve the deviation, move the ticket to `questions` and record the blocker.
@@ -229,29 +228,29 @@ Then run `complete-step` with `--executor inline`. If the user does not approve 
 ## CLI Commands
 
 ```sh
-node <<SCRIPT_PATH>> validate
-node <<SCRIPT_PATH>> query-next --json
-node <<SCRIPT_PATH>> query-ticket <ticket-id> --json
-node <<SCRIPT_PATH>> state-report --json
-node <<SCRIPT_PATH>> schema --json
-node <<SCRIPT_PATH>> create <epic|story|task|bug> "<title>" --status <status> --priority <priority> [--parent <id>]
-node <<SCRIPT_PATH>> start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--json]
-node <<SCRIPT_PATH>> begin-step <ticket-id> [--action <action>] [--json]
-node <<SCRIPT_PATH>> complete-step <ticket-id> <action> --executor <executor> --evidence "<evidence>" [--json]
-node <<SCRIPT_PATH>> approve-inline <ticket-id> <action> --reason "<reason>" [--json]
-node <<SCRIPT_PATH>> gate-check <ticket-id> --stage <stage> [--json]
-node <<SCRIPT_PATH>> specialty-run <ticket-id> <step-name> [--json]
-node <<SCRIPT_PATH>> calibration suggest <ticket-id> [--json]
-node <<SCRIPT_PATH>> estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]
-node <<SCRIPT_PATH>> move <ticket-id> <status> [--json]
-node <<SCRIPT_PATH>> set <ticket-id> <field> <value>
-node <<SCRIPT_PATH>> section <ticket-id> "<text>" --section "<section>"
-node <<SCRIPT_PATH>> section <ticket-id> --file <path> --section "<section>"
-node <<SCRIPT_PATH>> comment <ticket-id> "<text>" [--section "<section>"]
-node <<SCRIPT_PATH>> link-parent <child-id> <parent-id>
-node <<SCRIPT_PATH>> link-child <parent-id> <child-id>
-node <<SCRIPT_PATH>> block <ticket-id> <dependency-id>
-node <<SCRIPT_PATH>> unblock <ticket-id> <dependency-id>
+local-board validate
+local-board query-next --json
+local-board query-ticket <ticket-id> --json
+local-board state-report --json
+local-board schema --json
+local-board create <epic|story|task|bug> "<title>" --status <status> --priority <priority> [--parent <id>]
+local-board start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--json]
+local-board begin-step <ticket-id> [--action <action>] [--json]
+local-board complete-step <ticket-id> <action> --executor <executor> --evidence "<evidence>" [--json]
+local-board approve-inline <ticket-id> <action> --reason "<reason>" [--json]
+local-board gate-check <ticket-id> --stage <stage> [--json]
+local-board specialty-run <ticket-id> <step-name> [--json]
+local-board calibration suggest <ticket-id> [--json]
+local-board estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]
+local-board move <ticket-id> <status> [--json]
+local-board set <ticket-id> <field> <value>
+local-board section <ticket-id> "<text>" --section "<section>"
+local-board section <ticket-id> --file <path> --section "<section>"
+local-board comment <ticket-id> "<text>" [--section "<section>"]
+local-board link-parent <child-id> <parent-id>
+local-board link-child <parent-id> <child-id>
+local-board block <ticket-id> <dependency-id>
+local-board unblock <ticket-id> <dependency-id>
 ```
 
 Use `comment` for run-log style notes. Use `move` for status transitions. Use relationship commands for parent/child and dependency state.

@@ -5,27 +5,28 @@ description: Work several local-board tickets in parallel from one top-level Cod
 
 # local-team for Codex
 
-Use the installed CLI:
+Use the `local-board` command on PATH:
 
 ```sh
-node <<SCRIPT_PATH>>
+local-board
 ```
 
 Installation metadata:
 
 - Runtime directory: `<<INSTALL_PATH>>`
-- CLI entrypoint: `<<SCRIPT_PATH>>`
 - Codex executor prompts: `<<INSTALL_PATH>>/agents/codex/`
+
+Do not search the filesystem for local-board source or scripts. Use the `local-board` command on PATH.
 
 You are the top-level orchestrator. Keep up to `maxInFlight` tickets active, dispatch each step to a Codex spawned agent when configured, and keep the ticket file plus per-ticket worktree as the durable baton. Executors do work; you own all ticket-state mutations.
 
 ## Preflight
 
 1. Read project instructions: `AGENTS.md`, `CLAUDE.md`, and `memory-bank/` when present.
-2. Run `node <<SCRIPT_PATH>> validate`. Stop on validation errors.
-3. Run `node <<SCRIPT_PATH>> fast-forward --json`. Stop if it refuses.
-4. Run `node <<SCRIPT_PATH>> team-config --json`. Treat `maxTeammates` as `maxInFlight`; prefer about 3 even if the cap is higher.
-5. Run `node <<SCRIPT_PATH>> list --ready --limit <maxInFlight> --json`. If empty, report no ready tickets and stop.
+2. Run `local-board validate`. Stop on validation errors.
+3. Run `local-board fast-forward --json`. Stop if it refuses.
+4. Run `local-board team-config --json`. Treat `maxTeammates` as `maxInFlight`; prefer about 3 even if the cap is higher.
+5. Run `local-board list --ready --limit <maxInFlight> --json`. If empty, report no ready tickets and stop.
 
 ## Wave-Barrier Scheduling
 
@@ -50,7 +51,7 @@ see `docs/CodexSupport.md` "Worktrees and the sandbox" — set
 `worktrees.location: "inside"` to avoid `workspace-write` sandbox escalations):
 
 ```sh
-node <<SCRIPT_PATH>> worktree-add <ticket-id> --json
+local-board worktree-add <ticket-id> --json
 ```
 
 Pass `--root <worktreePath>` to every per-ticket command after creation. Give spawned agents the worktree path and require edits to happen there.
@@ -58,7 +59,7 @@ Pass `--root <worktreePath>` to every per-ticket command after creation. Give sp
 Remove the worktree after successful closeout:
 
 ```sh
-node <<SCRIPT_PATH>> worktree-remove <ticket-id> --root <project-root>
+local-board worktree-remove <ticket-id> --root <project-root>
 ```
 
 ## Route Translation
@@ -94,7 +95,7 @@ When a ticket reaches `ready_for_review`, record changed files from its branch. 
 On terminal work, run:
 
 ```sh
-node <<SCRIPT_PATH>> move <ticket-id> done --root <worktreePath> --json
+local-board move <ticket-id> done --root <worktreePath> --json
 ```
 
 If it refuses because the branch lacks the latest default, commit planning-only ticket edits in the worktree, rebase the ticket branch onto default, and retry. If conflicts cannot be resolved safely, move the ticket to `questions`.

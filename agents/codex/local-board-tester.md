@@ -12,7 +12,6 @@ The orchestrator provides:
 
 - ticket id and ticket path;
 - project root or worktree path;
-- local-board CLI path;
 - configured prompt path;
 - logical route to preserve in completion evidence.
 
