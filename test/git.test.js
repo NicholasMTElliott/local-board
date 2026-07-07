@@ -421,10 +421,10 @@ function escapeRegExp(value) {
 }
 
 async function completeRequiredTaskSteps(root, ticketId) {
-  await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence.");
-  await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer", "Implementation evidence.");
+  await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Design evidence.");
+  await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer@sonnet", "Implementation evidence.");
   await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
-  await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester", "Test evidence.");
+  await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester@sonnet", "Test evidence.");
   await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
 }
 

@@ -50,7 +50,11 @@ Strict routing still records the configured logical route. For example, if Codex
 local-board complete-step T123 design --executor claude-subagent:local-board-designer@codex-default --evidence "Design written by Codex worker."
 ```
 
-Validation compares only the route before `@`, so existing configs continue to pass.
+Route matching compares only the part before `@`, so existing configs continue to pass. When
+the route matches and the action's profile pins a model, `complete-step` under strict routing
+also requires the `@model` suffix to satisfy the pin — `codex-default` is a documented wildcard
+that satisfies any pinned model, so translated Codex evidence always passes without needing the
+real model id.
 
 ## Worktrees and the sandbox
 

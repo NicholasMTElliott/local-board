@@ -140,7 +140,17 @@ mode); config `agents.<action>.model` overrides the frontmatter default.
 Codex translates known `claude-subagent:local-board-*` routes to Codex spawned
 agents while preserving the configured logical route in `complete-step` evidence
 (`@codex-default` suffix when no valid Codex model id is used). This keeps
-Claude-first configs compatible without a schema migration.
+Claude-first configs compatible without a schema migration. `codex-default` is a
+wildcard that satisfies any pinned model in strict-routing model enforcement
+(see below).
+
+Strict routing enforces the per-step pinned model at `complete-step` write time:
+when the executor route matches the configured route and the action's profile
+pins a model, the executor's `@model` suffix must equal `configuredModel`, equal
+`codex-default`, or be covered by a `routingApprovals` entry for the full
+`route@model` token (`approve-inline --executor <route>@<model>`). Done-time
+re-validation (`validateRouting`) stays route-only for back-compat with evidence
+recorded before this rule.
 
 Return-only subagents (reviewer, tester, decomposer, gatecheck) have no Write or Edit tool. They return section content (Review Findings, Test Evidence) or JSON as Markdown in their final message; the orchestrator writes the temp file with the Write tool and runs `section --file`. Never instruct a return-only subagent to create a file — it falls back to Bash redirection (`echo`, heredoc, `Set-Content`), which breaks on backticks and code fences. The same return-only contract applies to `codex-task:read-only` routes. The designer is the exception: it has a scoped Write tool and self-writes its `Technical Design` section, returning only a terse summary, because that payload is the largest and the Write tool avoids the redirection bug.
 

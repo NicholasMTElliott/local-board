@@ -488,15 +488,16 @@ async function commandCompleteStep(root, args) {
 async function commandApproveInline(root, args) {
   const asJson = takeFlag(args, "--json");
   const reason = takeOption(args, "--reason");
+  const executor = takeOption(args, "--executor") ?? "inline";
   const ticketId = args.shift();
   const action = args.shift();
   ensureNoArgs(args);
 
   if (ticketId === undefined || action === undefined || reason === undefined) {
-    throw new Error("approve-inline requires: <ticket-id> <action> --reason <text>");
+    throw new Error("approve-inline requires: <ticket-id> <action> --reason <text> [--executor <executor>]");
   }
 
-  const result = await approveInline(root, ticketId, action, reason);
+  const result = await approveInline(root, ticketId, action, reason, { executor });
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));
   } else {
@@ -981,7 +982,7 @@ function printUsage() {
   local-board team-config [--json]
   local-board [--root <path>] begin-step <ticket-id> [--action <action>] [--json]
   local-board [--root <path>] complete-step <ticket-id> <action> --executor <executor> --evidence <text> [--json]
-  local-board [--root <path>] approve-inline <ticket-id> <action> --reason <text> [--json]
+  local-board [--root <path>] approve-inline <ticket-id> <action> --reason <text> [--executor <executor>] [--json]
   local-board [--root <path>] move <ticket-id> <status> [--json]
   local-board [--root <path>] set <ticket-id> <field> <value>
   local-board [--root <path>] comment <ticket-id> <text> [--section <section>]
