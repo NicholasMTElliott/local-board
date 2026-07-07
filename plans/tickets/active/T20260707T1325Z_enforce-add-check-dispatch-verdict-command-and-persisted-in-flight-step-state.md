@@ -13,8 +13,8 @@ estimateBasis: T20260707T1320Z
 workStartedAt: 2026-07-07T17:26:56Z
 workCompletedAt: null
 created: 2026-07-07T13:25:41Z
-updated: 2026-07-07T17:40:48Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-07T17:49:44Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only]
 routingApprovals: []
 ---
 # enforce: add check-dispatch verdict command and persisted in-flight step state
@@ -160,7 +160,7 @@ Note: `active-steps.js` imports `resolveExpectedStep`/`modelSatisfies`/`writeTic
 
 **Gitignore:** `.local-board/` (whole directory, not just `tmp/`/`runs/`) added to this repo's own `.gitignore` and to `scaffold.js`'s `GITIGNORE_TEMPLATE`/idempotent-append logic (`writeGitignore` now appends any of `[.worktrees/, .local-board/]` that's missing, individually idempotent). `test/pack.test.js` asserts `.local-board/` is excluded from `npm pack`.
 
-**Corruption handling (design was open on this):** chose "self-heal on write, error on read" — `begin-step`/`complete-step`/`approve-inline` never fail due to a corrupt ledger (self-heals to `{}` and overwrites), but `check-dispatch` (the query the hook depends on) throws a clear, path-carrying error on a corrupt ledger, surfacing as stderr + exit 2 rather than a silent false pass or false deny.
+**Corruption handling (design was open on this):** chose "self-heal on write, error on read" — `begin-step`/`complete-step`/`approve-inline` never fail due to a corrupt ledger (self-heals to `{}` and overwrites), but `check-dispatch` (the query the hook depends on) surfaces a clear, path-carrying error on a corrupt ledger, as exit 2 rather than a silent false pass or false deny.
 
 **Tests** (`test/active-steps.test.js`, 20 new; all pass): ledger path fallback in non-git dirs; stamp/read/clear round-trip and RMW preserves other tickets' keys; stamp idempotency (re-stamp overwrites only its own key, verified via `--action implement` override rather than a timing-based `ts` diff — `formatIsoSeconds` truncates to whole seconds, so a millisecond-scale re-stamp can land on the same second); corruption tolerance (self-heal on write, throw on read, both directions); begin-step→complete-step and begin-step→approve-inline clear round-trips via the CLI; a real `git worktree` fixture proving a worktree-invoked `begin-step` stamps the MAIN checkout's ledger (not the worktree's) and that a main-checkout-invoked `check-dispatch` sees it; the full check-dispatch verdict matrix (right agent+model, wrong agent, wrong model, model-omitted-with-pin, configured-model-null via a hand-crafted ledger record, no-active-step scan miss, non-local-board passthrough, `--ticket` vs scan, ledger-snapshot-beats-live-config, ticket-not-found, bad-args, corrupt-ledger).
 
@@ -172,7 +172,26 @@ Note: `active-steps.js` imports `resolveExpectedStep`/`modelSatisfies`/`writeTic
 
 **Remaining risk (accepted per design, not addressed here):** the ledger read-modify-write is atomic per-write but not lock-protected across concurrent `begin-step` calls for different tickets in parallel mode; a lost-update is possible (design flags this, defers the fix to B20260707T1322Z). Also flagged: `begin-step` gaining a ledger-write side effect means any script treating it as a pure query now also writes `.local-board/`.
 
+## Rework (2026-07-07T17:45:20Z review, two blockers)
+
+Fixed both blockers from the review of commit 905982b, scope held to exactly those two items:
+
+1. **check-dispatch now always emits JSON on stdout, including exit-2 errors.** `commandCheckDispatch` (`src/cli.js`) wraps the `checkDispatch(...)` call in try/catch: on any thrown error (e.g. `readActiveSteps` throwing on a corrupt ledger from `src/active-steps.js`), prints `{ ok: false, reason: "error", error: "<message>" }` to stdout and returns exit code 2, instead of letting the error escape to the generic CLI catch (stderr-only, empty stdout). The bad-args path (missing `--agent`) is unaffected — that throw happens before the try block, by design (per the original "matches the existing CLI catch that returns 2" note, stdout stays empty and the message goes to stderr for malformed invocations, not runtime ledger errors).
+   - Updated `test/active-steps.test.js` ("a corrupt ledger is an error... rather than a silent pass"): previously asserted `stdout === ""` and matched the corruption message on stderr. Now asserts exit 2 and parses `stdout` as JSON, checking `ok: false`, `reason: "error"`, and `error` matching `/active-steps ledger.*is corrupt/`.
+
+2. **Scan mode (`checkDispatchByScan` in `src/active-steps.js`) now mirrors `--ticket` mode's model-gate semantics.** Previously, once a route match was found, an omitted `--model` with a pinned `expectedModel` fell through to `reason: "match"` (silently claiming full verification). Now, per matched record: null-pinned model → `match`; `--model` omitted with a pinned model → pass-with-reason `model-unverifiable` (mirrors `checkDispatchForTicket`); `--model` present and mismatched → `continue` (keep scanning, unchanged); `--model` present and satisfies → `match`.
+   - Added new test "check-dispatch: scan mode with --model omitted passes with model-unverifiable when the matched step pins a model" asserting `ok: true`, `reason: "model-unverifiable"`, correct `ticket` and `expected`.
+
+**Verification (rework):** `npm run check` — clean. `npm test` — 206/206 pass (0 fail), zero regressions. `npm run validate` — OK. Live re-check per the rework instructions: this ticket's own ledger entry had already been cleared by the prior implementer's `complete-step implement` call (visible in front matter `completedSteps`), so a bare `check-dispatch --ticket T20260707T1325Z` first returned `ticket-not-found` (expected, given no ledger record and status `implementing` has no `statusActions` mapping — same pre-existing, unrelated gap noted in the original Implementation Notes). Re-stamped via `begin-step T20260707T1325Z --action implement --json` (same override used previously, mirroring the orchestrator's real dispatch), then re-ran:
+   - `check-dispatch --agent local-board-implementer --ticket T20260707T1325Z` (no `--model`) → exit 0, `{ok:true, reason:"model-unverifiable", expected:{agent:"local-board-implementer", model:"sonnet"}, ticket:"T20260707T1325Z"}`.
+   - `check-dispatch --agent local-board-implementer` (scan mode, no `--model`, no `--ticket`) → exit 0, same `model-unverifiable` verdict — confirms fix 2 live.
+   Did not run `complete-step` afterward; left the ledger stamped, matching the state the orchestrator's own begin-step produces for this in-flight step.
+
+**Remaining risks (unchanged, documented deferrals, not addressed in this rework):** action-aware clearing (clearing is ticket-wide, not per-action) and RMW lock-protection across concurrent `begin-step` calls (pending B20260707T1322Z) are both out of scope per the rework instructions.
+
 ## Review Findings
+
+- 2026-07-07T17:45:20Z: Review (codex): two blockers — check-dispatch exit-2 paths emit stderr-only (hook contract requires JSON on stdout always; a test even codifies the wrong behavior), and scan mode returns match instead of model-unverifiable when --model omitted with a pinned model. Non-blocking: clearing is ticket-wide rather than action-aware (documented design; deferred); concurrent RMW risk accepted pending B20260707T1322Z. Looping back.
 
 ## Test Evidence
 
@@ -185,3 +204,9 @@ Note: `active-steps.js` imports `resolveExpectedStep`/`modelSatisfies`/`writeTic
 - 2026-07-07T17:26:04Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): main-checkout sidecar ledger (worktree-invisibility of front matter to hooks is decisive), git-common-dir resolution, unconditional idempotent stamp on begin-step, best-effort clear, pass-with-reason for unverifiable models, exit 0/1/2 JSON verdicts. Estimate 4 (basis T20260707T1320Z).
 
 - 2026-07-07T17:26:56Z: Ensured git branch local-board/T20260707T1325Z-enforce-add-check-dispatch-verdict-command-and-persisted-in-flight-step-state (created).
+
+- 2026-07-07T17:41:25Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): src/active-steps.js ledger + check-dispatch CLI + stamp/clear lifecycle; 205/205 tests; live check-dispatch verdicts verified on this repo's own ledger.
+
+- 2026-07-07T17:45:21Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) changes_requested: JSON-on-stdout contract violated on error paths; scan-mode verdict reason wrong for unverifiable models. Ledger anchoring, worktree tests, and verdict matrix otherwise verified.
+
+- 2026-07-07T17:45:21Z: Ensured git branch local-board/T20260707T1325Z-enforce-add-check-dispatch-verdict-command-and-persisted-in-flight-step-state (already-current).

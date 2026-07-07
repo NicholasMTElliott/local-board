@@ -169,13 +169,21 @@ async function checkDispatchByScan(root, agent, model) {
       continue;
     }
     const expectedModel = record.model ?? null;
-    if (model !== undefined && expectedModel !== null && !modelSatisfies(expectedModel, model)) {
+    const expected = { agent: routeBare, model: expectedModel };
+
+    if (expectedModel === null) {
+      return { code: 0, body: { ok: true, reason: "match", ticket: ticketId, expected } };
+    }
+
+    if (model === undefined) {
+      return { code: 0, body: { ok: true, reason: "model-unverifiable", ticket: ticketId, expected } };
+    }
+
+    if (!modelSatisfies(expectedModel, model)) {
       continue;
     }
-    return {
-      code: 0,
-      body: { ok: true, reason: "match", ticket: ticketId, expected: { agent: routeBare, model: expectedModel } },
-    };
+
+    return { code: 0, body: { ok: true, reason: "match", ticket: ticketId, expected } };
   }
   return { code: 1, body: { ok: false, reason: "no-active-step-for-agent" } };
 }

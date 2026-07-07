@@ -523,9 +523,18 @@ async function commandCheckDispatch(root, args) {
     throw new Error("check-dispatch requires: --agent <subagent-type> [--model <model>] [--ticket <ticket-id>] [--json]");
   }
 
-  const verdict = await checkDispatch(root, { agent, model, ticketId });
-  console.log(JSON.stringify(verdict.body, null, 2));
-  return verdict.code;
+  try {
+    const verdict = await checkDispatch(root, { agent, model, ticketId });
+    console.log(JSON.stringify(verdict.body, null, 2));
+    return verdict.code;
+  } catch (error) {
+    // check-dispatch is a hook contract: stdout must always carry a parseable
+    // JSON verdict, even when the ledger read itself throws (e.g. a corrupt
+    // active-steps.json). Surface the error on stdout as { ok: false } rather
+    // than letting it propagate to the generic CLI catch (stderr-only).
+    console.log(JSON.stringify({ ok: false, reason: "error", error: error.message }, null, 2));
+    return 2;
+  }
 }
 
 async function commandInit(root, args) {

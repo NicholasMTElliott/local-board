@@ -455,6 +455,25 @@ test("check-dispatch: without --ticket scans the ledger for a matching agent+mod
   });
 });
 
+test("check-dispatch: scan mode with --model omitted passes with model-unverifiable when the matched step pins a model", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Scan mode model omitted", {
+      status: "ready_for_implementation",
+      now: new Date("2026-07-07T10:33:30Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    assert.equal((await runCli(["--root", root, "begin-step", ticketId, "--json"])).code, 0);
+
+    const result = await runCli(["--root", root, "check-dispatch", "--agent", "local-board-implementer"]);
+    assert.equal(result.code, 0, result.stderr);
+    const body = JSON.parse(result.stdout);
+    assert.equal(body.ok, true);
+    assert.equal(body.reason, "model-unverifiable");
+    assert.equal(body.ticket, ticketId);
+    assert.deepEqual(body.expected, { agent: "local-board-implementer", model: "sonnet" });
+  });
+});
+
 test("check-dispatch: --ticket resolves from the ledger snapshot even after config changes", async () => {
   await withBoard(async (root) => {
     const ticketPath = await createTicket(root, "task", "Ledger snapshot beats live config", {
@@ -544,7 +563,7 @@ test("check-dispatch: missing --agent is a bad-args error (exit 2, plain stderr 
   });
 });
 
-test("check-dispatch: a corrupt ledger is an error (exit 2, clear message) rather than a silent pass", async () => {
+test("check-dispatch: a corrupt ledger is an error (exit 2, JSON verdict on stdout) rather than a silent pass", async () => {
   await withBoard(async (root) => {
     const filePath = await ledgerPath(root);
     await mkdir(path.dirname(filePath), { recursive: true });
@@ -552,8 +571,10 @@ test("check-dispatch: a corrupt ledger is an error (exit 2, clear message) rathe
 
     const result = await runCli(["--root", root, "check-dispatch", "--agent", "local-board-implementer"]);
     assert.equal(result.code, 2);
-    assert.equal(result.stdout, "");
-    assert.match(result.stderr, /active-steps ledger.*is corrupt/);
+    const body = JSON.parse(result.stdout);
+    assert.equal(body.ok, false);
+    assert.equal(body.reason, "error");
+    assert.match(body.error, /active-steps ledger.*is corrupt/);
   });
 });
 
