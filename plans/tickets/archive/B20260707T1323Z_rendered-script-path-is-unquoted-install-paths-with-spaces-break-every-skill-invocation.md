@@ -1,7 +1,7 @@
 ---
 id: B20260707T1323Z
 type: bug
-status: ready_for_design
+status: archived
 priority: P2
 parent: null
 children: []
@@ -13,7 +13,7 @@ estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-07T13:23:08Z
-updated: 2026-07-07T13:23:23Z
+updated: 2026-07-07T16:49:11Z
 completedSteps: []
 routingApprovals: []
 ---
@@ -44,3 +44,5 @@ Acceptance: an install under a home path containing a space produces working ski
 ## Questions
 
 ## Run Log
+
+- 2026-07-07T16:49:10Z: Superseded by T20260707T1320Z: skills and allow rules now invoke the constant local-board PATH command; no absolute SCRIPT_PATH is rendered into any CLI invocation, so the unquoted-path failure class no longer exists. Verified by the T1320 test audit (zero node C:/ or placeholder matches across all installed skill/agent trees).

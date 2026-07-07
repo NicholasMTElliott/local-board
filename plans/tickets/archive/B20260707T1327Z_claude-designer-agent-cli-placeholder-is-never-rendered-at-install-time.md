@@ -1,7 +1,7 @@
 ---
 id: B20260707T1327Z
 type: bug
-status: ready_for_design
+status: archived
 priority: P3
 parent: null
 children: []
@@ -13,7 +13,7 @@ estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-07T13:27:08Z
-updated: 2026-07-07T13:23:23Z
+updated: 2026-07-07T16:49:11Z
 completedSteps: []
 routingApprovals: []
 ---
@@ -44,3 +44,5 @@ Acceptance: installed agent files contain a concrete, working CLI invocation wit
 ## Questions
 
 ## Run Log
+
+- 2026-07-07T16:49:10Z: Superseded by T20260707T1320Z: agents/claude/local-board-designer.md now invokes the literal local-board command; the unrendered CLI-path placeholder no longer exists. Verified by the T1320 test audit.
