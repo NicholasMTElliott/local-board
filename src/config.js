@@ -13,6 +13,29 @@ const MANDATORY_ACTION_NAMES = new Set([
   "document",
 ]);
 
+// DEFAULT_CONFIG plays two runtime roles — it is NOT the same thing as the
+// scaffolded config below it, minus some values:
+//   1. ENOENT fallback: when no config file exists, loadConfig returns
+//      structuredClone(DEFAULT_CONFIG) as the entire effective config.
+//   2. Deep-merge base: when a config file DOES exist, it is deep-merged onto
+//      DEFAULT_CONFIG, so every key here is a backward-compat default for
+//      configs that omit that block.
+// It deliberately differs from defaultConfigJsonc() (the blessed `init`
+// scaffold, below) in exactly two places, both required by role 2:
+//   - estimation.enabled: false here (vs true in the scaffold) so a
+//     pre-estimation config that omits the `estimation` block does not
+//     silently start enforcing the estimation gate.
+//   - optionalSteps: all stages empty here (vs populated in the scaffold)
+//     because optionalSteps arrays are merged wholesale per stage; a
+//     populated default here would make a user config that omits a stage
+//     silently inherit built-in specialties.
+// These two differences are pinned by tests in test/config.test.js (search
+// "backward-compat disabled" and "empty optionalSteps catalog"). Do NOT
+// converge them to match the scaffold — see the guard test
+// "defaultConfigJsonc matches DEFAULT_CONFIG except for documented
+// differences" in test/config.test.js, which locks the remaining shared
+// blocks (workflow, agents, routing, retention, git, worktrees) in sync
+// while allowlisting only these two intentional differences.
 export const DEFAULT_CONFIG = {
   version: 1,
   workflow: {
@@ -520,6 +543,10 @@ export async function writeDefaultConfig(root = ".", overwrite = false) {
   return configPath;
 }
 
+// This is the blessed `init` scaffold written to a new repo's config file —
+// distinct from DEFAULT_CONFIG above (the ENOENT fallback / deep-merge base),
+// which intentionally differs in estimation.enabled and optionalSteps. See
+// the comment on DEFAULT_CONFIG for why.
 export function defaultConfigJsonc() {
   return `{
   // Config schema version. Keep this at 1 until a future migration says otherwise.

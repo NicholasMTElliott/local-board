@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { defaultConfigJsonc, loadConfig, parseJsonc } from "../src/config.js";
+import { DEFAULT_CONFIG, defaultConfigJsonc, loadConfig, parseJsonc } from "../src/config.js";
 
 async function withRoot(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "local-board-config-"));
@@ -210,6 +210,53 @@ test("loadConfig returns empty optionalSteps catalog when the block is omitted",
     assert.deepEqual(config.optionalSteps.implement, []);
     assert.deepEqual(config.optionalSteps.test, []);
   });
+});
+
+// Recursively collects leaf-level key paths where `a` and `b` differ. Arrays
+// are traversed like objects (numeric indices), so an element-level or
+// length difference surfaces as e.g. "optionalSteps.design.0.name".
+function leafDiffPaths(a, b, prefix = "") {
+  if (Object.is(a, b)) return [];
+  const aIsObj = a !== null && typeof a === "object";
+  const bIsObj = b !== null && typeof b === "object";
+  if (!aIsObj || !bIsObj) return [prefix];
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  const paths = [];
+  for (const key of keys) {
+    paths.push(...leafDiffPaths(a[key], b[key], prefix ? `${prefix}.${key}` : key));
+  }
+  return paths;
+}
+
+test("defaultConfigJsonc matches DEFAULT_CONFIG except for documented differences", () => {
+  const scaffolded = parseJsonc(defaultConfigJsonc());
+  const expected = structuredClone(DEFAULT_CONFIG);
+
+  // Documented, intentional divergences (see the comment on DEFAULT_CONFIG in
+  // src/config.js):
+  //   - estimation.enabled: DEFAULT_CONFIG is the ENOENT fallback / merge base
+  //     and keeps the estimation gate off for backward compat; the scaffold
+  //     enables it for new repos.
+  //   - optionalSteps: DEFAULT_CONFIG ships empty catalogs (arrays merge
+  //     wholesale, so an empty default lets a user config omit a stage
+  //     without inheriting built-ins); the scaffold ships the v1 catalogs.
+  // Any OTHER difference here means someone edited one copy's shared blocks
+  // (workflow, agents, routing, retention, git, worktrees) without updating
+  // the other. Fix by updating both DEFAULT_CONFIG and defaultConfigJsonc(),
+  // or extend this allowlist (and the one below) if the new difference is
+  // genuinely intentional.
+  expected.estimation.enabled = true;
+  expected.optionalSteps = scaffolded.optionalSteps;
+  assert.deepEqual(scaffolded, expected);
+
+  // Guard against the allowlist above silently growing to mask unrelated
+  // drift: confirm these two paths are the *only* places DEFAULT_CONFIG and
+  // the scaffold differ.
+  const rawDiffs = leafDiffPaths(DEFAULT_CONFIG, parseJsonc(defaultConfigJsonc()));
+  const collapsed = [...new Set(
+    rawDiffs.map((diffPath) => (diffPath.startsWith("optionalSteps") ? "optionalSteps" : diffPath)),
+  )].sort();
+  assert.deepEqual(collapsed, ["estimation.enabled", "optionalSteps"]);
 });
 
 test("loadConfig preserves an optional agent override on optionalSteps entries", async () => {
