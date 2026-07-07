@@ -41,7 +41,10 @@ function sanitizedSystemPath() {
       path.join(windir, "System32", "WindowsPowerShell", "v1.0"),
     ].join(path.delimiter);
   }
-  return [nodeDir, "/usr/local/bin", "/usr/bin", "/bin"].join(path.delimiter);
+  // Deliberately excludes /usr/local/bin (and other global npm bin dirs):
+  // a real local-board install there would make the failure-path tests
+  // host-dependent. /usr/bin and /bin suffice for sh builtins and `command -v`.
+  return [nodeDir, "/usr/bin", "/bin"].join(path.delimiter);
 }
 
 function createStubBinDir() {

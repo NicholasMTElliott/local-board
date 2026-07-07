@@ -13,7 +13,7 @@ estimateBasis: T20260707T1319Z
 workStartedAt: 2026-07-07T16:14:58Z
 workCompletedAt: null
 created: 2026-07-07T13:20:26Z
-updated: 2026-07-07T16:35:57Z
+updated: 2026-07-07T16:40:45Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only]
 routingApprovals: []
 ---
@@ -335,6 +335,33 @@ Addressed the three review findings, nothing else touched.
 
 **Remaining risks**: none new. The sanitized-PATH approach assumes the OS-minimum directories listed cover every environment `where`/`command -v`/`node` need; if a given CI image relocates `where.exe` outside `System32` this would need adjustment, but this matches standard Windows and POSIX layouts.
 
+## Second rework pass (review changes_requested, scoped)
+
+`sanitizedSystemPath()`'s POSIX branch dropped `/usr/local/bin` (a common global npm bin dir, which made the failure-path tests host-dependent on POSIX); POSIX branch is now `[nodeDir, "/usr/bin", "/bin"]`, and the helper's comment now states why global npm bin dirs must be excluded. `npm run check`, `npm test` (179/179 pass, 0 fail), and `npm run validate` (`Ticket validation OK`) all green on this Windows host — the POSIX branch is inert here, so correctness is by inspection plus the updated comment. Files changed: `test/install.test.js`.
+</content>
+
+## Rework pass (review changes_requested)
+
+Addressed the three review findings, nothing else touched.
+
+1. **Hermetic PATH-verification tests** (`test/install.test.js`): the two failure-path tests (clone-mode and packaged/no-`.git` mode, previously at :307 and :322) no longer depend on the ambient test-runner PATH genuinely lacking `local-board`. Added a `sanitizedSystemPath()` helper that constructs a minimal PATH from only `path.dirname(process.execPath)` plus the OS-minimum system directories `where`/`command -v` and `node` need to resolve (win32: `System32`, `System32\Wbem`, `System32\WindowsPowerShell\v1.0`, the Windows dir itself; posix: `/usr/local/bin`, `/usr/bin`, `/bin`). `installEnv(home, { includeLocalBoardStub, sanitizePath })` gained a `sanitizePath` option that replaces the child process's PATH with this constructed value before optionally prepending the stub bin dir; the two failure tests now pass `{ includeLocalBoardStub: false, sanitizePath: true }`. The success-path tests are unchanged (still prepend the stub to the ambient PATH). Updated the header comment describing the seam accordingly.
+
+   Proof of hermeticity: ran `npm test` twice. Run 1 as-is (`where local-board` on the host resolved to nothing beforehand). Run 2 with a temp directory containing a `local-board.cmd` shim prepended to the shell's ambient `PATH` (confirmed via `where local-board` resolving to that shim before running). Both runs: **179/179 pass, 0 fail** — identical results, proving the suite no longer depends on whether `local-board` is globally installed on the machine running it.
+
+2. **README.md contradiction** (was line 44): the sentence claiming `node ./bin/local-board.js install` / `node install.mjs` work "without a prior global install" was false — it directly contradicted the installer's own fail-fast PATH check. Reworded to: these aliases exist but still require a prior `npm install -g .` or `npm link` from the checkout, because the installer's PATH check fails fast otherwise and rendered skills need the `local-board` command on `PATH` to be invoked correctly.
+
+3. **`skills/codex/local-board/SKILL.md:86`**: changed "Give spawned agents the ticket id, worktree/root path, CLI path, configured prompt path, ..." to "... the `local-board` command name, configured prompt path, ..." — spawned agents get the command name (from PATH), not a filesystem CLI path, consistent with the rest of this ticket's rewrite. Searched all other skill/agent files for the same "CLI path" phrasing; no other occurrences found.
+
+**Verification (rework pass)**:
+- `npm run check`: clean.
+- `npm test`, condition A (ambient PATH as normally found on this dev machine, no `local-board` shim): 179/179 pass, 0 fail.
+- `npm test`, condition B (temp `local-board.cmd` shim prepended to ambient PATH, confirmed present via `where local-board`): 179/179 pass, 0 fail — identical to condition A.
+- `npm run validate`: `Ticket validation OK`.
+
+**Files changed in this rework pass**: `test/install.test.js`, `README.md`, `skills/codex/local-board/SKILL.md`.
+
+**Remaining risks**: none new. The sanitized-PATH approach assumes the OS-minimum directories listed cover every environment `where`/`command -v`/`node` need; if a given CI image relocates `where.exe` outside `System32` this would need adjustment, but this matches standard Windows and POSIX layouts.
+
 ## Review Findings
 
 Reviewed by codex-task:read-only (gpt-5.5) against commit db2a700. Verdict: changes_requested.
@@ -349,6 +376,8 @@ Non-blocking:
 Verified clean: zero residual node <<SCRIPT_PATH>> / node C:/ / node ./bin/local-board.js / <local-board-cli> invocations in skills and agents (README repo-dev examples judged intentional); allowed-tools == settings rule == Bash(local-board *); PATH check platform-correct (where / command -v), lookup errors treated as false, runs before any mutation; .git detection anchored at package root and npm-link classifies as clone (guidance matches); install-info.json coherent; pack test asserts inclusions and critical exclusions; prepublishOnly runs check+test; "Do not search the filesystem" and memory-bank edits coherent.
 
 Verdict: changes_requested
+
+- 2026-07-07T16:38:18Z: Re-review (codex): README + skill wording fixed; one residual — sanitizedSystemPath includes /usr/local/bin (a global npm bin dir) so POSIX failure tests remain host-dependent. Looping back.
 
 ## Test Evidence
 
@@ -367,3 +396,9 @@ Verdict: changes_requested
 - 2026-07-07T16:31:43Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict changes_requested: PATH-failure tests non-hermetic (ambient PATH dependency blocks prepublishOnly on machines with local-board installed); README clone-install contradiction; one stale codex skill bullet. Rewrite itself verified complete and consistent.
 
 - 2026-07-07T16:31:43Z: Ensured git branch local-board/T20260707T1320Z-npm-publish-package-and-rewrite-skills-and-allow-rules-to-invoke-local-board-on-path (already-current).
+
+- 2026-07-07T16:36:25Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework (sonnet): sanitized-PATH seam makes failure tests hermetic (179/179 with and without a global local-board shim on PATH); README clone-mode contradiction fixed; stale CLI-path bullet reworded.
+
+- 2026-07-07T16:38:19Z: Completed review via codex-task:read-only: Re-review (gpt-5.5): two findings resolved; POSIX sanitized PATH still includes /usr/local/bin — changes_requested scoped to that.
+
+- 2026-07-07T16:38:19Z: Ensured git branch local-board/T20260707T1320Z-npm-publish-package-and-rewrite-skills-and-allow-rules-to-invoke-local-board-on-path (already-current).
