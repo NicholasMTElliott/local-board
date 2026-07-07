@@ -18,6 +18,7 @@ import {
   findTicket,
   gateConsultationRecords,
   gateStageForForwardMove,
+  invalidateDownstreamEvidence,
   linkParent,
   moveTicket,
   nextTicket,
@@ -2208,6 +2209,303 @@ test("back-compat: a ticket already at ready_for_docs with no gate tokens still 
     // no gate token is required even with the switch on.
     const moved = await moveTicket(root, ticketId, "done");
     assert.match(await readFile(moved, "utf8"), /^status: done$/m);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// invalidateOnLoopBack (T20260707T1328Z): strip stale downstream evidence on
+// a loop-back move.
+// ---------------------------------------------------------------------------
+
+const OPTIONAL_STEPS_FOR_INVALIDATION_TESTS = {
+  design: [
+    { name: "security_threat_model", prompt: "p.md", triggers: "t" },
+  ],
+  implement: [
+    { name: "security_audit", prompt: "p.md", triggers: "t" },
+  ],
+  test: [
+    { name: "perf_probe", prompt: "p.md", triggers: "t" },
+  ],
+};
+
+const FULL_EVIDENCE_FRONT_MATTER = {
+  completedSteps: [
+    "decompose:claude-subagent:local-board-decomposer@opus",
+    "design:claude-subagent:local-board-designer@opus",
+    "gate:design:skipped-empty-catalog",
+    "security_threat_model:inline",
+    "implement:claude-subagent:local-board-implementer@sonnet",
+    "gate:implement:skipped-empty-catalog",
+    "security_audit:inline",
+    "review:codex-task:read-only",
+    "test:claude-subagent:local-board-tester@sonnet",
+    "gate:test:skipped-empty-catalog",
+    "perf_probe:inline",
+    "document:codex-task:workspace-write",
+  ],
+  routingApprovals: [
+    "implement:claude-subagent:local-board-implementer@sonnet",
+    "security_audit:inline",
+    "design:claude-subagent:local-board-designer@opus",
+  ],
+};
+
+test("invalidateDownstreamEvidence: target ready_for_implementation strips implement/review/test/document + their gate tokens + implement/test specialties + matching approvals; design-stage evidence and approval survive", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ optionalSteps: OPTIONAL_STEPS_FOR_INVALIDATION_TESTS }));
+    const config = await loadConfig(root);
+
+    const result = invalidateDownstreamEvidence(FULL_EVIDENCE_FRONT_MATTER, config, "ready_for_implementation");
+
+    assert.deepEqual(result.completedSteps, [
+      "decompose:claude-subagent:local-board-decomposer@opus",
+      "design:claude-subagent:local-board-designer@opus",
+      "gate:design:skipped-empty-catalog",
+      "security_threat_model:inline",
+    ]);
+    assert.deepEqual(result.routingApprovals, ["design:claude-subagent:local-board-designer@opus"]);
+    assert.deepEqual(result.removed.completedSteps, [
+      "implement:claude-subagent:local-board-implementer@sonnet",
+      "gate:implement:skipped-empty-catalog",
+      "security_audit:inline",
+      "review:codex-task:read-only",
+      "test:claude-subagent:local-board-tester@sonnet",
+      "gate:test:skipped-empty-catalog",
+      "perf_probe:inline",
+      "document:codex-task:workspace-write",
+    ]);
+    assert.deepEqual(result.removed.routingApprovals, [
+      "implement:claude-subagent:local-board-implementer@sonnet",
+      "security_audit:inline",
+    ]);
+  });
+});
+
+test("invalidateDownstreamEvidence: target ready_for_design strips everything except decompose", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ optionalSteps: OPTIONAL_STEPS_FOR_INVALIDATION_TESTS }));
+    const config = await loadConfig(root);
+
+    const result = invalidateDownstreamEvidence(FULL_EVIDENCE_FRONT_MATTER, config, "ready_for_design");
+
+    assert.deepEqual(result.completedSteps, ["decompose:claude-subagent:local-board-decomposer@opus"]);
+    assert.deepEqual(result.routingApprovals, []);
+  });
+});
+
+test("invalidateDownstreamEvidence: target ready_for_docs strips only document", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ optionalSteps: OPTIONAL_STEPS_FOR_INVALIDATION_TESTS }));
+    const config = await loadConfig(root);
+
+    const result = invalidateDownstreamEvidence(FULL_EVIDENCE_FRONT_MATTER, config, "ready_for_docs");
+
+    assert.deepEqual(result.removed.completedSteps, ["document:codex-task:workspace-write"]);
+    assert.deepEqual(result.removed.routingApprovals, []);
+    assert.equal(result.completedSteps.includes("document:codex-task:workspace-write"), false);
+    assert.equal(result.completedSteps.length, FULL_EVIDENCE_FRONT_MATTER.completedSteps.length - 1);
+  });
+});
+
+test("invalidateDownstreamEvidence: forward move with no downstream evidence yet is a no-op", async () => {
+  await withBoard(async (root) => {
+    const config = await loadConfig(root);
+    const frontMatter = { completedSteps: ["decompose:claude-subagent:local-board-decomposer@opus"], routingApprovals: [] };
+
+    const result = invalidateDownstreamEvidence(frontMatter, config, "ready_for_implementation");
+
+    assert.deepEqual(result.completedSteps, frontMatter.completedSteps);
+    assert.deepEqual(result.routingApprovals, []);
+    assert.deepEqual(result.removed, { completedSteps: [], routingApprovals: [] });
+  });
+});
+
+test("invalidateDownstreamEvidence: a model-suffixed token is stripped wholesale, not split on @", async () => {
+  await withBoard(async (root) => {
+    const config = await loadConfig(root);
+    const frontMatter = {
+      completedSteps: ["implement:claude-subagent:local-board-implementer@sonnet"],
+      routingApprovals: [],
+    };
+
+    const result = invalidateDownstreamEvidence(frontMatter, config, "ready_for_implementation");
+
+    assert.deepEqual(result.removed.completedSteps, ["implement:claude-subagent:local-board-implementer@sonnet"]);
+    assert.deepEqual(result.completedSteps, []);
+  });
+});
+
+test("invalidateDownstreamEvidence: optional specialty is stripped for its own stage, kept when its stage is upstream of the target", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ optionalSteps: OPTIONAL_STEPS_FOR_INVALIDATION_TESTS }));
+    const config = await loadConfig(root);
+
+    // Target ready_for_test (rank 1): the test-stage specialty is at-or-downstream
+    // and must be stripped; the design- and implement-stage specialties are
+    // upstream (ranks 4 and 3) and must survive.
+    const result = invalidateDownstreamEvidence(FULL_EVIDENCE_FRONT_MATTER, config, "ready_for_test");
+
+    assert.equal(result.completedSteps.includes("perf_probe:inline"), false);
+    assert.equal(result.completedSteps.includes("security_audit:inline"), true);
+    assert.equal(result.completedSteps.includes("security_threat_model:inline"), true);
+  });
+});
+
+test("invalidateDownstreamEvidence: a target status with no pipeline rank (e.g. questions) is a defensive no-op", async () => {
+  await withBoard(async (root) => {
+    const config = await loadConfig(root);
+    const result = invalidateDownstreamEvidence(FULL_EVIDENCE_FRONT_MATTER, config, "questions");
+
+    assert.deepEqual(result.completedSteps, FULL_EVIDENCE_FRONT_MATTER.completedSteps);
+    assert.deepEqual(result.routingApprovals, FULL_EVIDENCE_FRONT_MATTER.routingApprovals);
+    assert.deepEqual(result.removed, { completedSteps: [], routingApprovals: [] });
+  });
+});
+
+test("moveTicket loop-back invalidation: acceptance path — test-fail loop-back strips implement/review/test/document and their gate tokens, design survives, done is refused until the stripped steps are re-recorded", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { invalidateOnLoopBack: true } }));
+
+    const ticketPath = await createTicket(root, "task", "Loop-back invalidation acceptance", {
+      status: "ready_for_design",
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    // Set an estimate before design, to assert it survives the loop-back untouched.
+    await setTicketField(root, ticketId, "estimate", "4");
+
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Design evidence.");
+    await recordGateSkippedEmptyCatalog(root, ticketId, "design");
+    await moveTicket(root, ticketId, "ready_for_implementation");
+
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer@sonnet", "Implementation evidence.");
+    await recordGateSkippedEmptyCatalog(root, ticketId, "implement");
+    await moveTicket(root, ticketId, "ready_for_review");
+
+    await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
+    await moveTicket(root, ticketId, "ready_for_test");
+
+    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester@sonnet", "Test evidence.");
+    await recordGateSkippedEmptyCatalog(root, ticketId, "test");
+    await moveTicket(root, ticketId, "ready_for_docs");
+
+    await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
+
+    const { ticket: beforeLoopBack } = await findTicket(root, ticketId);
+    assert.deepEqual(beforeLoopBack.frontMatter.completedSteps, [
+      "design:claude-subagent:local-board-designer@opus",
+      "gate:design:skipped-empty-catalog",
+      "implement:claude-subagent:local-board-implementer@sonnet",
+      "gate:implement:skipped-empty-catalog",
+      "review:codex-task:read-only",
+      "test:claude-subagent:local-board-tester@sonnet",
+      "gate:test:skipped-empty-catalog",
+      "document:codex-task:workspace-write",
+    ]);
+
+    // Test failure: loop back to ready_for_implementation.
+    await moveTicket(root, ticketId, "ready_for_implementation");
+
+    const { ticket: afterLoopBack } = await findTicket(root, ticketId);
+    assert.deepEqual(afterLoopBack.frontMatter.completedSteps, [
+      "design:claude-subagent:local-board-designer@opus",
+      "gate:design:skipped-empty-catalog",
+    ]);
+    assert.equal(afterLoopBack.frontMatter.estimate, "4");
+    assert.equal(afterLoopBack.frontMatter.estimateBasis, null);
+
+    // Run Log enumerates exactly what was stripped.
+    assert.match(afterLoopBack.body, /Invalidated downstream evidence on loop-back to ready_for_implementation/);
+    assert.match(afterLoopBack.body, /implement:claude-subagent:local-board-implementer@sonnet/);
+    assert.match(afterLoopBack.body, /gate:implement:skipped-empty-catalog/);
+    assert.match(afterLoopBack.body, /review:codex-task:read-only/);
+    assert.match(afterLoopBack.body, /test:claude-subagent:local-board-tester@sonnet/);
+    assert.match(afterLoopBack.body, /gate:test:skipped-empty-catalog/);
+    assert.match(afterLoopBack.body, /document:codex-task:workspace-write/);
+
+    // Premature move straight to done now fails: implement/review/test/document evidence is gone.
+    await assert.rejects(moveTicket(root, ticketId, "done"), /missing completedSteps entry for (implement|review|test|document)/);
+
+    // Re-running the stripped steps re-records evidence; done now succeeds.
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer@sonnet", "Re-implemented after test failure.");
+    await completeStep(root, ticketId, "review", "codex-task:read-only", "Re-reviewed.");
+    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester@sonnet", "Re-tested; passes now.");
+    await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Docs updated.");
+
+    const moved = await moveTicket(root, ticketId, "done");
+    assert.match(await readFile(moved, "utf8"), /^status: done$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("moveTicket loop-back invalidation: moves to questions/blocked never strip, even with the switch on", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { invalidateOnLoopBack: true } }));
+
+    const ticketPath = await createTicket(root, "task", "Questions/blocked no-strip", { status: "ready_for_test" });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Design evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer@sonnet", "Implementation evidence.");
+    await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
+
+    await moveTicket(root, ticketId, "questions");
+    const { ticket: afterQuestions } = await findTicket(root, ticketId);
+    assert.deepEqual(afterQuestions.frontMatter.completedSteps, [
+      "design:claude-subagent:local-board-designer@opus",
+      "implement:claude-subagent:local-board-implementer@sonnet",
+      "review:codex-task:read-only",
+    ]);
+
+    await setTicketField(root, ticketId, "status", "ready_for_test");
+    await moveTicket(root, ticketId, "blocked");
+    const { ticket: afterBlocked } = await findTicket(root, ticketId);
+    assert.deepEqual(afterBlocked.frontMatter.completedSteps, [
+      "design:claude-subagent:local-board-designer@opus",
+      "implement:claude-subagent:local-board-implementer@sonnet",
+      "review:codex-task:read-only",
+    ]);
+  });
+});
+
+test("moveTicket loop-back invalidation: switch off (default and explicit false) preserves old behavior; switch on strips", async () => {
+  await withBoard(async (root) => {
+    // Switch off by default (no config file): stale review/test-stage evidence
+    // survives a loop-back.
+    const noConfig = await createTicket(root, "task", "Switch off default", { status: "ready_for_test" });
+    const noConfigId = path.basename(noConfig).split("_", 1)[0];
+    await completeStep(root, noConfigId, "implement", "claude-subagent:local-board-implementer@sonnet", "Impl.");
+    await completeStep(root, noConfigId, "review", "codex-task:read-only", "Review.");
+    await moveTicket(root, noConfigId, "ready_for_implementation");
+    const { ticket: noConfigAfter } = await findTicket(root, noConfigId);
+    assert.deepEqual(noConfigAfter.frontMatter.completedSteps, [
+      "implement:claude-subagent:local-board-implementer@sonnet",
+      "review:codex-task:read-only",
+    ]);
+
+    // Explicit false behaves the same.
+    await writeConfig(root, JSON.stringify({ routing: { invalidateOnLoopBack: false } }));
+    const explicitOff = await createTicket(root, "task", "Switch off explicit", { status: "ready_for_test" });
+    const explicitOffId = path.basename(explicitOff).split("_", 1)[0];
+    await completeStep(root, explicitOffId, "implement", "claude-subagent:local-board-implementer@sonnet", "Impl.");
+    await completeStep(root, explicitOffId, "review", "codex-task:read-only", "Review.");
+    await moveTicket(root, explicitOffId, "ready_for_implementation");
+    const { ticket: explicitOffAfter } = await findTicket(root, explicitOffId);
+    assert.deepEqual(explicitOffAfter.frontMatter.completedSteps, [
+      "implement:claude-subagent:local-board-implementer@sonnet",
+      "review:codex-task:read-only",
+    ]);
+
+    // Switch on: the same loop-back now strips.
+    await writeConfig(root, JSON.stringify({ routing: { invalidateOnLoopBack: true } }));
+    const on = await createTicket(root, "task", "Switch on", { status: "ready_for_test" });
+    const onId = path.basename(on).split("_", 1)[0];
+    await completeStep(root, onId, "implement", "claude-subagent:local-board-implementer@sonnet", "Impl.");
+    await completeStep(root, onId, "review", "codex-task:read-only", "Review.");
+    await moveTicket(root, onId, "ready_for_implementation");
+    const { ticket: onAfter } = await findTicket(root, onId);
+    assert.deepEqual(onAfter.frontMatter.completedSteps, []);
+    assert.match(onAfter.body, /Invalidated downstream evidence on loop-back to ready_for_implementation/);
   });
 });
 

@@ -1,19 +1,19 @@
 ---
 id: T20260707T1328Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260707T1328Z-enforce-invalidate-downstream-step-evidence-on-loop-back-moves
 estimate: 4
 estimateBasis: T20260707T1327Z
-workStartedAt: null
+workStartedAt: 2026-07-07T21:58:42Z
 workCompletedAt: null
 created: 2026-07-07T13:28:41Z
-updated: 2026-07-07T21:58:41Z
+updated: 2026-07-07T22:09:14Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -273,6 +273,32 @@ Config:
 
 ## Implementation Notes
 
+Implemented per the Technical Design: strip-on-loop-back, evidence-driven, target-inclusive rank rule.
+
+`src/tickets.js`:
+- Added `STAGE_TO_STATUS` (fixed `{design, implement, test}` -> `ready_for_*`, independent of configurable `statusActions`), `pipelineRankOfStatus`, `invertStatusActions`, `producingStatusForToken` (routes gate tokens through `GATE_TOKEN_RE`, mandatory actions through the inverted `statusActions`, specialty tokens through `optionalStepEntry`'s new `stage` field; returns `null` for anything unplaceable — never stripped).
+- Added exported pure helper `invalidateDownstreamEvidence(frontMatter, config, targetStatus)` returning `{ completedSteps, routingApprovals, removed: { completedSteps, routingApprovals } }`. No-op when `targetStatus` has no pipeline rank.
+- `optionalStepEntry` now returns `{ ...entry, stage }` (additive; existing callers unaffected).
+- `pipelineRank(ticket, config)` refactored to reuse `pipelineRankOfStatus` (no behavior change).
+- `moveTicket`: `needsConfig` expanded to `gateStage !== null || status === "done" || TRIGGER_STATUSES.has(status)`. When `config.routing?.invalidateOnLoopBack === true` and the target is a trigger status, runs `invalidateDownstreamEvidence` against the pre-move front matter, splices the reduced lists into front matter, and appends one Run Log line (`invalidationRunLogMessage`) enumerating exactly what was removed — only when the removed sets are non-empty (empty-diff no-op, byte-identical to before for ordinary moves). All inside the existing `withTicketLock` span, before rendering.
+
+`src/config.js`:
+- `DEFAULT_CONFIG.routing.invalidateOnLoopBack = false` (ENOENT fallback / merge base, back-compat).
+- `defaultConfigJsonc()` scaffold: `"invalidateOnLoopBack": true` with a doc comment next to `requireGateConsultation`, including the migration caveat (invalidation is forward-only; pre-existing stale tokens are not retroactively cleaned).
+
+Tests added (`test/tickets.test.js`, `test/config.test.js`):
+- 7 unit tests on `invalidateDownstreamEvidence`: full-evidence strip at `ready_for_implementation` (implement/review/test/document + their gate tokens + implement/test-stage specialties + matching approvals stripped; design/decompose/gate:design/design-specialty + design approval survive); boundary at `ready_for_design` (strips all but decompose) and `ready_for_docs` (strips only document); forward-move no-op; model-suffixed token stripped wholesale; specialty stripped only for its own stage; non-pipeline target (`questions`) is a defensive no-op.
+- 3 `moveTicket` integration tests: full acceptance path (design→...→ready_for_docs with all evidence + gate tokens, loop back to `ready_for_implementation`, assert exact stripped set + Run Log enumeration + estimate survives untouched, direct move to `done` fails routing validation, re-`complete-step` implement/review/test/document, `done` then succeeds and board `validate`s clean); `questions`/`blocked` moves never strip even with the switch on; switch off (implicit default and explicit `false`) preserves old behavior vs switch on strips.
+- `test/config.test.js`: guard-test allowlist extended to a 4th documented divergence (`routing.invalidateOnLoopBack`); new dedicated backward-compat test (omitted key / explicit false / explicit true / shipped scaffold).
+
+Docs: `docs/Workflow.md` gets a new "Loop-back evidence invalidation" subsection (plus a cross-reference fix in the enforcement-hooks "Documented limits" paragraph that previously said this was "a separate concern"); `docs/PerStepOrchestration.md` real-run write-up now notes the loop-back path it exercised carried stale evidence and points at the fix; `memory-bank/systemPatterns.md` updated (Config key list, DEFAULT_CONFIG/scaffold divergence count 3→4, gate-check paragraph gets a new invalidateOnLoopBack paragraph, `move` line updated).
+
+Deviations from the design: none substantive. One interpretation choice not spelled out verbatim in the design: `routingApprovals` stripping re-applies the *same* producing-status rule directly to each approval token (rather than deriving a stripped-actions set from the completedSteps removals and filtering approvals by membership). This matches the design's literal instruction ("Strip routingApprovals tokens... using the same producing-status rule") and additionally covers an approval recorded for an action with no completedSteps token yet (edge case, not otherwise specified) — same firm outcome for every case the test strategy specifies.
+
+Repo-live config: `plans/local-board.config.jsonc` was intentionally left untouched (still has no `invalidateOnLoopBack` key, so it resolves to the `false` back-compat default via `DEFAULT_CONFIG`) per the ticket's explicit instruction. Turning it on for this board is an orchestrator decision to make post-merge.
+
+Verification: `npm run check` (syntax check, clean), `npm test` (314 tests, 313 pass, 1 pre-existing skip, 0 fail), `npm run validate` (board validates clean).
+
 ## Review Findings
 
 ## Test Evidence
@@ -286,3 +312,5 @@ Config:
 - 2026-07-07T21:57:57Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): evidence-driven strip on ready_* target moves (target-inclusive rank rule), covers action/gate/specialty tokens + matching approvals, Run Log enumeration, invalidateOnLoopBack switch per the established pattern. Estimate 4 (basis T20260707T1327Z).
 
 - 2026-07-07T21:58:41Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (internal workflow hygiene; no catalog triggers matched)
+
+- 2026-07-07T21:58:42Z: Ensured git branch local-board/T20260707T1328Z-enforce-invalidate-downstream-step-evidence-on-loop-back-moves (created).

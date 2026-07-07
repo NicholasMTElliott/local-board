@@ -234,9 +234,11 @@ CLI-side backstop regardless of hook state.
 
 Documented limits: inline work produces no tool call, so hooks cannot see it;
 a skipped step produces no event; a same-session loop-back through a step can
-still satisfy the evidence gate from an earlier iteration's ledger entry
-(CLI-side loop-back invalidation is a separate concern); Codex has no
-deny-hook equivalent, so Codex enforcement stays CLI-side. Active-step ledger
+still satisfy the evidence gate from an earlier iteration's ledger entry (the
+hook only checks that *a* dispatch happened this session, not that it was the
+*current* one — CLI-side loop-back invalidation, see "Loop-back evidence
+invalidation" below, is the authoritative fix for the stale-evidence problem);
+Codex has no deny-hook equivalent, so Codex enforcement stays CLI-side. Active-step ledger
 writes are lock-serialized by the CLI; the hook dispatch ledger remains an
 append-only, best-effort JSONL audit log with no rotation.
 
@@ -330,6 +332,14 @@ The CLI does not invoke an agent and does not decide which optional steps are re
 An empty `requestedSteps` array means no specialty step is needed. T20260516T1552Z (`specialty-run` dispatcher) consumes each requested step name to resolve the specialty prompt/agent. T20260516T1554Z (`orchestrator wiring`) consumes the whole gate-check handoff pattern in the local-board orchestration flow.
 
 When `routing.requireGateConsultation` is true, forward moves out of gated stages require the matching `gate:` token before `move` will advance to the next stage (`design` to implementation, `implement` to review, or `test` to docs). Gate tokens are ignored by normal routing evidence and `doneRequires`.
+
+### Loop-back evidence invalidation
+
+When `routing.invalidateOnLoopBack` is true, `move` strips stale evidence on a loop-back: if the target status is one of the six `ready_*` pipeline statuses and the ticket already carries `completedSteps` (action, `gate:`, or optional-specialty tokens) or `routingApprovals` produced at or downstream of that target status, those tokens are removed before the move is written. "Downstream" is ranked by `workflow.pipelineOrder`, target-inclusive: looping back to `ready_for_implementation` strips `implement`, `review`, `test`, `document`, their `gate:` tokens, and any implement/test-stage specialty evidence, but keeps `design`/`decompose` and design-stage evidence. A single Run Log line enumerates exactly what was removed. Re-running the affected steps re-records their evidence; `move ... done` fails routing validation until they are re-recorded, closing the audit-trail gap where a loop-back (e.g. a test failure sending a ticket from `ready_for_test` back to `ready_for_implementation`) let stale `review`/`test` evidence reach `done` unchanged.
+
+Moves to `questions`, `blocked`, `done`, `archived`, or an active status (`designing`, `implementing`, ...) are never affected — only `ready_*` targets trigger the check. A forward move with no downstream evidence yet is a no-op (no front-matter change, no Run Log line). `estimate`/`estimateBasis`/`workStartedAt` are front-matter fields, not `completedSteps` tokens, and are never touched.
+
+`invalidateOnLoopBack` defaults to `false` for a config file that predates this key (or omits it) and to `true` in the `init` scaffold for new repos. Invalidation only applies going forward: evidence already left stale by a loop-back that happened before this key was enabled on a given board is not retroactively cleaned up.
 
 ### Specialty-run
 

@@ -118,6 +118,132 @@ export function gateStageForForwardMove(fromStatus, toStatus) {
   return null;
 }
 
+// Fixed structural mapping from a gate/optional-step "stage" name to the
+// ready_* status that produces evidence for it. This is deliberately NOT
+// derived from config.workflow.statusActions: OPTIONAL_STEP_STAGES and
+// GATE_TOKEN_RE stages are always exactly {design, implement, test}
+// regardless of how a config renames its mandatory actions.
+const STAGE_TO_STATUS = {
+  design: "ready_for_design",
+  implement: "ready_for_implementation",
+  test: "ready_for_test",
+};
+
+// Rank of a raw status string within config.workflow.pipelineOrder, or null
+// when the status is not in the pipeline (e.g. questions/blocked/done/active
+// statuses). Lower rank = closer to done. Distinct from the ticket-based
+// pipelineRank below (which falls back to pipelineOrder.length for sorting).
+function pipelineRankOfStatus(status, config) {
+  const index = config.workflow.pipelineOrder.indexOf(status);
+  return index === -1 ? null : index;
+}
+
+// Inverts config.workflow.statusActions (status -> action) to action ->
+// status, so a mandatory action token can be mapped back to the ready_*
+// status that produced it. Computed fresh per call: cheap, and config can
+// legitimately differ between calls (tests reload config per case).
+function invertStatusActions(config) {
+  const actionToStatus = {};
+  for (const [status, action] of Object.entries(config.workflow.statusActions)) {
+    actionToStatus[action] = status;
+  }
+  return actionToStatus;
+}
+
+// Resolves the producing ready_* status for a single completedSteps or
+// routingApprovals token, or null when the token cannot be placed (unknown
+// action; defensive — never strip what we cannot place). Handles all three
+// token grammars: gate:<stage>:<executor>, mandatory <action>:<executor>,
+// and optional specialty <name>:<executor>.
+function producingStatusForToken(token, config, actionToStatus) {
+  const gateMatch = GATE_TOKEN_RE.exec(token);
+  if (gateMatch !== null) {
+    return STAGE_TO_STATUS[gateMatch[1]] ?? null;
+  }
+
+  const separator = token.indexOf(":");
+  const action = separator === -1 ? token : token.slice(0, separator);
+
+  if (Object.hasOwn(actionToStatus, action)) {
+    return actionToStatus[action];
+  }
+
+  const entry = optionalStepEntry(config, action);
+  if (entry !== null) {
+    return STAGE_TO_STATUS[entry.stage] ?? null;
+  }
+
+  return null;
+}
+
+// Pure core of the loop-back invalidation: strips completedSteps/
+// routingApprovals tokens whose producing status ranks at-or-downstream of
+// targetStatus (target-inclusive: pipelineRank(producing) <= pipelineRank(target)).
+// Returns the reduced lists plus exactly what was removed, for the Run Log
+// enumeration. A no-op (empty removed lists, unchanged input lists) when
+// targetStatus has no pipeline rank (not a ready_* pipeline status).
+export function invalidateDownstreamEvidence(frontMatter, config, targetStatus) {
+  const completedStepsIn = asList(frontMatter.completedSteps);
+  const routingApprovalsIn = asList(frontMatter.routingApprovals);
+  const targetRank = pipelineRankOfStatus(targetStatus, config);
+
+  if (targetRank === null) {
+    return {
+      completedSteps: completedStepsIn,
+      routingApprovals: routingApprovalsIn,
+      removed: { completedSteps: [], routingApprovals: [] },
+    };
+  }
+
+  const actionToStatus = invertStatusActions(config);
+  const isAtOrDownstreamOfTarget = (token) => {
+    const producingStatus = producingStatusForToken(token, config, actionToStatus);
+    if (producingStatus === null) {
+      return false;
+    }
+    const rank = pipelineRankOfStatus(producingStatus, config);
+    return rank !== null && rank <= targetRank;
+  };
+
+  const removedCompletedSteps = [];
+  const completedSteps = completedStepsIn.filter((token) => {
+    if (isAtOrDownstreamOfTarget(token)) {
+      removedCompletedSteps.push(token);
+      return false;
+    }
+    return true;
+  });
+
+  const removedApprovals = [];
+  const routingApprovals = routingApprovalsIn.filter((token) => {
+    if (isAtOrDownstreamOfTarget(token)) {
+      removedApprovals.push(token);
+      return false;
+    }
+    return true;
+  });
+
+  return {
+    completedSteps,
+    routingApprovals,
+    removed: { completedSteps: removedCompletedSteps, routingApprovals: removedApprovals },
+  };
+}
+
+// Formats the single Run Log line enumerating exactly what a loop-back move
+// stripped (the firm audit-trail requirement for the strip-vs-timestamp
+// design decision). Only called when at least one list is non-empty.
+function invalidationRunLogMessage(targetStatus, removed) {
+  const parts = [];
+  if (removed.completedSteps.length > 0) {
+    parts.push(`completedSteps [${removed.completedSteps.join(", ")}]`);
+  }
+  if (removed.routingApprovals.length > 0) {
+    parts.push(`routingApprovals [${removed.routingApprovals.join(", ")}]`);
+  }
+  return `Invalidated downstream evidence on loop-back to ${targetStatus}: removed ${parts.join("; ")}.`;
+}
+
 export const PRIORITIES = ["P0", "P1", "P2", "P3", "P4"];
 
 const REQUIRED_FIELDS = [
@@ -412,7 +538,7 @@ export async function moveTicket(root, ticketId, status, options = {}) {
       // check applies to the vast majority of moves (backward/lateral/active
       // in-stage), so config stays unloaded for those.
       const gateStage = gateStageForForwardMove(ticket.status, status);
-      const needsConfig = gateStage !== null || status === "done";
+      const needsConfig = gateStage !== null || status === "done" || TRIGGER_STATUSES.has(status);
       const config = needsConfig ? await loadConfig(board.root) : null;
 
       if (gateStage !== null && config.routing?.requireGateConsultation === true) {
@@ -427,7 +553,32 @@ export async function moveTicket(root, ticketId, status, options = {}) {
         }
       }
 
-      const frontMatter = withUpdated({ ...ticket.frontMatter, status }, now);
+      // Strip stale downstream evidence on a loop-back move, inside this same
+      // lock/read span, before front matter is rendered. Guarded on the
+      // target (not the source): only ready_* pipeline statuses trigger it,
+      // which excludes questions/blocked/done/archived/active targets. A
+      // no-op (no front-matter change, no Run Log line) when nothing at or
+      // downstream of the target has recorded evidence yet (ordinary forward
+      // moves stay byte-identical).
+      let nextFrontMatter = { ...ticket.frontMatter, status };
+      let body = ticket.body;
+      if (config?.routing?.invalidateOnLoopBack === true && TRIGGER_STATUSES.has(status)) {
+        const invalidation = invalidateDownstreamEvidence(ticket.frontMatter, config, status);
+        if (invalidation.removed.completedSteps.length > 0 || invalidation.removed.routingApprovals.length > 0) {
+          nextFrontMatter = {
+            ...nextFrontMatter,
+            completedSteps: invalidation.completedSteps,
+            routingApprovals: invalidation.routingApprovals,
+          };
+          body = appendToSection(
+            body,
+            "Run Log",
+            `- ${formatIsoSeconds(now)}: ${invalidationRunLogMessage(status, invalidation.removed)}`,
+          );
+        }
+      }
+
+      const frontMatter = withUpdated(nextFrontMatter, now);
       if (
         status === "done" &&
         frontMatter.workCompletedAt === null &&
@@ -441,7 +592,7 @@ export async function moveTicket(root, ticketId, status, options = {}) {
           throw new Error(`routing validation failed:\n${issues.join("\n")}`);
         }
       }
-      const content = renderMarkdownTicket(frontMatter, ticket.body);
+      const content = renderMarkdownTicket(frontMatter, body);
       const targetFolder = path.join(board.root, "plans", "tickets", STATUS_FOLDERS.get(status));
       const targetPath = path.join(targetFolder, path.basename(ticket.path));
 
@@ -1469,8 +1620,8 @@ export function compareTicketsForConfig(left, right, config) {
 }
 
 function pipelineRank(ticket, config) {
-  const index = config.workflow.pipelineOrder.indexOf(ticket.status);
-  return index === -1 ? config.workflow.pipelineOrder.length : index;
+  const rank = pipelineRankOfStatus(ticket.status, config);
+  return rank === null ? config.workflow.pipelineOrder.length : rank;
 }
 
 function priorityRank(ticket) {
@@ -1631,14 +1782,18 @@ function assertAction(config, action) {
   }
 }
 
-// Find an optional specialty step entry by name across all stages.
+// Find an optional specialty step entry by name across all stages. The
+// returned entry carries its owning `stage` (design/implement/test) so
+// callers like invalidateDownstreamEvidence can map a specialty token back to
+// the ready_* status that produced it, without changing existing consumers
+// that only read entry.agent.
 function optionalStepEntry(config, name) {
   const stages = config.optionalSteps ?? {};
   for (const stage of Object.keys(stages)) {
     const list = Array.isArray(stages[stage]) ? stages[stage] : [];
     const entry = list.find((candidate) => candidate && candidate.name === name);
     if (entry) {
-      return entry;
+      return { ...entry, stage };
     }
   }
   return null;
