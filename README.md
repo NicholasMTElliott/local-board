@@ -31,10 +31,12 @@ node ./bin/local-board.js --root /path/to/your/repo init
 To use local-board as an agent orchestrator, install the skills into your coding agent:
 
 ```sh
-node install.mjs                # install skills + agents
-node install.mjs --list-targets # see where they would go
-node install.mjs --target=codex # install only Codex skills
+node ./bin/local-board.js install                # install skills + agents
+node ./bin/local-board.js install --list-targets # see where they would go
+node ./bin/local-board.js install --target=codex # install only Codex skills
 ```
+
+`node install.mjs` remains available as a deprecated alias for the same installer.
 
 ## Status
 
@@ -93,11 +95,11 @@ When `git.autoMerge` is `true`, `move ... done` commits planning-only closeout c
 
 When `retention.archiveOnMoveDone` is `true`, `move ... done` also archives older done tickets after the configured retention window. Archived tickets remain closed for dependency checks.
 
-Claude subagent definitions live in `agents/claude/` and are installed to the user's Claude agents directory by `node install.mjs`. Codex executor prompt fragments live in `agents/codex/`; the Codex skill templates translate known `claude-subagent:local-board-*` routes to Codex spawned agents while preserving the configured route in strict-routing evidence. See [docs/CodexSupport.md](docs/CodexSupport.md).
+Claude subagent definitions live in `agents/claude/` and are installed to the user's Claude agents directory by `node ./bin/local-board.js install`. Codex executor prompt fragments live in `agents/codex/`; the Codex skill templates translate known `claude-subagent:local-board-*` routes to Codex spawned agents while preserving the configured route in strict-routing evidence. See [docs/CodexSupport.md](docs/CodexSupport.md).
 
 ```sh
-node install.mjs
-node install.mjs --list-targets
+node ./bin/local-board.js install
+node ./bin/local-board.js install --list-targets
 ```
 
 ## Tests
@@ -135,10 +137,10 @@ plans/prompts/optional-steps/
                      Specialty review prompts for optional workflow steps
 plans/templates/     Reusable ticket templates
 plans/local-board.config.jsonc
-src/                 Node.js ESM ticket parser, validator, writer, picker, and CLI
+src/                 Node.js ESM ticket parser, validator, writer, picker, installer, and CLI
 bin/                 CLI executable entrypoint
 test/                Unit tests for the ticket kernel
-install.mjs          Cross-harness skill installer
+install.mjs          Deprecated installer shim for local-board install
 SKILL.md             Installable orchestration skill template
 SKILL_TEAM.md        Installable parallel-mode skill template (top-level per-step orchestrator)
 ```

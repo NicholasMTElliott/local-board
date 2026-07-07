@@ -23,11 +23,12 @@ plans/templates/      ticket templates
 plans/local-board.config.jsonc workflow and routing config
 resources/            packaged prompt/template mirror synced from plans/ via npm run sync-resources (sync writes LF; mirror comparison is line-ending-insensitive)
 src/                  parser, validator, writer, git workflow, priority picker, CLI
+src/install.js       installer behind local-board install
 skills/codex/         Codex skill templates and metadata
 scripts/              maintainer tooling, not packaged
 bin/                  executable CLI entrypoint
 test/                 node:test unit tests
-install.mjs           cross-harness installer
+install.mjs           deprecated shim for local-board install
 SKILL.md              installable orchestration skill template
 ```
 
