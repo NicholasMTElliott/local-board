@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { loadConfig } from "./config.js";
@@ -101,6 +101,60 @@ const STANDARD_SECTIONS = [
 
 export const TICKET_ID_RE = /^[ESBT]\d{8}T\d{4}Z$/;
 const TICKET_FILE_RE = /^(?<id>[ESBT]\d{8}T\d{4}Z)_(?<slug>[a-z0-9]+(?:-[a-z0-9]+)*)\.md$/;
+
+// Per-process monotonic counter so two in-flight writes from the same process
+// never collide on the same temp filename (pid alone is not enough: linkParent,
+// blockTicket, and future concurrency can issue overlapping writes).
+let tmpSeq = 0;
+function nextTmpSeq() {
+  tmpSeq += 1;
+  return tmpSeq;
+}
+
+// Windows can throw these transiently on rename (antivirus, Search Indexer, or an
+// editor holding a handle open); retry a bounded number of times before giving up.
+const RENAME_RETRY_CODES = new Set(["EPERM", "EBUSY", "EACCES"]);
+const RENAME_RETRY_DELAYS_MS = [10, 20, 40, 80];
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function renameWithRetry(source, destination, renameFn = rename) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await renameFn(source, destination);
+      return;
+    } catch (error) {
+      if (!RENAME_RETRY_CODES.has(error.code) || attempt >= RENAME_RETRY_DELAYS_MS.length) {
+        throw error;
+      }
+      await delay(RENAME_RETRY_DELAYS_MS[attempt]);
+    }
+  }
+}
+
+// Atomically overwrite a canonical ticket file: write the full content to a
+// sibling temp file, then rename it over the destination so readers only ever
+// see a complete file (old or new, never torn). The temp name deliberately does
+// NOT end in ".md" so discover()'s `endsWith(".md")` filter (see walkMarkdown
+// below) never picks it up as a phantom ticket.
+// `options.renameFn` is a test-only injection point for failure-simulation; all
+// production call sites use the default real `rename`.
+export async function writeTicketFile(targetPath, content, options = {}) {
+  const renameFn = options.renameFn ?? rename;
+  const dir = path.dirname(targetPath);
+  const tmpPath = path.join(dir, `.${path.basename(targetPath)}.tmp-${process.pid}-${nextTmpSeq()}`);
+  try {
+    await writeFile(tmpPath, content, "utf8");
+    await renameWithRetry(tmpPath, targetPath, renameFn);
+  } catch (error) {
+    // Best-effort cleanup of the orphaned temp file; the canonical file at
+    // targetPath is left untouched and intact either way.
+    await rm(tmpPath, { force: true }).catch(() => {});
+    throw error;
+  }
+}
 
 export async function discover(root = ".") {
   const rootPath = path.resolve(root);
@@ -307,7 +361,7 @@ export async function moveTicket(root, ticketId, status, options = {}) {
     throw new Error(`${targetPath} already exists`);
   }
 
-  await writeFile(ticket.path, content, "utf8");
+  await writeTicketFile(ticket.path, content);
 
   if (path.resolve(ticket.path) !== path.resolve(targetPath)) {
     await rename(ticket.path, targetPath);
@@ -364,7 +418,7 @@ export async function setTicketField(root, ticketId, field, value, options = {})
 
   const { ticket } = await findTicket(root, ticketId);
   const frontMatter = withUpdated({ ...ticket.frontMatter, [field]: value }, options.now);
-  await writeFile(ticket.path, renderMarkdownTicket(frontMatter, ticket.body), "utf8");
+  await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, ticket.body));
   return ticket.path;
 }
 
@@ -376,7 +430,7 @@ export async function appendTicketComment(root, ticketId, section, text, options
   const { ticket } = await findTicket(root, ticketId);
   const body = appendToSection(ticket.body, section, `- ${formatIsoSeconds(options.now ?? new Date())}: ${text.trim()}`);
   const frontMatter = withUpdated({ ...ticket.frontMatter }, options.now);
-  await writeFile(ticket.path, renderMarkdownTicket(frontMatter, body), "utf8");
+  await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
   return ticket.path;
 }
 
@@ -384,7 +438,7 @@ export async function setTicketSection(root, ticketId, section, text, options = 
   const { ticket } = await findTicket(root, ticketId);
   const body = replaceSection(ticket.body, section, text.trim());
   const frontMatter = withUpdated({ ...ticket.frontMatter }, options.now);
-  await writeFile(ticket.path, renderMarkdownTicket(frontMatter, body), "utf8");
+  await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
   return ticket.path;
 }
 
@@ -441,7 +495,7 @@ export async function approveInline(root, ticketId, action, reason, options = {}
     now,
   );
   const body = appendToSection(ticket.body, "Run Log", `- ${formatIsoSeconds(now)}: Approved inline ${action}: ${reason.trim()}`);
-  await writeFile(ticket.path, renderMarkdownTicket(frontMatter, body), "utf8");
+  await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
   return { ticket: ticket.id, action, approvedExecutor: "inline", path: ticket.path };
 }
 
@@ -487,7 +541,7 @@ export async function completeStep(root, ticketId, action, executor, evidence, o
     "Run Log",
     `- ${formatIsoSeconds(now)}: Completed ${action} via ${executor}: ${evidence.trim()}`,
   );
-  await writeFile(ticket.path, renderMarkdownTicket(frontMatter, body), "utf8");
+  await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
   return { ticket: ticket.id, action, executor, path: ticket.path };
 }
 
@@ -1397,7 +1451,7 @@ async function findTicketPair(root, leftId, rightId, rightLabel) {
 }
 
 async function writeTicketUpdate(ticket, frontMatter) {
-  await writeFile(ticket.path, renderMarkdownTicket(frontMatter, ticket.body), "utf8");
+  await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, ticket.body));
 }
 
 function addUnique(values, value) {

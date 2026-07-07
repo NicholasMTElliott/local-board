@@ -1,7 +1,7 @@
 ---
 id: E20260514T2056Z
 type: epic
-status: done
+status: archived
 priority: P1
 parent: null
 children: [S20260514T2228Z, S20260514T2229Z, S20260514T2230Z, S20260514T2231Z]
@@ -9,8 +9,11 @@ blockedBy: []
 blocks: []
 branch: null
 estimate: null
+estimateBasis: null
+workStartedAt: null
+workCompletedAt: null
 created: 2026-05-14T20:56:00+00:00
-updated: 2026-05-15T13:48:57Z
+updated: 2026-07-07T14:07:41Z
 completedSteps: [decompose:claude-subagent:local-board-decomposer]
 ---
 # Local Ticket Kernel MVP

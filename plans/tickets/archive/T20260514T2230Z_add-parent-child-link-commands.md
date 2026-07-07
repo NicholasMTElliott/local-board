@@ -1,27 +1,30 @@
 ---
-id: T20260514T2229Z
+id: T20260514T2230Z
 type: task
-status: done
+status: archived
 priority: P1
-parent: S20260514T2228Z
+parent: S20260514T2229Z
 children: []
 blockedBy: []
 blocks: []
 branch: null
 estimate: null
-created: 2026-05-14T22:29:49Z
-updated: 2026-05-15T13:48:57Z
+estimateBasis: null
+workStartedAt: null
+workCompletedAt: null
+created: 2026-05-14T22:30:50Z
+updated: 2026-07-07T14:07:41Z
 completedSteps: [design:claude-subagent:local-board-designer, implement:claude-subagent:local-board-implementer, review:codex-task:read-only, test:claude-subagent:local-board-tester, document:codex-task:workspace-write]
 ---
-# Add query action commands
+# Add parent child link commands
 
 ## Requirement
 
-Add deterministic action queries for whole-project and specific-ticket workflows.
+Add commands for parent-child ticket relationships.
 
 ## Acceptance Criteria
 
-- `query-next` sorts by priority and pipeline order. - `query-ticket` returns action metadata for a named ticket. - Tests cover both paths.
+- `link-parent`, `link-child`, and `unlink-parent` update reciprocal front matter. - Tests cover reciprocal linking.
 
 ## Related Tickets
 

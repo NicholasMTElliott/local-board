@@ -1,7 +1,7 @@
 ---
 id: S20260514T2231Z
 type: story
-status: done
+status: archived
 priority: P1
 parent: E20260514T2056Z
 children: [T20260514T2234Z]
@@ -9,8 +9,11 @@ blockedBy: []
 blocks: []
 branch: null
 estimate: null
+estimateBasis: null
+workStartedAt: null
+workCompletedAt: null
 created: 2026-05-14T22:31:51Z
-updated: 2026-05-15T13:48:57Z
+updated: 2026-07-07T14:07:41Z
 completedSteps: [decompose:claude-subagent:local-board-decomposer]
 ---
 # Ticket content editing support

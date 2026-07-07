@@ -64,6 +64,9 @@ Required fields:
 - `created`
 - `updated`
 
+## Atomic Writes
+Existing ticket rewrites go through `writeTicketFile` (`src/tickets.js`): same-directory temp file (name never ends in `.md`), then `rename()` over the target with bounded retry on Windows `EPERM`/`EBUSY`/`EACCES`; `createTicket` uses exclusive `wx` create for new files. This gives crash-consistency (atomic rename), not mutual exclusion or fsync durability: `moveTicket`'s cross-folder rename ordering and two-file update races are separate open concerns.
+
 ## Status Folders
 ```text
 backlog -> plans/tickets/backlog

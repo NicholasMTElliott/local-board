@@ -1,7 +1,7 @@
 ---
 id: S20260516T1537Z
 type: story
-status: done
+status: archived
 priority: P2
 parent: null
 children: [T20260516T1543Z, T20260516T1544Z, T20260516T1545Z, T20260516T1546Z, T20260516T1547Z, T20260516T1548Z, T20260516T1549Z]
@@ -9,8 +9,11 @@ blockedBy: []
 blocks: []
 branch: null
 estimate: null
+estimateBasis: null
+workStartedAt: null
+workCompletedAt: null
 created: 2026-05-16T15:37:23Z
-updated: 2026-05-16T15:46:27Z
+updated: 2026-07-07T14:07:41Z
 completedSteps: [decompose:claude-subagent:local-board-decomposer]
 routingApprovals: []
 ---

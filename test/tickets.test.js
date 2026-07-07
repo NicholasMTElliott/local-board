@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -24,6 +24,7 @@ import {
   suggestCalibration,
   unblockTicket,
   validate,
+  writeTicketFile,
 } from "../src/tickets.js";
 import { initProject } from "../src/scaffold.js";
 import { loadConfig } from "../src/config.js";
@@ -1413,6 +1414,95 @@ test("completeStep implement is not gated by the design estimate check", async (
     const text = await readFile(ticketPath, "utf8");
     assert.match(text, /^completedSteps: \[implement:claude-subagent:local-board-implementer\]$/m);
     assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("writeTicketFile leaves the original file byte-identical when the rename fails", async () => {
+  await withBoard(async (root) => {
+    const dir = path.join(root, "plans", "tickets", "active");
+    await mkdir(dir, { recursive: true });
+    const targetPath = path.join(dir, "T20260707T0000Z_sample.md");
+    const original = "---\nid: T20260707T0000Z\n---\n\n# Sample\n";
+    await writeFile(targetPath, original, "utf8");
+
+    const failingRename = async () => {
+      const error = new Error("simulated disk full");
+      error.code = "ENOSPC";
+      throw error;
+    };
+
+    await assert.rejects(
+      writeTicketFile(targetPath, "corrupted replacement content", { renameFn: failingRename }),
+      /simulated disk full/,
+    );
+
+    assert.equal(await readFile(targetPath, "utf8"), original);
+
+    // No orphaned temp file: writeTicketFile cleans up on the caught-error path.
+    assert.deepEqual(await readdir(dir), ["T20260707T0000Z_sample.md"]);
+  });
+});
+
+test("writeTicketFile retries the rename after a transient Windows error", async () => {
+  await withBoard(async (root) => {
+    const dir = path.join(root, "plans", "tickets", "active");
+    await mkdir(dir, { recursive: true });
+    const targetPath = path.join(dir, "T20260707T0000Z_sample.md");
+    await writeFile(targetPath, "original content\n", "utf8");
+
+    let attempts = 0;
+    const flakyRename = async (source, destination) => {
+      attempts += 1;
+      if (attempts === 1) {
+        const error = new Error("transient lock");
+        error.code = "EPERM";
+        throw error;
+      }
+      await rename(source, destination);
+    };
+
+    await writeTicketFile(targetPath, "updated content\n", { renameFn: flakyRename });
+
+    assert.equal(attempts, 2);
+    assert.equal(await readFile(targetPath, "utf8"), "updated content\n");
+    assert.deepEqual(await readdir(dir), ["T20260707T0000Z_sample.md"]);
+  });
+});
+
+test("successful ticket mutations leave no temp files and discover reports zero load errors", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Atomic write check", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await setTicketSection(root, ticketId, "Implementation Notes", "Done.");
+    await appendTicketComment(root, ticketId, "Run Log", "did a thing");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer", "Implementation evidence.");
+
+    const siblings = await readdir(path.dirname(ticketPath));
+    assert.deepEqual(siblings, [path.basename(ticketPath)]);
+
+    const board = await discover(root);
+    assert.deepEqual(board.loadErrors, []);
+  });
+});
+
+test("an orphaned non-.md temp sibling is invisible to discover and validate", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Temp sibling check", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+
+    const tmpSiblingPath = `${ticketPath}.tmp-99999-1`;
+    await writeFile(tmpSiblingPath, "not a real ticket", "utf8");
+
+    const board = await discover(root);
+    assert.deepEqual(board.loadErrors, []);
+    assert.equal(board.tickets.length, 1);
+    assert.deepEqual(validate(board), []);
   });
 });
 
