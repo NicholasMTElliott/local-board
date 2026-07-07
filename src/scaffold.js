@@ -68,20 +68,23 @@ export async function initProject(root = ".", options = {}) {
 
   // Copy the maintained, dogfooded prompt/template tree from packaged
   // resources rather than inlining a third, drifting copy. Every file is
-  // routed through writeScaffoldFile so the existing wx-vs-w idempotency and
-  // --overwrite semantics apply uniformly (a bare cpSync would bypass the
-  // skip-if-exists contract other tests depend on).
+  // routed through writeScaffoldFile so the existing wx-vs-w idempotency
+  // applies. Unlike the other FILES above, this tree is always add-missing-only
+  // (overwrite: false) regardless of the caller's --overwrite flag: users are
+  // expected to customize plans/prompts/** and plans/templates/** in place, and
+  // `init --overwrite` must restore any packaged file the user deleted without
+  // clobbering ones they've edited.
   await copyResourceTree(
     packagedResourceDir("prompts"),
     path.join(rootPath, "plans", "prompts"),
-    overwrite,
+    false,
     created,
     skipped,
   );
   await copyResourceTree(
     packagedResourceDir("templates"),
     path.join(rootPath, "plans", "templates"),
-    overwrite,
+    false,
     created,
     skipped,
   );

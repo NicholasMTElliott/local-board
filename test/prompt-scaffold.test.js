@@ -110,7 +110,7 @@ test("initProject creates every prompt the default config's gate-check and optio
   });
 });
 
-test("initProject is idempotent for prompts/templates: second run skips, --overwrite refreshes", async () => {
+test("initProject prompts/templates are always add-missing-only: second run skips, --overwrite still never clobbers a customized prompt but restores a deleted one", async () => {
   await withBoard(async (root) => {
     const first = await initProject(root);
     assert.ok(
@@ -119,8 +119,15 @@ test("initProject is idempotent for prompts/templates: second run skips, --overw
     );
 
     const gateCheckPath = path.join(root, "plans", "prompts", "steps", "gate-check.md");
-    const originalContent = await readFile(gateCheckPath, "utf8");
     await writeFile(gateCheckPath, "locally modified content\n", "utf8");
+
+    // A second prompt is deleted entirely, simulating a file the user removed
+    // (or a board initialized before this prompt existed). --overwrite must
+    // restore it even though it must not touch the customized one above.
+    const implementerPath = path.join(root, "plans", "prompts", "roles", "implementer.md");
+    assert.ok(existsSync(implementerPath), "fixture assumption: implementer.md is part of the packaged prompt tree");
+    const implementerOriginalContent = await readFile(implementerPath, "utf8");
+    await rm(implementerPath, { force: true });
 
     const second = await initProject(root);
     assert.equal(
@@ -137,13 +144,38 @@ test("initProject is idempotent for prompts/templates: second run skips, --overw
       "locally modified content\n",
       "existing prompt content must be untouched without --overwrite",
     );
+    assert.ok(
+      second.created.some((p) => p.endsWith(path.join("prompts", "roles", "implementer.md"))),
+      "init without --overwrite must still restore a deleted prompt file (add-missing-only)",
+    );
+
+    // Re-customize the restored file and re-delete a different one, then run
+    // --overwrite: the customized prompt must survive untouched, while the
+    // deleted one is restored. Config and .gitignore --overwrite semantics
+    // are unrelated to this tree and unchanged by this test.
+    await writeFile(implementerPath, "locally modified implementer content\n", "utf8");
+    await rm(implementerPath, { force: true }); // deleted again, this time going into --overwrite
 
     const third = await initProject(root, { overwrite: true });
-    assert.ok(
+    assert.equal(
       third.created.some((p) => p.endsWith(path.join("prompts", "steps", "gate-check.md"))),
-      "--overwrite must refresh an existing prompt file",
+      false,
+      "--overwrite must NOT refresh an existing customized prompt file (user content clobber)",
     );
-    assert.equal(await readFile(gateCheckPath, "utf8"), originalContent, "--overwrite must restore the packaged content");
+    assert.equal(
+      await readFile(gateCheckPath, "utf8"),
+      "locally modified content\n",
+      "--overwrite must leave existing prompt content untouched",
+    );
+    assert.ok(
+      third.created.some((p) => p.endsWith(path.join("prompts", "roles", "implementer.md"))),
+      "--overwrite must still restore a missing prompt file",
+    );
+    assert.equal(
+      await readFile(implementerPath, "utf8"),
+      implementerOriginalContent,
+      "a restored prompt file must contain the packaged content",
+    );
   });
 });
 
