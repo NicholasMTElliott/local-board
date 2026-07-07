@@ -122,6 +122,7 @@ node ./bin/local-board.js create story "Ticket parser" --status backlog --priori
 node ./bin/local-board.js start-work T20260514T1234Z --json
 node ./bin/local-board.js start-work T20260514T1234Z --branch preseeded/ticket-parser --json
 node ./bin/local-board.js begin-step T20260514T1234Z --json
+node ./bin/local-board.js check-dispatch --agent local-board-implementer --model sonnet --ticket T20260514T1234Z
 node ./bin/local-board.js complete-step T20260514T1234Z review --executor codex-task:read-only --evidence "Review findings recorded."
 node ./bin/local-board.js approve-inline T20260514T1234Z review --reason "User approved fallback."
 node ./bin/local-board.js move T20260514T1234Z ready_for_design
@@ -181,6 +182,13 @@ action's profile pins a model — also requires the `@model` suffix to match
 `configuredModel` (or `@codex-default`, or an approved deviation recorded via
 `approve-inline --executor <route>@<model>`). Done-time re-validation stays
 route-only for back-compat with evidence recorded before this rule.
+
+For dispatch verification, `begin-step` also records the ticket's active action,
+route, and model in `.local-board/active-steps.json` in the main checkout, so
+linked worktrees share one ledger. `check-dispatch --agent [--model] [--ticket]`
+reads that ledger for hook callers, prints a JSON verdict to stdout, and exits
+0 for allow, 1 for deny, or 2 for error. `complete-step` and `approve-inline`
+clear the ticket's active ledger entry.
 
 Current Codex examples include `codex-task:read-only` and `codex-task:workspace-write`; projects may add more specific modes.
 

@@ -1293,24 +1293,28 @@ test("initProject --overwrite never clobbers an existing root .gitignore", async
     assert.match(afterFirst, /^\*\.log$/m);
     const occurrencesFirst = afterFirst.split(/\r?\n/).filter((line) => line.trim() === ".worktrees/").length;
     assert.equal(occurrencesFirst, 1, ".worktrees/ must be appended exactly once");
+    const localBoardOccurrencesFirst = afterFirst.split(/\r?\n/).filter((line) => line.trim() === ".local-board/").length;
+    assert.equal(localBoardOccurrencesFirst, 1, ".local-board/ must be appended exactly once");
 
     await initProject(root, { overwrite: true });
     const afterSecond = await readFile(gitignorePath, "utf8");
     assert.equal(afterSecond, afterFirst, "a second --overwrite run must not change the file further");
     const occurrencesSecond = afterSecond.split(/\r?\n/).filter((line) => line.trim() === ".worktrees/").length;
     assert.equal(occurrencesSecond, 1, ".worktrees/ must not be duplicated across repeated --overwrite runs");
+    const localBoardOccurrencesSecond = afterSecond.split(/\r?\n/).filter((line) => line.trim() === ".local-board/").length;
+    assert.equal(localBoardOccurrencesSecond, 1, ".local-board/ must not be duplicated across repeated --overwrite runs");
   });
 });
 
 test("initProject --overwrite treats an existing .worktrees line without a trailing slash as already present", async () => {
   await withBoard(async (root) => {
     const gitignorePath = path.join(root, ".gitignore");
-    const customContent = "# my custom rules\nnode_modules/\n.worktrees\n";
+    const customContent = "# my custom rules\nnode_modules/\n.worktrees\n.local-board\n";
     await writeFile(gitignorePath, customContent, "utf8");
 
     await initProject(root, { overwrite: true });
     const after = await readFile(gitignorePath, "utf8");
-    assert.equal(after, customContent, "a bare .worktrees entry must be recognized and nothing appended");
+    assert.equal(after, customContent, "bare .worktrees/.local-board entries must be recognized and nothing appended");
   });
 });
 

@@ -31,6 +31,7 @@ import {
   validate,
 } from "./tickets.js";
 import { assertAutoMergeReady, autoMergeTicketBranch, startTicketWork } from "./git.js";
+import { checkDispatch } from "./active-steps.js";
 import { loadConfig, OPTIONAL_STEP_STAGES } from "./config.js";
 import { runInstall } from "./install.js";
 import { initProject } from "./scaffold.js";
@@ -98,6 +99,9 @@ export async function main(argv) {
     }
     if (command === "approve-inline") {
       return await commandApproveInline(root, args);
+    }
+    if (command === "check-dispatch") {
+      return await commandCheckDispatch(root, args);
     }
     if (command === "init") {
       return await commandInit(root, args);
@@ -504,6 +508,33 @@ async function commandApproveInline(root, args) {
     console.log(`${result.ticket} ${result.action} ${result.approvedExecutor} ${result.path}`);
   }
   return 0;
+}
+
+async function commandCheckDispatch(root, args) {
+  // check-dispatch always prints a JSON verdict (the hook needs a stable,
+  // parseable contract); --json is accepted as a no-op for CLI consistency.
+  takeFlag(args, "--json");
+  const agent = takeOption(args, "--agent");
+  const model = takeOption(args, "--model");
+  const ticketId = takeOption(args, "--ticket");
+  ensureNoArgs(args);
+
+  if (agent === undefined || agent.trim() === "") {
+    throw new Error("check-dispatch requires: --agent <subagent-type> [--model <model>] [--ticket <ticket-id>] [--json]");
+  }
+
+  try {
+    const verdict = await checkDispatch(root, { agent, model, ticketId });
+    console.log(JSON.stringify(verdict.body, null, 2));
+    return verdict.code;
+  } catch (error) {
+    // check-dispatch is a hook contract: stdout must always carry a parseable
+    // JSON verdict, even when the ledger read itself throws (e.g. a corrupt
+    // active-steps.json). Surface the error on stdout as { ok: false } rather
+    // than letting it propagate to the generic CLI catch (stderr-only).
+    console.log(JSON.stringify({ ok: false, reason: "error", error: error.message }, null, 2));
+    return 2;
+  }
 }
 
 async function commandInit(root, args) {
@@ -983,6 +1014,7 @@ function printUsage() {
   local-board [--root <path>] begin-step <ticket-id> [--action <action>] [--json]
   local-board [--root <path>] complete-step <ticket-id> <action> --executor <executor> --evidence <text> [--json]
   local-board [--root <path>] approve-inline <ticket-id> <action> --reason <text> [--executor <executor>] [--json]
+  local-board [--root <path>] check-dispatch --agent <subagent-type> [--model <model>] [--ticket <ticket-id>] [--json]
   local-board [--root <path>] move <ticket-id> <status> [--json]
   local-board [--root <path>] set <ticket-id> <field> <value>
   local-board [--root <path>] comment <ticket-id> <text> [--section <section>]

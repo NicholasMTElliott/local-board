@@ -1,6 +1,7 @@
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { clearActiveStep, stampActiveStep } from "./active-steps.js";
 import { loadConfig } from "./config.js";
 import { ticketWorktreeMintOffsetMinutes } from "./worktrees.js";
 
@@ -453,15 +454,11 @@ export async function setTicketSection(root, ticketId, section, text, options = 
   return ticket.path;
 }
 
-export async function beginStep(root, ticketId, actionOverride = null) {
-  const [board, config] = await Promise.all([discover(root), loadConfig(root)]);
-  const issues = validate(board, config);
-  if (issues.length > 0) {
-    throw new Error(`ticket validation failed:\n${issues.join("\n")}`);
-  }
-
-  const byId = byTicketId(board);
-  const ticket = byId.get(ticketId);
+// Pure core shared by `beginStep` and `resolveExpectedStep`: resolves a
+// ticket's configured action against an already-loaded board/config, without
+// touching the ledger or requiring board-wide validation to pass.
+function resolveStepFromBoard(board, config, ticketId, actionOverride) {
+  const ticket = byTicketId(board).get(ticketId);
   if (ticket === undefined) {
     throw new Error(`ticket ${ticketId} not found`);
   }
@@ -472,20 +469,63 @@ export async function beginStep(root, ticketId, actionOverride = null) {
   }
 
   assertAction(config, action);
-  const configuredAgent = agentForAction(config, action);
+  return { ticket, action };
+}
+
+// Read-only resolver for a ticket's expected step (action/route/model), used
+// by `check-dispatch` when no ledger record exists yet for the ticket. Never
+// stamps the ledger and does not require the whole board to validate cleanly
+// (a hook must not go blind because an unrelated ticket has an issue).
+export async function resolveExpectedStep(root, ticketId, actionOverride = null) {
+  const [board, config] = await Promise.all([discover(root), loadConfig(root)]);
+  const { ticket, action } = resolveStepFromBoard(board, config, ticketId, actionOverride);
   return {
+    ticket: ticket.id,
+    action,
+    status: ticket.status,
+    route: agentForAction(config, action),
+    model: modelForAction(config, action),
+  };
+}
+
+export async function beginStep(root, ticketId, actionOverride = null) {
+  const [board, config] = await Promise.all([discover(root), loadConfig(root)]);
+  const issues = validate(board, config);
+  if (issues.length > 0) {
+    throw new Error(`ticket validation failed:\n${issues.join("\n")}`);
+  }
+
+  const { ticket, action } = resolveStepFromBoard(board, config, ticketId, actionOverride);
+  const configuredAgent = agentForAction(config, action);
+  const configuredModel = modelForAction(config, action);
+
+  const result = {
     ticket: ticket.id,
     action,
     status: ticket.status,
     transitions: transitionsForStatus(config, ticket.status),
     configuredAgent,
-    configuredModel: modelForAction(config, action),
+    configuredModel,
     configuredPrompt: promptForAction(config, action),
     strict: config.routing?.strict === true,
     delegationRequired: config.routing?.strict === true && configuredAgent !== "inline",
     branch: ticket.frontMatter.branch ?? null,
     path: path.relative(board.root, ticket.path),
   };
+
+  // Additive side effect (unconditional, idempotent): stamps this ticket's
+  // in-flight step so `check-dispatch` (T20260707T1325Z) can verify a later
+  // Task dispatch against it. `begin-step`'s return shape is unchanged.
+  await stampActiveStep(root, ticket.id, {
+    ticket: ticket.id,
+    action,
+    route: configuredAgent,
+    model: configuredModel,
+    root: path.resolve(root),
+    ts: formatIsoSeconds(new Date()),
+  });
+
+  return result;
 }
 
 export async function approveInline(root, ticketId, action, reason, options = {}) {
@@ -514,6 +554,7 @@ export async function approveInline(root, ticketId, action, reason, options = {}
     : `Approved routing deviation for ${action}: ${executor}: ${reason.trim()}`;
   const body = appendToSection(ticket.body, "Run Log", `- ${formatIsoSeconds(now)}: ${logMessage}`);
   await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
+  await clearActiveStep(root, ticket.id).catch(() => {});
   return { ticket: ticket.id, action, approvedExecutor: executor, path: ticket.path };
 }
 
@@ -560,6 +601,7 @@ export async function completeStep(root, ticketId, action, executor, evidence, o
     `- ${formatIsoSeconds(now)}: Completed ${action} via ${executor}: ${evidence.trim()}`,
   );
   await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
+  await clearActiveStep(root, ticket.id).catch(() => {});
   return { ticket: ticket.id, action, executor, path: ticket.path };
 }
 

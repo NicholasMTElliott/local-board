@@ -48,7 +48,7 @@ For whole-project work, run `query-next --json`. For a specific ticket, run `que
 For each returned ticket:
 
 1. Read the returned ticket `path`, returned `prompt`, `branch`, `transitions`, and relevant project context.
-2. Run `begin-step <ticket-id> --json` before `start-work` to resolve `action`, `configuredAgent`, `configuredModel`, and `configuredPrompt`.
+2. Run `begin-step <ticket-id> --json` before `start-work` to resolve `action`, `configuredAgent`, `configuredModel`, and `configuredPrompt`, and record the in-flight step for dispatch verification.
 3. Before `implement`, `review`, `test`, or `document`, run `start-work <ticket-id> --json`.
 4. Dispatch the returned action through the route translation contract below.
 5. Persist return-only output with `section --file`; self-writing workers write their own scoped changes.
@@ -164,6 +164,7 @@ local-board schema --json
 local-board create <epic|story|task|bug> "<title>" --status <status> --priority <priority> [--parent <id>]
 local-board start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--json]
 local-board begin-step <ticket-id> [--action <action>] [--json]
+local-board check-dispatch --agent <subagent-type> [--model <model>] [--ticket <ticket-id>] [--json]
 local-board complete-step <ticket-id> <action> --executor <executor> --evidence "<evidence>" [--json]
 local-board approve-inline <ticket-id> <action> --reason "<reason>" [--executor <executor>] [--json]
 local-board gate-check <ticket-id> --stage <stage> [--json]

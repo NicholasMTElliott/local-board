@@ -6,10 +6,15 @@ import { defaultConfigJsonc } from "./config.js";
 const TICKET_FOLDERS = ["backlog", "ready", "active", "questions", "blocked", "review", "done", "archive"];
 
 const GITIGNORE_WORKTREE_ENTRY = ".worktrees/";
+const GITIGNORE_LOCAL_BOARD_ENTRY = ".local-board/";
 const GITIGNORE_TEMPLATE = `# local-board ticket worktrees (see plans/local-board.config.jsonc: worktrees.location).
 # Only used by the "inside" layout, but seeded regardless of the chosen layout so
 # switching to it later never needs a manual .gitignore edit.
 ${GITIGNORE_WORKTREE_ENTRY}
+
+# local-board per-machine runtime state (active-step ledger, dispatch ledger, locks).
+# Unversioned by design; never commit it and never package it.
+${GITIGNORE_LOCAL_BOARD_ENTRY}
 `;
 
 const FILES = new Map([
@@ -247,19 +252,27 @@ async function writeGitignore(filePath, created, skipped) {
     return;
   }
 
-  // A pre-existing line matches whether or not it carries the trailing
-  // slash we always append for new entries (".worktrees" and ".worktrees/"
-  // are equivalent gitignore patterns), so idempotency checks must accept
-  // either form.
-  const bareWorktreeEntry = GITIGNORE_WORKTREE_ENTRY.replace(/\/$/, "");
-  const lines = current.split(/\r?\n/);
-  if (lines.some((line) => line.trim() === GITIGNORE_WORKTREE_ENTRY || line.trim() === bareWorktreeEntry)) {
+  const missingEntries = [GITIGNORE_WORKTREE_ENTRY, GITIGNORE_LOCAL_BOARD_ENTRY].filter(
+    (entry) => !hasGitignoreEntry(current, entry),
+  );
+  if (missingEntries.length === 0) {
     skipped.push(filePath);
     return;
   }
 
   const needsNewlineBefore = current.length > 0 && !current.endsWith("\n");
   const prefix = needsNewlineBefore ? "\n" : "";
-  await writeFile(filePath, `${current}${prefix}${GITIGNORE_WORKTREE_ENTRY}\n`, "utf8");
+  const appended = missingEntries.map((entry) => `${entry}\n`).join("");
+  await writeFile(filePath, `${current}${prefix}${appended}`, "utf8");
   created.push(filePath);
+}
+
+// A pre-existing line matches whether or not it carries the trailing slash we
+// always append for new entries (".worktrees" and ".worktrees/", ".local-board"
+// and ".local-board/" are equivalent gitignore patterns), so idempotency checks
+// must accept either form.
+function hasGitignoreEntry(content, entry) {
+  const bareEntry = entry.replace(/\/$/, "");
+  const lines = content.split(/\r?\n/);
+  return lines.some((line) => line.trim() === entry || line.trim() === bareEntry);
 }

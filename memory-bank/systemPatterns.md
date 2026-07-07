@@ -152,6 +152,8 @@ pins a model, the executor's `@model` suffix must equal `configuredModel`, equal
 re-validation (`validateRouting`) stays route-only for back-compat with evidence
 recorded before this rule.
 
+Dispatch verification uses `.local-board/active-steps.json` as the deterministic in-flight ledger, anchored at the main checkout's git common dir so linked worktrees share one record. `begin-step` stamps the ticket's resolved action/route/model there and is no longer a pure query; `complete-step` and `approve-inline` clear the ticket's entry. `check-dispatch --agent [--model] [--ticket]` reads the ledger for hook use, always emits JSON on stdout, and exits 0 allow / 1 deny / 2 error while passing through non-local-board agents and unverifiable models.
+
 Return-only subagents (reviewer, tester, decomposer, gatecheck) have no Write or Edit tool. They return section content (Review Findings, Test Evidence) or JSON as Markdown in their final message; the orchestrator writes the temp file with the Write tool and runs `section --file`. Never instruct a return-only subagent to create a file — it falls back to Bash redirection (`echo`, heredoc, `Set-Content`), which breaks on backticks and code fences. The same return-only contract applies to `codex-task:read-only` routes. The designer is the exception: it has a scoped Write tool and self-writes its `Technical Design` section, returning only a terse summary, because that payload is the largest and the Write tool avoids the redirection bug.
 
 ## Subagent CLI Permission
@@ -186,7 +188,7 @@ flow and its `local-board-teammate` agent have been removed; `docs/TeamMode.md` 
 retained only as historical context.
 
 ## MVP CLI
-Use `node ./bin/local-board.js validate`, `list`, `query-next`, `query-ticket`, `state-report`, `schema`, `create`, `estimate`, `calibration suggest`, `gate-check`, `specialty-run`, `start-work`, `begin-step`, `complete-step`, `approve-inline`, `move`, `set`, `section`, `comment`, `link-parent`, `link-child`, `block`, `unblock`, `team-config`, and `init`.
+Use `node ./bin/local-board.js validate`, `list`, `query-next`, `query-ticket`, `state-report`, `schema`, `create`, `estimate`, `calibration suggest`, `gate-check`, `specialty-run`, `start-work`, `begin-step`, `check-dispatch`, `complete-step`, `approve-inline`, `move`, `set`, `section`, `comment`, `link-parent`, `link-child`, `block`, `unblock`, `team-config`, and `init`.
 
 `move` changes status and relocates the ticket. `set` updates mutable front matter fields. `section` replaces section content. `comment` appends timestamped notes to a ticket section.
 `estimate` records story points and an estimate basis, validates points against the configured scale, and requires `--force` to overwrite.
