@@ -334,7 +334,11 @@ per-step models. Confirmed working:
 - `route@model` completion evidence and gate-check resolution (empty catalog →
   skip the gate agent);
 - the **failure/loop-back path**: the tester caught an acceptance violation →
-  ticket returned to implementation → `approve-inline` fix → re-verify → advance;
+  ticket returned to implementation → `approve-inline` fix → re-verify → advance.
+  This exact loop-back carried stale `review`/`test` evidence forward with no
+  invalidation (T20260707T1328Z); `routing.invalidateOnLoopBack` (see
+  `docs/Workflow.md`) now strips at-or-downstream evidence on such a move so
+  the re-run must re-record it before `done`;
 - closeout: auto-merge + branch prune + `fast-forward`, and the **Layer-2 rebase
   backstop** firing when the second ticket's branch was behind the advanced
   default, then succeeding after a rebase.

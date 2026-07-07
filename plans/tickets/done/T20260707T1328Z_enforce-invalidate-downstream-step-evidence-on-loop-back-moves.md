@@ -1,20 +1,20 @@
 ---
 id: T20260707T1328Z
 type: task
-status: ready_for_implementation
+status: done
 priority: P2
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260707T1328Z-enforce-invalidate-downstream-step-evidence-on-loop-back-moves
 estimate: 4
 estimateBasis: T20260707T1327Z
-workStartedAt: null
-workCompletedAt: null
+workStartedAt: 2026-07-07T21:58:42Z
+workCompletedAt: 2026-07-07T22:22:40Z
 created: 2026-07-07T13:28:41Z
-updated: 2026-07-07T21:58:41Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-07T22:22:40Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # enforce: invalidate downstream step evidence on loop-back moves
@@ -273,11 +273,75 @@ Config:
 
 ## Implementation Notes
 
+Implemented per the Technical Design: strip-on-loop-back, evidence-driven, target-inclusive rank rule.
+
+`src/tickets.js`:
+- Added `STAGE_TO_STATUS` (fixed `{design, implement, test}` -> `ready_for_*`, independent of configurable `statusActions`), `pipelineRankOfStatus`, `invertStatusActions`, `producingStatusForToken` (routes gate tokens through `GATE_TOKEN_RE`, mandatory actions through the inverted `statusActions`, specialty tokens through `optionalStepEntry`'s new `stage` field; returns `null` for anything unplaceable — never stripped).
+- Added exported pure helper `invalidateDownstreamEvidence(frontMatter, config, targetStatus)` returning `{ completedSteps, routingApprovals, removed: { completedSteps, routingApprovals } }`. No-op when `targetStatus` has no pipeline rank.
+- `optionalStepEntry` now returns `{ ...entry, stage }` (additive; existing callers unaffected).
+- `pipelineRank(ticket, config)` refactored to reuse `pipelineRankOfStatus` (no behavior change).
+- `moveTicket`: `needsConfig` expanded to `gateStage !== null || status === "done" || TRIGGER_STATUSES.has(status)`. When `config.routing?.invalidateOnLoopBack === true` and the target is a trigger status, runs `invalidateDownstreamEvidence` against the pre-move front matter, splices the reduced lists into front matter, and appends one Run Log line (`invalidationRunLogMessage`) enumerating exactly what was removed — only when the removed sets are non-empty (empty-diff no-op, byte-identical to before for ordinary moves). All inside the existing `withTicketLock` span, before rendering.
+
+`src/config.js`:
+- `DEFAULT_CONFIG.routing.invalidateOnLoopBack = false` (ENOENT fallback / merge base, back-compat).
+- `defaultConfigJsonc()` scaffold: `"invalidateOnLoopBack": true` with a doc comment next to `requireGateConsultation`, including the migration caveat (invalidation is forward-only; pre-existing stale tokens are not retroactively cleaned).
+
+Tests added (`test/tickets.test.js`, `test/config.test.js`):
+- 7 unit tests on `invalidateDownstreamEvidence`: full-evidence strip at `ready_for_implementation` (implement/review/test/document + their gate tokens + implement/test-stage specialties + matching approvals stripped; design/decompose/gate:design/design-specialty + design approval survive); boundary at `ready_for_design` (strips all but decompose) and `ready_for_docs` (strips only document); forward-move no-op; model-suffixed token stripped wholesale; specialty stripped only for its own stage; non-pipeline target (`questions`) is a defensive no-op.
+- 3 `moveTicket` integration tests: full acceptance path (design→...→ready_for_docs with all evidence + gate tokens, loop back to `ready_for_implementation`, assert exact stripped set + Run Log enumeration + estimate survives untouched, direct move to `done` fails routing validation, re-`complete-step` implement/review/test/document, `done` then succeeds and board `validate`s clean); `questions`/`blocked` moves never strip even with the switch on; switch off (implicit default and explicit `false`) preserves old behavior vs switch on strips.
+- `test/config.test.js`: guard-test allowlist extended to a 4th documented divergence (`routing.invalidateOnLoopBack`); new dedicated backward-compat test (omitted key / explicit false / explicit true / shipped scaffold).
+
+Docs: `docs/Workflow.md` gets a new "Loop-back evidence invalidation" subsection (plus a cross-reference fix in the enforcement-hooks "Documented limits" paragraph that previously said this was "a separate concern"); `docs/PerStepOrchestration.md` real-run write-up now notes the loop-back path it exercised carried stale evidence and points at the fix; `memory-bank/systemPatterns.md` updated (Config key list, DEFAULT_CONFIG/scaffold divergence count 3→4, gate-check paragraph gets a new invalidateOnLoopBack paragraph, `move` line updated).
+
+Deviations from the design: none substantive. One interpretation choice not spelled out verbatim in the design: `routingApprovals` stripping re-applies the *same* producing-status rule directly to each approval token (rather than deriving a stripped-actions set from the completedSteps removals and filtering approvals by membership). This matches the design's literal instruction ("Strip routingApprovals tokens... using the same producing-status rule") and additionally covers an approval recorded for an action with no completedSteps token yet (edge case, not otherwise specified) — same firm outcome for every case the test strategy specifies.
+
+Repo-live config: `plans/local-board.config.jsonc` was intentionally left untouched (still has no `invalidateOnLoopBack` key, so it resolves to the `false` back-compat default via `DEFAULT_CONFIG`) per the ticket's explicit instruction. Turning it on for this board is an orchestrator decision to make post-merge.
+
+Verification: `npm run check` (syntax check, clean), `npm test` (314 tests, 313 pass, 1 pre-existing skip, 0 fail), `npm run validate` (board validates clean).
+
 ## Review Findings
+
+Reviewed by codex-task:read-only (gpt-5.5) against commit a188c1c.
+
+No blocking findings.
+
+Non-blocking observations:
+- src/config.js:24,44 comments still say the default/scaffold split has "exactly three" divergences — this commit adds the fourth (invalidateOnLoopBack). Guard test correct; comment text stale (fix in the doc pass).
+- No dedicated failed-move-does-not-strip test; existing moveTicket rollback tests cover the same write mechanics, and invalidation is staged in memory until the normal write path — acceptable.
+
+Trace notes (all verified):
+- Rank rule target-inclusive per design (pipelineRank(producing) <= pipelineRank(target), src/tickets.js:204); ready_for_implementation strips implement/review/test/document and keeps design/decompose.
+- Token production mapping sound for gate/action/specialty tokens; model suffixes stay inside stripped tokens.
+- routingApprovals use the same producing-status rule — covers approvals without matching tokens.
+- T1327 interaction correct: gate refusal precedes invalidation; a stripped gate:implement forces a fresh consultation on the next forward move.
+- Estimates/lifecycle fields untouched; atomicity holds (invalidation persists only via the normal write path with the B1318 rollback).
+- Config split + fourth allowlist entry + docs accurate.
+
+Verdict: pass
 
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/T20260707T1328Z-..., commit a188c1c.
+
+**Suite:** `npm run check` pass; `npm test` 313 pass / 1 gated-skip; `npm run validate` OK.
+
+**End-to-end acceptance probe (fresh board, both switches on):** walked a ticket to ready_for_docs with all 7 tokens, looped back to ready_for_implementation — implement/review/test + gate:implement/gate:test stripped; design + gate:design + estimate survived; the Run Log line enumerates exactly the five removed tokens (full text captured). Re-run path: fresh implement recorded, forward move REFUSED until a fresh gate consultation (T1327 interaction verified live), then re-recorded review/test/document and move done succeeded. Bonus: a wrong-executor document attempt was correctly rejected by strict routing mid-probe.
+
+**Pause probe:** questions round-trip left completedSteps byte-identical, no invalidation log line.
+
+**Switch-off probe:** ENOENT-fallback board (invalidateOnLoopBack false) — loop-back left all tokens intact, no log line. (Explicit-false-with-gates-on covered by the unit suite.)
+
+**Gaps / caveats:** routingApprovals stripping and blocked-target no-strip verified via the automated suite only; the "exactly three places" comment staleness confirmed (cosmetic, flagged for the doc pass).
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `src/config.js` — stale "exactly three"/"only these three" divergence comments replaced with count-proof phrasing (review nit closed).
+- `docs/Workflow.md`, `docs/PerStepOrchestration.md`, `memory-bank/systemPatterns.md` — implementation-pass updates verified accurate: target-inclusive rank rule, fallback/scaffold defaults, Run Log enumeration, no-retroactive-cleanup migration caveat.
+- No README change needed.
 
 ## Questions
 
@@ -286,3 +350,15 @@ Config:
 - 2026-07-07T21:57:57Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): evidence-driven strip on ready_* target moves (target-inclusive rank rule), covers action/gate/specialty tokens + matching approvals, Run Log enumeration, invalidateOnLoopBack switch per the established pattern. Estimate 4 (basis T20260707T1327Z).
 
 - 2026-07-07T21:58:41Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (internal workflow hygiene; no catalog triggers matched)
+
+- 2026-07-07T21:58:42Z: Ensured git branch local-board/T20260707T1328Z-enforce-invalidate-downstream-step-evidence-on-loop-back-moves (created).
+
+- 2026-07-07T22:09:43Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): invalidateDownstreamEvidence helper wired into moveTicket under lock, config switch per the established pattern, Run Log enumeration; 313 pass + 1 gated-skip.
+
+- 2026-07-07T22:11:02Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (backend workflow logic; no catalog triggers matched)
+
+- 2026-07-07T22:13:54Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict pass: rank rule, token mapping, gate interaction, and atomicity all traced correct; one stale comment ('exactly three' divergences) to fix in the doc pass.
+
+- 2026-07-07T22:20:43Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 313+1 gated; full acceptance loop-back probed live with exact Run Log enumeration, fresh-gate refusal on re-run, pause and switch-off probes clean. Result: pass.
+
+- 2026-07-07T22:22:39Z: Completed document via codex-task:workspace-write: Codex (workspace-write): stale divergence comment count-proofed; impl-pass docs verified accurate.

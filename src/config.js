@@ -21,7 +21,7 @@ const MANDATORY_ACTION_NAMES = new Set([
 //      DEFAULT_CONFIG, so every key here is a backward-compat default for
 //      configs that omit that block.
 // It deliberately differs from defaultConfigJsonc() (the blessed `init`
-// scaffold, below) in exactly three places, all required by role 2:
+// scaffold, below) in the documented places below, all required by role 2:
 //   - estimation.enabled: false here (vs true in the scaffold) so a
 //     pre-estimation config that omits the `estimation` block does not
 //     silently start enforcing the estimation gate.
@@ -32,13 +32,16 @@ const MANDATORY_ACTION_NAMES = new Set([
 //   - routing.requireGateConsultation: false here (vs true in the scaffold)
 //     so a pre-gate-consultation config that omits the key does not suddenly
 //     start refusing forward moves out of design/implement/test on upgrade.
+//   - routing.invalidateOnLoopBack: false here (vs true in the scaffold) so a
+//     pre-existing config that omits the key does not silently start
+//     stripping completedSteps/routingApprovals tokens on loop-back moves.
 // These differences are pinned by tests in test/config.test.js (search
 // "backward-compat disabled" and "empty optionalSteps catalog"). Do NOT
 // converge them to match the scaffold — see the guard test
 // "defaultConfigJsonc matches DEFAULT_CONFIG except for documented
 // differences" in test/config.test.js, which locks the remaining shared
 // blocks (workflow, agents, routing, retention, git, worktrees) in sync
-// while allowlisting only these three intentional differences.
+// while allowlisting only these intentional differences.
 export const DEFAULT_CONFIG = {
   version: 1,
   workflow: {
@@ -261,6 +264,7 @@ export const DEFAULT_CONFIG = {
       bug: ["design", "implement", "review", "test", "document"],
     },
     requireGateConsultation: false,
+    invalidateOnLoopBack: false,
   },
   retention: {
     archiveDoneAfterDays: 30,
@@ -808,7 +812,21 @@ export function defaultConfigJsonc() {
     // (via gate-check's empty-catalog auto-stamp or the gate-complete verb).
     // Backward, lateral (questions/blocked), and archive/done moves are never
     // gated. Set to false to opt out.
-    "requireGateConsultation": true
+    "requireGateConsultation": true,
+    // invalidateOnLoopBack: true strips stale completedSteps (action, gate:,
+    // and specialty tokens) and matching routingApprovals when a "move"
+    // targets a ready_* pipeline status and evidence at or downstream of that
+    // status already exists (a loop-back, e.g. ready_for_test back to
+    // ready_for_implementation after a test failure). Forces the re-run
+    // steps to re-record their evidence before the ticket can reach done.
+    // Forward, questions/blocked, and done/archived/active-status moves are
+    // never affected. One Run Log line enumerates exactly what was removed.
+    // Set to false to opt out (pre-existing boards must opt in explicitly:
+    // this key predates DEFAULT_CONFIG's fallback, so an omitted key keeps
+    // old behavior). Migration note: invalidation only applies to *future*
+    // loop-back moves; evidence already stale from a loop-back before this
+    // key was enabled is not retroactively cleaned.
+    "invalidateOnLoopBack": true
   },
 
   // Done tickets are recent closeout history. Older done tickets are retained
