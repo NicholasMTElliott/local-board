@@ -361,10 +361,21 @@ export async function moveTicket(root, ticketId, status, options = {}) {
     throw new Error(`${targetPath} already exists`);
   }
 
-  await writeTicketFile(ticket.path, content);
-
   if (path.resolve(ticket.path) !== path.resolve(targetPath)) {
-    await rename(ticket.path, targetPath);
+    // Rename first (risky op), then rewrite content in place. If the rename
+    // throws, the file is untouched at the old path with old (folder-consistent)
+    // status: the board stays queryable and the caller can retry. If the
+    // in-place rewrite throws after a successful rename, roll the rename back
+    // so the file returns to its old, fully-consistent path.
+    await renameWithRetry(ticket.path, targetPath, options.renameFn);
+    try {
+      await writeTicketFile(targetPath, content, { renameFn: options.renameFn });
+    } catch (error) {
+      await renameWithRetry(targetPath, ticket.path, options.renameFn).catch(() => {});
+      throw error;
+    }
+  } else {
+    await writeTicketFile(targetPath, content, { renameFn: options.renameFn });
   }
 
   return targetPath;

@@ -1,19 +1,19 @@
 ---
 id: B20260707T1318Z
 type: bug
-status: ready_for_implementation
+status: implementing
 priority: P1
 parent: null
 children: []
 blockedBy: [B20260707T1317Z]
 blocks: []
-branch: null
+branch: local-board/B20260707T1318Z-moveticket-writes-new-status-before-cross-folder-rename-rename-failure-strands-the-board
 estimate: 2
 estimateBasis: B20260707T1317Z
-workStartedAt: null
+workStartedAt: 2026-07-07T14:30:44Z
 workCompletedAt: null
 created: 2026-07-07T13:18:54Z
-updated: 2026-07-07T14:30:44Z
+updated: 2026-07-07T14:35:59Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
@@ -234,6 +234,64 @@ this fix.
 
 ## Implementation Notes
 
+Implemented the rename-first, rewrite-in-place-with-rollback ordering in `moveTicket`
+(`src/tickets.js`) exactly per the Technical Design.
+
+Cross-folder branch now:
+1. `renameWithRetry(ticket.path, targetPath, options.renameFn)` — the risky op runs
+   first, before any content change. If it throws, the file is untouched at the old
+   path with the old (folder-consistent) status; nothing to roll back.
+2. On success, `writeTicketFile(targetPath, content, { renameFn: options.renameFn })`
+   rewrites the new-status content in place at the new path. If this throws, the code
+   rolls back via `renameWithRetry(targetPath, ticket.path, options.renameFn).catch(() => {})`
+   (best-effort) and rethrows the original error, restoring the single-file
+   old-path/old-status state.
+
+Same-folder branch is unchanged in behavior: a single `writeTicketFile(targetPath,
+content, { renameFn: options.renameFn })`, now also threading `options.renameFn` for
+test injection parity.
+
+Added `options.renameFn` passthrough to `moveTicket` (previously only
+`writeTicketFile` had this seam); production call sites pass no `renameFn` and keep
+the real `rename` default. The formerly-unguarded plain `rename()` call at the old
+line 367 is gone — the cross-folder move now goes through `renameWithRetry`, so it
+also absorbs transient Windows `EPERM`/`EBUSY`/`EACCES` the same way in-place writes
+already do.
+
+No locking added (out of scope, deferred to B20260707T1322Z). No change to
+validation/hard-fail behavior (deferred per the ticket's Recovery-behavior decision).
+The `exists()` TOCTOU precheck at the old line 360 is unchanged, per the design's
+TOCTOU note.
+
+Tests added in `test/tickets.test.js` (all passing), following the established
+`renameFn`-injection pattern:
+- "moveTicket cross-folder rename failure leaves the ticket consistent at exactly
+  one path" — non-retryable `ENOSPC` on the cross-folder rename; asserts single file
+  at old path, old status, target folder empty, `validate` clean.
+- "moveTicket cross-folder rename retries a transient Windows error and succeeds" —
+  `EPERM` on first attempt then real rename; asserts move completes, no leftovers.
+- "moveTicket rolls back the rename when the in-place rewrite fails" — stateful
+  `renameFn` succeeds the cross-folder rename (call 1) then throws `ENOSPC` on the
+  in-place rewrite's temp-rename (call 2); asserts rollback to old path with
+  byte-identical original content, target folder empty, `validate` clean.
+- "moveTicket within the same status folder rewrites in place without a
+  cross-folder rename" — regression test using `ready_for_review` -> `reviewing`
+  (both map to the `review` folder); a tracking `renameFn` confirms every recorded
+  rename call has matching source/destination directories (no cross-folder rename
+  attempted).
+
+Verification:
+- `npm run check` — pass.
+- `npm test` — 146 tests, 144 pass, 2 fail. Both failures are pre-existing and
+  unrelated (`resources-sync.test.js`: CRLF vs LF drift between `resources/` and
+  `plans/` mirrors on this Windows checkout); confirmed pre-existing by stashing
+  this change and re-running (same 2 failures, same test names). `test/tickets.test.js`
+  alone: 68/68 pass, including all 4 new tests.
+- `npm run validate` — "Ticket validation OK".
+
+No deviations from the Technical Design. Scope held to `moveTicket`'s cross-folder
+ordering and its `renameFn` seam; no locking, no validation-behavior change.
+
 ## Review Findings
 
 ## Test Evidence
@@ -245,3 +303,5 @@ this fix.
 ## Run Log
 
 - 2026-07-07T14:30:44Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): rename-first then rewrite-in-place with rollback; failure states stay folder-consistent; also upgrades the plain rename at :367 to renameWithRetry; hard-fail relaxation deferred. Estimate 2 (basis B20260707T1317Z, calibrated).
+
+- 2026-07-07T14:30:44Z: Ensured git branch local-board/B20260707T1318Z-moveticket-writes-new-status-before-cross-folder-rename-rename-failure-strands-the-board (created).
