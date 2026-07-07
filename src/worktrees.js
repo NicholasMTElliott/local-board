@@ -80,8 +80,13 @@ async function ensureWorktreeIgnore(repoRoot, worktreesRoot) {
     }
   }
 
+  // A pre-existing line matches whether or not it carries the trailing
+  // slash we always append for new entries (".worktrees" and ".worktrees/"
+  // are equivalent gitignore patterns), so idempotency checks must accept
+  // either form.
+  const bareEntry = entry.replace(/\/$/, "");
   const lines = current.length === 0 ? [] : current.split(/\r?\n/);
-  if (lines.some((line) => line.trim() === entry)) {
+  if (lines.some((line) => line.trim() === entry || line.trim() === bareEntry)) {
     return;
   }
 

@@ -13,7 +13,7 @@ estimateBasis: B20260707T1318Z
 workStartedAt: 2026-07-07T15:34:40Z
 workCompletedAt: null
 created: 2026-07-07T13:19:54Z
-updated: 2026-07-07T15:52:48Z
+updated: 2026-07-07T16:00:00Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only]
 routingApprovals: []
 ---
@@ -418,6 +418,48 @@ in the review as non-blocking and carried forward unresolved):
   `test/tickets.test.js`, 3 in `test/worktrees.test.js`).
 - `npm run validate`: `Ticket validation OK`.
 
+### Rework (second pass, post re-review, commit-not-yet-tagged review verdict: changes_requested)
+
+Re-review by codex-task:read-only (gpt-5.5) narrowed to a single remaining edge:
+gitignore idempotency must treat an existing equivalent entry *without* a trailing
+slash as already present.
+
+**Finding:** `ensureWorktreeIgnore` (`src/worktrees.js:83-90`) and `writeGitignore`
+(`src/scaffold.js:250-258`) both compared `line.trim() === entry`, where `entry`
+always carries a trailing slash (e.g. `.worktrees/`, `custom-worktrees/`). A
+pre-existing user line without the slash (`.worktrees` or `custom-worktrees`) is an
+equivalent gitignore pattern but did not match, so a redundant slash-suffixed entry
+was appended on top of it.
+
+**Fix:** both helpers now also accept the bare form. Computed `bareEntry` (entry with
+the trailing slash stripped) alongside the existing slash-suffixed `entry`/
+`GITIGNORE_WORKTREE_ENTRY`, and the presence check now matches `line.trim() === entry
+|| line.trim() === bareEntry` (same two-line duplicated predicate in each file, per
+the design note — no shared import introduced, to keep the two modules' local-helper
+boundary unchanged). No other logic touched: still append-only, still idempotent,
+still preserves all unrelated lines.
+
+**Tests added:**
+- `test/tickets.test.js`: "initProject --overwrite treats an existing .worktrees line
+  without a trailing slash as already present" — seeds `.gitignore` with a bare
+  `.worktrees` line (no slash) among custom rules, runs `initProject(root, {
+  overwrite: true })`, and asserts the file is byte-identical afterward (nothing
+  appended).
+- `test/worktrees.test.js`: "worktree-add treats a pre-existing explicit-path entry
+  without a trailing slash as already present" — under `{ location:
+  "custom-worktrees" }`, seeds `.gitignore` with a bare `custom-worktrees` line (no
+  slash), runs `worktree-add`, and asserts the file is unchanged (nothing appended).
+
+**Deliberately not changed:** everything else flagged in the prior review passes
+(mixed-mode drift, `git clean -fdx` exposure, Windows `MAX_PATH` marginal increase)
+remains out of scope for this surgical fix, per the rework brief.
+
+**Verification (rework, second pass)**
+- `npm run check`: pass (all `node --check` targets clean).
+- `npm test`: 173/173 pass (0 fail, 0 skipped) — up from 171 (+2 new tests: 1 in
+  `test/tickets.test.js`, 1 in `test/worktrees.test.js`).
+- `npm run validate`: `Ticket validation OK`.
+
 ## Implementation Notes
 
 Implemented per the approved technical design.
@@ -587,6 +629,8 @@ Confirmed correct: relative explicit paths resolve against repoRoot (:176); "ins
 
 Verdict: changes_requested
 
+- 2026-07-07T15:56:01Z: Re-review (codex) narrowed to one remaining edge: gitignore idempotency must accept an existing equivalent entry without trailing slash (worktrees.js:83-90, scaffold.js:250-258). Looping back for a surgical fix.
+
 ## Test Evidence
 
 ## Documentation Updates
@@ -604,3 +648,9 @@ Verdict: changes_requested
 - 2026-07-07T15:47:07Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict changes_requested: init --overwrite can clobber user .gitignore; explicit in-repo worktree paths lack the ignore guard. Two blocking fixes + test additions specified in Review Findings.
 
 - 2026-07-07T15:47:16Z: Ensured git branch local-board/B20260707T1319Z-worktrees-are-created-outside-the-workspace-root-breaking-the-codex-workspace-write-sandbox (already-current).
+
+- 2026-07-07T15:53:31Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework (sonnet): dedicated append-only .gitignore scaffold path; ensureWorktreeIgnore generalized to any in-repo root; 4 new tests; 171/171 green.
+
+- 2026-07-07T15:56:01Z: Completed review via codex-task:read-only: Re-review (gpt-5.5): both prior blockers fixed; one residual edge — no-slash equivalent gitignore entries not treated as present. changes_requested, scoped to that edge.
+
+- 2026-07-07T15:56:01Z: Ensured git branch local-board/B20260707T1319Z-worktrees-are-created-outside-the-workspace-root-breaking-the-codex-workspace-write-sandbox (already-current).

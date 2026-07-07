@@ -508,6 +508,29 @@ test("worktree-add ignore-guards an explicit in-repo worktrees.location and leav
   }, { location: "custom-worktrees" });
 });
 
+test("worktree-add treats a pre-existing explicit-path entry without a trailing slash as already present", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, _baseBranch, worktreesRoot) => {
+    const relative = path.relative(root, worktreesRoot).split(path.sep).join("/");
+    const before = await readFile(path.join(root, ".gitignore"), "utf8");
+    await writeFile(path.join(root, ".gitignore"), `${before}${relative}\n`, "utf8");
+    await git(root, ["add", "-A"]);
+    await git(root, ["commit", "-m", "Add bare custom-worktrees ignore line"]);
+
+    const ticketPath = await createTicket(root, "task", "Bare explicit path ticket", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-22T15:08:30Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add explicit in-repo path ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const before2 = await readFile(path.join(root, ".gitignore"), "utf8");
+    assert.equal((await runCli(["--root", root, "worktree-add", ticketId, "--json"])).code, 0);
+    const after = await readFile(path.join(root, ".gitignore"), "utf8");
+    assert.equal(after, before2, "a bare entry must be recognized and nothing appended");
+  }, { location: "custom-worktrees" });
+});
+
 test("worktree-add appends the ignore entry to a board with no existing .gitignore", { skip: !GIT_AVAILABLE }, async () => {
   await withRepo(async (root, _baseBranch) => {
     await rm(path.join(root, ".gitignore"), { force: true });

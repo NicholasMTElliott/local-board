@@ -1166,6 +1166,18 @@ test("initProject --overwrite never clobbers an existing root .gitignore", async
   });
 });
 
+test("initProject --overwrite treats an existing .worktrees line without a trailing slash as already present", async () => {
+  await withBoard(async (root) => {
+    const gitignorePath = path.join(root, ".gitignore");
+    const customContent = "# my custom rules\nnode_modules/\n.worktrees\n";
+    await writeFile(gitignorePath, customContent, "utf8");
+
+    await initProject(root, { overwrite: true });
+    const after = await readFile(gitignorePath, "utf8");
+    assert.equal(after, customContent, "a bare .worktrees entry must be recognized and nothing appended");
+  });
+});
+
 async function stampCalibrated(filePath, estimate, workStartedAt, workCompletedAt) {
   await replaceText(filePath, "estimate: null", `estimate: ${estimate}`);
   await replaceText(filePath, "estimateBasis: null", "estimateBasis: bootstrap");

@@ -247,8 +247,13 @@ async function writeGitignore(filePath, created, skipped) {
     return;
   }
 
+  // A pre-existing line matches whether or not it carries the trailing
+  // slash we always append for new entries (".worktrees" and ".worktrees/"
+  // are equivalent gitignore patterns), so idempotency checks must accept
+  // either form.
+  const bareWorktreeEntry = GITIGNORE_WORKTREE_ENTRY.replace(/\/$/, "");
   const lines = current.split(/\r?\n/);
-  if (lines.some((line) => line.trim() === GITIGNORE_WORKTREE_ENTRY)) {
+  if (lines.some((line) => line.trim() === GITIGNORE_WORKTREE_ENTRY || line.trim() === bareWorktreeEntry)) {
     skipped.push(filePath);
     return;
   }
