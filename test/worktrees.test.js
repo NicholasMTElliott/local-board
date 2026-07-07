@@ -283,6 +283,74 @@ test("guard is a no-op when worktrees.guardWrongRoot is false (non-breaking defa
   });
 });
 
+test("gate-check refuses the empty-catalog auto-stamp from the main root when the ticket has a registered worktree", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, _baseBranch, worktreesRoot) => {
+    const ticketPath = await createTicket(root, "task", "Gate-check guard refuse ticket", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-22T16:05:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    assert.equal((await runCli(["--root", root, "worktree-add", ticketId, "--json"])).code, 0);
+    const worktreePath = path.join(worktreesRoot, ticketId);
+    const before = await readFile(ticketPath, "utf8");
+
+    // optionalSteps.test is empty in the scaffold config: this is the
+    // mutating (auto-stamp) branch of gate-check, so the guard must fire
+    // before recordGateSkippedEmptyCatalog writes the ticket.
+    const result = await runCli(["--root", root, "gate-check", ticketId, "--stage", "test"]);
+
+    assert.equal(result.code, 2);
+    assert.match(result.stderr, new RegExp(`^refusing to mutate ${escapeRegExp(ticketId)} from `));
+    assert.match(
+      result.stderr,
+      new RegExp(`Re-run with --root ${escapeRegExp(displayPath(worktreePath))}, or pass --allow-main-root to override\\.$`),
+    );
+
+    const after = await readFile(ticketPath, "utf8");
+    assert.equal(after, before, "mainline ticket file must be byte-unchanged after a refused gate-check");
+  });
+});
+
+test("gate-check --allow-main-root overrides the guard on the empty-catalog auto-stamp", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Gate-check guard override ticket", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-22T16:06:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    assert.equal((await runCli(["--root", root, "worktree-add", ticketId, "--json"])).code, 0);
+
+    const result = await runCli(["--root", root, "gate-check", ticketId, "--stage", "test", "--allow-main-root", "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(await readFile(ticketPath, "utf8"), /^completedSteps: \[gate:test:skipped-empty-catalog\]$/m);
+  });
+});
+
+test("gate-check succeeds from the ticket's own registered worktree root on the empty-catalog auto-stamp", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, _baseBranch, worktreesRoot) => {
+    const ticketPath = await createTicket(root, "task", "Gate-check guard correct root ticket", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-22T16:07:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    assert.equal((await runCli(["--root", root, "worktree-add", ticketId, "--json"])).code, 0);
+    const worktreePath = path.join(worktreesRoot, ticketId);
+
+    const result = await runCli(["--root", worktreePath, "gate-check", ticketId, "--stage", "test", "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(
+      await readFile(path.join(worktreePath, "plans", "tickets", "ready", path.basename(ticketPath)), "utf8"),
+      /^completedSteps: \[gate:test:skipped-empty-catalog\]$/m,
+    );
+  });
+});
+
 test("assertInvocationRootForTicket fails open when git resolution fails (non-git directory)", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "local-board-guard-nogit-"));
   try {

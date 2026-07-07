@@ -13,7 +13,7 @@ estimateBasis: T20260707T1328Z
 workStartedAt: 2026-07-07T23:22:26Z
 workCompletedAt: null
 created: 2026-07-07T13:31:54Z
-updated: 2026-07-07T23:35:00Z
+updated: 2026-07-07T23:46:18Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -230,7 +230,7 @@ Implemented per the Technical Design.
 - `removeTicketWorktree` now resolves its working root via `resolveMainRoot(root)` instead of `rev-parse --show-toplevel`, so `worktree-remove` works given either the main root or the ticket's own worktree root.
 
 **`src/cli.js`**
-- Parsed `--allow-main-root` in `main()` alongside `--root`, threaded to the 14 guarded handlers: `start-work`, `complete-step`, `move`, `set`/`update-field`, `comment`, `section`/`set-section`, `estimate`, `approve-inline`, `gate-complete`, `link-parent`, `link-child`, `unlink-parent`, `block`, `unblock`. Each calls `assertInvocationRootForTicket` right after parsing its ticket id(s) (two-ticket commands guard both ids) and before the mutation. `begin-step`, `gate-check`, `worktree-*`, `fast-forward`, `validate`, `list`, `create`, `specialty-run` are unguarded per the design.
+- Parsed `--allow-main-root` in `main()` alongside `--root`, threaded to the 14 guarded handlers: `start-work`, `complete-step`, `move`, `set`/`update-field`, `comment`, `section`/`set-section`, `estimate`, `approve-inline`, `gate-complete`, `link-parent`, `link-child`, `unlink-parent`, `block`, `unblock`. Each calls `assertInvocationRootForTicket` right after parsing its ticket id(s) (two-ticket commands guard both ids) and before the mutation. `begin-step`, `worktree-*`, `fast-forward`, `validate`, `list`, `create`, `specialty-run` are unguarded per the design.
 - `printUsage()` documents `--allow-main-root` on every guarded command line plus a trailing explanatory paragraph.
 
 **`src/config.js`**
@@ -256,7 +256,28 @@ Implemented per the Technical Design.
 - Guard tests move tickets to `questions` (lateral) instead of a forward `ready_*` status to avoid tripping the unrelated `routing.requireGateConsultation` gate that the scaffold also enables by default; this is a test-isolation choice, not a behavior change.
 - This repo's own `plans/local-board.config.jsonc` was not modified — only `DEFAULTS`/`defaultConfigJsonc()` in `src/config.js` changed, per the scaffold-only instruction.
 
+## Rework (2026-07-07, review findings on commit 2baf88f)
+
+Two fixes from review:
+
+1. **BLOCKER — gate-check empty-catalog auto-stamp unguarded.** `commandGateCheck` now takes `allowMainRoot` and calls `assertInvocationRootForTicket(root, ticketId, { allowMainRoot })` immediately after arg validation, **before** the `catalog.length > 0` branch that decides between `assertPromptExists` (read-only) and `recordGateSkippedEmptyCatalog` (mutating). Guarding the whole command rather than only the mutating branch, per the review's explicit instruction and for parity with `gate-complete`, which is already guarded unconditionally. `main()`'s `gate-check` dispatch now passes `allowMainRoot` through; usage text and the `gate-check requires: ...` error string both gained `[--allow-main-root]`.
+2. **Non-blocking — win32 case sensitivity.** Added a `pathsEqual(left, right)` comparer in `src/worktrees.js`: lower-cases both sides on `process.platform === "win32"`, compares as-is (case-sensitive) elsewhere. Applied at both flagged comparison sites: the guard's `invocationTop` vs `expected` check, and `findRegisteredWorktree`'s resolved-path match against `git worktree list --porcelain` output.
+
+**Tests added** (`test/worktrees.test.js`, all `{ skip: !GIT_AVAILABLE }`):
+- `gate-check refuses the empty-catalog auto-stamp from the main root when the ticket has a registered worktree` — wrong root + empty catalog (`--stage test`) refused with the same message shape as the `move` guard test; asserts the mainline ticket file is byte-unchanged.
+- `gate-check --allow-main-root overrides the guard on the empty-catalog auto-stamp` — override succeeds and the skip token is stamped.
+- `gate-check succeeds from the ticket's own registered worktree root on the empty-catalog auto-stamp` — correct root succeeds; asserts the stamp lands in the worktree's copy of the ticket file.
+
+No new test needed for `pathsEqual` beyond the existing guard/worktree-add/worktree-remove suite: on this win32 dev machine every existing guard, `worktree-add`, and `worktree-remove` test already exercises the two touched comparison sites end-to-end (they were passing before only because `path.resolve` on this machine happens to preserve consistent casing from git's own output; the fix is defensive hardening against casing drift, e.g. a differently-cased drive letter or 8.3-name mismatch, that the existing fixtures do not deliberately provoke). Did not add a synthetic differently-cased-path unit test because doing so would require mocking `git worktree list --porcelain` output or fabricating a differently-cased filesystem path, which is brittle across platforms; the platform-gated `pathsEqual` helper itself is a 5-line pure function reviewed by inspection.
+
+**Verification (rework)**
+- `npm run check`: pass.
+- `npm test`: 327 tests, 326 pass, 1 skip (pre-existing, unrelated "smoke (slow)" race test), 0 fail.
+- `npm run validate`: `Ticket validation OK`.
+
 ## Review Findings
+
+- 2026-07-07T23:42:48Z: Review (codex): blocker — gate-check's empty-catalog auto-stamp mutates the ticket unguarded (wrong-root stamp of the main copy possible); fix by guarding gate-check with --allow-main-root support and empty-catalog coverage. Non-blocking: win32 path comparison should be case-insensitive (or realpath-normalized). All 14 wired handlers, skips, fail-open quietness, and closeout order verified sound.
 
 ## Test Evidence
 
@@ -271,3 +292,13 @@ Implemented per the Technical Design.
 - 2026-07-07T23:22:25Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (internal CLI safety guard)
 
 - 2026-07-07T23:22:26Z: Ensured git branch local-board/T20260707T1331Z-cli-guard-against-wrong-root-when-a-ticket-has-a-registered-worktree (created).
+
+- 2026-07-07T23:35:29Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): guard wired into 14 mutation handlers with override + fail-open, worktree-remove root resolution, scaffold-only config key; 323 pass + 1 gated-skip.
+
+- 2026-07-07T23:39:46Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (internal CLI safety guard)
+
+- 2026-07-07T23:42:49Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) changes_requested: unguarded gate-check empty-catalog stamp; win32 case-insensitive comparison recommended. Guard coverage otherwise verified handler-by-handler.
+
+- 2026-07-07T23:42:49Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku, review:codex-task:read-only].
+
+- 2026-07-07T23:42:49Z: Ensured git branch local-board/T20260707T1331Z-cli-guard-against-wrong-root-when-a-ticket-has-a-registered-worktree (already-current).

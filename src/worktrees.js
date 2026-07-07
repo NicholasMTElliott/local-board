@@ -146,7 +146,7 @@ export async function assertInvocationRootForTicket(root, ticketId, options = {}
     return;
   }
 
-  if (invocationTop === path.resolve(expected)) {
+  if (pathsEqual(invocationTop, path.resolve(expected))) {
     return;
   }
   if (allowMainRoot) {
@@ -350,7 +350,18 @@ async function reflogCandidates(root, branch, newHead) {
 async function findRegisteredWorktree(root, worktreePath) {
   const target = path.resolve(worktreePath);
   const records = await listRegisteredWorktrees(root);
-  return records.find((record) => path.resolve(record.worktreePath) === target) ?? null;
+  return records.find((record) => pathsEqual(path.resolve(record.worktreePath), target)) ?? null;
+}
+
+// Path-equality comparer for the worktree/root guard. win32 filesystems are
+// case-insensitive, so two differently-cased spellings of the same resolved
+// path (drive-letter casing, git's own casing choices, etc.) must compare
+// equal there; POSIX stays case-sensitive since its filesystems normally are.
+function pathsEqual(left, right) {
+  if (process.platform === "win32") {
+    return left.toLowerCase() === right.toLowerCase();
+  }
+  return left === right;
 }
 
 async function listRegisteredWorktrees(root) {

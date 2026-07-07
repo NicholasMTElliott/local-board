@@ -154,7 +154,7 @@ export async function main(argv) {
       return await commandEstimate(root, args, allowMainRoot);
     }
     if (command === "gate-check") {
-      return await commandGateCheck(root, args);
+      return await commandGateCheck(root, args, allowMainRoot);
     }
     if (command === "gate-complete") {
       return await commandGateComplete(root, args, allowMainRoot);
@@ -914,18 +914,23 @@ async function assertPromptExists(promptPath, action) {
   }
 }
 
-async function commandGateCheck(root, args) {
+async function commandGateCheck(root, args, allowMainRoot) {
   const asJson = takeFlag(args, "--json");
   const stage = takeOption(args, "--stage");
   const ticketId = args.shift();
   ensureNoArgs(args);
 
   if (ticketId === undefined || stage === undefined) {
-    throw new Error("gate-check requires: <ticket-id> --stage <stage> [--json]");
+    throw new Error("gate-check requires: <ticket-id> --stage <stage> [--allow-main-root] [--json]");
   }
   if (!OPTIONAL_STEP_STAGES.includes(stage)) {
     throw new Error(`gate-check --stage must be one of ${OPTIONAL_STEP_STAGES.join(", ")}`);
   }
+
+  // Guarded before the empty-catalog auto-stamp branch below (which mutates
+  // the ticket via recordGateSkippedEmptyCatalog): a wrong-root invocation
+  // must be refused before any write, not just on the non-empty read path.
+  await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
   const config = await loadConfig(root);
   const { ticket } = await findTicket(root, ticketId);
@@ -1193,7 +1198,7 @@ function printUsage() {
   local-board [--root <path>] block <ticket-id> <dependency-ticket-id> [--allow-main-root]
   local-board [--root <path>] unblock <ticket-id> <dependency-ticket-id> [--allow-main-root]
   local-board [--root <path>] estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--allow-main-root] [--json]
-  local-board [--root <path>] gate-check <ticket-id> --stage <stage> [--json]
+  local-board [--root <path>] gate-check <ticket-id> --stage <stage> [--allow-main-root] [--json]
   local-board [--root <path>] gate-complete <ticket-id> --stage <stage> --executor <executor> [--evidence <text>] [--allow-main-root] [--json]
   local-board [--root <path>] specialty-run <ticket-id> <step-name> [--json]
   local-board [--root <path>] calibration suggest <ticket-id> [--json]
