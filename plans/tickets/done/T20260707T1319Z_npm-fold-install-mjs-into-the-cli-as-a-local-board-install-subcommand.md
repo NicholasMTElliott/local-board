@@ -1,20 +1,20 @@
 ---
 id: T20260707T1319Z
 type: task
-status: ready_for_implementation
+status: done
 priority: P1
 parent: null
 children: []
 blockedBy: []
 blocks: [T20260707T1320Z]
-branch: null
+branch: local-board/T20260707T1319Z-npm-fold-install-mjs-into-the-cli-as-a-local-board-install-subcommand
 estimate: 4
 estimateBasis: T20260707T1318Z
-workStartedAt: null
-workCompletedAt: null
+workStartedAt: 2026-07-07T15:07:32Z
+workCompletedAt: 2026-07-07T15:29:23Z
 created: 2026-07-07T13:19:26Z
-updated: 2026-07-07T15:07:32Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-07T15:29:23Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # npm: fold install.mjs into the CLI as a local-board install subcommand
@@ -247,14 +247,135 @@ seam and costs nothing.
 
 ## Implementation Notes
 
+Implemented per Technical Design, no deviations from the approach.
+
+**New `src/install.js`**: relocated all installer logic (`buildTargets(home)`,
+`runInstall(argv, options)`, and private helpers). `SCRIPT_DIR` anchors to
+`join(dirname(fileURLToPath(import.meta.url)), "..")` (one level up, since the
+module now lives in `src/`). `HOME`/`INSTALL_DIR` are resolved per-run from
+`options.home ?? homedir()`; no module-level mutable state (args/targets are
+threaded as parameters through `resolveTargets`, `performInstall`,
+`performUninstall`, etc.) per the Risks section. `runInstall` has no
+top-level execution and lets errors throw (no internal try/catch or
+`process.exit`). Also exported `buildTargets` per the Open Question
+recommendation.
+
+**`src/cli.js`**: imports `runInstall`, adds `install` dispatch branch calling
+new `commandInstall(root, args)` (ignores `root`, passes `args` straight to
+`runInstall(args, {})`), and adds a `printUsage()` line documenting that
+`install` acts on user HOME and ignores `--root`.
+
+**`install.mjs`**: reduced from 409 lines to a 3-line shim (plus a
+deprecation comment) that imports `runInstall` from `./src/install.js` and
+assigns `process.exitCode`. Shebang and `install.mjs` `package.json` files
+entry kept unchanged.
+
+**`package.json`**: `scripts.check` now also runs `node --check src/install.js`
+(kept the existing `install.mjs` check).
+
+**Tests** (`test/install.test.js`, extended, all via HOME redirection —
+never the real dev HOME): added 7 new cases —
+1. CLI install tree parity (`local-board install --target=codex` vs the
+   existing `install.mjs` assertions: skill dirs, team skill, rendered
+   `<<SCRIPT_PATH>>`, runtime dir, prompts/templates, install-info.json).
+2. CLI `--list-targets` output matches the shim's output byte-for-byte.
+3. CLI `--uninstall` removes what CLI install created.
+4. settings.json allow-rule idempotency (`--target=claude` run twice; rule
+   count stays 1; full settings object is byte-identical across runs).
+5. `--root` is ignored by `install` (installs under redirected HOME, not the
+   bogus root path).
+6. In-process `runInstall({ home })` option-seam install/uninstall roundtrip
+   (no subprocess).
+7. `buildTargets(home)` unit check (paths anchored under the supplied home).
+
+Existing 3 tests (subprocess shim invocations) kept untouched to prove
+back-compat.
+
+**Verification**:
+- `npm run check` — clean (all `node --check` targets pass, including new
+  `src/install.js`).
+- `npm test` — 154/154 passing (was 147 before; added 7 new install tests,
+  0 failures).
+- `npm run validate` — "Ticket validation OK".
+- `node install.mjs --list-targets` vs `node ./bin/local-board.js install
+  --list-targets` (both run against a redirected HOME): `diff` reported no
+  differences (byte-identical output).
+- Manually verified non-zero exit codes for both entry points on
+  `--target=nope` (shim: uncaught throw, stack trace, exit 1; CLI: caught by
+  `main()`, clean `error.message`, exit 2 — both non-zero, satisfying the
+  Risks-section check) and confirmed `--uninstall` is a 0-exit no-op on a
+  clean HOME for both entry points.
+
+**Note on shim error UX**: the design's literal 3-line shim (no try/catch)
+means `node install.mjs` with a bad argument now prints a Node stack trace
+instead of the old `ERROR: <message>` one-liner, though the exit code is
+still non-zero (1, via Node's default uncaught-exception handling) as the
+design's Risks section requires. This is implemented exactly as specified in
+Technical Design section 3; flagging it here since it is a small, deliberate
+UX regression versus the previous handcrafted `console.error` + `process.exit(1)`.
+
+No documentation files were touched — the ticket explicitly scopes doc edits
+to a later Documentation stage / T20260707T1338Z.
+
 ## Review Findings
+
+Reviewed by codex-task:read-only (gpt-5.5) against commit 42f2ad1.
+
+No blocking findings.
+
+Non-blocking observations:
+- install.mjs:7-9 lets runInstall throws escape: `node install.mjs --target=nope` now prints a raw stack trace (exit 1) vs the old one-line ERROR. Design-specified thin shim; a one-line catch is reasonable polish if legacy script UX matters.
+- SCRIPT_DIR anchor (src/install.js:20) is correct for repo checkouts and npm package installs. Running `install` FROM the copied runtime (~/.local-board/bin/local-board.js install) would copy the runtime onto itself — unsupported path, worth documenting (self-refresh should use the source checkout or npm copy).
+- Test coverage gaps (not bugs): tree assertions check key entries and rendered skill contents, not byte-for-byte trees or install-info.json field values; the settings-idempotency test does not seed unrelated pre-existing settings (the implementation does preserve them via object mutation + tmp/rename at src/install.js:399-415).
+
+Extraction fidelity verified: legacy-dir cleanup in both install and uninstall paths (:171-172, :302-303); codex template resolution unchanged (:45-46, :182-191); install-info.json content preserved (:240-257); uninstall still leaves the Claude settings allow rule in place — matching the old installer rather than silently changing behavior.
+Packaging safe: src/ allowlisted so src/install.js ships; no installed-runtime dependency on excluded scripts/.
+Verification caveat: node --check passed on the three changed modules; full suite not run in the read-only sandbox — delegated to test stage.
+
+Verdict: pass
 
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/T20260707T1319Z-..., commit 42f2ad1.
+
+**Suite:** `npm run check` pass (9 targets incl. src/install.js); `npm test` 154/154 pass; `npm run validate` OK.
+
+**Independent end-to-end probe (throwaway USERPROFILE):**
+- `local-board install --target=codex`: full tree verified — ~/.local-board (bin, src×8, agents, skills, prompts×15, templates×1, install-info.json with correct fields, SKILL.md); codex skill + team skill installed; grep found zero unrendered `<<` placeholders.
+- `install --list-targets` CLI vs shim under same HOME: byte-identical (diff exit 0).
+- `install --uninstall`: all three install locations confirmed removed.
+- Error paths: CLI `--target=nope` clean one-liner exit 2; shim raw stack trace exit 1 (documented deliberate shim behavior).
+- Scratch HOME cleaned; git status unchanged beyond ticket lifecycle moves.
+
+**7 new tests confirmed by name (test/install.test.js:120-228):** CLI-vs-shim tree parity, list-targets byte parity, uninstall symmetry, settings allow-rule idempotency, --root ignored, in-process runInstall seam, buildTargets home anchoring. Pre-existing 3 shim tests untouched.
+
+**Acceptance:** subcommand does everything install.mjs does (tests + probe); shim is a true 3-line delegate; package.json has NO postinstall script (verified by direct read — only prose mentions in the ticket).
+
+**Gaps / caveats:** reviewer's non-blocking notes stand (shim stack-trace UX, self-copy from installed runtime unsupported/undocumented, tree assertions not byte-for-byte); Windows-only verification, consistent with the existing harness style.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `README.md` — Quick start and Installable Skills examples now use `node ./bin/local-board.js install ...` as the primary form with a one-line deprecated-alias note for `node install.mjs`; repository layout references updated.
+- `memory-bank/techContext.md` — layout now describes the installer as src/install.js behind `local-board install`, with install.mjs as the deprecated shim.
+- `memory-bank/systemPatterns.md` — checked, unchanged (installer behavior wording still current).
+- Full installation guide deferred to T20260707T1338Z (docs/Install.md) by design.
 
 ## Questions
 
 ## Run Log
 
 - 2026-07-07T15:06:38Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): src/install.js module + cli subcommand + install.mjs shim; HOME injection seam for tests; rendering unchanged (T1320 boundary); SCRIPT_DIR anchor flagged as top risk. Estimate 4 (basis T20260707T1318Z).
+
+- 2026-07-07T15:07:32Z: Ensured git branch local-board/T20260707T1319Z-npm-fold-install-mjs-into-the-cli-as-a-local-board-install-subcommand (created).
+
+- 2026-07-07T15:19:36Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): src/install.js + cli install subcommand + 3-line shim; 154/154 tests; shim vs subcommand --list-targets diff byte-identical; check script covers new module.
+
+- 2026-07-07T15:23:08Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict pass: extraction faithful (legacy cleanup, codex templates, install-info, uninstall symmetry all preserved), SCRIPT_DIR anchor correct for repo and npm layouts; notes on shim error UX, self-refresh path, and test depth recorded.
+
+- 2026-07-07T15:26:19Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 154/154 green; throwaway-HOME probe verified install tree, list-targets byte parity, uninstall symmetry, error paths, zero unrendered placeholders; no postinstall script confirmed. Result: pass.
+
+- 2026-07-07T15:29:23Z: Completed document via codex-task:workspace-write: Codex (workspace-write): README install examples switched to the subcommand with deprecated-alias note; techContext layout updated; systemPatterns checked unchanged.
