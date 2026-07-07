@@ -1,7 +1,7 @@
 ---
 id: T20260707T1325Z
 type: task
-status: implementing
+status: done
 priority: P1
 parent: null
 children: []
@@ -11,10 +11,10 @@ branch: local-board/T20260707T1325Z-enforce-add-check-dispatch-verdict-command-a
 estimate: 4
 estimateBasis: T20260707T1320Z
 workStartedAt: 2026-07-07T17:26:56Z
-workCompletedAt: null
+workCompletedAt: 2026-07-07T18:00:03Z
 created: 2026-07-07T13:25:41Z
-updated: 2026-07-07T17:49:44Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only]
+updated: 2026-07-07T18:00:03Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # enforce: add check-dispatch verdict command and persisted in-flight step state
@@ -193,9 +193,36 @@ Fixed both blockers from the review of commit 905982b, scope held to exactly tho
 
 - 2026-07-07T17:45:20Z: Review (codex): two blockers — check-dispatch exit-2 paths emit stderr-only (hook contract requires JSON on stdout always; a test even codifies the wrong behavior), and scan mode returns match instead of model-unverifiable when --model omitted with a pinned model. Non-blocking: clearing is ticket-wide rather than action-aware (documented design; deferred); concurrent RMW risk accepted pending B20260707T1322Z. Looping back.
 
+- 2026-07-07T17:51:53Z: Re-review (codex): both blockers verified fixed; usage errors still route through the generic path; genuine-mismatch deny preserved. Verdict: pass.
+
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/T20260707T1325Z-..., commits 905982b + f74da9c.
+
+**Suite:** `npm run check` pass; `npm test` 206/206 pass; `npm run validate` OK.
+
+**Independent end-to-end probe (throwaway git repo + board):**
+- begin-step stamped `.local-board/active-steps.json` with { ticket, action, route, model, root, ts }.
+- Full verdict matrix captured live (exit / reason): right agent+model 0/match; right agent no model 0/model-unverifiable (both --ticket and scan modes); wrong model 1/model-mismatch; wrong agent 1/agent-mismatch; Explore 0/not-local-board-agent; bogus ticket 2/ticket-not-found; scan miss 1/no-active-step-for-agent. All JSON bodies carried expected{agent,model} and ticket where applicable.
+- complete-step (proper @sonnet suffix) cleared the entry — ledger back to {}.
+- Corrupt ledger: exit 2 with stdout JSON {"ok":false,"reason":"error","error":"active-steps ledger ... is corrupt (invalid JSON): ..."}; stderr empty. Contract fix verified live.
+- Worktree: begin-step --root <worktree> stamped the MAIN checkout ledger (worktree has no .local-board of its own); also demonstrated self-heal-on-write repairing the corrupted ledger. Worktree removed cleanly.
+- .local-board/ confirmed gitignored in both the probe repo and this repo.
+
+**Rework tests confirmed by name:** corrupt-ledger JSON-verdict test; scan-mode model-unverifiable test (plus the --ticket-mode counterpart and the self-heal-on-write test).
+
+**Gaps / caveats:** approve-inline clearing verified via the unit suite only (shares the clearActiveStep path proven live by complete-step); concurrent RMW and action-aware clearing are documented deferrals (B20260707T1322Z).
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `memory-bank/systemPatterns.md` — dispatch-verification note (active-steps ledger, begin-step stamp side effect, clear behavior, check-dispatch verdict contract); check-dispatch added to the MVP CLI list.
+- `SKILL.md` and `skills/codex/local-board/SKILL.md` — begin-step description no longer reads as a pure query; check-dispatch added to both CLI command lists.
+- `docs/Workflow.md` — short dispatch-verification paragraph with a command example.
+- No new docs page and no README change (no entry point changed); the full hooks narrative belongs to T20260707T1326Z.
 
 ## Questions
 
@@ -210,3 +237,11 @@ Fixed both blockers from the review of commit 905982b, scope held to exactly tho
 - 2026-07-07T17:45:21Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) changes_requested: JSON-on-stdout contract violated on error paths; scan-mode verdict reason wrong for unverifiable models. Ledger anchoring, worktree tests, and verdict matrix otherwise verified.
 
 - 2026-07-07T17:45:21Z: Ensured git branch local-board/T20260707T1325Z-enforce-add-check-dispatch-verdict-command-and-persisted-in-flight-step-state (already-current).
+
+- 2026-07-07T17:50:17Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework (sonnet): check-dispatch prints JSON on stdout for error exits; scan mode mirrors the model-unverifiable semantics; 206/206 green with live verdict confirmation.
+
+- 2026-07-07T17:51:53Z: Completed review via codex-task:read-only: Re-review (gpt-5.5): verdict pass — JSON-on-stdout contract and scan-mode model gate verified fixed, no regressions in focused paths.
+
+- 2026-07-07T17:56:45Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 206/206; full verdict matrix live-probed including corrupt-ledger JSON contract and worktree main-checkout anchoring with self-heal. Result: pass.
+
+- 2026-07-07T18:00:03Z: Completed document via codex-task:workspace-write: Codex (workspace-write): systemPatterns dispatch-verification note + CLI list, SKILL begin-step wording + command lists, Workflow.md paragraph.
