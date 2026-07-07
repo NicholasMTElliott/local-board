@@ -50,7 +50,9 @@ must stay warm between steps. This also **unifies single-ticket and team mode**:
 
 Worktree-per-ticket isolation is **retained** — each executor `--root`s into the
 ticket worktree exactly as teammates do today. Nothing here justifies changing
-it.
+it. For newly scaffolded boards, `worktrees.guardWrongRoot` makes the CLI enforce
+this discipline by refusing guarded per-ticket calls from the main root unless
+`--allow-main-root` is supplied.
 
 ## 1. Execution profile schema
 

@@ -29,7 +29,8 @@ Operate in the user's current project unless they specify another root. Pass
 per-ticket calls (see Worktrees). The CLI itself refuses wrong-root per-ticket
 mutations once a ticket has a registered worktree (`worktrees.guardWrongRoot`),
 naming the expected worktree; this is a backstop, not a reason to skip passing
-`--root <worktreePath>`.
+`--root <worktreePath>`. Use `--allow-main-root` only for an intentional
+main-root override.
 
 ## When to use it
 
