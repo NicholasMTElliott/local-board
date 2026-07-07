@@ -509,7 +509,10 @@ export async function approveInline(root, ticketId, action, reason, options = {}
     },
     now,
   );
-  const body = appendToSection(ticket.body, "Run Log", `- ${formatIsoSeconds(now)}: Approved inline ${action}: ${reason.trim()}`);
+  const logMessage = executor === "inline"
+    ? `Approved inline ${action}: ${reason.trim()}`
+    : `Approved routing deviation for ${action}: ${executor}: ${reason.trim()}`;
+  const body = appendToSection(ticket.body, "Run Log", `- ${formatIsoSeconds(now)}: ${logMessage}`);
   await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
   return { ticket: ticket.id, action, approvedExecutor: executor, path: ticket.path };
 }

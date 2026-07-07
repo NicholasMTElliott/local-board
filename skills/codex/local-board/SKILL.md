@@ -165,7 +165,7 @@ local-board create <epic|story|task|bug> "<title>" --status <status> --priority 
 local-board start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--json]
 local-board begin-step <ticket-id> [--action <action>] [--json]
 local-board complete-step <ticket-id> <action> --executor <executor> --evidence "<evidence>" [--json]
-local-board approve-inline <ticket-id> <action> --reason "<reason>" [--json]
+local-board approve-inline <ticket-id> <action> --reason "<reason>" [--executor <executor>] [--json]
 local-board gate-check <ticket-id> --stage <stage> [--json]
 local-board specialty-run <ticket-id> <step-name> [--json]
 local-board calibration suggest <ticket-id> [--json]

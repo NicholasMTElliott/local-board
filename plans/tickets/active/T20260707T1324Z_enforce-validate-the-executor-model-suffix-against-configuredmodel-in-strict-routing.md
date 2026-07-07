@@ -13,8 +13,8 @@ estimateBasis: T20260707T1320Z
 workStartedAt: 2026-07-07T16:54:27Z
 workCompletedAt: null
 created: 2026-07-07T13:24:41Z
-updated: 2026-07-07T17:07:26Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-07T17:14:46Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only]
 routingApprovals: []
 ---
 # enforce: validate the executor model suffix against configuredModel in strict routing
@@ -267,7 +267,14 @@ Verification:
 
 Deviations from the design: none in behavior. Test-file updates to pre-existing bare-executor `completeStep` calls were necessary but not explicitly enumerated in the ticket's test strategy (which only called out the `review`+`@gpt-5.5` no-pin regression); they were required to keep the suite green given the design's own enforcement rule applies to `design`/`implement`/`test`/`decompose`, all of which are model-pinned in the default config and were exercised bare by unrelated pre-existing tests.
 
+## Rework (review fixes on commit bb3e889)
+
+- `skills/codex/local-board/SKILL.md` CLI command list: added the missing `[--executor <executor>]` to the `approve-inline` line (root `SKILL.md` already had it; `skills/codex/local-team/SKILL.md` has no standalone command-list block, so nothing to fix there).
+- `src/tickets.js` `approveInline`: the run-log line now reads "Approved routing deviation for <action>: <executor>: <reason>" when `--executor` names a non-inline route/model, and keeps "Approved inline <action>: <reason>" for the default `inline` executor; added run-log text assertions to the existing model-deviation and inline-default tests in `test/tickets.test.js`. Re-verified: `npm run check` clean, `npm test` 185/185, `npm run validate` OK.
+
 ## Review Findings
+
+- 2026-07-07T17:12:01Z: Review (codex): enforcement logic verified sound (approval separation, @ grammar, done-time back-compat, inline model-pin rejection all confirmed). One fix: codex skill command list omits [--executor] on approve-inline; also reword the Approved-inline run-log line for model deviations. Looping back.
 
 ## Test Evidence
 
@@ -280,3 +287,9 @@ Deviations from the design: none in behavior. Test-file updates to pre-existing 
 - 2026-07-07T16:53:42Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): write-time enforceModel flag in validateStepRouting (done-time stays route-only for back-compat), shared modelSatisfies helper for reuse by check-dispatch/hooks, codex-default wildcard honored, approve-inline --executor extension for model deviations, doc updates listed. Estimate 2 (basis T20260707T1320Z).
 
 - 2026-07-07T16:54:27Z: Ensured git branch local-board/T20260707T1324Z-enforce-validate-the-executor-model-suffix-against-configuredmodel-in-strict-routing (created).
+
+- 2026-07-07T17:07:56Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): enforceModel write-time gate, modelOf/modelSatisfies helpers, approve-inline --executor escape, doc updates; 185/185 tests; live board still validates under the new enforcement.
+
+- 2026-07-07T17:12:01Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) changes_requested scoped to a skill doc line + run-log wording; core enforcement verified correct.
+
+- 2026-07-07T17:12:01Z: Ensured git branch local-board/T20260707T1324Z-enforce-validate-the-executor-model-suffix-against-configuredmodel-in-strict-routing (already-current).

@@ -705,6 +705,10 @@ test("approve-inline --executor approves a model deviation while keeping the con
       text,
       /^completedSteps: \["design:claude-subagent:local-board-designer@sonnet"\]$/m,
     );
+    assert.match(
+      text,
+      /Approved routing deviation for design: claude-subagent:local-board-designer@sonnet: Opus unavailable; running sonnet\./,
+    );
     assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
   });
 });
@@ -746,6 +750,7 @@ test("approve-inline without --executor still records :inline (regression)", asy
 
     assert.equal(result.approvedExecutor, "inline");
     assert.match(await readFile(ticketPath, "utf8"), /^routingApprovals: \[review:inline\]$/m);
+    assert.match(await readFile(ticketPath, "utf8"), /Approved inline review: No --executor supplied\./);
   });
 });
 
