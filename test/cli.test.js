@@ -253,7 +253,7 @@ test("move done archives old done tickets but leaves recent and current done tic
           currentId,
           "decompose",
           "--executor",
-          "claude-subagent:local-board-decomposer",
+          "claude-subagent:local-board-decomposer@opus",
           "--evidence",
           "Decomposition not needed.",
         ])
@@ -728,6 +728,42 @@ test("CLI complete-step rejects a model on an inline executor", async () => {
     ]);
     assert.notEqual(res.code, 0);
     assert.match(res.stderr, /executor must be/);
+  });
+});
+
+test("CLI approve-inline --executor approves a model deviation on a pinned action", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    const create = await runCli([
+      "--root", root, "create", "task", "CLI model deviation",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const id = path.basename(create.stdout.trim()).split("_", 1)[0];
+    assert.equal((await runCli(["--root", root, "estimate", id, "2"])).code, 0);
+
+    const rejected = await runCli([
+      "--root", root, "complete-step", id, "design",
+      "--executor", "claude-subagent:local-board-designer@sonnet", "--evidence", "Design evidence",
+    ]);
+    assert.notEqual(rejected.code, 0);
+    assert.match(rejected.stderr, /configured model is opus/);
+
+    const approve = await runCli([
+      "--root", root, "approve-inline", id, "design",
+      "--executor", "claude-subagent:local-board-designer@sonnet",
+      "--reason", "Opus unavailable; running sonnet.",
+    ]);
+    assert.equal(approve.code, 0, approve.stderr);
+
+    const completed = await runCli([
+      "--root", root, "complete-step", id, "design",
+      "--executor", "claude-subagent:local-board-designer@sonnet", "--evidence", "Design evidence",
+    ]);
+    assert.equal(completed.code, 0, completed.stderr);
+
+    const text = await readFile(create.stdout.trim(), "utf8");
+    assert.match(text, /^routingApprovals: \["design:claude-subagent:local-board-designer@sonnet"\]$/m);
   });
 });
 

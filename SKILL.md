@@ -32,7 +32,7 @@ Operate in the user's current project unless they specify another root. Pass `--
 7. Read the returned ticket `path`, returned `prompt`, `branch`, `transitions`, and relevant project context.
 8. Run `local-board begin-step <ticket-id> --json`. It returns `configuredAgent` (the route), `configuredModel` (the per-step model, or null), and `configuredPrompt`.
 9. Execute the returned `action` through the configured route. For `claude-subagent:<agent-name>`, dispatch the named Claude subagent after the colon and, when `configuredModel` is non-null, pin that subagent's model to `configuredModel` at dispatch. For `codex-task:<mode>`, shell out to codex in that mode. For `inline`, do the work yourself on your own model. Per-step models only take effect on subagent/codex routes — `inline` always runs on the orchestrator's model.
-10. Run `local-board complete-step <ticket-id> <action> --executor <configuredAgent>[@<configuredModel>] --evidence "<evidence>"`. Append `@<configuredModel>` when a model was pinned, so the evidence records which model ran. Strict routing compares the route part only and ignores the `@model` suffix.
+10. Run `local-board complete-step <ticket-id> <action> --executor <configuredAgent>[@<configuredModel>] --evidence "<evidence>"`. Append `@<configuredModel>` when a model was pinned, so the evidence records which model ran. Under strict routing, when the route matches the configured route and a model is pinned, `complete-step` requires the executor's `@model` suffix to match `configuredModel` (or `@codex-default` for a Codex-translated run, or an `approve-inline --executor <route>@<model>` approval) — otherwise it is rejected.
 11. Mutate ticket state only through CLI commands.
 12. After the action, choose the next status from the returned `transitions` list and run `local-board move <ticket-id> <status> --json`.
 13. Choose `done` only when all required stages are complete.
@@ -215,7 +215,7 @@ Whenever a CLI command needs a file argument (such as `section --file`), create 
 
 The orchestrator remains responsible for canonical ticket state unless a delegated worker was explicitly assigned write scope.
 
-When recording completion evidence, use the configured route from `begin-step`, suffixed with `@<configuredModel>` when a model was pinned — for example `claude-subagent:local-board-designer@opus`. Strict routing matches the route part only.
+When recording completion evidence, use the configured route from `begin-step`, suffixed with `@<configuredModel>` when a model was pinned — for example `claude-subagent:local-board-designer@opus`. Strict routing matches the route, and when the route matches and a model is pinned, also requires the `@model` suffix to match (or `@codex-default`, or an approved deviation — see below).
 
 If the configured agent is unavailable, do not continue inline by default. Ask the user for approval. If approved, run:
 
@@ -224,6 +224,14 @@ local-board approve-inline <ticket-id> <action> --reason "<user-approved reason>
 ```
 
 Then run `complete-step` with `--executor inline`. If the user does not approve the deviation, move the ticket to `questions` and record the blocker.
+
+If instead the route is fine but the pinned model is unavailable (e.g. `opus` unavailable, running `sonnet`), approve the model deviation while keeping the route:
+
+```sh
+local-board approve-inline <ticket-id> <action> --executor <configuredAgent>@<actualModel> --reason "<user-approved reason>"
+```
+
+Then run `complete-step` with `--executor <configuredAgent>@<actualModel>`.
 
 ## CLI Commands
 
@@ -237,7 +245,7 @@ local-board create <epic|story|task|bug> "<title>" --status <status> --priority 
 local-board start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--json]
 local-board begin-step <ticket-id> [--action <action>] [--json]
 local-board complete-step <ticket-id> <action> --executor <executor> --evidence "<evidence>" [--json]
-local-board approve-inline <ticket-id> <action> --reason "<reason>" [--json]
+local-board approve-inline <ticket-id> <action> --reason "<reason>" [--executor <executor>] [--json]
 local-board gate-check <ticket-id> --stage <stage> [--json]
 local-board specialty-run <ticket-id> <step-name> [--json]
 local-board calibration suggest <ticket-id> [--json]

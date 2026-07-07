@@ -618,6 +618,137 @@ test("completeStep enforces configured routing unless inline is approved", async
   });
 });
 
+test("completeStep enforces the configured model suffix when the route matches (match, mismatch, missing)", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Model-pinned design", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    // missing: no @model suffix on an opus-pinned action.
+    await assert.rejects(
+      completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence."),
+      /completed on model \(none\), but configured model is opus/,
+    );
+
+    // mismatch: wrong @model suffix.
+    await assert.rejects(
+      completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@sonnet", "Design evidence."),
+      /completed on model sonnet, but configured model is opus/,
+    );
+
+    const textBeforeMatch = await readFile(ticketPath, "utf8");
+    assert.match(textBeforeMatch, /^completedSteps: \[\]$/m);
+
+    // match: exact configured model.
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Design evidence.");
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \["design:claude-subagent:local-board-designer@opus"\]$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("completeStep accepts @codex-default as satisfying any pinned model", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Codex-translated design", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await completeStep(
+      root,
+      ticketId,
+      "design",
+      "claude-subagent:local-board-designer@codex-default",
+      "Codex-translated design evidence.",
+    );
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(
+      text,
+      /^completedSteps: \["design:claude-subagent:local-board-designer@codex-default"\]$/m,
+    );
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("approve-inline --executor approves a model deviation while keeping the configured route", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Approved model deviation", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await assert.rejects(
+      completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@sonnet", "Design evidence."),
+      /configured model is opus/,
+    );
+
+    await approveInline(root, ticketId, "design", "Opus unavailable; running sonnet.", {
+      executor: "claude-subagent:local-board-designer@sonnet",
+      now: new Date("2026-05-14T21:00:00Z"),
+    });
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@sonnet", "Design evidence.", {
+      now: new Date("2026-05-14T21:01:00Z"),
+    });
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(
+      text,
+      /^routingApprovals: \["design:claude-subagent:local-board-designer@sonnet"\]$/m,
+    );
+    assert.match(
+      text,
+      /^completedSteps: \["design:claude-subagent:local-board-designer@sonnet"\]$/m,
+    );
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("done-time validation stays route-only: a legacy suffix-less token on a model-pinned action still validates", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Legacy suffix-less evidence", {
+      status: "ready_for_docs",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    // Hand-write completedSteps as if recorded before per-step model pinning existed
+    // (or before this rule shipped): no @model suffix on now-pinned design/implement/test.
+    await replaceText(
+      ticketPath,
+      "completedSteps: []",
+      "completedSteps: [design:claude-subagent:local-board-designer, implement:claude-subagent:local-board-implementer, review:codex-task:read-only, test:claude-subagent:local-board-tester, document:codex-task:workspace-write]",
+    );
+
+    const moved = await moveTicket(root, ticketId, "done");
+
+    assert.match(await readFile(moved, "utf8"), /^status: done$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("approve-inline without --executor still records :inline (regression)", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Default approve-inline", {
+      status: "ready_for_review",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const result = await approveInline(root, ticketId, "review", "No --executor supplied.", {
+      now: new Date("2026-05-14T21:00:00Z"),
+    });
+
+    assert.equal(result.approvedExecutor, "inline");
+    assert.match(await readFile(ticketPath, "utf8"), /^routingApprovals: \[review:inline\]$/m);
+  });
+});
+
 test("strict routing blocks done until required steps have completion evidence", async () => {
   await withBoard(async (root) => {
     const ticketPath = await createTicket(root, "task", "Strict done", {
@@ -628,10 +759,10 @@ test("strict routing blocks done until required steps have completion evidence",
 
     await assert.rejects(moveTicket(root, ticketId, "done"), /missing completedSteps entry for design/);
 
-    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence.");
-    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer", "Implementation evidence.");
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Design evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer@sonnet", "Implementation evidence.");
     await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
-    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester", "Test evidence.");
+    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester@sonnet", "Test evidence.");
     await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
 
     const moved = await moveTicket(root, ticketId, "done");
@@ -650,10 +781,10 @@ test("moveTicket to done stamps workCompletedAt when null", async () => {
     const ticketId = path.basename(ticketPath).split("_", 1)[0];
     await replaceText(ticketPath, "workStartedAt: null", "workStartedAt: 2026-05-14T21:00:00Z");
 
-    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence.");
-    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer", "Implementation evidence.");
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Design evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer@sonnet", "Implementation evidence.");
     await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
-    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester", "Test evidence.");
+    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester@sonnet", "Test evidence.");
     await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
 
     const moved = await moveTicket(root, ticketId, "done", { now: new Date("2026-05-16T15:37:00Z") });
@@ -674,10 +805,10 @@ test("moveTicket re-opening and returning to done preserves the original workCom
     const ticketId = path.basename(ticketPath).split("_", 1)[0];
     await replaceText(ticketPath, "workStartedAt: null", "workStartedAt: 2026-05-14T21:00:00Z");
 
-    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence.");
-    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer", "Implementation evidence.");
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Design evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer@sonnet", "Implementation evidence.");
     await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
-    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester", "Test evidence.");
+    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester@sonnet", "Test evidence.");
     await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
 
     await moveTicket(root, ticketId, "done", { now: new Date("2026-05-16T15:37:00Z") });
@@ -699,10 +830,10 @@ test("moveTicket to done preserves a pre-existing workCompletedAt", async () => 
     await replaceText(ticketPath, "workStartedAt: null", "workStartedAt: 2026-05-14T21:00:00Z");
     await replaceText(ticketPath, "workCompletedAt: null", "workCompletedAt: 2026-05-14T22:00:00Z");
 
-    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence.");
-    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer", "Implementation evidence.");
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Design evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer@sonnet", "Implementation evidence.");
     await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
-    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester", "Test evidence.");
+    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester@sonnet", "Test evidence.");
     await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
 
     const moved = await moveTicket(root, ticketId, "done", { now: new Date("2026-05-16T15:37:00Z") });
@@ -746,10 +877,10 @@ test("moveTicket directly to done with workStartedAt null leaves both timestamps
     });
     const ticketId = path.basename(ticketPath).split("_", 1)[0];
 
-    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence.");
-    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer", "Implementation evidence.");
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Design evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer@sonnet", "Implementation evidence.");
     await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
-    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester", "Test evidence.");
+    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester@sonnet", "Test evidence.");
     await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
 
     // Sanity-check: workStartedAt was never stamped (no startTicketWork call was made).
@@ -1484,7 +1615,7 @@ test("completeStep design refuses a task with null estimate when estimation is e
     const ticketId = path.basename(ticketPath).split("_", 1)[0];
 
     await assert.rejects(
-      completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence."),
+      completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Design evidence."),
       new RegExp(
         `^Error: complete-step design refused: ticket has no estimate\\. Run local-board estimate ${ticketId} POINTS \\[--basis ID\\] before completing design \\(config\\.estimation\\.enabled is true\\)\\.$`,
       ),
@@ -1506,7 +1637,7 @@ test("completeStep design refuses a bug with null estimate when estimation is en
     const ticketId = path.basename(ticketPath).split("_", 1)[0];
 
     await assert.rejects(
-      completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence."),
+      completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Design evidence."),
       /complete-step design refused: ticket has no estimate/,
     );
 
@@ -1524,10 +1655,10 @@ test("completeStep design accepts a story with null estimate when estimation is 
     });
     const ticketId = path.basename(ticketPath).split("_", 1)[0];
 
-    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Story design evidence.");
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Story design evidence.");
 
     const text = await readFile(ticketPath, "utf8");
-    assert.match(text, /^completedSteps: \[design:claude-subagent:local-board-designer\]$/m);
+    assert.match(text, /^completedSteps: \["design:claude-subagent:local-board-designer@opus"\]$/m);
     assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
   });
 });
@@ -1541,10 +1672,10 @@ test("completeStep design accepts an epic with null estimate when estimation is 
     });
     const ticketId = path.basename(ticketPath).split("_", 1)[0];
 
-    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Epic design evidence.");
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Epic design evidence.");
 
     const text = await readFile(ticketPath, "utf8");
-    assert.match(text, /^completedSteps: \[design:claude-subagent:local-board-designer\]$/m);
+    assert.match(text, /^completedSteps: \["design:claude-subagent:local-board-designer@opus"\]$/m);
     assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
   });
 });
@@ -1559,10 +1690,10 @@ test("completeStep design accepts a task with a non-null estimate when estimatio
     const ticketId = path.basename(ticketPath).split("_", 1)[0];
     await setTicketField(root, ticketId, "estimate", "4");
 
-    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence.");
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Design evidence.");
 
     const text = await readFile(ticketPath, "utf8");
-    assert.match(text, /^completedSteps: \[design:claude-subagent:local-board-designer\]$/m);
+    assert.match(text, /^completedSteps: \["design:claude-subagent:local-board-designer@opus"\]$/m);
     assert.match(text, /^estimate: 4$/m);
     assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
   });
@@ -1577,10 +1708,10 @@ test("completeStep design accepts a task with null estimate when estimation is d
     });
     const ticketId = path.basename(ticketPath).split("_", 1)[0];
 
-    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer", "Design evidence.");
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Design evidence.");
 
     const text = await readFile(ticketPath, "utf8");
-    assert.match(text, /^completedSteps: \[design:claude-subagent:local-board-designer\]$/m);
+    assert.match(text, /^completedSteps: \["design:claude-subagent:local-board-designer@opus"\]$/m);
     assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
   });
 });
@@ -1594,10 +1725,10 @@ test("completeStep implement is not gated by the design estimate check", async (
     });
     const ticketId = path.basename(ticketPath).split("_", 1)[0];
 
-    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer", "Implementation evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer@sonnet", "Implementation evidence.");
 
     const text = await readFile(ticketPath, "utf8");
-    assert.match(text, /^completedSteps: \[implement:claude-subagent:local-board-implementer\]$/m);
+    assert.match(text, /^completedSteps: \["implement:claude-subagent:local-board-implementer@sonnet"\]$/m);
     assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
   });
 });
@@ -1664,7 +1795,7 @@ test("successful ticket mutations leave no temp files and discover reports zero 
 
     await setTicketSection(root, ticketId, "Implementation Notes", "Done.");
     await appendTicketComment(root, ticketId, "Run Log", "did a thing");
-    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer", "Implementation evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer@sonnet", "Implementation evidence.");
 
     const siblings = await readdir(path.dirname(ticketPath));
     assert.deepEqual(siblings, [path.basename(ticketPath)]);

@@ -60,7 +60,7 @@ For each returned ticket:
 
 ## Route Translation Contract
 
-Strict routing validates the configured logical route, not the physical Codex worker. Preserve the configured route when recording completion.
+Strict routing validates the configured logical route, not the physical Codex worker. Preserve the configured route when recording completion. When the route matches and the action's profile pins a model, `complete-step` also requires the executor's `@model` suffix to match `configuredModel`, or `@codex-default` (always accepted — see below), or an approved deviation via `approve-inline --executor <route>@<model>`.
 
 Known route mapping:
 

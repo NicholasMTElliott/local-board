@@ -1,19 +1,19 @@
 ---
 id: T20260707T1324Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P1
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260707T1324Z-enforce-validate-the-executor-model-suffix-against-configuredmodel-in-strict-routing
 estimate: 2
 estimateBasis: T20260707T1320Z
-workStartedAt: null
+workStartedAt: 2026-07-07T16:54:27Z
 workCompletedAt: null
 created: 2026-07-07T13:24:41Z
-updated: 2026-07-07T16:54:26Z
+updated: 2026-07-07T17:07:26Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
@@ -241,6 +241,32 @@ or approve the deviation with approve-inline --executor ${configuredAgent}@<mode
 
 ## Implementation Notes
 
+Implemented exactly per the Technical Design.
+
+`src/tickets.js`:
+- `validateStepRouting(ticket, config, action, executor, { enforceModel = false } = {})`: restructured so the route comparison is the gate. On route match with `enforceModel` set and the action's profile pinning a model (`modelForAction`), require `modelOf(executor)` to satisfy `modelSatisfies(configuredModel, executorModel)` (`configuredModel` or `codex-default`) or an exact `routingApprovals` entry for the full `route@model` token; otherwise push an issue naming the expected suffix. `inline` routes are always skipped (cannot carry a model).
+- Added `modelOf` (mirrors `routeOf`) and exported `modelSatisfies` for reuse by related tickets (check-dispatch, hooks).
+- `completeStep` now calls `validateStepRouting(..., { enforceModel: true })` — the only enforcement point.
+- `validateRouting` (done-time) keeps the default `enforceModel: false`; added a comment documenting the deliberate route-only posture for back-compat.
+- `approveInline` gained an optional `executor` option (`options.executor`, default `"inline"`), validated via `isValidAgentValue`, recording `stepToken(action, executor)`; `approvedExecutor` in the return value reflects it.
+
+`src/cli.js`:
+- `commandApproveInline` takes optional `--executor <executor>` (default `inline`) and passes it through. Usage string updated.
+
+Docs (removed "suffix is ignored" framing, replaced with the enforcement rule and the approval escape hatch): `docs/PerStepOrchestration.md`, `docs/CodexSupport.md`, `docs/Workflow.md`, `SKILL.md` (steps 10 and the completion-evidence section, plus CLI usage line), `skills/codex/local-board/SKILL.md`. `memory-bank/systemPatterns.md` updated with the enforcement rule as current-state fact.
+
+Tests added/updated:
+- `test/tickets.test.js`: new tests — match/mismatch/missing suffix on opus-pinned `design`; `@codex-default` wildcard acceptance; `approve-inline --executor` approving a model deviation end-to-end; done-time back-compat with a hand-written suffix-less token on now-pinned actions; `approve-inline` without `--executor` still records `:inline` (regression).
+- `test/cli.test.js`: new CLI-level test for `approve-inline --executor` on a model-pinned action (had to add an `estimate` CLI call first since `init`-scaffolded config enables estimation).
+- Updated pre-existing tests across `test/tickets.test.js`, `test/cli.test.js`, and `test/git.test.js` that called `completeStep`/CLI `complete-step` on model-pinned actions (`design`→opus, `implement`/`test`→sonnet, `decompose`→opus) with bare (suffix-less) executors — these were previously "well-behaved" only by accident (the model check didn't exist). Added the correct `@<model>` suffix so those tests keep exercising their original intent (estimate gating, done-time gating, atomic-write behavior, etc.) rather than newly tripping the model-enforcement gate. Front-matter serialization quotes any list item containing `@` (per existing `formatString`), so regex assertions on `completedSteps` for these tokens now expect the quoted form, consistent with the pre-existing `@gpt-5.5` test.
+
+Verification:
+- `npm run check`: clean (all `node --check` targets pass).
+- `npm test`: 185/185 passing (up from 179 before this ticket; +6 new tests).
+- `npm run validate`: `Ticket validation OK` — confirms the live board (including this session's own `@opus`/`@sonnet`-suffixed evidence and suffix-less inline approvals) still validates cleanly under the new enforcement.
+
+Deviations from the design: none in behavior. Test-file updates to pre-existing bare-executor `completeStep` calls were necessary but not explicitly enumerated in the ticket's test strategy (which only called out the `review`+`@gpt-5.5` no-pin regression); they were required to keep the suite green given the design's own enforcement rule applies to `design`/`implement`/`test`/`decompose`, all of which are model-pinned in the default config and were exercised bare by unrelated pre-existing tests.
+
 ## Review Findings
 
 ## Test Evidence
@@ -252,3 +278,5 @@ or approve the deviation with approve-inline --executor ${configuredAgent}@<mode
 ## Run Log
 
 - 2026-07-07T16:53:42Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): write-time enforceModel flag in validateStepRouting (done-time stays route-only for back-compat), shared modelSatisfies helper for reuse by check-dispatch/hooks, codex-default wildcard honored, approve-inline --executor extension for model deviations, doc updates listed. Estimate 2 (basis T20260707T1320Z).
+
+- 2026-07-07T16:54:27Z: Ensured git branch local-board/T20260707T1324Z-enforce-validate-the-executor-model-suffix-against-configuredmodel-in-strict-routing (created).

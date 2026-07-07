@@ -493,10 +493,14 @@ export async function approveInline(root, ticketId, action, reason, options = {}
     throw new Error("approve-inline requires a non-empty reason");
   }
 
+  const executor = options.executor ?? "inline";
   const config = await loadConfig(root);
   assertAction(config, action);
+  if (!isValidAgentValue(executor)) {
+    throw new Error(`executor must be one of ${schemaAgentValues().join(", ")}`);
+  }
   const { ticket } = await findTicket(root, ticketId);
-  const token = stepToken(action, "inline");
+  const token = stepToken(action, executor);
   const now = options.now ?? new Date();
   const frontMatter = withUpdated(
     {
@@ -507,7 +511,7 @@ export async function approveInline(root, ticketId, action, reason, options = {}
   );
   const body = appendToSection(ticket.body, "Run Log", `- ${formatIsoSeconds(now)}: Approved inline ${action}: ${reason.trim()}`);
   await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
-  return { ticket: ticket.id, action, approvedExecutor: "inline", path: ticket.path };
+  return { ticket: ticket.id, action, approvedExecutor: executor, path: ticket.path };
 }
 
 export async function completeStep(root, ticketId, action, executor, evidence, options = {}) {
@@ -523,7 +527,7 @@ export async function completeStep(root, ticketId, action, executor, evidence, o
 
   const { ticket } = await findTicket(root, ticketId);
   const token = stepToken(action, executor);
-  const routingIssues = validateStepRouting(ticket, config, action, executor);
+  const routingIssues = validateStepRouting(ticket, config, action, executor, { enforceModel: true });
   if (routingIssues.length > 0) {
     throw new Error(`routing validation failed:\n${routingIssues.join("\n")}`);
   }
@@ -802,6 +806,9 @@ function validateRouting(ticket, config) {
   const completed = completedStepRecords(ticket);
   const required = config.routing.doneRequires?.[ticket.type] ?? [];
 
+  // Done-time re-validation stays route-only (enforceModel defaults false): it must
+  // not retroactively fail tokens recorded before per-step model pinning existed or
+  // before this rule shipped. The model gate runs once, at complete-step write time.
   for (const record of completed) {
     issues.push(...validateStepRouting(ticket, config, record.action, record.executor));
   }
@@ -817,7 +824,7 @@ function validateRouting(ticket, config) {
   return issues;
 }
 
-function validateStepRouting(ticket, config, action, executor) {
+function validateStepRouting(ticket, config, action, executor, { enforceModel = false } = {}) {
   const issues = [];
   if (!isKnownAction(config, action)) {
     return [`${ticket.path}: completedSteps entry uses unknown action ${action}`];
@@ -828,15 +835,41 @@ function validateStepRouting(ticket, config, action, executor) {
   const configuredAgent = configuredRouteForAction(config, action);
   const executorRoute = routeOf(executor);
   const approvals = asList(ticket.frontMatter.routingApprovals);
-  if (
-    configuredAgent !== executorRoute
-    && !approvals.includes(stepToken(action, executorRoute))
-    && !approvals.includes(stepToken(action, executor))
-  ) {
-    issues.push(
-      `${ticket.path}: ${action} completed by ${executorRoute}, but configured agent is ${configuredAgent}; approve the deviation first`,
-    );
+  const routeApproved =
+    approvals.includes(stepToken(action, executorRoute)) || approvals.includes(stepToken(action, executor));
+
+  if (configuredAgent !== executorRoute) {
+    if (!routeApproved) {
+      issues.push(
+        `${ticket.path}: ${action} completed by ${executorRoute}, but configured agent is ${configuredAgent}; approve the deviation first`,
+      );
+    }
+    return issues;
   }
+
+  if (!enforceModel || executorRoute === "inline") {
+    return issues;
+  }
+
+  const configuredModel = modelForAction(config, action);
+  if (configuredModel === null) {
+    return issues;
+  }
+
+  const executorModel = modelOf(executor);
+  if (modelSatisfies(configuredModel, executorModel)) {
+    return issues;
+  }
+
+  if (approvals.includes(stepToken(action, executor))) {
+    return issues;
+  }
+
+  issues.push(
+    `${ticket.path}: ${action} completed on model ${executorModel ?? "(none)"}, but configured model is ${configuredModel}; ` +
+      `record --executor ${configuredAgent}@${configuredModel} (or @codex-default for a Codex-translated run), ` +
+      `or approve the deviation with approve-inline --executor ${configuredAgent}@<model>.`,
+  );
   return issues;
 }
 
@@ -1350,6 +1383,20 @@ function schemaAgentValues() {
 function routeOf(value) {
   const at = value.indexOf("@");
   return at === -1 ? value : value.slice(0, at);
+}
+
+// The model part of an executor string (after "@"), or null if none was recorded.
+function modelOf(value) {
+  const at = value.indexOf("@");
+  return at === -1 ? null : value.slice(at + 1);
+}
+
+// Shared predicate for "does this executor's recorded model satisfy the
+// configured pin". `codex-default` is the documented sentinel Codex records
+// when it translates and physically runs a Claude-routed step (no valid Codex
+// model id to pin), so it satisfies any configured model.
+export function modelSatisfies(configuredModel, executorModel) {
+  return executorModel === configuredModel || executorModel === "codex-default";
 }
 
 function isValidAgentValue(value) {

@@ -109,8 +109,14 @@ subagent route.** Practical fallouts:
 - `complete-step` evidence extends from `<action>:<route>` to an optional
   `<action>:<route>@<model>` form (e.g.
   `design:claude-subagent:local-board-designer@opus`). The `@<model>` suffix is
-  optional so existing evidence parses unchanged; strict-routing validation
-  ignores the suffix when matching the configured route.
+  optional at the schema level (route-only tokens still parse), but when strict
+  routing is on and the step's route matches the configured route and the
+  action's profile pins a model, `complete-step` requires a matching `@<model>`
+  suffix — or `@codex-default` for a Codex-translated run, or a
+  `routingApprovals` entry for the full `route@model` token recorded via
+  `approve-inline --executor <route>@<model>`. Done-time re-validation stays
+  route-only so pre-existing evidence recorded before this rule (or before
+  per-step models existed) is never retroactively broken.
 
 ### Deferred: conditional profiles
 

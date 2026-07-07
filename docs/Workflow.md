@@ -175,8 +175,12 @@ model. `prompt` overrides `workflow.actionPrompts` for that action.
 subagent route it pins the subagent to `configuredModel`; per-step models only
 take effect on subagent/codex routes. Completion evidence may record the model
 that ran as `<route>@<model>` (for example
-`design:claude-subagent:local-board-designer@opus`); strict routing matches the
-route part only.
+`design:claude-subagent:local-board-designer@opus`). Strict routing matches the
+route, and — at `complete-step` write time, when the route matches and the
+action's profile pins a model — also requires the `@model` suffix to match
+`configuredModel` (or `@codex-default`, or an approved deviation recorded via
+`approve-inline --executor <route>@<model>`). Done-time re-validation stays
+route-only for back-compat with evidence recorded before this rule.
 
 Current Codex examples include `codex-task:read-only` and `codex-task:workspace-write`; projects may add more specific modes.
 
