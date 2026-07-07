@@ -32,6 +32,7 @@ import {
 } from "./tickets.js";
 import { assertAutoMergeReady, autoMergeTicketBranch, startTicketWork } from "./git.js";
 import { loadConfig, OPTIONAL_STEP_STAGES } from "./config.js";
+import { runInstall } from "./install.js";
 import { initProject } from "./scaffold.js";
 import {
   addTicketWorktree,
@@ -100,6 +101,9 @@ export async function main(argv) {
     }
     if (command === "init") {
       return await commandInit(root, args);
+    }
+    if (command === "install") {
+      return await commandInstall(root, args);
     }
     if (command === "move") {
       return await commandMove(root, args);
@@ -514,6 +518,12 @@ async function commandInit(root, args) {
     console.log(`Created ${result.created.length} file(s); skipped ${result.skipped.length} existing file(s).`);
   }
   return 0;
+}
+
+async function commandInstall(root, args) {
+  // The installer operates on the user HOME, not the board root; --root has
+  // no effect here (see printUsage).
+  return runInstall(args, {});
 }
 
 async function commandMove(root, args) {
@@ -961,6 +971,7 @@ function printUsage() {
   local-board [--root <path>] state-report [--json]
   local-board [--root <path>] schema [--json]
   local-board [--root <path>] init [--overwrite] [--json]
+  local-board install [--target=<ids>] [--all] [--no-<id>] [--list-targets] [--uninstall] (acts on user HOME; ignores --root)
   local-board [--root <path>] create <type> <title> [--status <status>] [--priority <priority>] [--parent <id>]
   local-board [--root <path>] start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--json]
   local-board [--root <path>] worktree-add <ticket-id> [--json]

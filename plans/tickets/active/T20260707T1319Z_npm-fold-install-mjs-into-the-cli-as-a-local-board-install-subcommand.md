@@ -1,19 +1,19 @@
 ---
 id: T20260707T1319Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P1
 parent: null
 children: []
 blockedBy: []
 blocks: [T20260707T1320Z]
-branch: null
+branch: local-board/T20260707T1319Z-npm-fold-install-mjs-into-the-cli-as-a-local-board-install-subcommand
 estimate: 4
 estimateBasis: T20260707T1318Z
-workStartedAt: null
+workStartedAt: 2026-07-07T15:07:32Z
 workCompletedAt: null
 created: 2026-07-07T13:19:26Z
-updated: 2026-07-07T15:07:32Z
+updated: 2026-07-07T15:13:38Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
@@ -247,6 +247,76 @@ seam and costs nothing.
 
 ## Implementation Notes
 
+Implemented per Technical Design, no deviations from the approach.
+
+**New `src/install.js`**: relocated all installer logic (`buildTargets(home)`,
+`runInstall(argv, options)`, and private helpers). `SCRIPT_DIR` anchors to
+`join(dirname(fileURLToPath(import.meta.url)), "..")` (one level up, since the
+module now lives in `src/`). `HOME`/`INSTALL_DIR` are resolved per-run from
+`options.home ?? homedir()`; no module-level mutable state (args/targets are
+threaded as parameters through `resolveTargets`, `performInstall`,
+`performUninstall`, etc.) per the Risks section. `runInstall` has no
+top-level execution and lets errors throw (no internal try/catch or
+`process.exit`). Also exported `buildTargets` per the Open Question
+recommendation.
+
+**`src/cli.js`**: imports `runInstall`, adds `install` dispatch branch calling
+new `commandInstall(root, args)` (ignores `root`, passes `args` straight to
+`runInstall(args, {})`), and adds a `printUsage()` line documenting that
+`install` acts on user HOME and ignores `--root`.
+
+**`install.mjs`**: reduced from 409 lines to a 3-line shim (plus a
+deprecation comment) that imports `runInstall` from `./src/install.js` and
+assigns `process.exitCode`. Shebang and `install.mjs` `package.json` files
+entry kept unchanged.
+
+**`package.json`**: `scripts.check` now also runs `node --check src/install.js`
+(kept the existing `install.mjs` check).
+
+**Tests** (`test/install.test.js`, extended, all via HOME redirection —
+never the real dev HOME): added 7 new cases —
+1. CLI install tree parity (`local-board install --target=codex` vs the
+   existing `install.mjs` assertions: skill dirs, team skill, rendered
+   `<<SCRIPT_PATH>>`, runtime dir, prompts/templates, install-info.json).
+2. CLI `--list-targets` output matches the shim's output byte-for-byte.
+3. CLI `--uninstall` removes what CLI install created.
+4. settings.json allow-rule idempotency (`--target=claude` run twice; rule
+   count stays 1; full settings object is byte-identical across runs).
+5. `--root` is ignored by `install` (installs under redirected HOME, not the
+   bogus root path).
+6. In-process `runInstall({ home })` option-seam install/uninstall roundtrip
+   (no subprocess).
+7. `buildTargets(home)` unit check (paths anchored under the supplied home).
+
+Existing 3 tests (subprocess shim invocations) kept untouched to prove
+back-compat.
+
+**Verification**:
+- `npm run check` — clean (all `node --check` targets pass, including new
+  `src/install.js`).
+- `npm test` — 154/154 passing (was 147 before; added 7 new install tests,
+  0 failures).
+- `npm run validate` — "Ticket validation OK".
+- `node install.mjs --list-targets` vs `node ./bin/local-board.js install
+  --list-targets` (both run against a redirected HOME): `diff` reported no
+  differences (byte-identical output).
+- Manually verified non-zero exit codes for both entry points on
+  `--target=nope` (shim: uncaught throw, stack trace, exit 1; CLI: caught by
+  `main()`, clean `error.message`, exit 2 — both non-zero, satisfying the
+  Risks-section check) and confirmed `--uninstall` is a 0-exit no-op on a
+  clean HOME for both entry points.
+
+**Note on shim error UX**: the design's literal 3-line shim (no try/catch)
+means `node install.mjs` with a bad argument now prints a Node stack trace
+instead of the old `ERROR: <message>` one-liner, though the exit code is
+still non-zero (1, via Node's default uncaught-exception handling) as the
+design's Risks section requires. This is implemented exactly as specified in
+Technical Design section 3; flagging it here since it is a small, deliberate
+UX regression versus the previous handcrafted `console.error` + `process.exit(1)`.
+
+No documentation files were touched — the ticket explicitly scopes doc edits
+to a later Documentation stage / T20260707T1338Z.
+
 ## Review Findings
 
 ## Test Evidence
@@ -258,3 +328,5 @@ seam and costs nothing.
 ## Run Log
 
 - 2026-07-07T15:06:38Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): src/install.js module + cli subcommand + install.mjs shim; HOME injection seam for tests; rendering unchanged (T1320 boundary); SCRIPT_DIR anchor flagged as top risk. Estimate 4 (basis T20260707T1318Z).
+
+- 2026-07-07T15:07:32Z: Ensured git branch local-board/T20260707T1319Z-npm-fold-install-mjs-into-the-cli-as-a-local-board-install-subcommand (created).
