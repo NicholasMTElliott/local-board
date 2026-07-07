@@ -1,7 +1,7 @@
 ---
 id: B20260707T1322Z
 type: bug
-status: implementing
+status: done
 priority: P2
 parent: null
 children: []
@@ -11,10 +11,10 @@ branch: local-board/B20260707T1322Z-no-locking-for-concurrent-ticket-mutations-l
 estimate: 4
 estimateBasis: B20260707T1321Z
 workStartedAt: 2026-07-07T20:49:23Z
-workCompletedAt: null
+workCompletedAt: 2026-07-07T21:16:05Z
 created: 2026-07-07T13:22:54Z
-updated: 2026-07-07T21:03:07Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-07T21:16:05Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # No locking for concurrent ticket mutations; link and block write two files non-atomically
@@ -321,9 +321,48 @@ warns to stderr (via the default `onStaleBreak`, overridable).
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) against commit 2697538.
+
+No blocking findings.
+
+Non-blocking observations:
+- Stale age uses best-effort meta.ts (missing/corrupt = infinitely old); clock skew can delay or hasten stale recovery — matches the accepted age-only design (src/lock.js:57,76,122).
+- Stale break is rm + atomic mkdir: only one waiter's mkdir can win; the loser re-errors and retries. Residual: breaking a genuinely-live slow holder can overlap critical sections, and the old holder's finally can remove a successor's sentinel — unlikely within the 30s window for these spans (:132-146).
+- Ordered dual locks may spend the 2000ms budget per lock while holding the first, but sorted acquisition (:195) prevents deadlock.
+- Nesting verified safe: approveInline/completeStep release the ticket lock BEFORE the ledger clear, so no ticket->ledger hold-order can deadlock a ledger->ticket path (src/tickets.js:598-685).
+- Locked spans fully awaited inside the hold; release in finally (:150).
+- resolveMainRoot move extends an ESM cycle through git.js/tickets.js but with no top-level cyclic call; check + dynamic import pass.
+- Test-clarity nit: the ticket-level dual-lock test title claims reversed order but both calls pass (childId, parentId); the lock-level test at lock.test.js:164 does exercise reversed order.
+- Stale tests use synthetic metadata (no real 30s sleeps); slow smoke properly gated; perf scoped to mutation paths, read paths lock-free; Windows release retry present; lock dirs removed, not accumulated.
+
+Verification caveat: reviewer ran check only (read-only sandbox); full suite delegated to test stage.
+
+Verdict: pass
+
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/B20260707T1322Z-..., commit 2697538.
+
+**Suite:** `npm run check` pass; `npm test` 284 pass / 1 gated-skip; `LOCAL_BOARD_SLOW_TESTS=1 npm test` 285 pass / 0 skipped (smoke test passed in ~2.8s); `npm run validate` OK.
+
+**Independent race probe (throwaway board, real OS processes):** 20-iteration loop of concurrent comment vs set processes on the same ticket — 20/20 iterations with zero lost comments, valid field values, parseable front matter; a coarser all-at-once variant (20+20 simultaneous processes) also lost nothing; final validate clean. Confirms serialization under genuine process concurrency, not just the in-process seam.
+
+**Stale-lock probe:** hand-created lock with 120s-old metadata — mutation printed the documented "breaking stale lock (held by pid ... age 122276ms > staleMs 30000ms)" message, completed, and left no lock dir. Missing-metadata treated as infinitely old, as designed.
+
+**Leak check:** .local-board/locks empty in both the throwaway board and this repo after all probes.
+
+**Gaps / caveats:** link/block dual-lock and different-ticket ledger races verified via the repo's deterministic seam tests only (passing); Windows EPERM release retry verified by unit test, not forced live; documented residuals (no two-file crash atomicity, no fsync durability) accepted per design.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `memory-bank/systemPatterns.md` — Atomic Writes now describes lock-serialized mutations (.local-board/locks mkdir sentinels, 30s stale break with diagnostic, accepted residuals); the stale "separate open concern" phrasing is gone.
+- `docs/Workflow.md` — unlocked-writer caveat removed; CLI-serialized active-steps ledger distinguished from the append-only hook dispatch log.
+- `docs/EnforcementHooks.md` — same current ledger model.
+- No README change (no entry points changed).
 
 ## Questions
 
@@ -332,3 +371,11 @@ warns to stderr (via the default `onStaleBreak`, overridable).
 - 2026-07-07T20:48:25Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): withFileLock mkdir-sentinel primitive (bounded retry, age-based stale break) on the ledger RMW and per-ticket mutation spans, ordered dual-locks for link/block, deterministic + probabilistic race tests; read paths stay lock-free. Estimate 4 (basis B20260707T1321Z).
 
 - 2026-07-07T20:49:23Z: Ensured git branch local-board/B20260707T1322Z-no-locking-for-concurrent-ticket-mutations-link-and-block-write-two-files-non-atomically (created).
+
+- 2026-07-07T21:03:40Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): src/lock.js primitive across ledger + six mutation spans + ordered dual-locks; 284 pass 1 gated-skip; slow smoke test passes explicitly; live board validates.
+
+- 2026-07-07T21:07:35Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict pass: mkdir-win atomicity on stale break, safe nesting order (ticket released before ledger), awaited spans with finally release, gated tests; documented residuals accepted.
+
+- 2026-07-07T21:13:35Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 284+1 gated (285 with slow tests); independent 20-iteration real-process race lost nothing; stale break observed live with the documented message; zero lock leakage. Result: pass.
+
+- 2026-07-07T21:16:05Z: Completed document via codex-task:workspace-write: Codex (workspace-write): systemPatterns Atomic Writes updated for lock serialization; Workflow + EnforcementHooks ledger caveats refreshed.
