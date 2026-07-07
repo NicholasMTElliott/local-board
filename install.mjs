@@ -132,8 +132,8 @@ function install() {
   copyDir("src");
   copyDir("agents");
   copyDir("skills");
-  copyDir(join("plans", "prompts"), "prompts");
-  copyDir(join("plans", "templates"), "templates");
+  copyDir(join("resources", "prompts"), "prompts");
+  copyDir(join("resources", "templates"), "templates");
 
   const scriptPath = join(INSTALL_DIR, "bin", "local-board.js").replace(/\\/g, "/");
   const allowRule = `Bash(node ${scriptPath} *)`;
