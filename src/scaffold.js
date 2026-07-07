@@ -1,7 +1,14 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { defaultConfigJsonc } from "./config.js";
+
+// Package root (directory holding package.json, resources/, src/, ...). This
+// module lives at <root>/src/scaffold.js, so the root is one level up from
+// this file's directory. Mirrors the same pattern in src/install.js.
+const SCRIPT_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const TICKET_FOLDERS = ["backlog", "ready", "active", "questions", "blocked", "review", "done", "archive"];
 
@@ -41,147 +48,6 @@ Human-friendly status folders for local-board tickets.
 Front matter \`status\` is canonical. Folder placement should match it.
 `,
   ],
-  [
-    "plans/templates/ticket.md",
-    `---
-id: TYYYYMMDDTHHMMZ
-type: task
-status: backlog
-priority: P2
-parent: null
-children: []
-blockedBy: []
-blocks: []
-branch: null
-estimate: null
-estimateBasis: null
-workStartedAt: null
-workCompletedAt: null
-completedSteps: []
-routingApprovals: []
-created: YYYY-MM-DDTHH:MM:SSZ
-updated: YYYY-MM-DDTHH:MM:SSZ
----
-
-# Ticket Title
-
-## Requirement
-
-## Acceptance Criteria
-
-## Related Tickets
-
-## Technical Design
-
-## Implementation Notes
-
-## Review Findings
-
-## Test Evidence
-
-## Documentation Updates
-
-## Questions
-
-## Run Log
-`,
-  ],
-  [
-    "plans/prompts/roles/orchestrator.md",
-    `# Orchestrator Role
-
-You are the local-board orchestrator.
-
-Read project instructions, \`memory-bank/\` when present, and \`plans/\` before acting.
-
-Responsibilities:
-- validate ticket state before work;
-- select work through \`local-board query-next\`;
-- load the returned step prompt;
-- delegate only bounded work;
-- update ticket front matter and sections through local-board commands;
-- preserve human approval gates.
-
-Do not hide state transitions in prose. Update front matter.
-`,
-  ],
-  [
-    "plans/prompts/roles/implementer.md",
-    `# Implementer Role
-
-Implement the current ticket's approved technical design.
-
-Rules:
-- keep changes scoped to the ticket;
-- update tests with behavior changes;
-- record important implementation notes in the ticket;
-- stop and ask questions when requirements are ambiguous.
-`,
-  ],
-  [
-    "plans/prompts/roles/code_reviewer.md",
-    `# Code Reviewer Role
-
-Review the current ticket's changes for correctness, regressions, maintainability, and missing tests.
-
-Lead with findings. If there are no findings, say so clearly and note residual risk.
-`,
-  ],
-  [
-    "plans/prompts/steps/decompose.md",
-    `# Decompose Step
-
-Decompose the current ticket into child tickets.
-
-Rules:
-- epics create stories;
-- stories create tasks;
-- each child has clear acceptance criteria;
-- link parent and children in front matter;
-- preserve priority unless there is a clear reason to adjust;
-- add dependencies when sequencing matters.
-`,
-  ],
-  [
-    "plans/prompts/steps/design.md",
-    `# Design Step
-
-Write a technical design for the current ticket.
-
-Include:
-- relevant existing code and docs;
-- proposed implementation approach;
-- risks and edge cases;
-- test plan;
-- documentation impact.
-`,
-  ],
-  [
-    "plans/prompts/steps/test.md",
-    `# Test Step
-
-Verify the current ticket.
-
-Include:
-- commands run;
-- results;
-- gaps or risks;
-- manual checks when automated tests are insufficient.
-`,
-  ],
-  [
-    "plans/prompts/steps/document.md",
-    `# Document Step
-
-Update project documentation required by the current ticket.
-
-Rules:
-- keep \`memory-bank/\` terse and current when present;
-- update \`README.md\` when documentation entry points change;
-- update \`docs/\` for human-facing narrative changes;
-- record evidence in the ticket's \`## Documentation Updates\` section.
-`,
-  ],
 ]);
 
 export async function initProject(root = ".", options = {}) {
@@ -196,13 +62,32 @@ export async function initProject(root = ".", options = {}) {
     await writeScaffoldFile(path.join(folderPath, ".gitkeep"), "", overwrite, created, skipped);
   }
 
-  await mkdir(path.join(rootPath, "plans", "templates"), { recursive: true });
-  await mkdir(path.join(rootPath, "plans", "prompts", "roles"), { recursive: true });
-  await mkdir(path.join(rootPath, "plans", "prompts", "steps"), { recursive: true });
-
   for (const [relativePath, content] of FILES.entries()) {
     await writeScaffoldFile(path.join(rootPath, relativePath), content, overwrite, created, skipped);
   }
+
+  // Copy the maintained, dogfooded prompt/template tree from packaged
+  // resources rather than inlining a third, drifting copy. Every file is
+  // routed through writeScaffoldFile so the existing wx-vs-w idempotency
+  // applies. Unlike the other FILES above, this tree is always add-missing-only
+  // (overwrite: false) regardless of the caller's --overwrite flag: users are
+  // expected to customize plans/prompts/** and plans/templates/** in place, and
+  // `init --overwrite` must restore any packaged file the user deleted without
+  // clobbering ones they've edited.
+  await copyResourceTree(
+    packagedResourceDir("prompts"),
+    path.join(rootPath, "plans", "prompts"),
+    false,
+    created,
+    skipped,
+  );
+  await copyResourceTree(
+    packagedResourceDir("templates"),
+    path.join(rootPath, "plans", "templates"),
+    false,
+    created,
+    skipped,
+  );
 
   await writeGitignore(path.join(rootPath, ".gitignore"), created, skipped);
 
@@ -215,6 +100,48 @@ export async function initProject(root = ".", options = {}) {
   );
 
   return { root: rootPath, created, skipped };
+}
+
+// Resolves a packaged resource directory (e.g. "prompts", "templates") across
+// the two layouts local-board can run from: a dev clone / global npm install,
+// where the packaged tree lives at <packageRoot>/resources/<name>, and the
+// flattened ~/.local-board runtime layout that src/install.js produces
+// (resources/prompts -> <installDir>/prompts), where it lives directly at
+// <packageRoot>/<name>. `packageRoot` defaults to this package's root and is
+// overridable for tests that simulate one layout or the other with a fixture
+// directory. Throws a clear error if neither layout resolves so a packaging
+// regression fails loudly rather than silently scaffolding an empty tree.
+export function packagedResourceDir(name, packageRoot = SCRIPT_DIR) {
+  const layered = path.join(packageRoot, "resources", name);
+  if (existsSync(layered)) {
+    return layered;
+  }
+  const flattened = path.join(packageRoot, name);
+  if (existsSync(flattened)) {
+    return flattened;
+  }
+  throw new Error(
+    `local-board: could not locate packaged "${name}" resources at "${layered}" or "${flattened}". ` +
+      `This indicates a broken installation or packaging regression; reinstall local-board.`,
+  );
+}
+
+// Recursively mirrors sourceDir into targetDir, routing every file through
+// writeScaffoldFile so idempotency (skip-if-exists unless --overwrite) is
+// preserved. Directories are created as needed.
+async function copyResourceTree(sourceDir, targetDir, overwrite, created, skipped) {
+  await mkdir(targetDir, { recursive: true });
+  const entries = await readdir(sourceDir, { withFileTypes: true });
+  for (const entry of entries) {
+    const sourcePath = path.join(sourceDir, entry.name);
+    const targetPath = path.join(targetDir, entry.name);
+    if (entry.isDirectory()) {
+      await copyResourceTree(sourcePath, targetPath, overwrite, created, skipped);
+    } else if (entry.isFile()) {
+      const content = await readFile(sourcePath, "utf8");
+      await writeScaffoldFile(targetPath, content, overwrite, created, skipped);
+    }
+  }
 }
 
 async function writeScaffoldFile(filePath, content, overwrite, created, skipped) {

@@ -107,16 +107,16 @@ archived -> plans/tickets/archive
 Role prompts live in `plans/prompts/roles/`.
 Step prompts live in `plans/prompts/steps/`.
 
-Current required role prompts:
-- `plans/prompts/roles/estimator.md`: relative story point estimator guidance.
-
-Current required step prompts:
-- `plans/prompts/steps/estimate.md`: design-adjacent estimate procedure using `calibration suggest` and `estimate`.
+Fresh `init` scaffolds the full packaged prompt tree into `plans/prompts/`:
+- role prompts: `code_reviewer.md`, `estimator.md`, `implementer.md`, `orchestrator.md`
+- step prompts: `decompose.md`, `design.md`, `document.md`, `estimate.md`, `gate-check.md`, `test.md`
+- optional-step prompts: design `security_threat_model.md`, `ui_component_review.md`, `ux_interaction_review.md`; impl `security_audit.md`, `ui_visual_review.md`
 
 Skills should be orchestration entrypoints. Step behavior should live in prompt files and deterministic scripts where possible.
 
-The installable `local-board` skill is the portable entrypoint. Project-local prompts override bundled fallback prompts.
-For design/implement/test stages, the orchestrator skill runs `gate-check` + `specialty-run` between mandatory action completion and stage transition.
+The installable `local-board` skill is the portable entrypoint. Project-local prompts are runtime inputs; missing configured prompts are loud CLI errors, not silent fallback behavior.
+`init` restores missing packaged prompts/templates but never overwrites existing prompt files, even with `--overwrite`.
+For design/implement/test stages with a non-empty specialty catalog, the orchestrator skill runs `gate-check` + `specialty-run` between mandatory action completion and stage transition.
 Bundled Claude agents live in `agents/claude/` and are installed to `~/.claude/agents/`.
 Codex skill templates live in `skills/codex/` and install to `~/.codex/skills/local-board` and `~/.codex/skills/local-team`. Codex executor prompts live in `agents/codex/`.
 

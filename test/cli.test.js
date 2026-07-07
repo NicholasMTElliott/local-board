@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -969,6 +969,13 @@ test("CLI specialty-run returns per-entry agent override when configured", async
       }),
       "utf8",
     );
+    // specialty-run now verifies the resolved prompt exists; this custom entry
+    // has no packaged counterpart, so seed the fixture file it points at.
+    await writeFile(
+      path.join(root, "plans", "prompts", "optional-steps", "design", "custom_review.md"),
+      "# Custom Review\n",
+      "utf8",
+    );
 
     const create = await runCli([
       "--root",
@@ -1030,6 +1037,14 @@ test("CLI specialty-run status-to-stage mapping covers every status", async () =
           ],
         },
       }),
+      "utf8",
+    );
+    // specialty-run now verifies the resolved prompt exists; this synthetic
+    // test-stage entry has no packaged counterpart, so seed its fixture file.
+    await mkdir(path.join(root, "plans", "prompts", "optional-steps", "test"), { recursive: true });
+    await writeFile(
+      path.join(root, "plans", "prompts", "optional-steps", "test", "perf_smoke.md"),
+      "# Perf Smoke\n",
       "utf8",
     );
 

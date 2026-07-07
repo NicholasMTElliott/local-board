@@ -263,7 +263,7 @@ and unlocked concurrent writes are a known, low-impact race.
 Each stage contains entries shaped `{ name, prompt, triggers, agent? }`.
 
 - `name`: required lowercase snake_case identifier, unique across all stages (routing resolves a specialty step by name across stages). It cannot reuse a mandatory action name such as `design`, `implement`, `review`, or `test`.
-- `prompt`: required repo-relative path to the specialty prompt, normally under `plans/prompts/optional-steps/<stage>/`. Config loading validates the string but does not require the file to exist.
+- `prompt`: required repo-relative path to the specialty prompt, normally under `plans/prompts/optional-steps/<stage>/`. Fresh `init` scaffolds the packaged prompts, and `specialty-run` reports an actionable error if a configured prompt file is missing.
 - `triggers`: required human-readable guidance for deciding when the specialty applies.
 - `agent`: optional route override using the same conventions as mandatory action routing: `inline`, `claude-subagent:<agent-name>`, or `codex-task:<mode>`. Omitted entries run inline.
 
@@ -318,7 +318,7 @@ With `--json`, the command returns:
 }
 ```
 
-The CLI is a read-only resolver. It does not invoke an agent and does not decide which optional steps are required. The orchestrator dispatches the returned `prompt`, `catalog`, and narrow `ticketContext` to the configured gate-check `agent`, pinning its `model` (the bundled `local-board-gatecheck` agent on `haiku` by default). That agent pattern-matches the completed work against the catalog trigger criteria and returns strict JSON shaped:
+The CLI is a read-only resolver. It does not invoke an agent and does not decide which optional steps are required. If `catalog` is empty, the orchestrator skips gate-agent dispatch. Otherwise it dispatches the returned `prompt`, `catalog`, and narrow `ticketContext` to the configured gate-check `agent`, pinning its `model` (the bundled `local-board-gatecheck` agent on `haiku` by default). That agent pattern-matches the completed work against the catalog trigger criteria and returns strict JSON shaped:
 
 ```json
 { "requestedSteps": ["security_audit"] }

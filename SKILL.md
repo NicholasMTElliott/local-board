@@ -86,7 +86,7 @@ Priorities: `P0`, `P1`, `P2`, `P3`, `P4`.
 - `test`: run appropriate tests and write `## Test Evidence`.
 - `document`: update docs and write `## Documentation Updates`.
 
-Project-local prompts in `plans/prompts/` are authoritative. If a returned prompt is missing, use fallback prompts from `<<INSTALL_PATH>>/prompts/`.
+Project-local prompts in `plans/prompts/` are authoritative; `local-board init` scaffolds the full set (including `gate-check.md` and every `optionalSteps` prompt) from the packaged prompt tree. `gate-check` and `specialty-run` verify the resolved prompt file exists and fail with an actionable error naming the missing path if it does not — if you see that error, run `local-board init` in the repo to restore the missing prompts (or copy the file from `<<INSTALL_PATH>>/prompts/`).
 
 ## Transition Guidance
 

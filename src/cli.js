@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -790,6 +790,25 @@ async function commandEstimate(root, args) {
   return 0;
 }
 
+// Verifies a resolved prompt path exists before it is handed to a dispatched
+// agent as a `prompt` field. Boards initialized before prompt scaffolding
+// covered the full resources/prompts tree (or that have since deleted a
+// prompt file) would otherwise hand back a dead path; fail loudly instead
+// with the remedy (re-run init, or restore the file from packaged
+// resources/prompts).
+async function assertPromptExists(promptPath, action) {
+  try {
+    await access(promptPath);
+  } catch (error) {
+    if (error.code === "ENOENT") {
+      throw new Error(
+        `${action}: prompt not found at ${promptPath}. Run "local-board init" in this repo to scaffold missing prompts, or restore the file from the packaged resources/prompts.`,
+      );
+    }
+    throw error;
+  }
+}
+
 async function commandGateCheck(root, args) {
   const asJson = takeFlag(args, "--json");
   const stage = takeOption(args, "--stage");
@@ -819,6 +838,14 @@ async function commandGateCheck(root, args) {
   });
 
   const promptPath = path.resolve(root, "plans", "prompts", "steps", "gate-check.md");
+  // Only verify the prompt exists when a dispatch will actually occur: an
+  // empty catalog for this stage means gate-check.md is never opened, so a
+  // missing file here must not fail what would otherwise be a legitimate
+  // empty-catalog result.
+  if (catalog.length > 0) {
+    await assertPromptExists(promptPath, "gate-check");
+  }
+
   const baseRecord = ticketRecord(root, ticket);
   const currentAction = config.workflow?.statusActions?.[ticket.status] ?? null;
   const ticketContext = {
@@ -888,6 +915,7 @@ async function commandSpecialtyRun(root, args) {
   }
 
   const promptPath = path.resolve(root, entry.prompt);
+  await assertPromptExists(promptPath, "specialty-run");
   const agent = Object.hasOwn(entry, "agent") ? entry.agent : "inline";
 
   const baseRecord = ticketRecord(root, ticket);
