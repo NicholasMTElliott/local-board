@@ -40,6 +40,7 @@ import { runInstall } from "./install.js";
 import { initProject, packagedResourceDir } from "./scaffold.js";
 import {
   addTicketWorktree,
+  assertInvocationRootForTicket,
   fastForwardDefaultBranch,
   listTicketWorktrees,
   removeTicketWorktree,
@@ -51,6 +52,7 @@ export { commandWhere };
 export async function main(argv) {
   const args = [...argv];
   const root = takeOption(args, "--root") ?? ".";
+  const allowMainRoot = takeFlag(args, "--allow-main-root");
   const command = args.shift();
 
   try {
@@ -86,7 +88,7 @@ export async function main(argv) {
       return await commandCreate(root, args);
     }
     if (command === "start-work" || command === "ensure-branch") {
-      return await commandStartWork(root, args);
+      return await commandStartWork(root, args, allowMainRoot);
     }
     if (command === "worktree-add") {
       return await commandWorktreeAdd(root, args);
@@ -107,10 +109,10 @@ export async function main(argv) {
       return await commandBeginStep(root, args);
     }
     if (command === "complete-step") {
-      return await commandCompleteStep(root, args);
+      return await commandCompleteStep(root, args, allowMainRoot);
     }
     if (command === "approve-inline") {
-      return await commandApproveInline(root, args);
+      return await commandApproveInline(root, args, allowMainRoot);
     }
     if (command === "check-dispatch") {
       return await commandCheckDispatch(root, args);
@@ -122,40 +124,40 @@ export async function main(argv) {
       return await commandInstall(root, args);
     }
     if (command === "move") {
-      return await commandMove(root, args);
+      return await commandMove(root, args, allowMainRoot);
     }
     if (command === "set" || command === "update-field") {
-      return await commandSet(root, args);
+      return await commandSet(root, args, allowMainRoot);
     }
     if (command === "comment") {
-      return await commandComment(root, args);
+      return await commandComment(root, args, allowMainRoot);
     }
     if (command === "section" || command === "set-section") {
-      return await commandSection(root, args);
+      return await commandSection(root, args, allowMainRoot);
     }
     if (command === "link-parent") {
-      return await commandLinkParent(root, args);
+      return await commandLinkParent(root, args, allowMainRoot);
     }
     if (command === "link-child") {
-      return await commandLinkChild(root, args);
+      return await commandLinkChild(root, args, allowMainRoot);
     }
     if (command === "unlink-parent") {
-      return await commandUnlinkParent(root, args);
+      return await commandUnlinkParent(root, args, allowMainRoot);
     }
     if (command === "block") {
-      return await commandBlock(root, args);
+      return await commandBlock(root, args, allowMainRoot);
     }
     if (command === "unblock") {
-      return await commandUnblock(root, args);
+      return await commandUnblock(root, args, allowMainRoot);
     }
     if (command === "estimate") {
-      return await commandEstimate(root, args);
+      return await commandEstimate(root, args, allowMainRoot);
     }
     if (command === "gate-check") {
-      return await commandGateCheck(root, args);
+      return await commandGateCheck(root, args, allowMainRoot);
     }
     if (command === "gate-complete") {
-      return await commandGateComplete(root, args);
+      return await commandGateComplete(root, args, allowMainRoot);
     }
     if (command === "specialty-run") {
       return await commandSpecialtyRun(root, args);
@@ -418,7 +420,7 @@ async function commandCreate(root, args) {
   return 0;
 }
 
-async function commandStartWork(root, args) {
+async function commandStartWork(root, args, allowMainRoot) {
   const asJson = takeFlag(args, "--json");
   const allowDirty = takeFlag(args, "--allow-dirty");
   const branch = takeOption(args, "--branch");
@@ -426,8 +428,10 @@ async function commandStartWork(root, args) {
   ensureNoArgs(args);
 
   if (ticketId === undefined) {
-    throw new Error("start-work requires: <ticket-id> [--branch <branch>] [--allow-dirty]");
+    throw new Error("start-work requires: <ticket-id> [--branch <branch>] [--allow-dirty] [--allow-main-root]");
   }
+
+  await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
   const result = await startTicketWork(root, ticketId, { branch, allowDirty });
   if (asJson) {
@@ -540,7 +544,7 @@ async function commandBeginStep(root, args) {
   return 0;
 }
 
-async function commandCompleteStep(root, args) {
+async function commandCompleteStep(root, args, allowMainRoot) {
   const asJson = takeFlag(args, "--json");
   const executor = takeOption(args, "--executor");
   const evidence = takeOption(args, "--evidence");
@@ -549,8 +553,10 @@ async function commandCompleteStep(root, args) {
   ensureNoArgs(args);
 
   if (ticketId === undefined || action === undefined || executor === undefined || evidence === undefined) {
-    throw new Error("complete-step requires: <ticket-id> <action> --executor <executor> --evidence <text>");
+    throw new Error("complete-step requires: <ticket-id> <action> --executor <executor> --evidence <text> [--allow-main-root]");
   }
+
+  await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
   const result = await completeStep(root, ticketId, action, executor, evidence);
   if (asJson) {
@@ -561,7 +567,7 @@ async function commandCompleteStep(root, args) {
   return 0;
 }
 
-async function commandApproveInline(root, args) {
+async function commandApproveInline(root, args, allowMainRoot) {
   const asJson = takeFlag(args, "--json");
   const reason = takeOption(args, "--reason");
   const executor = takeOption(args, "--executor") ?? "inline";
@@ -570,8 +576,10 @@ async function commandApproveInline(root, args) {
   ensureNoArgs(args);
 
   if (ticketId === undefined || action === undefined || reason === undefined) {
-    throw new Error("approve-inline requires: <ticket-id> <action> --reason <text> [--executor <executor>]");
+    throw new Error("approve-inline requires: <ticket-id> <action> --reason <text> [--executor <executor>] [--allow-main-root]");
   }
+
+  await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
   const result = await approveInline(root, ticketId, action, reason, { executor });
   if (asJson) {
@@ -630,29 +638,33 @@ async function commandInstall(root, args) {
   return runInstall(args, {});
 }
 
-async function commandMove(root, args) {
+async function commandMove(root, args, allowMainRoot) {
   const asJson = takeFlag(args, "--json");
   const ticketId = args.shift();
   const status = args.shift();
   ensureNoArgs(args);
 
   if (ticketId === undefined || status === undefined) {
-    throw new Error("move requires: <ticket-id> <status>");
+    throw new Error("move requires: <ticket-id> <status> [--allow-main-root]");
   }
+
+  await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
   await moveAndMaybeMerge(root, ticketId, status, { asJson });
   return 0;
 }
 
-async function commandSet(root, args) {
+async function commandSet(root, args, allowMainRoot) {
   const ticketId = args.shift();
   const field = args.shift();
   const rawValue = args.shift();
   ensureNoArgs(args);
 
   if (ticketId === undefined || field === undefined || rawValue === undefined) {
-    throw new Error("set requires: <ticket-id> <field> <value>");
+    throw new Error("set requires: <ticket-id> <field> <value> [--allow-main-root]");
   }
+
+  await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
   const value = parseScalar(rawValue);
   if (field === "status") {
@@ -701,32 +713,36 @@ async function moveAndMaybeMerge(root, ticketId, status, options = {}) {
   }
 }
 
-async function commandComment(root, args) {
+async function commandComment(root, args, allowMainRoot) {
   const section = takeOption(args, "--section") ?? "Run Log";
   const ticketId = args.shift();
   const text = args.join(" ").trim();
 
   if (ticketId === undefined || text === "") {
-    throw new Error("comment requires: <ticket-id> <text> [--section <section>]");
+    throw new Error("comment requires: <ticket-id> <text> [--section <section>] [--allow-main-root]");
   }
+
+  await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
   const ticketPath = await appendTicketComment(root, ticketId, section, text);
   console.log(ticketPath);
   return 0;
 }
 
-async function commandSection(root, args) {
+async function commandSection(root, args, allowMainRoot) {
   const section = takeOption(args, "--section");
   const file = takeOption(args, "--file");
   const ticketId = args.shift();
   const inlineText = args.join(" ").trim();
 
   if (ticketId === undefined || section === undefined) {
-    throw new Error("section requires: <ticket-id> (<text>|--file <path>) --section <section>");
+    throw new Error("section requires: <ticket-id> (<text>|--file <path>) --section <section> [--allow-main-root]");
   }
   if (file !== undefined && inlineText !== "") {
     throw new Error("section accepts either <text> or --file <path>, not both");
   }
+
+  await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
   const text = file === undefined ? inlineText : await readFile(file, "utf8");
   if (text.trim() === "") {
@@ -738,77 +754,92 @@ async function commandSection(root, args) {
   return 0;
 }
 
-async function commandLinkParent(root, args) {
+async function commandLinkParent(root, args, allowMainRoot) {
   const childId = args.shift();
   const parentId = args.shift();
   ensureNoArgs(args);
 
   if (childId === undefined || parentId === undefined) {
-    throw new Error("link-parent requires: <child-ticket-id> <parent-ticket-id>");
+    throw new Error("link-parent requires: <child-ticket-id> <parent-ticket-id> [--allow-main-root]");
   }
+
+  await assertInvocationRootForTicket(root, childId, { allowMainRoot });
+  await assertInvocationRootForTicket(root, parentId, { allowMainRoot });
 
   const result = await linkParent(root, childId, parentId);
   console.log(`${result.childPath}\n${result.parentPath}`);
   return 0;
 }
 
-async function commandLinkChild(root, args) {
+async function commandLinkChild(root, args, allowMainRoot) {
   const parentId = args.shift();
   const childId = args.shift();
   ensureNoArgs(args);
 
   if (parentId === undefined || childId === undefined) {
-    throw new Error("link-child requires: <parent-ticket-id> <child-ticket-id>");
+    throw new Error("link-child requires: <parent-ticket-id> <child-ticket-id> [--allow-main-root]");
   }
+
+  await assertInvocationRootForTicket(root, parentId, { allowMainRoot });
+  await assertInvocationRootForTicket(root, childId, { allowMainRoot });
 
   const result = await linkParent(root, childId, parentId);
   console.log(`${result.parentPath}\n${result.childPath}`);
   return 0;
 }
 
-async function commandUnlinkParent(root, args) {
+async function commandUnlinkParent(root, args, allowMainRoot) {
   const childId = args.shift();
   const parentId = args.shift();
   ensureNoArgs(args);
 
   if (childId === undefined || parentId === undefined) {
-    throw new Error("unlink-parent requires: <child-ticket-id> <parent-ticket-id>");
+    throw new Error("unlink-parent requires: <child-ticket-id> <parent-ticket-id> [--allow-main-root]");
   }
+
+  await assertInvocationRootForTicket(root, childId, { allowMainRoot });
+  await assertInvocationRootForTicket(root, parentId, { allowMainRoot });
 
   const result = await unlinkParent(root, childId, parentId);
   console.log(`${result.childPath}\n${result.parentPath}`);
   return 0;
 }
 
-async function commandBlock(root, args) {
+async function commandBlock(root, args, allowMainRoot) {
   const ticketId = args.shift();
   const dependencyId = args.shift();
   ensureNoArgs(args);
 
   if (ticketId === undefined || dependencyId === undefined) {
-    throw new Error("block requires: <ticket-id> <dependency-ticket-id>");
+    throw new Error("block requires: <ticket-id> <dependency-ticket-id> [--allow-main-root]");
   }
+
+  await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
+  await assertInvocationRootForTicket(root, dependencyId, { allowMainRoot });
 
   const result = await blockTicket(root, ticketId, dependencyId);
   console.log(`${result.ticketPath}\n${result.dependencyPath}`);
   return 0;
 }
 
-async function commandUnblock(root, args) {
+async function commandUnblock(root, args, allowMainRoot) {
   const ticketId = args.shift();
   const dependencyId = args.shift();
   ensureNoArgs(args);
 
   if (ticketId === undefined || dependencyId === undefined) {
-    throw new Error("unblock requires: <ticket-id> <dependency-ticket-id>");
+    throw new Error("unblock requires: <ticket-id> <dependency-ticket-id> [--allow-main-root]");
   }
+
+  await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
+  await assertInvocationRootForTicket(root, dependencyId, { allowMainRoot });
 
   const result = await unblockTicket(root, ticketId, dependencyId);
   console.log(`${result.ticketPath}\n${result.dependencyPath}`);
   return 0;
 }
 
-async function commandEstimate(root, args) {
+async function commandEstimate(root, args, allowMainRoot) {
   const basisOption = takeOption(args, "--basis");
   const force = takeFlag(args, "--force");
   const asJson = takeFlag(args, "--json");
@@ -817,8 +848,10 @@ async function commandEstimate(root, args) {
   ensureNoArgs(args);
 
   if (ticketId === undefined || rawPoints === undefined) {
-    throw new Error("estimate requires: <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]");
+    throw new Error("estimate requires: <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json] [--allow-main-root]");
   }
+
+  await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
   const trimmedPoints = rawPoints.trim();
   if (trimmedPoints === "") {
@@ -881,18 +914,23 @@ async function assertPromptExists(promptPath, action) {
   }
 }
 
-async function commandGateCheck(root, args) {
+async function commandGateCheck(root, args, allowMainRoot) {
   const asJson = takeFlag(args, "--json");
   const stage = takeOption(args, "--stage");
   const ticketId = args.shift();
   ensureNoArgs(args);
 
   if (ticketId === undefined || stage === undefined) {
-    throw new Error("gate-check requires: <ticket-id> --stage <stage> [--json]");
+    throw new Error("gate-check requires: <ticket-id> --stage <stage> [--allow-main-root] [--json]");
   }
   if (!OPTIONAL_STEP_STAGES.includes(stage)) {
     throw new Error(`gate-check --stage must be one of ${OPTIONAL_STEP_STAGES.join(", ")}`);
   }
+
+  // Guarded before the empty-catalog auto-stamp branch below (which mutates
+  // the ticket via recordGateSkippedEmptyCatalog): a wrong-root invocation
+  // must be refused before any write, not just on the non-empty read path.
+  await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
   const config = await loadConfig(root);
   const { ticket } = await findTicket(root, ticketId);
@@ -963,7 +1001,7 @@ async function commandGateCheck(root, args) {
   return 0;
 }
 
-async function commandGateComplete(root, args) {
+async function commandGateComplete(root, args, allowMainRoot) {
   const asJson = takeFlag(args, "--json");
   const stage = takeOption(args, "--stage");
   const executor = takeOption(args, "--executor");
@@ -972,11 +1010,13 @@ async function commandGateComplete(root, args) {
   ensureNoArgs(args);
 
   if (ticketId === undefined || stage === undefined || executor === undefined) {
-    throw new Error("gate-complete requires: <ticket-id> --stage <stage> --executor <executor> [--evidence <text>]");
+    throw new Error("gate-complete requires: <ticket-id> --stage <stage> --executor <executor> [--evidence <text>] [--allow-main-root]");
   }
   if (!OPTIONAL_STEP_STAGES.includes(stage)) {
     throw new Error(`gate-complete --stage must be one of ${OPTIONAL_STEP_STAGES.join(", ")}`);
   }
+
+  await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
   const result = await recordGateConsultation(root, ticketId, stage, executor, evidence);
   if (asJson) {
@@ -1137,29 +1177,33 @@ function printUsage() {
   local-board [--root <path>] init [--overwrite] [--json]
   local-board install [--target=<ids>] [--all] [--no-<id>] [--list-targets] [--uninstall] (acts on user HOME; ignores --root)
   local-board [--root <path>] create <type> <title> [--status <status>] [--priority <priority>] [--parent <id>]
-  local-board [--root <path>] start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--json]
+  local-board [--root <path>] start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--allow-main-root] [--json]
   local-board [--root <path>] worktree-add <ticket-id> [--json]
   local-board [--root <path>] worktree-remove <ticket-id> [--force] [--json]
   local-board [--root <path>] worktree-list [--json]
   local-board [--root <path>] fast-forward [--json]
   local-board team-config [--json]
   local-board [--root <path>] begin-step <ticket-id> [--action <action>] [--json]
-  local-board [--root <path>] complete-step <ticket-id> <action> --executor <executor> --evidence <text> [--json]
-  local-board [--root <path>] approve-inline <ticket-id> <action> --reason <text> [--executor <executor>] [--json]
+  local-board [--root <path>] complete-step <ticket-id> <action> --executor <executor> --evidence <text> [--allow-main-root] [--json]
+  local-board [--root <path>] approve-inline <ticket-id> <action> --reason <text> [--executor <executor>] [--allow-main-root] [--json]
   local-board [--root <path>] check-dispatch --agent <subagent-type> [--model <model>] [--ticket <ticket-id>] [--json]
-  local-board [--root <path>] move <ticket-id> <status> [--json]
-  local-board [--root <path>] set <ticket-id> <field> <value>
-  local-board [--root <path>] comment <ticket-id> <text> [--section <section>]
-  local-board [--root <path>] section <ticket-id> <text> --section <section>
-  local-board [--root <path>] section <ticket-id> --file <path> --section <section>
-  local-board [--root <path>] link-parent <child-ticket-id> <parent-ticket-id>
-  local-board [--root <path>] link-child <parent-ticket-id> <child-ticket-id>
-  local-board [--root <path>] unlink-parent <child-ticket-id> <parent-ticket-id>
-  local-board [--root <path>] block <ticket-id> <dependency-ticket-id>
-  local-board [--root <path>] unblock <ticket-id> <dependency-ticket-id>
-  local-board [--root <path>] estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]
-  local-board [--root <path>] gate-check <ticket-id> --stage <stage> [--json]
-  local-board [--root <path>] gate-complete <ticket-id> --stage <stage> --executor <executor> [--evidence <text>] [--json]
+  local-board [--root <path>] move <ticket-id> <status> [--allow-main-root] [--json]
+  local-board [--root <path>] set <ticket-id> <field> <value> [--allow-main-root]
+  local-board [--root <path>] comment <ticket-id> <text> [--section <section>] [--allow-main-root]
+  local-board [--root <path>] section <ticket-id> <text> --section <section> [--allow-main-root]
+  local-board [--root <path>] section <ticket-id> --file <path> --section <section> [--allow-main-root]
+  local-board [--root <path>] link-parent <child-ticket-id> <parent-ticket-id> [--allow-main-root]
+  local-board [--root <path>] link-child <parent-ticket-id> <child-ticket-id> [--allow-main-root]
+  local-board [--root <path>] unlink-parent <child-ticket-id> <parent-ticket-id> [--allow-main-root]
+  local-board [--root <path>] block <ticket-id> <dependency-ticket-id> [--allow-main-root]
+  local-board [--root <path>] unblock <ticket-id> <dependency-ticket-id> [--allow-main-root]
+  local-board [--root <path>] estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--allow-main-root] [--json]
+  local-board [--root <path>] gate-check <ticket-id> --stage <stage> [--allow-main-root] [--json]
+  local-board [--root <path>] gate-complete <ticket-id> --stage <stage> --executor <executor> [--evidence <text>] [--allow-main-root] [--json]
   local-board [--root <path>] specialty-run <ticket-id> <step-name> [--json]
-  local-board [--root <path>] calibration suggest <ticket-id> [--json]`);
+  local-board [--root <path>] calibration suggest <ticket-id> [--json]
+
+--allow-main-root overrides the wrong-root mutation guard (worktrees.guardWrongRoot)
+for per-ticket commands above; it is a no-op unless the ticket has a registered
+worktree and the invocation root is not that worktree.`);
 }

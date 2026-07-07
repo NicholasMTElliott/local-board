@@ -35,6 +35,9 @@ const MANDATORY_ACTION_NAMES = new Set([
 //   - routing.invalidateOnLoopBack: false here (vs true in the scaffold) so a
 //     pre-existing config that omits the key does not silently start
 //     stripping completedSteps/routingApprovals tokens on loop-back moves.
+//   - worktrees.guardWrongRoot: false here (vs true in the scaffold) so a
+//     pre-existing board that omits the key does not silently start refusing
+//     per-ticket mutations invoked from the wrong root.
 // These differences are pinned by tests in test/config.test.js (search
 // "backward-compat disabled" and "empty optionalSteps catalog"). Do NOT
 // converge them to match the scaffold — see the guard test
@@ -283,6 +286,7 @@ export const DEFAULT_CONFIG = {
   },
   worktrees: {
     location: "sibling",
+    guardWrongRoot: false,
   },
   estimation: {
     enabled: false,
@@ -484,19 +488,24 @@ function normalizeEstimation(merged) {
 // once repoRoot is resolved.
 function normalizeWorktrees(merged) {
   if (merged.worktrees === undefined || merged.worktrees === null) {
-    merged.worktrees = { location: "sibling" };
+    merged.worktrees = { location: "sibling", guardWrongRoot: false };
     return;
   }
   if (!isObject(merged.worktrees)) {
     throw new Error("worktrees must be an object");
   }
-  const { location } = merged.worktrees;
+  const { location, guardWrongRoot } = merged.worktrees;
   if (typeof location !== "string" || location.trim() === "") {
     throw new Error(
       `worktrees.location must be a non-empty string; got ${JSON.stringify(location)}`,
     );
   }
-  merged.worktrees = { location };
+  if (typeof guardWrongRoot !== "boolean") {
+    throw new Error(
+      `worktrees.guardWrongRoot must be a boolean; got ${JSON.stringify(guardWrongRoot)}`,
+    );
+  }
+  merged.worktrees = { location, guardWrongRoot };
 }
 
 function validateOptionalStepEntry(entry, stage, seenNames) {
@@ -895,8 +904,12 @@ export function defaultConfigJsonc() {
   // workspace root and needs no extra sandbox config — recommended for Codex parallel runs.
   // Any other non-empty string is an explicit path (absolute, or relative to repoRoot);
   // it is rejected if it resolves inside plans/.
+  // guardWrongRoot: refuse per-ticket mutation commands invoked from a root other than
+  // a ticket's registered worktree (override with --allow-main-root). No-op when the
+  // ticket has no worktree, so this costs solo/single-ticket users nothing.
   "worktrees": {
-    "location": "sibling"
+    "location": "sibling",
+    "guardWrongRoot": true
   },
 
   // Relative-sized estimation. Sized after design; enforced on complete-step

@@ -13,6 +13,7 @@ import {
   resolveDefaultBranch,
   ticketBranchName,
 } from "./git.js";
+import { resolveMainRoot } from "./lock.js";
 
 export async function addTicketWorktree(root, ticketId) {
   const repoRoot = await gitOutput(root, ["rev-parse", "--show-toplevel"]);
@@ -103,8 +104,62 @@ async function commitBranchStamp(worktreePath, ticketId, branch) {
   await gitRun(worktreePath, ["commit", "-m", `local-board: stamp branch ${branch} on ${ticketId}`]);
 }
 
+// Guards per-ticket mutation commands against writing the wrong checkout's
+// copy of a ticket file. A no-op unless `worktrees.guardWrongRoot` is true
+// (see DEFAULTS in config.js): older boards that omit the key keep today's
+// unguarded behaviour. When enabled: resolves the ticket's expected worktree
+// path from the shared main root (identical for the mainline checkout and
+// every linked worktree of the same repo -- see resolveMainRoot), and, only
+// if a worktree is actually registered there, refuses when the invocation
+// root is neither that worktree nor overridden with `allowMainRoot`. No
+// worktree registered for this ticket -> return immediately: single-ticket /
+// solo mode is unaffected because the guard only ever binds once a worktree
+// for *that* ticket exists. Any git failure resolving the registered
+// worktree or the invocation root's toplevel is swallowed -- the guard fails
+// open (it is a safety net, not a correctness gate, and must never break
+// non-git fixtures or degraded environments).
+export async function assertInvocationRootForTicket(root, ticketId, options = {}) {
+  const allowMainRoot = options.allowMainRoot === true;
+
+  let config;
+  try {
+    config = await loadConfig(root);
+  } catch {
+    return;
+  }
+  if (config.worktrees.guardWrongRoot !== true) {
+    return;
+  }
+
+  const mainRoot = await resolveMainRoot(root);
+  const expected = ticketWorktreePath(mainRoot, ticketId, config.worktrees.location);
+
+  let registered;
+  let invocationTop;
+  try {
+    registered = await findRegisteredWorktree(mainRoot, expected);
+    if (registered === null) {
+      return;
+    }
+    invocationTop = path.resolve(await gitOutput(root, ["rev-parse", "--show-toplevel"]));
+  } catch {
+    return;
+  }
+
+  if (pathsEqual(invocationTop, path.resolve(expected))) {
+    return;
+  }
+  if (allowMainRoot) {
+    return;
+  }
+
+  throw new Error(
+    `refusing to mutate ${ticketId} from ${displayPath(invocationTop)}: this ticket has a registered worktree at ${displayPath(expected)}. Re-run with --root ${displayPath(expected)}, or pass --allow-main-root to override.`,
+  );
+}
+
 export async function removeTicketWorktree(root, ticketId, options = {}) {
-  const repoRoot = await gitOutput(root, ["rev-parse", "--show-toplevel"]);
+  const repoRoot = await resolveMainRoot(root);
   await findTicket(repoRoot, ticketId);
   const config = await loadConfig(repoRoot);
   const worktreePath = ticketWorktreePath(repoRoot, ticketId, config.worktrees.location);
@@ -295,7 +350,18 @@ async function reflogCandidates(root, branch, newHead) {
 async function findRegisteredWorktree(root, worktreePath) {
   const target = path.resolve(worktreePath);
   const records = await listRegisteredWorktrees(root);
-  return records.find((record) => path.resolve(record.worktreePath) === target) ?? null;
+  return records.find((record) => pathsEqual(path.resolve(record.worktreePath), target)) ?? null;
+}
+
+// Path-equality comparer for the worktree/root guard. win32 filesystems are
+// case-insensitive, so two differently-cased spellings of the same resolved
+// path (drive-letter casing, git's own casing choices, etc.) must compare
+// equal there; POSIX stays case-sensitive since its filesystems normally are.
+function pathsEqual(left, right) {
+  if (process.platform === "win32") {
+    return left.toLowerCase() === right.toLowerCase();
+  }
+  return left === right;
 }
 
 async function listRegisteredWorktrees(root) {
