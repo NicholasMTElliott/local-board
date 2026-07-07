@@ -166,7 +166,6 @@ test("installer writes rendered Codex skills and uninstall removes them", async 
     assert.match(stdout, /installed skill for Codex/);
     assert.match(stdout, /installed team skill for Codex/);
 
-    const expectedInstallDir = path.join(home, ".local-board").replace(/\\/g, "/");
     const skillDir = path.join(home, ".codex", "skills", "local-board");
     const teamSkillDir = path.join(home, ".codex", "skills", "local-team");
     const skillPath = path.join(skillDir, "SKILL.md");
@@ -180,10 +179,10 @@ test("installer writes rendered Codex skills and uninstall removes them", async 
 
     const skill = await readFile(skillPath, "utf8");
     const teamSkill = await readFile(teamSkillPath, "utf8");
-    assert.match(skill, new RegExp(escapeRegExp(expectedInstallDir)));
-    assert.match(teamSkill, new RegExp(escapeRegExp(expectedInstallDir)));
     assert.doesNotMatch(skill, /<<SCRIPT_PATH>>|<<INSTALL_PATH>>/);
     assert.doesNotMatch(teamSkill, /<<SCRIPT_PATH>>|<<INSTALL_PATH>>/);
+    assert.doesNotMatch(skill, /Runtime directory:/);
+    assert.doesNotMatch(teamSkill, /Runtime directory:/);
     assert.doesNotMatch(skill, /node\s+\S*local-board\.js/i);
     assert.doesNotMatch(teamSkill, /node\s+\S*local-board\.js/i);
     assert.match(skill, /\blocal-board /);
@@ -266,13 +265,49 @@ test("Codex skill templates have valid frontmatter and route translation guidanc
 }
 );
 
+test("no live skill template contains the retired <<INSTALL_PATH>> placeholder", async () => {
+  const templatePaths = [
+    path.resolve("SKILL.md"),
+    path.resolve("SKILL_TEAM.md"),
+    path.resolve("skills", "codex", "local-board", "SKILL.md"),
+    path.resolve("skills", "codex", "local-team", "SKILL.md"),
+  ];
+
+  for (const templatePath of templatePaths) {
+    const text = await readFile(templatePath, "utf8");
+    assert.doesNotMatch(text, /<<INSTALL_PATH>>/, `${templatePath} still references <<INSTALL_PATH>>`);
+    assert.doesNotMatch(text, /Runtime directory:/, `${templatePath} still has a Runtime directory: line`);
+  }
+});
+
+test("renderSkill no longer replaces <<INSTALL_PATH>>; the token survives verbatim if a template reintroduces it", async () => {
+  await withHome(async (home) => {
+    const packagedDir = createPackagedCopy();
+    try {
+      const skillPath = path.join(packagedDir, "skills", "codex", "local-board", "SKILL.md");
+      const original = await readFile(skillPath, "utf8");
+      await writeFile(skillPath, `${original}\n\nLegacy runtime marker: <<INSTALL_PATH>>/agents/codex/\n`, "utf8");
+
+      await execFileAsync(
+        process.execPath,
+        [path.join(packagedDir, "bin", "local-board.js"), "install", "--target=codex"],
+        { cwd: packagedDir, encoding: "utf8", env: installEnv(home) },
+      );
+
+      const rendered = await readFile(path.join(home, ".codex", "skills", "local-board", "SKILL.md"), "utf8");
+      assert.match(rendered, /Legacy runtime marker: <<INSTALL_PATH>>\/agents\/codex\//);
+    } finally {
+      await rm(packagedDir, { recursive: true, force: true });
+    }
+  });
+});
+
 test("CLI install subcommand installs the same tree as install.mjs", async () => {
   await withHome(async (home) => {
     const { stdout } = await runInstallCli(home, ["--target=codex"]);
     assert.match(stdout, /installed skill for Codex/);
     assert.match(stdout, /installed team skill for Codex/);
 
-    const expectedInstallDir = path.join(home, ".local-board").replace(/\\/g, "/");
     const skillDir = path.join(home, ".codex", "skills", "local-board");
     const teamSkillDir = path.join(home, ".codex", "skills", "local-team");
     const skillPath = path.join(skillDir, "SKILL.md");
@@ -290,10 +325,10 @@ test("CLI install subcommand installs the same tree as install.mjs", async () =>
 
     const skill = await readFile(skillPath, "utf8");
     const teamSkill = await readFile(teamSkillPath, "utf8");
-    assert.match(skill, new RegExp(escapeRegExp(expectedInstallDir)));
-    assert.match(teamSkill, new RegExp(escapeRegExp(expectedInstallDir)));
     assert.doesNotMatch(skill, /<<SCRIPT_PATH>>|<<INSTALL_PATH>>/);
     assert.doesNotMatch(teamSkill, /<<SCRIPT_PATH>>|<<INSTALL_PATH>>/);
+    assert.doesNotMatch(skill, /Runtime directory:/);
+    assert.doesNotMatch(teamSkill, /Runtime directory:/);
     assert.doesNotMatch(skill, /node\s+\S*local-board\.js/i);
     assert.doesNotMatch(teamSkill, /node\s+\S*local-board\.js/i);
   });

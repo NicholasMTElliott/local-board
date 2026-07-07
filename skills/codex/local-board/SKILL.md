@@ -13,8 +13,7 @@ local-board
 
 Installation metadata:
 
-- Runtime directory: `<<INSTALL_PATH>>`
-- Codex executor prompts: `<<INSTALL_PATH>>/agents/codex/`
+- Codex executor prompts: run `local-board where --json` and read `agentsDir`.
 - Installed from local-board v<<VERSION>>
 
 Do not search the filesystem for local-board source or scripts. Use the `local-board` command on PATH.

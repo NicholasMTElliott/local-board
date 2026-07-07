@@ -13,8 +13,7 @@ local-board
 
 Installation metadata:
 
-- Runtime directory: `<<INSTALL_PATH>>`
-- Codex executor prompts: `<<INSTALL_PATH>>/agents/codex/`
+- Codex executor prompts: run `local-board where --json` and read `agentsDir`.
 
 Do not search the filesystem for local-board source or scripts. Use the `local-board` command on PATH.
 
@@ -69,7 +68,7 @@ Use the same translation rules as the Codex `local-board` skill:
 - `inline`: current Codex orchestrator performs the step.
 - `codex-task:read-only`: spawn an `explorer`.
 - `codex-task:workspace-write`: spawn a `worker`.
-- known `claude-subagent:local-board-*`: translate to the matching Codex executor prompt in `<<INSTALL_PATH>>/agents/codex/`.
+- known `claude-subagent:local-board-*`: translate to the matching Codex executor prompt in the `agentsDir` reported by `local-board where --json`.
 - unknown `claude-subagent:*`: ask before inline fallback; otherwise move to `questions`.
 
 Preserve the configured logical route in `complete-step`, suffixed with `@codex-default` when a Claude route was physically handled by Codex and no valid Codex model id was used. Do not pass Claude model aliases (`opus`, `sonnet`, `haiku`) as Codex model overrides.

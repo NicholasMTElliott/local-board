@@ -24,10 +24,6 @@ Use the `local-board` command on PATH:
 local-board
 ```
 
-Installation metadata:
-
-- Runtime directory: `<<INSTALL_PATH>>`
-
 Operate in the user's current project unless they specify another root. Pass
 `--root <path>` for non-current projects and `--root <worktreePath>` for all
 per-ticket calls (see Worktrees).

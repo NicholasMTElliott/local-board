@@ -181,10 +181,10 @@ function performInstall(args, targets, home, installDir, options = {}) {
   for (const target of selected) {
     const skillTemplate = resolveSkillTemplate(target, "skillTemplate", "SKILL.md");
     const teamSkillTemplate = resolveSkillTemplate(target, "teamSkillTemplate", "SKILL_TEAM.md");
-    installRenderedSkillDir(skillTemplate, target.skillDir, scriptPath, installDir, version);
+    installRenderedSkillDir(skillTemplate, target.skillDir, scriptPath, version);
     console.log(`installed skill for ${target.label}: ${target.skillDir}`);
     if (teamSkillTemplate !== null && target.teamSkillDir) {
-      installRenderedSkillDir(teamSkillTemplate, target.teamSkillDir, scriptPath, installDir, version);
+      installRenderedSkillDir(teamSkillTemplate, target.teamSkillDir, scriptPath, version);
       console.log(`installed team skill for ${target.label}: ${target.teamSkillDir}`);
     }
     removeLegacyDirs(target, "legacySkillDirs", target.skillDir, "skill");
@@ -219,26 +219,26 @@ function resolveSkillTemplate(target, field, fallbackFile) {
   return existsSync(fallback) ? fallback : null;
 }
 
-function installRenderedSkillDir(source, targetDir, scriptPath, installDir, version) {
+function installRenderedSkillDir(source, targetDir, scriptPath, version) {
   if (source === null) {
     return;
   }
   mkdirSync(targetDir, { recursive: true });
   if (existsSync(join(source, "SKILL.md"))) {
     cpSync(source, targetDir, { recursive: true, force: true });
-    renderFilesInPlace(targetDir, scriptPath, installDir, version);
+    renderFilesInPlace(targetDir, scriptPath, version);
   } else {
-    writeFileSync(join(targetDir, "SKILL.md"), renderSkill(source, scriptPath, installDir, version));
+    writeFileSync(join(targetDir, "SKILL.md"), renderSkill(source, scriptPath, version));
   }
 }
 
-function renderFilesInPlace(dir, scriptPath, installDir, version) {
+function renderFilesInPlace(dir, scriptPath, version) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const entryPath = join(dir, entry.name);
     if (entry.isDirectory()) {
-      renderFilesInPlace(entryPath, scriptPath, installDir, version);
+      renderFilesInPlace(entryPath, scriptPath, version);
     } else if (entry.isFile() && (entry.name.endsWith(".md") || entry.name.endsWith(".yaml") || entry.name.endsWith(".yml"))) {
-      writeFileSync(entryPath, renderSkill(entryPath, scriptPath, installDir, version));
+      writeFileSync(entryPath, renderSkill(entryPath, scriptPath, version));
     }
   }
 }
@@ -259,9 +259,8 @@ function removeLegacyDirs(target, field, currentDir, label) {
   }
 }
 
-function renderSkill(sourcePath, scriptPath, installDir, version) {
+function renderSkill(sourcePath, scriptPath, version) {
   return readFileSync(sourcePath, "utf8")
-    .replace(/<<INSTALL_PATH>>/g, () => installDir.replace(/\\/g, "/"))
     .replace(/<<SCRIPT_PATH>>/g, () => scriptPath)
     .replace(/<<VERSION>>/g, () => version);
 }

@@ -54,6 +54,7 @@ Run commands from the repository root:
 
 ```sh
 node ./bin/local-board.js version
+node ./bin/local-board.js where --json
 node ./bin/local-board.js validate
 node ./bin/local-board.js list
 node ./bin/local-board.js next

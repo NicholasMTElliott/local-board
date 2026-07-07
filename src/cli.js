@@ -1,5 +1,6 @@
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   appendTicketComment,
@@ -34,7 +35,7 @@ import { assertAutoMergeReady, autoMergeTicketBranch, startTicketWork } from "./
 import { checkDispatch } from "./active-steps.js";
 import { loadConfig, OPTIONAL_STEP_STAGES } from "./config.js";
 import { runInstall } from "./install.js";
-import { initProject } from "./scaffold.js";
+import { initProject, packagedResourceDir } from "./scaffold.js";
 import {
   addTicketWorktree,
   fastForwardDefaultBranch,
@@ -42,6 +43,8 @@ import {
   removeTicketWorktree,
 } from "./worktrees.js";
 import { resolveMaxTeammates } from "./team.js";
+
+export { commandWhere };
 
 export async function main(argv) {
   const args = [...argv];
@@ -52,6 +55,9 @@ export async function main(argv) {
     if (command === "--version" || command === "version") {
       console.log(await readPackageVersion());
       return 0;
+    }
+    if (command === "where") {
+      return await commandWhere(root, args);
     }
     if (command === "validate") {
       return await commandValidate(root, args);
@@ -171,10 +177,55 @@ export async function main(argv) {
 // flattened runtime copy the installer writes (~/.local-board/src/cli.js ->
 // ~/.local-board/package.json, since install.js copies package.json to the
 // install dir root and src/ beneath it). Never depends on process.cwd().
-async function readPackageVersion() {
-  const packageJsonUrl = new URL("../package.json", import.meta.url);
-  const contents = await readFile(packageJsonUrl, "utf8");
+//
+// `packageRoot`, when supplied, overrides the self-located root (test seam
+// for `where`, mirroring `packagedResourceDir`'s override parameter).
+async function readPackageVersion(packageRoot) {
+  const contents = packageRoot
+    ? await readFile(path.join(packageRoot, "package.json"), "utf8")
+    : await readFile(new URL("../package.json", import.meta.url), "utf8");
   return JSON.parse(contents).version;
+}
+
+// Resolves the running CLI's own package root, the same seam readPackageVersion
+// uses: fileURLToPath(new URL("..", import.meta.url)) from this file's own
+// location. Correct under every install mode because the CLI invoked on PATH
+// (global npm install, npm link, dev clone) is always co-located with its own
+// assets -- unlike the separate, flattened ~/.local-board runtime copy, which
+// `where` deliberately does not resolve against (see ticket T20260707T1322Z).
+function selfPackageRoot() {
+  return path.resolve(fileURLToPath(new URL("..", import.meta.url)));
+}
+
+// Reports the running CLI's own asset locations: version, package root,
+// packaged prompts/templates dirs (dual-layout aware via packagedResourceDir),
+// and the Codex executor-prompt dir. `packageRoot`, when supplied, overrides
+// self-location -- a test seam for exercising both the layered (dev clone /
+// npm global) and flattened (~/.local-board runtime) layouts hermetically
+// against fixtures.
+async function commandWhere(root, args, packageRootOverride) {
+  const asJson = takeFlag(args, "--json");
+  ensureNoArgs(args);
+
+  const packageRoot = packageRootOverride ?? selfPackageRoot();
+  const version = await readPackageVersion(packageRoot);
+  const promptsDir = packagedResourceDir("prompts", packageRoot);
+  const templatesDir = packagedResourceDir("templates", packageRoot);
+  const agentsDir = path.join(packageRoot, "agents", "codex");
+
+  const result = { version, packageRoot, promptsDir, templatesDir, agentsDir };
+
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`version: ${result.version}`);
+    console.log(`packageRoot: ${result.packageRoot}`);
+    console.log(`promptsDir: ${result.promptsDir}`);
+    console.log(`templatesDir: ${result.templatesDir}`);
+    console.log(`agentsDir: ${result.agentsDir}`);
+  }
+
+  return 0;
 }
 
 async function commandValidate(root, args) {
@@ -1040,6 +1091,7 @@ function ensureNoArgs(args) {
 function printUsage() {
   console.error(`Usage:
   local-board --version
+  local-board where [--json]
   local-board [--root <path>] validate [--json]
   local-board [--root <path>] list [--status <status>] [--ready] [--limit <N>] [--json]
   local-board [--root <path>] next [--json]
