@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { chmodSync, cpSync, existsSync, mkdtempSync, writeFileSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -8,6 +8,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { buildTargets, runInstall as runInstallInProcess } from "../src/install.js";
+import { removeFixtureDir } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
 const INSTALLER = path.resolve("install.mjs");
@@ -64,7 +65,7 @@ async function withHome(fn) {
   try {
     await fn(home);
   } finally {
-    await rm(home, { recursive: true, force: true });
+    await removeFixtureDir(home);
   }
 }
 
@@ -76,7 +77,7 @@ async function withHomeContainingSpace(fn) {
   try {
     await fn(home);
   } finally {
-    await rm(home, { recursive: true, force: true });
+    await removeFixtureDir(home);
   }
 }
 
@@ -297,7 +298,7 @@ test("renderSkill no longer replaces <<INSTALL_PATH>>; the token survives verbat
       const rendered = await readFile(path.join(home, ".codex", "skills", "local-board", "SKILL.md"), "utf8");
       assert.match(rendered, /Legacy runtime marker: <<INSTALL_PATH>>\/agents\/codex\//);
     } finally {
-      await rm(packagedDir, { recursive: true, force: true });
+      await removeFixtureDir(packagedDir);
     }
   });
 });
@@ -622,7 +623,7 @@ test("PATH verification failure (packaged/no-.git tree): guidance omits npm link
         },
       );
     } finally {
-      await rm(packagedDir, { recursive: true, force: true });
+      await removeFixtureDir(packagedDir);
     }
   });
 });

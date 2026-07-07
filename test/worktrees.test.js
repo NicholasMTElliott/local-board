@@ -11,6 +11,7 @@ import { initProject } from "../src/scaffold.js";
 import { createTicket, setTicketField } from "../src/tickets.js";
 import { worktreesRootFor } from "../src/worktrees.js";
 import { defaultConfigJsonc } from "../src/config.js";
+import { removeFixtureDir } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
 const GIT_AVAILABLE = await hasGit();
@@ -21,6 +22,10 @@ async function withRepo(fn, options = {}) {
   const worktreesRoot = worktreesRootFor(root, location);
   try {
     await git(root, ["init"]);
+    // Disable background maintenance so a detached gc/object-packing writer
+    // can't still be touching .git when teardown removes the fixture dir.
+    await git(root, ["config", "gc.auto", "0"]);
+    await git(root, ["config", "gc.autoDetach", "false"]);
     await git(root, ["config", "user.email", "local-board@example.test"]);
     await git(root, ["config", "user.name", "local-board test"]);
     await writeFile(path.join(root, "README.md"), "# Test Repo\n", "utf8");
@@ -39,8 +44,8 @@ async function withRepo(fn, options = {}) {
     await git(root, ["commit", "-m", "Initialize local board"]);
     await fn(root, baseBranch, worktreesRoot);
   } finally {
-    await rm(worktreesRoot, { recursive: true, force: true });
-    await rm(root, { recursive: true, force: true });
+    await removeFixtureDir(worktreesRoot);
+    await removeFixtureDir(root);
   }
 }
 

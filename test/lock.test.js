@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -11,6 +11,7 @@ import {
   withOrderedTicketLocks,
   withTicketLock,
 } from "../src/lock.js";
+import { removeFixtureDir } from "./helpers/fixtures.js";
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -21,7 +22,7 @@ async function withRoot(fn) {
   try {
     await fn(root);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeFixtureDir(root);
   }
 }
 

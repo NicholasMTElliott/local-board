@@ -1,5 +1,5 @@
 import { execFile, spawn } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -10,6 +10,7 @@ import { handle as dispatchLedgerHandle } from "../hooks/dispatch-ledger.js";
 import { handle as routingValidatorHandle } from "../hooks/routing-validator.js";
 import { handle as evidenceGateHandle } from "../hooks/evidence-gate.js";
 import { handle as approveInlineConsentHandle } from "../hooks/approve-inline-consent.js";
+import { removeFixtureDir } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
 const HOOKS_DIR = path.resolve("hooks");
@@ -18,9 +19,13 @@ async function withRepo(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "local-board-hooks-"));
   try {
     await execFileAsync("git", ["init", "-q"], { cwd: root });
+    // Disable background maintenance so a detached gc/object-packing writer
+    // can't still be touching .git when teardown removes the fixture dir.
+    await execFileAsync("git", ["config", "gc.auto", "0"], { cwd: root });
+    await execFileAsync("git", ["config", "gc.autoDetach", "false"], { cwd: root });
     await fn(root);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeFixtureDir(root);
   }
 }
 

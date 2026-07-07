@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -17,6 +17,7 @@ import {
   readActiveSteps,
   stampActiveStep,
 } from "../src/active-steps.js";
+import { removeFixtureDir } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
 const GIT_AVAILABLE = await hasGit();
@@ -27,7 +28,7 @@ async function withBoard(fn) {
     await initProject(root);
     await fn(root);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeFixtureDir(root);
   }
 }
 
@@ -35,6 +36,10 @@ async function withRepo(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "local-board-active-steps-repo-"));
   try {
     await git(root, ["init"]);
+    // Disable background maintenance so a detached gc/object-packing writer
+    // can't still be touching .git when teardown removes the fixture dir.
+    await git(root, ["config", "gc.auto", "0"]);
+    await git(root, ["config", "gc.autoDetach", "false"]);
     await git(root, ["config", "user.email", "local-board@example.test"]);
     await git(root, ["config", "user.name", "local-board test"]);
     await writeFile(path.join(root, "README.md"), "# Test Repo\n", "utf8");
@@ -45,7 +50,7 @@ async function withRepo(fn) {
     await git(root, ["commit", "-m", "Initialize local board"]);
     await fn(root);
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await removeFixtureDir(root);
   }
 }
 

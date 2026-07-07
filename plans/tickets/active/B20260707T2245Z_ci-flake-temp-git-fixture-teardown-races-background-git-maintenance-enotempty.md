@@ -1,19 +1,19 @@
 ---
 id: B20260707T2245Z
 type: bug
-status: ready_for_implementation
+status: implementing
 priority: P1
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/B20260707T2245Z-ci-flake-temp-git-fixture-teardown-races-background-git-maintenance-enotempty
 estimate: 2
 estimateBasis: B20260707T1322Z
-workStartedAt: null
+workStartedAt: 2026-07-07T22:53:19Z
 workCompletedAt: null
 created: 2026-07-07T22:45:32Z
-updated: 2026-07-07T22:53:19Z
+updated: 2026-07-07T23:00:09Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -145,6 +145,42 @@ None required in `docs/` or `README.md`. This is a test-infrastructure fix. If `
 
 ## Implementation Notes
 
+Implemented per the design's two-part fix, plus the design's explicit recommendation to route non-git temp-fixture teardown through the same helper "where it costs nothing":
+
+**Part 1 — disable background git maintenance in fixture repos.** Added `git config gc.auto 0` and `git config gc.autoDetach false` immediately after `git init` in all four real-git fixture helpers: `test/worktrees.test.js` (`withRepo`), `test/git.test.js` (`withRepo`), `test/active-steps.test.js` (`withRepo`), `test/hooks.test.js` (`withRepo`, via its raw `execFileAsync("git", ...)` calls since that file has no local `git()` wrapper). Linked worktrees created via `git worktree add` share the main repo's `.git/config`, so the setting also covers production code (`src/worktrees.js`, `src/git.js`) invoked against the fixture and its worktrees.
+
+**Part 2 — resilient teardown.** Added `test/helpers/fixtures.js` exporting `removeFixtureDir(dir)` using `fs.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })`. Routed every recursive temp-fixture-root teardown through it, including the four git fixtures (both `rm` calls in `worktrees.test.js`: `worktreesRoot` then `root`) and, per the design's "optional/harmless where cheap" note, the non-git fixtures too: `test/tickets.test.js` (`withBoard`), `test/config.test.js` (`withRoot`), `test/cli.test.js` (`withBoard` and the `where --json` flattened-layout fixture), `test/lock.test.js` (`withRoot`), `test/prompt-scaffold.test.js` (`withBoard` plus the three `packagedResourceDir` layout fixtures), `test/install.test.js` (`withHome`, `withHomeContainingSpace`, and both `createPackagedCopy()` teardown sites).
+
+Left untouched: single-file `rm(path, { force: true })` calls scattered in several test files (e.g. deleting one prompt template, one ticket file) — these are not fixture-root recursive removals and don't carry the ENOTEMPTY race; converting them would be scope creep the design doesn't call for.
+
+Removed now-unused `rm` imports from `node:fs/promises` in files where every `rm(...)` call became `removeFixtureDir(...)` (`git.test.js`, `active-steps.test.js`, `hooks.test.js`, `config.test.js`, `lock.test.js`, `install.test.js`); left `rm` imported where single-file removals remain (`worktrees.test.js`, `tickets.test.js`, `cli.test.js`, `prompt-scaffold.test.js`).
+
+No production source changes. Test-only.
+
+**Verification:**
+- `npm run check` — clean (syntax check across src/bin/hooks).
+- `node --check` on every edited test file plus the new helper — all pass.
+- `npm test` — 315 tests, 314 pass, 1 skipped (pre-existing slow-test skip), 0 fail.
+- `npm run validate` — "Ticket validation OK".
+- `node --test test/worktrees.test.js` run three times consecutively — 21/21 pass each run, no teardown throws, ~29s per run.
+
+Cannot reproduce the Linux ENOTEMPTY race on this Windows machine (matches the ticket's own observation); real acceptance evidence is a green ubuntu CI run per the design's test strategy. Local stress loop confirms the new `git config` setup and `removeFixtureDir` retry contract are sound under repetition with no regressions.
+
+Files changed:
+- test/helpers/fixtures.js (new)
+- test/worktrees.test.js
+- test/git.test.js
+- test/active-steps.test.js
+- test/hooks.test.js
+- test/tickets.test.js
+- test/config.test.js
+- test/lock.test.js
+- test/cli.test.js
+- test/prompt-scaffold.test.js
+- test/install.test.js
+
+No deviations from the Technical Design's recommended approach (per-repo `git config`, not the `GIT_CONFIG_*` env alternative).
+
 ## Review Findings
 
 ## Test Evidence
@@ -158,3 +194,5 @@ None required in `docs/` or `README.md`. This is a test-infrastructure fix. If `
 - 2026-07-07T22:52:35Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): per-repo gc.auto=0/gc.autoDetach=false after fixture init (covers -C invocations and linked worktrees) + shared removeFixtureDir with fs.rm maxRetries/retryDelay; verification via consecutive ubuntu CI runs. Estimate 2 (basis B20260707T1322Z).
 
 - 2026-07-07T22:53:18Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (test-only CI fix)
+
+- 2026-07-07T22:53:19Z: Ensured git branch local-board/B20260707T2245Z-ci-flake-temp-git-fixture-teardown-races-background-git-maintenance-enotempty (created).
