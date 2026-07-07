@@ -245,6 +245,9 @@
     // Forward moves out of design/implement/test require a recorded gate
     // consultation token (gate-check auto-stamp or gate-complete).
     "requireGateConsultation": true,
+    // Loop-back moves to an earlier ready_* status strip downstream
+    // completedSteps evidence and matching approvals (Run Log records it).
+    "invalidateOnLoopBack": true,
     "doneRequires": {
       "epic": ["decompose"],
       "story": ["decompose"],
