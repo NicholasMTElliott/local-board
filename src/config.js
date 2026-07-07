@@ -21,7 +21,7 @@ const MANDATORY_ACTION_NAMES = new Set([
 //      DEFAULT_CONFIG, so every key here is a backward-compat default for
 //      configs that omit that block.
 // It deliberately differs from defaultConfigJsonc() (the blessed `init`
-// scaffold, below) in exactly three places, all required by role 2:
+// scaffold, below) in the documented places below, all required by role 2:
 //   - estimation.enabled: false here (vs true in the scaffold) so a
 //     pre-estimation config that omits the `estimation` block does not
 //     silently start enforcing the estimation gate.
@@ -41,7 +41,7 @@ const MANDATORY_ACTION_NAMES = new Set([
 // "defaultConfigJsonc matches DEFAULT_CONFIG except for documented
 // differences" in test/config.test.js, which locks the remaining shared
 // blocks (workflow, agents, routing, retention, git, worktrees) in sync
-// while allowlisting only these three intentional differences.
+// while allowlisting only these intentional differences.
 export const DEFAULT_CONFIG = {
   version: 1,
   workflow: {
