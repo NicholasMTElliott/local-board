@@ -247,6 +247,157 @@ test("move rewrites status and relocates ticket", async () => {
   });
 });
 
+test("moveTicket cross-folder rename failure leaves the ticket consistent at exactly one path", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Rename fails", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const failingRename = async () => {
+      const error = new Error("simulated disk full");
+      error.code = "ENOSPC";
+      throw error;
+    };
+
+    await assert.rejects(
+      moveTicket(root, ticketId, "implementing", {
+        now: new Date("2026-05-14T21:00:00Z"),
+        renameFn: failingRename,
+      }),
+      /simulated disk full/,
+    );
+
+    const readyDir = path.join(root, "plans", "tickets", "ready");
+    const activeDir = path.join(root, "plans", "tickets", "active");
+    assert.deepEqual(await readdir(readyDir), [path.basename(ticketPath)]);
+    // moveTicket pre-creates the target folder (mkdir recursive) before attempting the
+    // rename, so it may exist; it must not contain the ticket (or anything else).
+    assert.deepEqual(await readdir(activeDir), []);
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^status: ready_for_design$/m);
+
+    const board = await discover(root);
+    assert.deepEqual(validate(board, await loadConfig(root)), []);
+  });
+});
+
+test("moveTicket cross-folder rename retries a transient Windows error and succeeds", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Rename retries", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    let attempts = 0;
+    const flakyRename = async (source, destination) => {
+      attempts += 1;
+      if (attempts === 1) {
+        const error = new Error("transient lock");
+        error.code = "EPERM";
+        throw error;
+      }
+      await rename(source, destination);
+    };
+
+    const movedPath = await moveTicket(root, ticketId, "implementing", {
+      now: new Date("2026-05-14T21:00:00Z"),
+      renameFn: flakyRename,
+    });
+
+    assert.ok(attempts >= 2);
+    assert.equal(path.relative(root, movedPath), path.join("plans", "tickets", "active", path.basename(ticketPath)));
+
+    const readyDir = path.join(root, "plans", "tickets", "ready");
+    const activeDir = path.join(root, "plans", "tickets", "active");
+    assert.deepEqual(await readdir(readyDir), []);
+    assert.deepEqual(await readdir(activeDir), [path.basename(ticketPath)]);
+
+    const text = await readFile(movedPath, "utf8");
+    assert.match(text, /^status: implementing$/m);
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+test("moveTicket rolls back the rename when the in-place rewrite fails", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Rewrite fails after rename", {
+      status: "ready_for_design",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    const originalText = await readFile(ticketPath, "utf8");
+
+    let callCount = 0;
+    const statefulRename = async (source, destination) => {
+      callCount += 1;
+      if (callCount === 2) {
+        const error = new Error("simulated disk full");
+        error.code = "ENOSPC";
+        throw error;
+      }
+      await rename(source, destination);
+    };
+
+    await assert.rejects(
+      moveTicket(root, ticketId, "implementing", {
+        now: new Date("2026-05-14T21:00:00Z"),
+        renameFn: statefulRename,
+      }),
+      /simulated disk full/,
+    );
+
+    const readyDir = path.join(root, "plans", "tickets", "ready");
+    const activeDir = path.join(root, "plans", "tickets", "active");
+    assert.deepEqual(await readdir(readyDir), [path.basename(ticketPath)]);
+    assert.deepEqual(await readdir(activeDir), []);
+
+    // File rolled back to the old path with its original (untouched) content.
+    assert.equal(await readFile(ticketPath, "utf8"), originalText);
+
+    const board = await discover(root);
+    assert.deepEqual(validate(board, await loadConfig(root)), []);
+  });
+});
+
+test("moveTicket within the same status folder rewrites in place without a cross-folder rename", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Same folder move", {
+      status: "ready_for_review",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const calls = [];
+    const trackingRename = async (source, destination) => {
+      calls.push({ source: path.dirname(source), destination: path.dirname(destination) });
+      await rename(source, destination);
+    };
+
+    const movedPath = await moveTicket(root, ticketId, "reviewing", {
+      now: new Date("2026-05-14T21:00:00Z"),
+      renameFn: trackingRename,
+    });
+
+    assert.equal(path.resolve(movedPath), path.resolve(ticketPath));
+    // Only the in-place temp-file rename happens: source and destination directories
+    // are identical for every recorded call (no cross-folder rename attempted).
+    assert.ok(calls.length >= 1);
+    for (const call of calls) {
+      assert.equal(call.source, call.destination);
+    }
+
+    const text = await readFile(movedPath, "utf8");
+    assert.match(text, /^status: reviewing$/m);
+    const reviewDir = path.join(root, "plans", "tickets", "review");
+    assert.deepEqual(await readdir(reviewDir), [path.basename(ticketPath)]);
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
 test("setTicketField rewrites front matter without replacing the body", async () => {
   await withBoard(async (root) => {
     const ticketPath = await createTicket(root, "task", "Set field", {

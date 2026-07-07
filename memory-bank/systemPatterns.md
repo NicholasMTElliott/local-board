@@ -65,7 +65,7 @@ Required fields:
 - `updated`
 
 ## Atomic Writes
-Existing ticket rewrites go through `writeTicketFile` (`src/tickets.js`): same-directory temp file (name never ends in `.md`), then `rename()` over the target with bounded retry on Windows `EPERM`/`EBUSY`/`EACCES`; `createTicket` uses exclusive `wx` create for new files. This gives crash-consistency (atomic rename), not mutual exclusion or fsync durability: `moveTicket`'s cross-folder rename ordering and two-file update races are separate open concerns.
+Existing ticket rewrites go through `writeTicketFile` (`src/tickets.js`): same-directory temp file (name never ends in `.md`), then `rename()` over the target with bounded retry on Windows `EPERM`/`EBUSY`/`EACCES`; `createTicket` uses exclusive `wx` create; same-folder `moveTicket` rewrites in place, while cross-folder `moveTicket` renames first with `renameWithRetry`, rewrites in place, and rolls back on rewrite failure. This gives crash-consistency (atomic rename), not mutual exclusion or fsync durability; remaining gaps are the two-file update/locking race (B20260707T1322Z) and the accepted double-fault/power-loss residual, which should be retry-healable.
 
 ## Status Folders
 ```text

@@ -1,20 +1,20 @@
 ---
 id: B20260707T1318Z
 type: bug
-status: ready_for_implementation
+status: done
 priority: P1
 parent: null
 children: []
 blockedBy: [B20260707T1317Z]
 blocks: []
-branch: null
+branch: local-board/B20260707T1318Z-moveticket-writes-new-status-before-cross-folder-rename-rename-failure-strands-the-board
 estimate: 2
 estimateBasis: B20260707T1317Z
-workStartedAt: null
-workCompletedAt: null
+workStartedAt: 2026-07-07T14:30:44Z
+workCompletedAt: 2026-07-07T15:03:31Z
 created: 2026-07-07T13:18:54Z
-updated: 2026-07-07T14:30:44Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-07T15:03:31Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # moveTicket writes new status before cross-folder rename; rename failure strands the board
@@ -218,10 +218,10 @@ tests can target the cross-folder rename.
 
 ## Documentation Updates
 
-None required. Behavior contract is internal; `memory-bank/systemPatterns.md`
-already frames atomic writes at the B1317 level. If a one-line note on the
-move-ordering invariant is wanted, add it there, but it is not load-bearing for
-this fix.
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `memory-bank/systemPatterns.md` — Atomic Writes section updated: cross-folder moveTicket described as rename-first (renameWithRetry) then in-place writeTicketFile rewrite with rollback on failure; remaining open concerns narrowed to the two-file update/locking race (B20260707T1322Z) plus the accepted double-fault/power-loss residual.
+- `docs/` and `README.md` — checked; no stale move/status behavior narrative; unchanged.
 
 ## Open Questions
 
@@ -234,9 +234,103 @@ this fix.
 
 ## Implementation Notes
 
+Implemented the rename-first, rewrite-in-place-with-rollback ordering in `moveTicket`
+(`src/tickets.js`) exactly per the Technical Design.
+
+Cross-folder branch now:
+1. `renameWithRetry(ticket.path, targetPath, options.renameFn)` — the risky op runs
+   first, before any content change. If it throws, the file is untouched at the old
+   path with the old (folder-consistent) status; nothing to roll back.
+2. On success, `writeTicketFile(targetPath, content, { renameFn: options.renameFn })`
+   rewrites the new-status content in place at the new path. If this throws, the code
+   rolls back via `renameWithRetry(targetPath, ticket.path, options.renameFn).catch(() => {})`
+   (best-effort) and rethrows the original error, restoring the single-file
+   old-path/old-status state.
+
+Same-folder branch is unchanged in behavior: a single `writeTicketFile(targetPath,
+content, { renameFn: options.renameFn })`, now also threading `options.renameFn` for
+test injection parity.
+
+Added `options.renameFn` passthrough to `moveTicket` (previously only
+`writeTicketFile` had this seam); production call sites pass no `renameFn` and keep
+the real `rename` default. The formerly-unguarded plain `rename()` call at the old
+line 367 is gone — the cross-folder move now goes through `renameWithRetry`, so it
+also absorbs transient Windows `EPERM`/`EBUSY`/`EACCES` the same way in-place writes
+already do.
+
+No locking added (out of scope, deferred to B20260707T1322Z). No change to
+validation/hard-fail behavior (deferred per the ticket's Recovery-behavior decision).
+The `exists()` TOCTOU precheck at the old line 360 is unchanged, per the design's
+TOCTOU note.
+
+Tests added in `test/tickets.test.js` (all passing), following the established
+`renameFn`-injection pattern:
+- "moveTicket cross-folder rename failure leaves the ticket consistent at exactly
+  one path" — non-retryable `ENOSPC` on the cross-folder rename; asserts single file
+  at old path, old status, target folder empty, `validate` clean.
+- "moveTicket cross-folder rename retries a transient Windows error and succeeds" —
+  `EPERM` on first attempt then real rename; asserts move completes, no leftovers.
+- "moveTicket rolls back the rename when the in-place rewrite fails" — stateful
+  `renameFn` succeeds the cross-folder rename (call 1) then throws `ENOSPC` on the
+  in-place rewrite's temp-rename (call 2); asserts rollback to old path with
+  byte-identical original content, target folder empty, `validate` clean.
+- "moveTicket within the same status folder rewrites in place without a
+  cross-folder rename" — regression test using `ready_for_review` -> `reviewing`
+  (both map to the `review` folder); a tracking `renameFn` confirms every recorded
+  rename call has matching source/destination directories (no cross-folder rename
+  attempted).
+
+Verification:
+- `npm run check` — pass.
+- `npm test` — 146 tests, 144 pass, 2 fail. Both failures are pre-existing and
+  unrelated (`resources-sync.test.js`: CRLF vs LF drift between `resources/` and
+  `plans/` mirrors on this Windows checkout); confirmed pre-existing by stashing
+  this change and re-running (same 2 failures, same test names). `test/tickets.test.js`
+  alone: 68/68 pass, including all 4 new tests.
+- `npm run validate` — "Ticket validation OK".
+
+No deviations from the Technical Design. Scope held to `moveTicket`'s cross-folder
+ordering and its `renameFn` seam; no locking, no validation-behavior change.
+
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) against commit ffd0cff.
+
+No blocking findings.
+
+Non-blocking observations:
+- src/tickets.js:374 swallows rollback failure: in the double-fault case (rewrite throws AND rollback rename throws) the caller sees only the rewrite error; on-disk state is one file at the new path with old status — retry-healable but folder-inconsistent until retried. Matches the ticket's documented accepted risk, though not the stricter "every in-process failure is folder-consistent" wording.
+- Rollback uses renameWithRetry (correct) but is semantically a plain rename: on POSIX it could clobber a file that appeared at the old path in between — unlocked concurrent-writer race, correctly out of scope (B20260707T1322Z).
+
+Failure-point review: rename at :370 precedes any content change (throw = old path, old status, no duplicate); rewrite at :372 via writeTicketFile (throw + successful rollback = old path, old status, original error rethrown); double-fault per above.
+Power-loss window: starts after :370, ends at writeTicketFile's temp rename (:150); nothing inserted into the window; only writeTicketFile's own bounded retry can extend it.
+Done/archive behavior: workCompletedAt/updated still computed before render (:338-355) and written only by the final writeTicketFile; archive still runs in cli.js only after moveTicket returns. No observable success-path change beyond failure atomicity + retry on the cross-folder rename.
+Tests: four tests exercise production moveTicket via the renameFn seam (non-retryable fail :250, transient retry :287, rollback :325, same-folder :366). No double-fault test — acceptable while the residual stays accepted.
+
+Verification caveat: tests not run in the reviewer's read-only sandbox; delegated to test stage.
+
+Verdict: pass
+
 ## Test Evidence
+
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/B20260707T1318Z-..., change ffd0cff (plus merged eol fix).
+
+**Suite:** `npm run check` pass; `npm test` 147/147 pass, 0 fail (143 mainline + 4 new); `npm run validate` OK.
+
+**Four new tests confirmed (test/tickets.test.js) and the failure point each covers:**
+- `:250` cross-folder rename failure (ENOSPC) — rejects; exactly one file at old path, old status; validate clean.
+- `:287` transient EPERM retried — move completes; old folder empty; validate clean.
+- `:325` rewrite failure after successful rename — rollback to old path byte-identical; target empty; validate clean.
+- `:366` same-folder move — tracking renameFn proves only same-directory temp renames occur.
+
+**Independent end-to-end probe (throwaway --root board):** init -> create in backlog -> cross-folder move to ready_for_design (file physically relocated backlog/ -> ready/, status matches folder, validate OK) -> same-folder move to ready_for_implementation (single file, in-place rewrite, validate OK) -> temp dir removed.
+
+**Gaps / caveats:**
+- Failure injection is unit-test-only (CLI exposes no failing-rename hook) — expected; the probe verifies the success paths end-to-end.
+- Double-fault (rewrite + rollback both throw) untested — explicitly accepted residual per design and review, retry-healable state.
+- Windows EPERM/EBUSY simulated via injection, not real AV locks — consistent with the established pattern.
+
+Result: pass
 
 ## Documentation Updates
 
@@ -245,3 +339,13 @@ this fix.
 ## Run Log
 
 - 2026-07-07T14:30:44Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): rename-first then rewrite-in-place with rollback; failure states stay folder-consistent; also upgrades the plain rename at :367 to renameWithRetry; hard-fail relaxation deferred. Estimate 2 (basis B20260707T1317Z, calibrated).
+
+- 2026-07-07T14:30:44Z: Ensured git branch local-board/B20260707T1318Z-moveticket-writes-new-status-before-cross-folder-rename-rename-failure-strands-the-board (created).
+
+- 2026-07-07T14:54:30Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): moveTicket cross-folder branch reordered to rename-first (renameWithRetry) then atomic rewrite with rollback; 4 failure-injection tests; suite green after merging the B1437 eol fix (147 incl. new tests).
+
+- 2026-07-07T14:58:29Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict pass: ordering invariant verified at all failure points, power-loss window minimal, no success-path behavior change; double-fault residual documented as accepted risk.
+
+- 2026-07-07T15:01:36Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 147/147 green; four failure-injection tests verified by line and failure point; end-to-end probe on throwaway board confirmed cross-folder and same-folder moves. Result: pass.
+
+- 2026-07-07T15:03:31Z: Completed document via codex-task:workspace-write: Codex (workspace-write): systemPatterns Atomic Writes updated for rename-first ordering; docs/README checked unchanged.
