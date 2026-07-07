@@ -1,19 +1,19 @@
 ---
 id: B20260707T1320Z
 type: bug
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/B20260707T1320Z-init-scaffolds-a-config-that-references-prompt-files-it-never-creates
 estimate: 4
 estimateBasis: B20260707T1318Z
-workStartedAt: null
+workStartedAt: 2026-07-07T19:07:18Z
 workCompletedAt: null
 created: 2026-07-07T13:20:54Z
-updated: 2026-07-07T19:07:18Z
+updated: 2026-07-07T19:16:48Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
@@ -220,6 +220,39 @@ design assumes the former.
 
 ## Implementation Notes
 
+Implemented per the approved design.
+
+**src/scaffold.js**
+- Removed the inline, drifting prompt/template bodies from `FILES` (kept only the two `README.md` entries, which have no `resources/` counterpart).
+- Added `packagedResourceDir(name, packageRoot = SCRIPT_DIR)` (exported): probes `<packageRoot>/resources/<name>` first (dev clone / global npm layout), then `<packageRoot>/<name>` (flattened `~/.local-board` runtime layout), and throws a clear packaging error if neither resolves.
+- Added `copyResourceTree(sourceDir, targetDir, overwrite, created, skipped)`: recursively mirrors a packaged resource dir into the board, routing every file through the existing `writeScaffoldFile` so `wx`-vs-`w` idempotency and `--overwrite` accounting are preserved (no bare `cpSync`).
+- `initProject` now copies `packagedResourceDir("prompts")` into `plans/prompts/` and `packagedResourceDir("templates")` into `plans/templates/`, replacing the old inline stubs and the old explicit `mkdir` calls for those subdirs (the walk creates dirs as needed).
+
+**src/cli.js**
+- Added `assertPromptExists(promptPath, action)`: `access()`-checks the path; on `ENOENT` throws `"<action>: prompt not found at <path>. Run \"local-board init\" in this repo to scaffold missing prompts, or restore the file from the packaged resources/prompts."` (surfaces as CLI exit code 2 via the existing top-level catch).
+- `commandGateCheck`: calls `assertPromptExists` on the resolved `gate-check.md` path, but only when `catalog.length > 0` — an empty-catalog stage never dispatches gate-check.md, so its absence must not fail what would otherwise be a legitimate empty-catalog result. This coordinates with the (separate, not-yet-landed) empty-catalog skip ticket: check order is catalog-empty-handling first, existence check second.
+- `commandSpecialtyRun`: calls `assertPromptExists` unconditionally on the resolved catalog-entry prompt path (a specific entry was already matched from a non-empty catalog by definition).
+
+**Tests**
+- New file `test/prompt-scaffold.test.js` (10 tests): fresh `initProject` mirrors the full `resources/prompts` + `resources/templates` trees byte-for-byte into a temp board; every `DEFAULT_CONFIG`-derived `optionalSteps` prompt + `gate-check.md` exists and is non-empty after init; idempotency (second run skips, `--overwrite` refreshes and restores packaged content); `gate-check`/`specialty-run` produce the actionable "prompt not found ... local-board init" error (exit 2) when the resolved prompt is deleted; `gate-check` on an empty-catalog stage succeeds even with `gate-check.md` deleted; `packagedResourceDir` dual-layout resolution (dev-clone, flattened, both-present-prefers-dev-clone, neither-present-throws) via fixture directories passed as the `packageRoot` override.
+- Updated `test/cli.test.js`: two pre-existing tests configured synthetic `optionalSteps` entries (`custom_review.md`, `perf_smoke.md`) with no packaged counterpart; both now seed a fixture file at the referenced path before calling `specialty-run`, since the new existence check would otherwise correctly reject the dead path these tests were passing in as an implementation detail rather than a fixture concern.
+
+**Docs**
+- `SKILL.md`: replaced the stale "if a returned prompt is missing, use fallback prompts from `<<INSTALL_PATH>>/prompts/`" guidance (a silent-fallback description that no longer matches CLI behavior) with wording describing `local-board init` scaffolding the full prompt set and the new loud, actionable `gate-check`/`specialty-run` error with its remedy.
+- No changes needed to `README.md` / `memory-bank/systemPatterns.md` / `memory-bank/techContext.md` — none of them describe scaffold internals in a way this change makes incorrect.
+
+**Verification**
+- `npm run check`: clean (no output, exit 0).
+- `npm test`: 258/258 pass (248 pre-existing + 10 new), 0 fail.
+- `npm run validate`: `Ticket validation OK`.
+- Manual probe: `init` a throwaway temp board, created a `ready_for_design` ticket, ran `gate-check <id> --stage design --json` — returned `prompt` path resolved to `.../plans/prompts/steps/gate-check.md`, confirmed present on disk with `test -f`.
+
+**Deviations from the open question**
+- Resolved the one open implementer choice as the design recommended: `plans/templates/ticket.md` is now sourced from `resources/templates` (removing the last inline duplicate), not kept inline.
+
+**Residual risk**
+- The empty-catalog-skip ticket (T20260707T1333Z) is not yet landed; when it lands, verify its skip computation still runs before (or is compatible with) the `catalog.length > 0` gate added here — the design flagged this coordination explicitly.
+
 ## Review Findings
 
 ## Test Evidence
@@ -231,3 +264,5 @@ design assumes the former.
 ## Run Log
 
 - 2026-07-07T19:06:26Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): init copies packaged resources/prompts+templates via writeScaffoldFile idempotency (dual-layout resolver for pkg root and ~/.local-board flatten); gate-check/specialty-run gain actionable existence errors behind the skip decision. Estimate 4 (basis B20260707T1318Z).
+
+- 2026-07-07T19:07:18Z: Ensured git branch local-board/B20260707T1320Z-init-scaffolds-a-config-that-references-prompt-files-it-never-creates (created).
