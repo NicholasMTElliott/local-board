@@ -37,6 +37,7 @@ SKILL.md              installable orchestration skill template
 - Prefer schemas and small scripts over hidden convention.
 - Avoid external services for core workflow.
 - Preserve portability across Windows/macOS/Linux.
+- `worktrees.location` controls ticket worktree placement: sibling default, inside `.worktrees`, or explicit non-`plans/` path.
 - `package.json` `files` allowlist defines the npm package surface.
 
 ## Open Decisions
