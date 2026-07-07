@@ -1,7 +1,7 @@
 ---
 id: T20260707T1326Z
 type: task
-status: ready_for_review
+status: done
 priority: P1
 parent: null
 children: []
@@ -11,10 +11,10 @@ branch: local-board/T20260707T1326Z-enforce-claude-code-hooks-for-dispatch-ledge
 estimate: 8
 estimateBasis: T20260707T1325Z
 workStartedAt: 2026-07-07T18:06:04Z
-workCompletedAt: null
+workCompletedAt: 2026-07-07T19:01:32Z
 created: 2026-07-07T13:26:41Z
-updated: 2026-07-07T18:43:52Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only]
+updated: 2026-07-07T19:01:32Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # enforce: Claude Code hooks for dispatch ledger, evidence gate, routing validator, and approve-inline consent
@@ -180,9 +180,34 @@ All four export `handle(payload, deps)` for direct-import unit tests and wrap `m
 
 - 2026-07-07T18:35:10Z: Review (codex): one blocker — dispatch-ledger emits success JSON on stdout (hooks must be silent on allow; test codifies the wrong shape). Also fixing the non-blocking unquoted hook command path (home dirs with spaces) and adding quoted-executor/Windows-path test coverage. Fast paths, fail-open policy, timeout, installer idempotency all verified.
 
+- 2026-07-07T18:44:22Z: Final review disposition: the residual (quoting-era migration matching) was fixed exactly as the re-review specified with dedicated tests; blocker and all prior items verified fixed across two codex passes. Treating review as complete.
+
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/T20260707T1326Z-..., commits a83ab5d + e90b5df + fe0cfa1.
+
+**Suite:** `npm run check` pass (includes all four hook scripts); `npm test` 248/248 pass; `npm run validate` OK.
+
+**Direct hook probes (synthetic stdin JSON):**
+- dispatch-ledger: Task payload with Ticket line -> exit 0, EMPTY stdout, ledger gains the exact record (silent-success blocker fix verified live).
+- routing-validator: correct agent+model -> silent allow via a REAL check-dispatch spawn; wrong agent -> deny JSON embedding the agent-mismatch verdict and expected route; real CLI exit-2 (ticket-not-found) -> fail-open allow with the "ambiguous; allowing dispatch without verification" reason. ENOENT/timeout fail-open branches covered by the green stubbed unit tests (not synthesizable live in this environment).
+- evidence-gate: unledgered claude-subagent claim -> deny with a precise reason; matching session-scoped ledger entry -> silent allow; git status -> instant fast path; inline and codex-task executor claims pass through un-gated as designed.
+- approve-inline-consent: approve-inline command -> permissionDecision ask; unrelated command -> silent allow.
+
+**Installer probe (throwaway HOME, npm link/unlink restored):** install --hooks wires PreToolUse (Task|Agent routing-validator; Bash evidence-gate + consent) and PostToolUse (Task|Agent dispatch-ledger) with quoted paths; hooks land under ~/.local-board/hooks; hand-seeded legacy unquoted entries deduped on reinstall and fully removed on uninstall; permissions.allow untouched throughout.
+
+**Gaps / caveats:** live Claude Code harness dispatch is out of environment scope per the ticket's test strategy — synthetic probes + installed-settings verification are the acceptance evidence; spawn-ENOENT/timeout branches verified via unit tests only.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `docs/EnforcementHooks.md` (new) — narrative for the four hooks: what each enforces, the self-reported-evidence threat model closed, what hooks cannot see (inline work, skipped steps, Codex side — CLI preconditions own those), fail-open rationale, install/uninstall via --hooks, the Ticket: <id> prompt convention, ledger files, known limits (headless ask, Task|Agent naming, migration note).
+- `README.md` — --hooks opt-in shown in the install section; docs/EnforcementHooks.md added to the Documentation Index.
+- `memory-bank/systemPatterns.md` — dispatch-verification note extended (four hooks, opt-in, fail-open); the Subagent CLI Permission risk paragraph now notes PreToolUse hooks exist for enabled sessions.
+- `docs/Workflow.md` — dispatch-verification subsection landed during implementation.
 
 ## Questions
 
@@ -199,3 +224,11 @@ All four export `handle(payload, deps)` for direct-import unit tests and wrap `m
 - 2026-07-07T18:35:10Z: Ensured git branch local-board/T20260707T1326Z-enforce-claude-code-hooks-for-dispatch-ledger-evidence-gate-routing-validator-and-approve-inline-consent (already-current).
 
 - 2026-07-07T18:39:37Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework (sonnet): dispatch-ledger silent on all paths; hook commands quoted (space-safe homes) with matching uninstall; quoted-executor/Windows-path/whitespace-Ticket coverage; 246/246 green.
+
+- 2026-07-07T18:44:22Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Third pass (sonnet): quote-agnostic managed-entry matching with dedupe on reinstall and full removal on uninstall; 248/248 green.
+
+- 2026-07-07T18:44:22Z: Completed review via codex-task:read-only: Review complete across two codex passes; final residual fixed verbatim per re-review with reinstall-dedupe and uninstall tests.
+
+- 2026-07-07T18:57:51Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 248/248; all four hooks probed with synthetic payloads (silent success, deny JSON, fail-open, ask) plus a real check-dispatch spawn; installer dedupe/uninstall round-trip verified in a throwaway HOME. Result: pass.
+
+- 2026-07-07T19:01:31Z: Completed document via codex-task:workspace-write: Codex (workspace-write): docs/EnforcementHooks.md created and indexed; README --hooks line; systemPatterns updated.
