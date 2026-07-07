@@ -1,19 +1,19 @@
 ---
 id: T20260707T1330Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260707T1330Z-skills-align-decomposer-contract-to-propose-only-across-claude-codex-and-memory-bank
 estimate: 2
 estimateBasis: T20260707T1328Z
-workStartedAt: null
+workStartedAt: 2026-07-07T22:27:23Z
 workCompletedAt: null
 created: 2026-07-07T13:30:54Z
-updated: 2026-07-07T22:27:22Z
+updated: 2026-07-07T22:30:02Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -175,6 +175,74 @@ None blocking. Implementer's judgment call: whether to also patch `SKILL_TEAM.md
 
 ## Implementation Notes
 
+Aligned the decomposer contract to propose-only across all sources, using the
+Codex agent file's wording as canonical.
+
+Files changed:
+
+- `agents/claude/local-board-decomposer.md`: Scope "propose or create" → "propose";
+  Rule now restricts Bash to read-only CLI queries (`schema --json`, `list`,
+  `query-ticket`), explicitly forbids `create`/`link-parent`/`link-child`/`block`,
+  and states the decomposer returns a proposal for the orchestrator to create;
+  added a "Proposal format" section (type/title/status/priority/requirement/
+  blockedBy) matching the Codex file; Output "created or proposed" → "proposed".
+- `agents/codex/local-board-decomposer.md`: added the same "Proposal format"
+  section; Output "created or proposed" → "proposed". Rules were already
+  propose-only, unchanged.
+- `SKILL.md`: Actions line for `decompose` now says the decomposer proposes and
+  the orchestrator creates/links; added the explicit sentence to the Persisting
+  Delegated Output block: "For decomposition, the decomposer returns a
+  child-ticket proposal; the orchestrator runs `create`, `link-parent`,
+  `link-child`, and dependency commands." (copied from the Codex skill).
+- `SKILL_TEAM.md`: added a "Decompose result" bullet to the "On completion"
+  branch (item 7, included since cheap) clarifying the decomposer never creates
+  and the orchestrator runs `create`/`link-parent`/`link-child`/`block`.
+- `memory-bank/systemPatterns.md`: Delegation table row for
+  `local-board-decomposer` changed from "Return-only; creates tickets via CLI"
+  to "Return-only; proposes child tickets, orchestrator creates them via CLI".
+- `plans/prompts/steps/decompose.md`: Persistence paragraph dropped the "it runs
+  those CLI commands or proposes" fork; now states the decomposer has no Write
+  tool, does not mutate state, returns a proposal, and the orchestrator runs the
+  CLI mutations.
+- `resources/prompts/steps/decompose.md`: synced byte-for-byte via
+  `npm run sync-resources` (plans/ is source of truth).
+
+No production code changed (prose-only ticket); no changes to
+`skills/codex/local-board/SKILL.md` (already canonical, used as the wording
+source, not itself an affected file) or to the worktree mint-offset paragraph in
+systemPatterns.md (design explicitly recommends leaving it as-is).
+
+Tests:
+
+- `npm run check` — all `node --check` passes, no errors.
+- `npm test` — 314 tests, 313 pass, 1 skipped (unrelated smoke test), 0 fail.
+- `node --test test/resources-sync.test.js` — 4/4 pass, including the
+  byte-for-byte mirror check for `resources/prompts` vs `plans/prompts`.
+- `npm run validate` — "Ticket validation OK".
+
+Verification grep (`grep -rin "creates tickets via CLI|create child tickets"
+agents/ SKILL.md SKILL_TEAM.md skills/ memory-bank/ plans/prompts
+resources/prompts`) returns 4 lines, all consistent with propose-only:
+
+- `agents/claude/local-board-decomposer.md:23` — forbids mutating commands,
+  describes the CLI only as read-only-query surface, ends "Return a concrete
+  proposal for the orchestrator to create."
+- `agents/codex/local-board-decomposer.md:23` — "Do not create child tickets
+  yourself. Return a concrete proposal for the orchestrator to create."
+- `plans/prompts/steps/decompose.md:15` and the mirrored
+  `resources/prompts/steps/decompose.md:15` — describes the CLI-only mutation
+  path (used by the orchestrator) immediately followed by "the
+  `local-board-decomposer` has no Write tool and does not mutate state — it
+  returns a child-ticket proposal and the orchestrator runs
+  `create`/`link-parent`/`link-child`/`block`."
+
+No fourth source asserts the decomposer creates directly. Zero contradicting
+residue.
+
+Deviations from design: none. Included the low-priority `SKILL_TEAM.md` item 7
+edit since it was cheap, per the ticket's open-questions note leaving it to
+implementer judgment.
+
 ## Review Findings
 
 ## Test Evidence
@@ -188,3 +256,5 @@ None blocking. Implementer's judgment call: whether to also patch `SKILL_TEAM.md
 - 2026-07-07T22:26:36Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): propose-only contract with codex wording as canonical source; structured proposal shape defined; Bash kept for read-only queries with mutations forbidden by contract; mirrored prompt pair kept drift-safe. Estimate 2 (basis T20260707T1328Z).
 
 - 2026-07-07T22:27:22Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (prose-only contract alignment)
+
+- 2026-07-07T22:27:23Z: Ensured git branch local-board/T20260707T1330Z-skills-align-decomposer-contract-to-propose-only-across-claude-codex-and-memory-bank (created).

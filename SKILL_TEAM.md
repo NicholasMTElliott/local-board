@@ -112,6 +112,9 @@ scheduling cache and is cheap to rebuild after a compaction.
    - Return-only result (reviewer, tester, gate-check, codex read-only) → write a
      temp file with the Write tool, `section --file --root <worktreePath>`, then
      `complete-step <action> --executor <route>[@<model>] --root <worktreePath> --evidence "..."`.
+   - Decompose result → the decomposer returns a child-ticket proposal (never
+     creates); the orchestrator runs `create`, `link-parent`/`link-child`, and
+     `block` for each accepted child, then records `complete-step`.
    - Self-writing result (designer, implementer, documenter) → the executor
      already wrote its section/files in the worktree; just record
      `complete-step <action> --executor <route>[@<model>] --root <worktreePath> --evidence "..."`.

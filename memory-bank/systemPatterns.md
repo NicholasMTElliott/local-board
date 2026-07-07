@@ -135,7 +135,7 @@ The `~/.local-board` runtime copy remains only for hooks + provenance.
 
 | Subagent | Tools | Persistence |
 |---|---|---|
-| `local-board-decomposer` | Read, Glob, Grep, Bash | Return-only; creates tickets via CLI |
+| `local-board-decomposer` | Read, Glob, Grep, Bash | Return-only; proposes child tickets, orchestrator creates them via CLI |
 | `local-board-designer` | Read, Glob, Grep, Bash, Write, Edit | Self-writes its own `Technical Design` section via scoped Write (keeps the large design payload out of the orchestrator window); returns a terse summary. Does not edit production source. |
 | `local-board-reviewer` | Read, Glob, Grep, Bash | Return-only |
 | `local-board-tester` | Read, Glob, Grep, Bash | Return-only |

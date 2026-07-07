@@ -82,7 +82,7 @@ Priorities: `P0`, `P1`, `P2`, `P3`, `P4`.
 
 ## Actions
 
-- `decompose`: create child tickets, then link them with `link-parent` or `link-child`.
+- `decompose`: propose child tickets and dependency ordering; the orchestrator creates them and links them with `link-parent` or `link-child`.
 - `design`: write or update `## Technical Design`; move to the next configured status only when the design is complete.
 - `implement`: make scoped code changes, test them, and record notes/evidence.
 - `review`: inspect changes and write `## Review Findings`.
@@ -221,6 +221,7 @@ The `local-board-reviewer`, `local-board-tester`, `local-board-decomposer`, and 
 - They return their section content — Review Findings, Test Evidence — or strict JSON (gate-check `requestedSteps`) in their final message.
 - They do not create files and do not run `section` themselves.
 - The orchestrator takes that returned content, writes it to a temp file with the Write tool, and runs `section <ticket-id> --file <temp-path> --section "<Section>"` itself.
+- For decomposition, the decomposer returns a child-ticket proposal; the orchestrator runs `create`, `link-parent`, `link-child`, and dependency commands.
 
 Never instruct a return-only subagent to "write a temp file" or "use the Write tool". It cannot, and it falls back to Bash `echo`/heredoc/`Set-Content`, which loops endlessly on backtick and code-fence escaping. The same return-only contract applies to any `codex-task:read-only` route.
 

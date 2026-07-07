@@ -25,11 +25,22 @@ The orchestrator provides:
 - Do not mark the parent done.
 - If requirements are ambiguous, return exact questions instead of guessing.
 
+## Proposal format
+
+Return, per child, an ordered list of:
+
+- `type` (`story` for an epic parent, `task` for a story parent);
+- `title`;
+- `status` (the configured first status, e.g. `ready_for_design`);
+- `priority` (inherit parent unless justified);
+- `requirement` / acceptance-criteria summary;
+- `blockedBy` (references to sibling proposals, by ordinal, when sequencing matters).
+
 ## Output
 
 Return:
 
-- child tickets created or proposed;
+- child tickets proposed;
 - dependency ordering;
 - open questions;
 - commands run.
