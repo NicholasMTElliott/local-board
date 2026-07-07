@@ -1,27 +1,30 @@
 ---
-id: T20260514T2234Z
+id: T20260514T2232Z
 type: task
-status: done
+status: archived
 priority: P1
-parent: S20260514T2231Z
+parent: S20260514T2230Z
 children: []
 blockedBy: []
 blocks: []
 branch: null
 estimate: null
-created: 2026-05-14T22:34:51Z
-updated: 2026-05-15T13:48:57Z
+estimateBasis: null
+workStartedAt: null
+workCompletedAt: null
+created: 2026-05-14T22:32:51Z
+updated: 2026-07-07T14:07:41Z
 completedSteps: [design:claude-subagent:local-board-designer, implement:claude-subagent:local-board-implementer, review:codex-task:read-only, test:claude-subagent:local-board-tester, document:codex-task:workspace-write]
 ---
-# Add section rewrite command
+# Add idempotent init command
 
 ## Requirement
 
-Add deterministic section replacement for ticket content.
+Scaffold local-board folders, prompts, templates, and config into another repo.
 
 ## Acceptance Criteria
 
-- `section` replaces content under a standard heading. - The Markdown body remains valid. - Validation passes after section updates.
+- `init` creates missing files. - Re-running `init` skips existing files unless overwrite is requested.
 
 ## Related Tickets
 

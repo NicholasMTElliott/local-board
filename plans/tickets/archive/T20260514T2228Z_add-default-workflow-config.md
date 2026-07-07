@@ -1,27 +1,30 @@
 ---
-id: T20260514T2231Z
+id: T20260514T2228Z
 type: task
-status: done
+status: archived
 priority: P1
-parent: S20260514T2229Z
+parent: S20260514T2228Z
 children: []
 blockedBy: []
 blocks: []
 branch: null
 estimate: null
-created: 2026-05-14T22:31:50Z
-updated: 2026-05-15T13:48:57Z
+estimateBasis: null
+workStartedAt: null
+workCompletedAt: null
+created: 2026-05-14T22:28:49Z
+updated: 2026-07-07T14:07:41Z
 completedSteps: [design:claude-subagent:local-board-designer, implement:claude-subagent:local-board-implementer, review:codex-task:read-only, test:claude-subagent:local-board-tester, document:codex-task:workspace-write]
 ---
-# Add dependency block commands
+# Add default workflow config
 
 ## Requirement
 
-Add commands for dependency relationships.
+Add project-local workflow and agent routing configuration.
 
 ## Acceptance Criteria
 
-- `block` and `unblock` update `blockedBy` and `blocks`. - Tests cover blocking and unblocking.
+- Default config exists at `plans/local-board.config.jsonc`. - Missing project config falls back to built-in defaults.
 
 ## Related Tickets
 

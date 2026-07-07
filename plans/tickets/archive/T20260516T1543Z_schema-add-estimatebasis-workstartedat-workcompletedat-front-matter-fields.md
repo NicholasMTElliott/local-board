@@ -1,7 +1,7 @@
 ---
 id: T20260516T1543Z
 type: task
-status: done
+status: archived
 priority: P2
 parent: S20260516T1537Z
 children: []
@@ -9,8 +9,11 @@ blockedBy: []
 blocks: [T20260516T1544Z, T20260516T1545Z, T20260516T1546Z, T20260516T1547Z]
 branch: feature/estimation-and-specialty-steps
 estimate: null
+estimateBasis: null
+workStartedAt: null
+workCompletedAt: null
 created: 2026-05-16T15:43:35Z
-updated: 2026-05-16T16:25:26Z
+updated: 2026-07-07T14:07:41Z
 completedSteps: [design:claude-subagent:local-board-designer, implement:claude-subagent:local-board-implementer, review:codex-task:read-only, test:claude-subagent:local-board-tester, document:codex-task:workspace-write]
 routingApprovals: []
 ---

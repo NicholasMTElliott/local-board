@@ -1,7 +1,7 @@
 ---
 id: T20260516T1554Z
 type: task
-status: done
+status: archived
 priority: P2
 parent: S20260516T1538Z
 children: []
@@ -9,13 +9,13 @@ blockedBy: [T20260516T1551Z, T20260516T1552Z, T20260516T1553Z]
 blocks: []
 branch: feature/estimation-and-specialty-steps
 estimate: null
+estimateBasis: null
+workStartedAt: null
+workCompletedAt: null
 created: 2026-05-16T15:54:16Z
-updated: 2026-05-16T23:48:10Z
+updated: 2026-07-07T14:07:41Z
 completedSteps: [design:claude-subagent:local-board-designer, implement:claude-subagent:local-board-implementer, review:codex-task:read-only, test:claude-subagent:local-board-tester, document:codex-task:workspace-write]
 routingApprovals: []
-estimateBasis: null
-workCompletedAt: null
-workStartedAt: null
 ---
 # Update orchestrator skill and add specialty-steps docs
 

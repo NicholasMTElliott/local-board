@@ -1,7 +1,7 @@
 ---
 id: B20260707T1317Z
 type: bug
-status: implementing
+status: done
 priority: P1
 parent: null
 children: []
@@ -11,10 +11,10 @@ branch: local-board/B20260707T1317Z-ticket-writes-are-not-atomic-crash-mid-write
 estimate: 4
 estimateBasis: bootstrap
 workStartedAt: 2026-07-07T13:50:04Z
-workCompletedAt: null
+workCompletedAt: 2026-07-07T14:07:41Z
 created: 2026-07-07T13:17:14Z
-updated: 2026-07-07T13:55:34Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-07T14:07:41Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # Ticket writes are not atomic; crash mid-write corrupts canonical board file
@@ -190,10 +190,11 @@ Run: `node --test` (whole suite) and target `test/tickets.test.js`.
 
 ## Documentation Updates
 
-- `memory-bank/systemPatterns.md` — record the atomic-write invariant: all canonical
-  ticket writes go through `writeTicketFile` (temp-write + rename), never a bare
-  `writeFile` to a live ticket path. Keep it terse.
-- No `docs/` or README index change required (internal invariant, no new doc file).
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `memory-bank/systemPatterns.md` — new "Atomic Writes" pattern entry; wording tightened per review finding to state the accurate invariant: existing ticket rewrites go through `writeTicketFile` (temp-write-then-rename, non-.md temp names, bounded Windows retry), while `createTicket` uses exclusive `wx` creation; crash-consistency only, not mutual exclusion or fsync durability.
+- `docs/` — checked for stale ticket-write or crash-behavior wording; none found, left unchanged.
+- `README.md` — no documentation entry points changed; left unchanged.
 
 ## Open Questions
 
@@ -263,7 +264,49 @@ change to `moveTicket`'s cross-folder rename ordering.
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) against commit d3b60e2.
+
+No blocking findings.
+
+Non-blocking observations:
+
+- memory-bank/systemPatterns.md:68 says "All canonical ticket writes" go through `writeTicketFile`, but `createTicket` still uses an exclusive new-file `writeFile(..., { flag: "wx" })` at src/tickets.js:1158. That create path is outside this ticket's seven existing overwrite/mutation sites, so no change requested, but the Memory Bank wording is a little broader than the implemented invariant.
+- src/tickets.js:144, 364, 421, 433, 441, 498, 544, 1454: the previous direct `writeFile(ticket.path, ...)` overwrite sites are routed through `writeTicketFile`; `rg` found no remaining `writeFile(ticket.path, ...)` matches.
+- src/tickets.js:147 and test/tickets.test.js:1499: temp names end in `.tmp-<pid>-<seq>`, not `.md`, and the orphan-temp discovery test covers the production `discover`/`validate` path.
+- src/tickets.js:123, 129, 149: retry is bounded and targeted to `EPERM`/`EBUSY`/`EACCES`; the canonical file is not opened for overwrite before the final rename, so failed writes leave the destination old-and-intact rather than missing or truncated.
+- test/tickets.test.js:1420 and 1446 exercise failure injection through the real helper with a test-only `renameFn`; 1472 also exercises normal production mutation call sites. The injection parameter is reasonable and production call sites do not pass it.
+
+Verification note: `npm test` could not run inside the reviewer's read-only sandbox (spawn EPERM from Node's test runner); `node --check` passed on both changed files. Full-suite verification is delegated to the test stage.
+
+Verdict: pass
+
 ## Test Evidence
+
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/B20260707T1317Z-..., commit d3b60e2.
+
+**Verification suite (project root):**
+
+1. `npm run check` — pass (all node --check targets clean).
+2. `npm test` — pass, 139/139, 0 fail, 0 skipped (~11.7s); includes the four new tests plus 135 pre-existing.
+3. `npm run validate` — pass (`Ticket validation OK`).
+
+**Four new tests confirmed present and passing (`test/tickets.test.js`):**
+
+- `:1420` writeTicketFile leaves the original file byte-identical when the rename fails (injected ENOSPC).
+- `:1446` writeTicketFile retries the rename after a transient Windows error (EPERM then success).
+- `:1472` successful ticket mutations leave no temp files and discover reports zero load errors (real setTicketSection/appendTicketComment/completeStep calls).
+- `:1492` an orphaned non-.md temp sibling is invisible to discover and validate.
+
+All three acceptance behaviors are directly exercised, plus a bonus bounded-retry test.
+
+**Independent end-to-end probe (throwaway OS-temp board, production code path, no renameFn injection):** `--root <tmpdir> init` (19 files) -> `create task` -> `comment` + `set priority P1` -> ticket file well-formed (valid front matter, updated bumped, Run Log appended), directory contains no `.tmp-*` residue, `validate` OK. Temp directory removed afterward.
+
+**Gaps / caveats:**
+
+- Failure injection is via mocked renameFn, not real ENOSPC/process-kill — reasonable per the design's own test strategy; the probe covers the real path for the success case.
+- createTicket's exclusive `wx` new-file write is intentionally out of scope (never overwrites an existing canonical file).
+
+Result: pass
 
 ## Documentation Updates
 
@@ -274,3 +317,11 @@ change to `moveTicket`'s cross-folder rename ordering.
 - 2026-07-07T13:48:59Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus) wrote Technical Design: shared writeTicketFile temp-write-then-rename helper covering all seven write sites, non-.md temp naming to protect discovery, bounded Windows rename retry, failure-injection test strategy. Estimate 4 (bootstrap).
 
 - 2026-07-07T13:50:04Z: Ensured git branch local-board/B20260707T1317Z-ticket-writes-are-not-atomic-crash-mid-write-corrupts-canonical-board-file (created).
+
+- 2026-07-07T13:56:10Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet) added writeTicketFile atomic helper routing all seven write sites; 4 new failure-injection tests; npm check/test/validate all pass (139/139).
+
+- 2026-07-07T14:01:36Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict pass: all seven write sites routed through helper, temp naming safe for discovery, bounded targeted retry; two non-blocking observations recorded in Review Findings.
+
+- 2026-07-07T14:04:56Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): npm check/test/validate all pass (139/139); four new failure-injection/discovery tests verified by name; independent end-to-end probe on a throwaway board confirmed no temp residue and well-formed tickets. Result: pass.
+
+- 2026-07-07T14:07:41Z: Completed document via codex-task:workspace-write: Codex (workspace-write) added and tightened the memory-bank Atomic Writes pattern; docs/ and README checked, no changes needed.

@@ -1,27 +1,30 @@
 ---
-id: T20260514T2228Z
+id: T20260514T2233Z
 type: task
-status: done
+status: archived
 priority: P1
-parent: S20260514T2228Z
+parent: S20260514T2230Z
 children: []
 blockedBy: []
 blocks: []
 branch: null
 estimate: null
-created: 2026-05-14T22:28:49Z
-updated: 2026-05-15T13:48:57Z
+estimateBasis: null
+workStartedAt: null
+workCompletedAt: null
+created: 2026-05-14T22:33:51Z
+updated: 2026-07-07T14:07:41Z
 completedSteps: [design:claude-subagent:local-board-designer, implement:claude-subagent:local-board-implementer, review:codex-task:read-only, test:claude-subagent:local-board-tester, document:codex-task:workspace-write]
 ---
-# Add default workflow config
+# Add orchestration skill and installer
 
 ## Requirement
 
-Add project-local workflow and agent routing configuration.
+Provide a reusable skill and installer for agent orchestration.
 
 ## Acceptance Criteria
 
-- Default config exists at `plans/local-board.config.jsonc`. - Missing project config falls back to built-in defaults.
+- Skill instructs agents to use deterministic query and mutation commands. - Installer supports target listing and cross-harness skill installation.
 
 ## Related Tickets
 
