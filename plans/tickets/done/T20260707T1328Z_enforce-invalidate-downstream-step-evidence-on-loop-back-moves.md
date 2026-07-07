@@ -1,7 +1,7 @@
 ---
 id: T20260707T1328Z
 type: task
-status: implementing
+status: done
 priority: P2
 parent: null
 children: []
@@ -11,10 +11,10 @@ branch: local-board/T20260707T1328Z-enforce-invalidate-downstream-step-evidence-
 estimate: 4
 estimateBasis: T20260707T1327Z
 workStartedAt: 2026-07-07T21:58:42Z
-workCompletedAt: null
+workCompletedAt: 2026-07-07T22:22:40Z
 created: 2026-07-07T13:28:41Z
-updated: 2026-07-07T22:09:14Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-07T22:22:40Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # enforce: invalidate downstream step evidence on loop-back moves
@@ -301,9 +301,47 @@ Verification: `npm run check` (syntax check, clean), `npm test` (314 tests, 313 
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) against commit a188c1c.
+
+No blocking findings.
+
+Non-blocking observations:
+- src/config.js:24,44 comments still say the default/scaffold split has "exactly three" divergences — this commit adds the fourth (invalidateOnLoopBack). Guard test correct; comment text stale (fix in the doc pass).
+- No dedicated failed-move-does-not-strip test; existing moveTicket rollback tests cover the same write mechanics, and invalidation is staged in memory until the normal write path — acceptable.
+
+Trace notes (all verified):
+- Rank rule target-inclusive per design (pipelineRank(producing) <= pipelineRank(target), src/tickets.js:204); ready_for_implementation strips implement/review/test/document and keeps design/decompose.
+- Token production mapping sound for gate/action/specialty tokens; model suffixes stay inside stripped tokens.
+- routingApprovals use the same producing-status rule — covers approvals without matching tokens.
+- T1327 interaction correct: gate refusal precedes invalidation; a stripped gate:implement forces a fresh consultation on the next forward move.
+- Estimates/lifecycle fields untouched; atomicity holds (invalidation persists only via the normal write path with the B1318 rollback).
+- Config split + fourth allowlist entry + docs accurate.
+
+Verdict: pass
+
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/T20260707T1328Z-..., commit a188c1c.
+
+**Suite:** `npm run check` pass; `npm test` 313 pass / 1 gated-skip; `npm run validate` OK.
+
+**End-to-end acceptance probe (fresh board, both switches on):** walked a ticket to ready_for_docs with all 7 tokens, looped back to ready_for_implementation — implement/review/test + gate:implement/gate:test stripped; design + gate:design + estimate survived; the Run Log line enumerates exactly the five removed tokens (full text captured). Re-run path: fresh implement recorded, forward move REFUSED until a fresh gate consultation (T1327 interaction verified live), then re-recorded review/test/document and move done succeeded. Bonus: a wrong-executor document attempt was correctly rejected by strict routing mid-probe.
+
+**Pause probe:** questions round-trip left completedSteps byte-identical, no invalidation log line.
+
+**Switch-off probe:** ENOENT-fallback board (invalidateOnLoopBack false) — loop-back left all tokens intact, no log line. (Explicit-false-with-gates-on covered by the unit suite.)
+
+**Gaps / caveats:** routingApprovals stripping and blocked-target no-strip verified via the automated suite only; the "exactly three places" comment staleness confirmed (cosmetic, flagged for the doc pass).
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `src/config.js` — stale "exactly three"/"only these three" divergence comments replaced with count-proof phrasing (review nit closed).
+- `docs/Workflow.md`, `docs/PerStepOrchestration.md`, `memory-bank/systemPatterns.md` — implementation-pass updates verified accurate: target-inclusive rank rule, fallback/scaffold defaults, Run Log enumeration, no-retroactive-cleanup migration caveat.
+- No README change needed.
 
 ## Questions
 
@@ -314,3 +352,13 @@ Verification: `npm run check` (syntax check, clean), `npm test` (314 tests, 313 
 - 2026-07-07T21:58:41Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (internal workflow hygiene; no catalog triggers matched)
 
 - 2026-07-07T21:58:42Z: Ensured git branch local-board/T20260707T1328Z-enforce-invalidate-downstream-step-evidence-on-loop-back-moves (created).
+
+- 2026-07-07T22:09:43Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): invalidateDownstreamEvidence helper wired into moveTicket under lock, config switch per the established pattern, Run Log enumeration; 313 pass + 1 gated-skip.
+
+- 2026-07-07T22:11:02Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (backend workflow logic; no catalog triggers matched)
+
+- 2026-07-07T22:13:54Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict pass: rank rule, token mapping, gate interaction, and atomicity all traced correct; one stale comment ('exactly three' divergences) to fix in the doc pass.
+
+- 2026-07-07T22:20:43Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 313+1 gated; full acceptance loop-back probed live with exact Run Log enumeration, fresh-gate refusal on re-run, pause and switch-off probes clean. Result: pass.
+
+- 2026-07-07T22:22:39Z: Completed document via codex-task:workspace-write: Codex (workspace-write): stale divergence comment count-proofed; impl-pass docs verified accurate.
