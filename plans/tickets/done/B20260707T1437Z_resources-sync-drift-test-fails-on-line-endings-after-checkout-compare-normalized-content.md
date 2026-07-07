@@ -1,7 +1,7 @@
 ---
 id: B20260707T1437Z
 type: bug
-status: implementing
+status: done
 priority: P1
 parent: null
 children: []
@@ -11,10 +11,10 @@ branch: local-board/B20260707T1437Z-resources-sync-drift-test-fails-on-line-endi
 estimate: 2
 estimateBasis: B20260707T1317Z
 workStartedAt: 2026-07-07T14:41:38Z
-workCompletedAt: null
+workCompletedAt: 2026-07-07T14:53:11Z
 created: 2026-07-07T14:37:50Z
-updated: 2026-07-07T14:45:10Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-07T14:53:11Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # resources-sync drift test fails on line endings after checkout; compare normalized content
@@ -206,9 +206,46 @@ Implemented per Technical Design, both primary and secondary changes.
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) against commit 70924c1.
+
+No blocking findings.
+
+Non-blocking observations:
+- test/resources-sync.test.js:58,62 still name the mirror assertions "byte-for-byte" while :50 normalizes CRLF/LF before comparing — names overstate the assertion; rename during a later pass.
+- scripts/sync-resources.mjs:20,35 assume text-only assets (UTF-8 read + CRLF replace). All mirrored assets are .md today and .gitattributes enforces LF; a future binary asset in those trees would be corrupted — extension/content guard needed before allowing binaries.
+- Test gap: normalizeEol unit test covers CRLF->LF and LF-unchanged but not lone \r or an automated negative drift fixture (the changed-word probe was manual).
+
+Correctness: file-list set equality stays exact (:39); normalization applies to content comparison only (:50). A CRLF-only difference is now invisible — acceptable under repo policy (.gitattributes text=auto eol=lf makes such differences checkout noise, not packaged content).
+Recursive copy: nested dirs handled, empty dirs recreated, special entries ignored, Node path/fs APIs only — Windows-safe.
+Scope: no material creep; sync LF writer and comments were in the design.
+Verification caveat: reviewer ran the test file in-process (4/4) since the sandbox blocks child-process spawn.
+
+Verdict: pass
+
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/B20260707T1437Z-..., commit 70924c1.
+
+**Precondition verified (read-only byte check):** plans/templates/ticket.md contains CR bytes (true), resources/templates/ticket.md does not (false) — the exact regression state is live on this working copy.
+
+**Suite:** `npm run check` pass; `npm test` 143/143 pass, 0 fail; `npm run validate` OK. Re-ran the full suite after probes: identical 143/143 — green and stable on a CRLF/LF-mismatched working copy (the primary acceptance).
+
+**Independent drift probe:** perturbed one word in resources/templates/ticket.md -> exactly one test failed (`resources/templates mirrors plans/templates`, "content has drifted" with word diff); all other tests unaffected; restored via git checkout -- (status clean); back to 4/4 and 143/143.
+
+**Line-ending-only reasoning (no writes):** normalizeEol at test/resources-sync.test.js:34 (`\r\n` -> `\n` only) is applied to both sides at :50-53; file-list equality at :39 operates on names only. The live green suite on the mismatched working copy is the empirical proof of this path.
+
+**Gaps / caveats:**
+- The vice-versa direction (LF plans/ vs CRLF resources/) proven by symmetry, not a live probe — matches the ticket's own test strategy.
+- Reviewer's non-blocking notes stand: "byte-for-byte" test names overstate, no lone-\r coverage, negative-drift check is manual. None block acceptance.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `memory-bank/techContext.md` — clarified that `sync-resources` writes LF output and the mirror drift comparison is line-ending-insensitive, so CRLF working-copy state cannot mislead maintainers investigating drift.
+- No docs/ or README changes needed (no entry points changed; test-tooling fix).
 
 ## Questions
 
@@ -217,3 +254,11 @@ Implemented per Technical Design, both primary and secondary changes.
 - 2026-07-07T14:40:51Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): normalizeEol on both sides of content assertion only; file-list equality stays exact; sync script writes LF; renormalize guidance in comment. Estimate 2 (basis B20260707T1317Z). Live failure reproduced.
 
 - 2026-07-07T14:41:38Z: Ensured git branch local-board/B20260707T1437Z-resources-sync-drift-test-fails-on-line-endings-after-checkout-compare-normalized-content (created).
+
+- 2026-07-07T14:45:39Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): normalizeEol both sides of content assertion, LF-writing sync script, renormalize guidance, unit test; suite 143/143 green from 2 failures; perturbation probe confirmed real drift still fails.
+
+- 2026-07-07T14:48:40Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict pass: normalization scoped to content comparison only, file-list equality exact, sync walk Windows-safe; three non-blocking observations (assertion naming, binary-asset guard, lone-CR coverage) recorded.
+
+- 2026-07-07T14:51:37Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 143/143 green on a live CRLF/LF-mismatched working copy (precondition byte-verified); drift probe failed exactly one test then restored clean. Result: pass.
+
+- 2026-07-07T14:53:11Z: Completed document via codex-task:workspace-write: Codex (workspace-write): techContext clarified LF-writing sync + eol-insensitive comparison; no docs/README changes needed.
