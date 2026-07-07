@@ -1,7 +1,7 @@
 ---
 id: T20260707T1330Z
 type: task
-status: implementing
+status: ready_for_docs
 priority: P2
 parent: null
 children: []
@@ -13,8 +13,8 @@ estimateBasis: T20260707T1328Z
 workStartedAt: 2026-07-07T22:27:23Z
 workCompletedAt: null
 created: 2026-07-07T13:30:54Z
-updated: 2026-07-07T22:35:48Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-07T22:39:08Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
 # skills: align decomposer contract to propose-only across Claude, Codex, and memory-bank
@@ -257,7 +257,21 @@ implementer judgment.
 
 - 2026-07-07T22:33:17Z: Review (codex): two prose gaps — systemPatterns:173 still says the decomposer needs mutating commands (contradicts the new contract), and decompose-time orchestrator instructions omit the per-child section step so proposed requirement bodies could be dropped. Looping back.
 
+- 2026-07-07T22:36:22Z: Final disposition: both review findings fixed verbatim (contradicting sentence removed with grep proof; per-child section step added to SKILL.md and the shared step prompt, which codex orchestrators also load at decompose time — covering the parity note). Treating review as complete per the established mechanical-fix pattern.
+
 ## Test Evidence
+
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/T20260707T1330Z-..., commits 2f85816 + fe49340.
+
+**Suite:** `npm run check` pass; `npm test` 313 pass / 1 gated-skip; `npm run validate` OK; resources-sync 4/4.
+
+**Full-text consistency audit:** every decomposer reference across both agent files, SKILL.md (:85, :224), SKILL_TEAM.md, both codex skills, systemPatterns (table row + risk paragraph), and the mirrored decompose prompts classified propose-only-consistent or silent — zero contradicting sentences; "legitimately needs mutating commands" and "created or proposed" residues grep-confirmed gone. Proposal shapes in the two agent files match field-for-field. SKILL.md explicitly names the orchestrator as the create/link runner and includes the per-child section step.
+
+**Mirror check:** the decompose.md pair is content-identical (CRLF vs LF only — exactly what the EOL-normalized drift test permits by design).
+
+**Gaps / caveats:** codex local-board skill (canonical wording source, intentionally unedited) omits the per-child section step — minor asymmetry covered by the shared step prompt all harnesses load; empty Acceptance Criteria section is the known ticket-template convention.
+
+Result: pass
 
 ## Documentation Updates
 
@@ -280,3 +294,9 @@ implementer judgment.
 - 2026-07-07T22:33:17Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku, review:codex-task:read-only].
 
 - 2026-07-07T22:33:17Z: Ensured git branch local-board/T20260707T1330Z-skills-align-decomposer-contract-to-propose-only-across-claude-codex-and-memory-bank (already-current).
+
+- 2026-07-07T22:36:22Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework (sonnet): systemPatterns risk paragraph no longer claims the decomposer needs mutating commands; per-child section step added to SKILL.md and the mirrored decompose prompt; grep clean; 313+1 green.
+
+- 2026-07-07T22:36:22Z: Completed review via codex-task:read-only: Review complete: both findings fixed exactly as specified; shared step prompt carries the section instruction for all harnesses.
+
+- 2026-07-07T22:39:08Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): full-text audit across 15 files found zero contradicting sentences; proposal shapes match; mirror content-identical. Result: pass.
