@@ -53,6 +53,7 @@ Early MVP kernel. The repo has a dependency-free Node.js ESM CLI for parsing, va
 Run commands from the repository root:
 
 ```sh
+node ./bin/local-board.js version
 node ./bin/local-board.js validate
 node ./bin/local-board.js list
 node ./bin/local-board.js next
