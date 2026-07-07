@@ -1,19 +1,19 @@
 ---
 id: B20260707T1317Z
 type: bug
-status: ready_for_implementation
+status: implementing
 priority: P1
 parent: null
 children: []
 blockedBy: []
 blocks: [B20260707T1318Z]
-branch: null
+branch: local-board/B20260707T1317Z-ticket-writes-are-not-atomic-crash-mid-write-corrupts-canonical-board-file
 estimate: 4
 estimateBasis: bootstrap
-workStartedAt: null
+workStartedAt: 2026-07-07T13:50:04Z
 workCompletedAt: null
 created: 2026-07-07T13:17:14Z
-updated: 2026-07-07T13:49:50Z
+updated: 2026-07-07T13:55:34Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
@@ -204,6 +204,63 @@ write sites through the new helper.
 
 ## Implementation Notes
 
+Added a shared `writeTicketFile` helper in `src/tickets.js` and routed all seven
+full-file ticket write sites through it, per the approved design.
+
+**`src/tickets.js`**
+- Import: added `rm` to the `node:fs/promises` import (kept `writeFile`/`rename`).
+- New: per-process monotonic `nextTmpSeq()` counter, `renameWithRetry()` (bounded
+  retry: up to 5 attempts, 10/20/40/80ms backoff, retrying only
+  `EPERM`/`EBUSY`/`EACCES`, rethrowing anything else and the final failure), and
+  exported `writeTicketFile(targetPath, content, options)`. Temp path is
+  `<dir>/.<basename>.tmp-<pid>-<seq>` — same directory as the target (so rename is
+  a same-volume atomic metadata swap) and deliberately does not end in `.md`, so
+  `discover()`'s `endsWith(".md")` filter never picks it up. On any failure
+  (write or rename) the temp file is best-effort cleaned up (`rm(..., { force:
+  true })`) and the original error is rethrown; the canonical file is never
+  touched until the rename succeeds. `options.renameFn` is a test-only injection
+  point (defaults to the real `rename`); no production call site passes it.
+- Rerouted all seven direct `writeFile(ticket.path, ...)` calls to
+  `writeTicketFile(ticket.path, ...)`: `moveTicket` (in-place rewrite only — the
+  separate cross-folder `rename` at lines 312-314 is untouched, per the design's
+  explicit boundary with B20260707T1318Z), `setTicketField`, `appendTicketComment`,
+  `setTicketSection`, `approveInline`, `completeStep`, and the `writeTicketUpdate`
+  helper (covers `linkParent`/`unlinkParent`/`blockTicket`/`unblockTicket`).
+  `createTicket`'s exclusive (`wx`) new-file write is untouched — out of scope,
+  it never overwrites an existing canonical file.
+
+**`test/tickets.test.js`**
+- Added `writeTicketFile` to the imports from `../src/tickets.js`, and `readdir`/
+  `rename` to the `node:fs/promises` import.
+- Four new tests:
+  1. `writeTicketFile leaves the original file byte-identical when the rename
+     fails` — injects a `renameFn` throwing `ENOSPC`; asserts the promise rejects,
+     the target file is unchanged, and no temp file remains in the directory.
+  2. `writeTicketFile retries the rename after a transient Windows error` —
+     injects a `renameFn` that throws `EPERM` once then delegates to the real
+     `rename`; asserts it took exactly 2 attempts and the content updated.
+  3. `successful ticket mutations leave no temp files and discover reports zero
+     load errors` — runs `setTicketSection`, `appendTicketComment`, and
+     `completeStep` back to back, then asserts the ticket folder contains exactly
+     the one `.md` file and `discover()` has zero `loadErrors`.
+  4. `an orphaned non-.md temp sibling is invisible to discover and validate` —
+     manually drops a `<ticket>.md.tmp-99999-1` file next to a real ticket and
+     asserts `discover`/`validate` ignore it entirely.
+
+**Memory bank**
+- `memory-bank/systemPatterns.md`: added a terse "Atomic Writes" section recording
+  the `writeTicketFile` invariant and explicitly noting it is crash-consistency,
+  not mutual exclusion or fsync durability (B20260707T1318Z and B20260707T1322Z
+  remain separately open).
+
+**Deviations from design:** none. Scope held to atomicity only — no locking, no
+change to `moveTicket`'s cross-folder rename ordering.
+
+**Test results:**
+- `npm run check`: pass (all `node --check` targets clean).
+- `npm test`: 139/139 pass, 0 fail (135 pre-existing + 4 new).
+- `npm run validate`: `Ticket validation OK`.
+
 ## Review Findings
 
 ## Test Evidence
@@ -215,3 +272,5 @@ write sites through the new helper.
 ## Run Log
 
 - 2026-07-07T13:48:59Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus) wrote Technical Design: shared writeTicketFile temp-write-then-rename helper covering all seven write sites, non-.md temp naming to protect discovery, bounded Windows rename retry, failure-injection test strategy. Estimate 4 (bootstrap).
+
+- 2026-07-07T13:50:04Z: Ensured git branch local-board/B20260707T1317Z-ticket-writes-are-not-atomic-crash-mid-write-corrupts-canonical-board-file (created).
