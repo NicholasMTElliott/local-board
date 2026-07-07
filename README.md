@@ -41,7 +41,7 @@ Installed skill and agent text always invokes the `local-board` command on `PATH
 
 **`npx local-board` is not supported.** A first run of `npx` needs network access to fetch the package, which sandboxed environments (including the Codex sandbox) deny. Install the package globally first, as above.
 
-`node ./bin/local-board.js install` and `node install.mjs` remain available as deprecated aliases for running the installer from a checkout without a prior global install.
+`node ./bin/local-board.js install` and `node install.mjs` remain available as deprecated aliases for running the installer from a checkout, but they still require a prior `npm install -g .` or `npm link` from that checkout — the installer's PATH check fails fast otherwise, and rendered skills need the `local-board` command on `PATH` to be invoked correctly.
 
 ## Status
 

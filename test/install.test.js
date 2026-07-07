@@ -15,10 +15,34 @@ const CLI = path.resolve("bin", "local-board.js");
 
 // A stub `local-board` executable on PATH so installer tests can exercise the
 // PATH-verification success path without a real global install. Tests that
-// exercise the *failure* path pass `{ includeLocalBoardStub: false }` to
-// `installEnv`, which relies on the ambient test PATH genuinely lacking
-// `local-board`.
+// exercise the *failure* path pass `{ includeLocalBoardStub: false,
+// sanitizePath: true }` to `installEnv`, which replaces the child process's
+// PATH with a minimal, constructed set of directories (just enough for
+// `node`/`where`/`command -v` to run) instead of relying on the ambient host
+// PATH to genuinely lack `local-board`. This keeps the suite hermetic: it
+// passes identically whether or not `local-board` is globally installed on
+// the machine running the tests.
 const STUB_BIN_DIR = createStubBinDir();
+
+// A minimal PATH for the child process containing only the directory of the
+// current Node executable plus the OS-minimum directories needed for `where`
+// (win32) / `command -v` (posix) and `node` itself to resolve. Deliberately
+// excludes any ambient PATH entries, so tests using it are unaffected by
+// whatever is globally installed on the host running the suite.
+function sanitizedSystemPath() {
+  const nodeDir = path.dirname(process.execPath);
+  if (process.platform === "win32") {
+    const windir = process.env.SystemRoot || process.env.WINDIR || "C:\\Windows";
+    return [
+      nodeDir,
+      windir,
+      path.join(windir, "System32"),
+      path.join(windir, "System32", "Wbem"),
+      path.join(windir, "System32", "WindowsPowerShell", "v1.0"),
+    ].join(path.delimiter);
+  }
+  return [nodeDir, "/usr/local/bin", "/usr/bin", "/bin"].join(path.delimiter);
+}
 
 function createStubBinDir() {
   const dir = mkdtempSync(path.join(os.tmpdir(), "local-board-stub-bin-"));
@@ -45,7 +69,7 @@ function findPathKey(env) {
   return Object.keys(env).find((key) => key.toLowerCase() === "path") ?? "PATH";
 }
 
-function installEnv(home, { includeLocalBoardStub = true } = {}) {
+function installEnv(home, { includeLocalBoardStub = true, sanitizePath = false } = {}) {
   const env = {
     ...process.env,
     HOME: home,
@@ -53,8 +77,11 @@ function installEnv(home, { includeLocalBoardStub = true } = {}) {
     HOMEDRIVE: path.parse(home).root.replace(/[\\/]+$/, ""),
     HOMEPATH: home.slice(path.parse(home).root.length),
   };
+  const pathKey = findPathKey(env);
+  if (sanitizePath) {
+    env[pathKey] = sanitizedSystemPath();
+  }
   if (includeLocalBoardStub) {
-    const pathKey = findPathKey(env);
     env[pathKey] = `${STUB_BIN_DIR}${path.delimiter}${env[pathKey] ?? ""}`;
   }
   return env;
@@ -307,7 +334,7 @@ test("PATH verification (in-process option seam): resolvesOnPath false throws a 
 test("PATH verification failure (real PATH, clone/git-checkout mode): guidance recommends npm link", async () => {
   await withHome(async (home) => {
     await assert.rejects(
-      runInstallCli(home, ["--target=codex"], { includeLocalBoardStub: false }),
+      runInstallCli(home, ["--target=codex"], { includeLocalBoardStub: false, sanitizePath: true }),
       (error) => {
         const output = errorOutput(error);
         assert.match(output, /local-board is not on PATH/);
@@ -328,7 +355,7 @@ test("PATH verification failure (packaged/no-.git tree): guidance omits npm link
         execFileAsync(process.execPath, [path.join(packagedDir, "bin", "local-board.js"), "install", "--target=codex"], {
           cwd: packagedDir,
           encoding: "utf8",
-          env: installEnv(home, { includeLocalBoardStub: false }),
+          env: installEnv(home, { includeLocalBoardStub: false, sanitizePath: true }),
         }),
         (error) => {
           const output = errorOutput(error);
