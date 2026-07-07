@@ -68,6 +68,18 @@ async function withHome(fn) {
   }
 }
 
+// Regression seam for the hook-command quoting fix: the prefix deliberately
+// contains a space so the resulting HOME (and therefore the install dir
+// nested under it) reproduces "home dir with spaces" installs.
+async function withHomeContainingSpace(fn) {
+  const home = await mkdtemp(path.join(os.tmpdir(), "local board install "));
+  try {
+    await fn(home);
+  } finally {
+    await rm(home, { recursive: true, force: true });
+  }
+}
+
 function findPathKey(env) {
   return Object.keys(env).find((key) => key.toLowerCase() === "path") ?? "PATH";
 }
@@ -319,19 +331,19 @@ test("install --hooks writes all four managed hook entries and is idempotent", a
     const bashGroup = firstRun.hooks.PreToolUse.find((entry) => entry.matcher === "Bash");
     const bashCommands = bashGroup.hooks.map((hook) => hook.command).sort();
     assert.deepEqual(bashCommands, [
-      `node ${installDir}/hooks/approve-inline-consent.js`,
-      `node ${installDir}/hooks/evidence-gate.js`,
+      `node "${installDir}/hooks/approve-inline-consent.js"`,
+      `node "${installDir}/hooks/evidence-gate.js"`,
     ]);
 
     const taskGroupPre = firstRun.hooks.PreToolUse.find((entry) => entry.matcher === "Task|Agent");
     assert.deepEqual(
       taskGroupPre.hooks.map((hook) => hook.command),
-      [`node ${installDir}/hooks/routing-validator.js`],
+      [`node "${installDir}/hooks/routing-validator.js"`],
     );
     const taskGroupPost = firstRun.hooks.PostToolUse.find((entry) => entry.matcher === "Task|Agent");
     assert.deepEqual(
       taskGroupPost.hooks.map((hook) => hook.command),
-      [`node ${installDir}/hooks/dispatch-ledger.js`],
+      [`node "${installDir}/hooks/dispatch-ledger.js"`],
     );
 
     // Existing allow-rule patch must coexist untouched.
@@ -382,6 +394,33 @@ test("install --uninstall removes wired hook entries from settings.json", async 
     await runInstallCli(home, ["--target=claude", "--uninstall"]);
     const after = JSON.parse(await readFile(settingsPath, "utf8"));
     assert.equal(after.hooks, undefined);
+  });
+});
+
+test("install --hooks quotes the hook command path when the home dir contains spaces, and --uninstall still removes it", async () => {
+  await withHomeContainingSpace(async (home) => {
+    assert.match(home, / /); // sanity: the fixture actually reproduces a space in the path
+
+    const settingsPath = path.join(home, ".claude", "settings.json");
+    const installDir = path.join(home, ".local-board").replace(/\\/g, "/");
+    await runInstallCli(home, ["--target=claude", "--hooks"]);
+
+    const afterInstall = JSON.parse(await readFile(settingsPath, "utf8"));
+    const taskGroupPost = afterInstall.hooks.PostToolUse.find((entry) => entry.matcher === "Task|Agent");
+    assert.deepEqual(
+      taskGroupPost.hooks.map((hook) => hook.command),
+      [`node "${installDir}/hooks/dispatch-ledger.js"`],
+    );
+
+    // Re-running --hooks must not duplicate the (quoted) entry.
+    await runInstallCli(home, ["--target=claude", "--hooks"]);
+    const afterSecondRun = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.deepEqual(afterSecondRun.hooks, afterInstall.hooks);
+
+    // Uninstall must match and remove the quoted command form.
+    await runInstallCli(home, ["--target=claude", "--uninstall"]);
+    const afterUninstall = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.equal(afterUninstall.hooks, undefined);
   });
 });
 

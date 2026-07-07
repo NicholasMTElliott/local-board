@@ -13,8 +13,8 @@ estimateBasis: T20260707T1325Z
 workStartedAt: 2026-07-07T18:06:04Z
 workCompletedAt: null
 created: 2026-07-07T13:26:41Z
-updated: 2026-07-07T18:30:38Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-07T18:39:02Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only]
 routingApprovals: []
 ---
 # enforce: Claude Code hooks for dispatch ledger, evidence gate, routing validator, and approve-inline consent
@@ -163,7 +163,20 @@ All four export `handle(payload, deps)` for direct-import unit tests and wrap `m
 3. Did not add the `Ticket: <id>` mandate to the Codex skill templates (see above).
 4. Open questions 1/3/4 from the ticket (exact Task-vs-Agent tool name, headless `ask` behavior, `model` presence reliability) are not resolvable from this implementation pass — matcher registers both names defensively; the rest is unverifiable without a live harness run.
 
+**Rework pass (2026-07-07, review of commit a83ab5d):**
+
+1. BLOCKER fixed: `hooks/dispatch-ledger.js` `main()` no longer writes anything to stdout on a successful append (or on the no-op path) — `handle()`'s return value is still exercised directly by unit tests, but the process boundary is now output-free on every branch, matching the PostToolUse "never disrupt, never surface success JSON" contract. Inverted `test/hooks.test.js`'s spawned dispatch-ledger test (previously named "...appends a correct record (spawned)", now "...appends a correct record silently (spawned)") to assert `stdout` is empty while reading the appended record back from the real ledger file instead of parsing it off stdout.
+2. `src/install.js`'s `hookCommand()` now quotes the script path (`` `node "${scriptPath}"` ``) so an install dir under a home directory containing spaces survives shell execution. Both the add path (`patchHooks`) and the remove path (uninstall) build their match string through this same function, so idempotency and removal stay consistent with the quoted form — no separate matching logic to keep in sync. Updated the three `test/install.test.js` assertions that hard-coded the old unquoted command strings, and added a new test (`install --hooks quotes the hook command path when the home dir contains spaces, and --uninstall still removes it`) using a new `withHomeContainingSpace` fixture (mkdtemp prefix `"local board install "`) that exercises install, re-install (idempotency), and uninstall (removal) all against a quoted, space-containing path.
+3. Added the three requested test-coverage gaps (all passed without needing an implementation change — pure coverage additions):
+   - `evidence-gate: a quoted --executor value is parsed identically to an unquoted one` — `--executor "claude-subagent:local-board-implementer@sonnet"`.
+   - `evidence-gate: a Windows-style node C:\...\local-board.js command form is recognized as the program token` — verifies `isProgramToken`'s backslash-normalize-then-basename logic against a real Windows path.
+   - `dispatch-ledger: a Ticket: line with leading whitespace is still extracted` and `routing-validator: a Ticket: line with leading whitespace still triggers the check-dispatch spawn` — both hooks' `extractTicketId` already anchors `^\s*Ticket:` per-line in multiline mode, so leading whitespace was already tolerated; these tests just codify it.
+
+**Verification (rework pass):** `npm run check` (green, no output), `npm test` — 246/246 passing (up from 241; 5 new tests: 2 leading-whitespace Ticket: cases, 2 evidence-gate quoted-executor/Windows-path cases, 1 install spaces-in-home-dir case), `npm run validate` (green, "Ticket validation OK").
+
 ## Review Findings
+
+- 2026-07-07T18:35:10Z: Review (codex): one blocker — dispatch-ledger emits success JSON on stdout (hooks must be silent on allow; test codifies the wrong shape). Also fixing the non-blocking unquoted hook command path (home dirs with spaces) and adding quoted-executor/Windows-path test coverage. Fast paths, fail-open policy, timeout, installer idempotency all verified.
 
 ## Test Evidence
 
@@ -176,3 +189,9 @@ All four export `handle(payload, deps)` for direct-import unit tests and wrap `m
 - 2026-07-07T18:04:53Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): four self-contained stdin-JSON hook scripts in hooks/, installed to ~/.local-board/hooks and wired via new patchHooks into user settings; opt-in --hooks flag; fail-open on errors (CLI validation is the backstop); session-scoped ledger gate. Estimate 8 (basis T20260707T1325Z).
 
 - 2026-07-07T18:06:04Z: Ensured git branch local-board/T20260707T1326Z-enforce-claude-code-hooks-for-dispatch-ledger-evidence-gate-routing-validator-and-approve-inline-consent (created).
+
+- 2026-07-07T18:31:13Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): four hook scripts + patchHooks opt-in wiring + skill mandate + 36 new tests; 241/241 green; discovered and worked around a Windows async-spawn stdin hang.
+
+- 2026-07-07T18:35:10Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) changes_requested: silent-allow contract violation in the ledger hook; three minor hardening items. Everything else verified including 10s timeout and opt-in wiring.
+
+- 2026-07-07T18:35:10Z: Ensured git branch local-board/T20260707T1326Z-enforce-claude-code-hooks-for-dispatch-ledger-evidence-gate-routing-validator-and-approve-inline-consent (already-current).

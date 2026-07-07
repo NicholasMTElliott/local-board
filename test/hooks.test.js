@@ -53,7 +53,7 @@ function parseStdout(stdout) {
 // dispatch-ledger.js
 // ---------------------------------------------------------------------------
 
-test("dispatch-ledger: Task payload with a Ticket: line appends a correct record (spawned)", async () => {
+test("dispatch-ledger: Task payload with a Ticket: line appends a correct record silently (spawned)", async () => {
   await withRepo(async (root) => {
     const payload = {
       tool_name: "Task",
@@ -65,19 +65,20 @@ test("dispatch-ledger: Task payload with a Ticket: line appends a correct record
         prompt: "Ticket: T20260707T0001Z\nDo the thing.",
       },
     };
+    // PostToolUse hooks must be silent on success -- stdout stays empty even
+    // though the ledger file gains the entry.
     const { stdout } = await runHookProcess("dispatch-ledger.js", payload);
-    const result = parseStdout(stdout);
-    assert.equal(result.appended, true);
-    assert.equal(result.record.ticketId, "T20260707T0001Z");
-    assert.equal(result.record.subagent_type, "local-board-implementer");
-    assert.equal(result.record.model, "sonnet");
-    assert.equal(result.record.session_id, "sess-a");
-    assert.ok(typeof result.record.ts === "string" && result.record.ts.length > 0);
+    assert.equal(stdout.trim(), "");
 
     const ledgerRaw = await readFile(path.join(root, ".local-board", "dispatch-ledger.jsonl"), "utf8");
     const lines = ledgerRaw.trim().split("\n");
     assert.equal(lines.length, 1);
-    assert.deepEqual(JSON.parse(lines[0]), result.record);
+    const record = JSON.parse(lines[0]);
+    assert.equal(record.ticketId, "T20260707T0001Z");
+    assert.equal(record.subagent_type, "local-board-implementer");
+    assert.equal(record.model, "sonnet");
+    assert.equal(record.session_id, "sess-a");
+    assert.ok(typeof record.ts === "string" && record.ts.length > 0);
   });
 });
 
@@ -93,6 +94,25 @@ test("dispatch-ledger: also matches tool_name Agent", () => {
   );
   assert.equal(result.appended, true);
   assert.equal(result.record.ticketId, "T1");
+});
+
+test("dispatch-ledger: a Ticket: line with leading whitespace is still extracted", () => {
+  const appended = [];
+  const result = dispatchLedgerHandle(
+    {
+      tool_name: "Task",
+      session_id: "sess-ws",
+      cwd: process.cwd(),
+      tool_input: {
+        subagent_type: "local-board-implementer",
+        model: "sonnet",
+        prompt: "Some preamble.\n   Ticket: T20260707T9999Z\nDo the thing.",
+      },
+    },
+    { appendLedger: (file, record) => appended.push(record), now: () => "2026-01-01T00:00:00.000Z" },
+  );
+  assert.equal(result.record.ticketId, "T20260707T9999Z");
+  assert.equal(appended.length, 1);
 });
 
 test("dispatch-ledger: no Ticket: line records ticketId null", () => {
@@ -167,6 +187,19 @@ test("routing-validator: missing Ticket: line allows without invoking spawn", ()
   );
   assert.equal(result, null);
   assert.equal(spawnCalls, 0);
+});
+
+test("routing-validator: a Ticket: line with leading whitespace still triggers the check-dispatch spawn", () => {
+  let spawnCalls = 0;
+  const result = routingValidatorHandle(
+    {
+      tool_name: "Task",
+      tool_input: { subagent_type: "local-board-implementer", model: "sonnet", prompt: "  Ticket: T9\nHi" },
+    },
+    { spawnSync: () => ((spawnCalls += 1), { status: 0, stdout: JSON.stringify({ ok: true, reason: "match" }) }) },
+  );
+  assert.equal(spawnCalls, 1);
+  assert.equal(result, null);
 });
 
 test("routing-validator: non-Task/Agent tool is a fast-path no-op", () => {
@@ -375,6 +408,28 @@ test("evidence-gate: both local-board and node .../local-board.js command forms 
     );
     assert.equal(result, null, command);
   }
+});
+
+test("evidence-gate: a quoted --executor value is parsed identically to an unquoted one", () => {
+  const ledger = JSON.stringify({ ticketId: "T1", subagent_type: "local-board-implementer", session_id: "sess-x" });
+  const command =
+    'local-board complete-step T1 implement --executor "claude-subagent:local-board-implementer@sonnet" --evidence "done"';
+  const result = evidenceGateHandle(
+    { session_id: "sess-x", tool_input: { command } },
+    { spawnSync: () => ({ status: 128 }), readFile: () => ledger },
+  );
+  assert.equal(result, null);
+});
+
+test("evidence-gate: a Windows-style node C:\\...\\local-board.js command form is recognized as the program token", () => {
+  const ledger = JSON.stringify({ ticketId: "T1", subagent_type: "local-board-implementer", session_id: "sess-x" });
+  const command =
+    'node C:\\Users\\jane\\.local-board\\bin\\local-board.js complete-step T1 implement --executor claude-subagent:local-board-implementer@sonnet --evidence "done"';
+  const result = evidenceGateHandle(
+    { session_id: "sess-x", tool_input: { command } },
+    { spawnSync: () => ({ status: 128 }), readFile: () => ledger },
+  );
+  assert.equal(result, null);
 });
 
 test("evidence-gate: a --evidence value containing the literal substring does not false-positive the gate", () => {

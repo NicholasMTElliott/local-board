@@ -469,7 +469,12 @@ const HOOK_SPECS = [
 
 function hookCommand(installDir, script) {
   const scriptPath = join(installDir, "hooks", script).replace(/\\/g, "/");
-  return `node ${scriptPath}`;
+  // Quoted so an install dir under a home directory containing spaces (e.g.
+  // "C:\\Users\\Jane Doe\\.local-board") still shells out correctly. Both the
+  // add path (patchHooks) and the remove path (uninstall) call this same
+  // function to build the command they match against, so idempotency and
+  // removal stay consistent with the quoted form.
+  return `node "${scriptPath}"`;
 }
 
 // Idempotent, dedup-by-exact-command-string patcher for `settings.hooks`,

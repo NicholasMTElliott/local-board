@@ -118,10 +118,11 @@ function parsePayload(raw) {
 async function main() {
   try {
     const payload = parsePayload(await readStdin());
-    const result = handle(payload);
-    if (result !== null && result !== undefined) {
-      process.stdout.write(`${JSON.stringify(result)}\n`);
-    }
+    // PostToolUse hooks cannot deny and must not disrupt the transcript --
+    // stay silent on stdout for every outcome (no-op and successful append
+    // alike). `handle`'s return value is exercised directly by unit tests;
+    // this process boundary is intentionally output-free.
+    handle(payload);
   } catch {
     // Fail-open: never brick the session on an unexpected error.
   }
