@@ -125,6 +125,101 @@ test("active-steps ledger corruption is tolerated on write (self-heals) but surf
   });
 });
 
+// --- Ledger RMW locking (B20260707T1322Z) ---
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+test("control: an unlocked ledger read-modify-write loses an update under a forced interleave (reproduces the pre-lock bug)", async () => {
+  await withBoard(async (root) => {
+    const filePath = await ledgerPath(root);
+    await mkdir(path.dirname(filePath), { recursive: true });
+    await writeFile(filePath, "{}\n", "utf8");
+
+    // Hand-rolled analog of the OLD (unlocked) stampActiveStep body: read,
+    // hold, mutate, write. No withFileLock involved at all -- this is
+    // deliberately the naive pattern the ticket's bug describes, used here
+    // only to prove the seam reproduces a real lost update.
+    async function unsafeStamp(ticketId, holdMs) {
+      const current = JSON.parse(await readFile(filePath, "utf8"));
+      await delay(holdMs);
+      current[ticketId] = { ticket: ticketId };
+      await writeFile(filePath, `${JSON.stringify(current, null, 2)}\n`, "utf8");
+    }
+
+    // T1 reads first and holds longer; T2 reads (the same pre-mutation {})
+    // and writes first (short hold), then T1 writes last with a copy that
+    // never saw T2's write, clobbering it.
+    await Promise.all([unsafeStamp("T1", 60), unsafeStamp("T2", 5)]);
+
+    const final = JSON.parse(await readFile(filePath, "utf8"));
+    assert.deepEqual(Object.keys(final), ["T1"], "T2's update must be lost by the naive unlocked RMW pattern");
+  });
+});
+
+test("stampActiveStep serializes concurrent stamps for different tickets via the ledger lock: neither entry is lost", async () => {
+  await withBoard(async (root) => {
+    // T1's stamp is forced to hold the lock for a while between its read and
+    // its write (mirroring the control test's interleave above); T2's stamp
+    // has no artificial delay and starts concurrently. Without the lock this
+    // is exactly the shape that loses an update; with it, T2 must block on
+    // the mkdir sentinel until T1 releases, then read T1's already-written
+    // state before adding its own key.
+    await Promise.all([
+      stampActiveStep(
+        root,
+        "T1",
+        { ticket: "T1", action: "design", route: "r1", model: "opus" },
+        { __afterRead: () => delay(60) },
+      ),
+      stampActiveStep(root, "T2", { ticket: "T2", action: "implement", route: "r2", model: "sonnet" }),
+    ]);
+
+    const steps = await readActiveSteps(root);
+    assert.equal(steps.T1.action, "design", "T1's entry must survive");
+    assert.equal(steps.T2.action, "implement", "T2's entry must survive");
+  });
+});
+
+test("clearActiveStep and stampActiveStep contend on the same ledger lock without losing either update", async () => {
+  await withBoard(async (root) => {
+    await stampActiveStep(root, "T1", { ticket: "T1", action: "design", route: "r1", model: "opus" });
+
+    await Promise.all([
+      clearActiveStep(root, "T1", { __afterRead: () => delay(60) }),
+      stampActiveStep(root, "T2", { ticket: "T2", action: "implement", route: "r2", model: "sonnet" }),
+    ]);
+
+    const steps = await readActiveSteps(root);
+    assert.equal(Object.hasOwn(steps, "T1"), false, "T1 must be cleared");
+    assert.equal(steps.T2.action, "implement", "T2's entry must survive the concurrent clear");
+  });
+});
+
+test("stale ledger lock is broken and the mutation proceeds", async () => {
+  await withBoard(async (root) => {
+    const filePath = await ledgerPath(root);
+    const lockDir = `${filePath}.lock`;
+    await mkdir(lockDir, { recursive: true });
+    await writeFile(
+      path.join(lockDir, "meta"),
+      JSON.stringify({ pid: 999999, ts: new Date(Date.now() - 100_000).toISOString(), hostname: "stale-host" }),
+      "utf8",
+    );
+
+    await stampActiveStep(
+      root,
+      "T1",
+      { ticket: "T1", action: "design", route: "r1", model: "opus" },
+      { lock: { staleMs: 50, retryBudgetMs: 50 } },
+    );
+
+    const steps = await readActiveSteps(root);
+    assert.equal(steps.T1.action, "design");
+  });
+});
+
 // --- CLI round-trip: begin-step stamps, complete-step/approve-inline clear ---
 
 test("begin-step stamps the ledger; complete-step clears it", async () => {

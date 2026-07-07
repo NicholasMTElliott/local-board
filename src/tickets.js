@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { clearActiveStep, stampActiveStep } from "./active-steps.js";
 import { loadConfig } from "./config.js";
+import { withOrderedTicketLocks, withTicketLock } from "./lock.js";
 import { ticketWorktreeMintOffsetMinutes } from "./worktrees.js";
 
 export const PREFIX_TYPES = new Map([
@@ -336,50 +337,63 @@ export async function moveTicket(root, ticketId, status, options = {}) {
     throw new Error(`status must be one of ${[...STATUSES].sort().join(", ")}`);
   }
 
-  const now = options.now ?? new Date();
-  const { board, ticket } = await findTicket(root, ticketId);
-  const frontMatter = withUpdated({ ...ticket.frontMatter, status }, now);
-  if (
-    status === "done" &&
-    frontMatter.workCompletedAt === null &&
-    typeof frontMatter.workStartedAt === "string"
-  ) {
-    frontMatter.workCompletedAt = formatIsoSeconds(now);
-  }
-  if (status === "done") {
-    const config = await loadConfig(board.root);
-    const issues = validateRouting({ ...ticket, status, frontMatter }, config);
-    if (issues.length > 0) {
-      throw new Error(`routing validation failed:\n${issues.join("\n")}`);
-    }
-  }
-  const content = renderMarkdownTicket(frontMatter, ticket.body);
-  const targetFolder = path.join(board.root, "plans", "tickets", STATUS_FOLDERS.get(status));
-  const targetPath = path.join(targetFolder, path.basename(ticket.path));
+  // Locks the whole read (findTicket) -> write/rename span: a concurrent
+  // mutation of the same ticket (e.g. a Run Log comment) racing this rename
+  // would otherwise read the same stale frontMatter and clobber this write.
+  return withTicketLock(
+    root,
+    ticketId,
+    async () => {
+      const now = options.now ?? new Date();
+      const { board, ticket } = await findTicket(root, ticketId);
+      if (options.__afterRead) {
+        await options.__afterRead();
+      }
+      const frontMatter = withUpdated({ ...ticket.frontMatter, status }, now);
+      if (
+        status === "done" &&
+        frontMatter.workCompletedAt === null &&
+        typeof frontMatter.workStartedAt === "string"
+      ) {
+        frontMatter.workCompletedAt = formatIsoSeconds(now);
+      }
+      if (status === "done") {
+        const config = await loadConfig(board.root);
+        const issues = validateRouting({ ...ticket, status, frontMatter }, config);
+        if (issues.length > 0) {
+          throw new Error(`routing validation failed:\n${issues.join("\n")}`);
+        }
+      }
+      const content = renderMarkdownTicket(frontMatter, ticket.body);
+      const targetFolder = path.join(board.root, "plans", "tickets", STATUS_FOLDERS.get(status));
+      const targetPath = path.join(targetFolder, path.basename(ticket.path));
 
-  await mkdir(targetFolder, { recursive: true });
-  if (path.resolve(ticket.path) !== path.resolve(targetPath) && (await exists(targetPath))) {
-    throw new Error(`${targetPath} already exists`);
-  }
+      await mkdir(targetFolder, { recursive: true });
+      if (path.resolve(ticket.path) !== path.resolve(targetPath) && (await exists(targetPath))) {
+        throw new Error(`${targetPath} already exists`);
+      }
 
-  if (path.resolve(ticket.path) !== path.resolve(targetPath)) {
-    // Rename first (risky op), then rewrite content in place. If the rename
-    // throws, the file is untouched at the old path with old (folder-consistent)
-    // status: the board stays queryable and the caller can retry. If the
-    // in-place rewrite throws after a successful rename, roll the rename back
-    // so the file returns to its old, fully-consistent path.
-    await renameWithRetry(ticket.path, targetPath, options.renameFn);
-    try {
-      await writeTicketFile(targetPath, content, { renameFn: options.renameFn });
-    } catch (error) {
-      await renameWithRetry(targetPath, ticket.path, options.renameFn).catch(() => {});
-      throw error;
-    }
-  } else {
-    await writeTicketFile(targetPath, content, { renameFn: options.renameFn });
-  }
+      if (path.resolve(ticket.path) !== path.resolve(targetPath)) {
+        // Rename first (risky op), then rewrite content in place. If the rename
+        // throws, the file is untouched at the old path with old (folder-consistent)
+        // status: the board stays queryable and the caller can retry. If the
+        // in-place rewrite throws after a successful rename, roll the rename back
+        // so the file returns to its old, fully-consistent path.
+        await renameWithRetry(ticket.path, targetPath, options.renameFn);
+        try {
+          await writeTicketFile(targetPath, content, { renameFn: options.renameFn });
+        } catch (error) {
+          await renameWithRetry(targetPath, ticket.path, options.renameFn).catch(() => {});
+          throw error;
+        }
+      } else {
+        await writeTicketFile(targetPath, content, { renameFn: options.renameFn });
+      }
 
-  return targetPath;
+      return targetPath;
+    },
+    options.lock,
+  );
 }
 
 export async function archiveDoneTickets(root, options = {}) {
@@ -428,10 +442,23 @@ export async function setTicketField(root, ticketId, field, value, options = {})
 
   assertFieldValue(field, value);
 
-  const { ticket } = await findTicket(root, ticketId);
-  const frontMatter = withUpdated({ ...ticket.frontMatter, [field]: value }, options.now);
-  await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, ticket.body));
-  return ticket.path;
+  // Locks the read (findTicket) -> write span so a concurrent mutation of the
+  // same ticket (e.g. a Run Log comment or complete-step) cannot read the
+  // same stale frontMatter and clobber this write.
+  return withTicketLock(
+    root,
+    ticketId,
+    async () => {
+      const { ticket } = await findTicket(root, ticketId);
+      if (options.__afterRead) {
+        await options.__afterRead();
+      }
+      const frontMatter = withUpdated({ ...ticket.frontMatter, [field]: value }, options.now);
+      await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, ticket.body));
+      return ticket.path;
+    },
+    options.lock,
+  );
 }
 
 export async function appendTicketComment(root, ticketId, section, text, options = {}) {
@@ -439,19 +466,45 @@ export async function appendTicketComment(root, ticketId, section, text, options
     throw new Error("comment text is required");
   }
 
-  const { ticket } = await findTicket(root, ticketId);
-  const body = appendToSection(ticket.body, section, `- ${formatIsoSeconds(options.now ?? new Date())}: ${text.trim()}`);
-  const frontMatter = withUpdated({ ...ticket.frontMatter }, options.now);
-  await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
-  return ticket.path;
+  // See setTicketField: locks the read -> write span (this is the acceptance
+  // scenario's "Run Log comment landing while a complete-step is in flight").
+  return withTicketLock(
+    root,
+    ticketId,
+    async () => {
+      const { ticket } = await findTicket(root, ticketId);
+      if (options.__afterRead) {
+        await options.__afterRead();
+      }
+      const body = appendToSection(
+        ticket.body,
+        section,
+        `- ${formatIsoSeconds(options.now ?? new Date())}: ${text.trim()}`,
+      );
+      const frontMatter = withUpdated({ ...ticket.frontMatter }, options.now);
+      await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
+      return ticket.path;
+    },
+    options.lock,
+  );
 }
 
 export async function setTicketSection(root, ticketId, section, text, options = {}) {
-  const { ticket } = await findTicket(root, ticketId);
-  const body = replaceSection(ticket.body, section, text.trim());
-  const frontMatter = withUpdated({ ...ticket.frontMatter }, options.now);
-  await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
-  return ticket.path;
+  return withTicketLock(
+    root,
+    ticketId,
+    async () => {
+      const { ticket } = await findTicket(root, ticketId);
+      if (options.__afterRead) {
+        await options.__afterRead();
+      }
+      const body = replaceSection(ticket.body, section, text.trim());
+      const frontMatter = withUpdated({ ...ticket.frontMatter }, options.now);
+      await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
+      return ticket.path;
+    },
+    options.lock,
+  );
 }
 
 // Pure core shared by `beginStep` and `resolveExpectedStep`: resolves a
@@ -539,23 +592,37 @@ export async function approveInline(root, ticketId, action, reason, options = {}
   if (!isValidAgentValue(executor)) {
     throw new Error(`executor must be one of ${schemaAgentValues().join(", ")}`);
   }
-  const { ticket } = await findTicket(root, ticketId);
-  const token = stepToken(action, executor);
-  const now = options.now ?? new Date();
-  const frontMatter = withUpdated(
-    {
-      ...ticket.frontMatter,
-      routingApprovals: addUnique(asList(ticket.frontMatter.routingApprovals), token),
+
+  // Locks the read (findTicket) -> write span, same rationale as
+  // setTicketField/appendTicketComment.
+  const result = await withTicketLock(
+    root,
+    ticketId,
+    async () => {
+      const { ticket } = await findTicket(root, ticketId);
+      if (options.__afterRead) {
+        await options.__afterRead();
+      }
+      const token = stepToken(action, executor);
+      const now = options.now ?? new Date();
+      const frontMatter = withUpdated(
+        {
+          ...ticket.frontMatter,
+          routingApprovals: addUnique(asList(ticket.frontMatter.routingApprovals), token),
+        },
+        now,
+      );
+      const logMessage = executor === "inline"
+        ? `Approved inline ${action}: ${reason.trim()}`
+        : `Approved routing deviation for ${action}: ${executor}: ${reason.trim()}`;
+      const body = appendToSection(ticket.body, "Run Log", `- ${formatIsoSeconds(now)}: ${logMessage}`);
+      await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
+      return { ticket: ticket.id, action, approvedExecutor: executor, path: ticket.path };
     },
-    now,
+    options.lock,
   );
-  const logMessage = executor === "inline"
-    ? `Approved inline ${action}: ${reason.trim()}`
-    : `Approved routing deviation for ${action}: ${executor}: ${reason.trim()}`;
-  const body = appendToSection(ticket.body, "Run Log", `- ${formatIsoSeconds(now)}: ${logMessage}`);
-  await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
-  await clearActiveStep(root, ticket.id).catch(() => {});
-  return { ticket: ticket.id, action, approvedExecutor: executor, path: ticket.path };
+  await clearActiveStep(root, result.ticket).catch(() => {});
+  return result;
 }
 
 export async function completeStep(root, ticketId, action, executor, evidence, options = {}) {
@@ -569,115 +636,174 @@ export async function completeStep(root, ticketId, action, executor, evidence, o
     throw new Error(`executor must be one of ${schemaAgentValues().join(", ")}`);
   }
 
-  const { ticket } = await findTicket(root, ticketId);
-  const token = stepToken(action, executor);
-  const routingIssues = validateStepRouting(ticket, config, action, executor, { enforceModel: true });
-  if (routingIssues.length > 0) {
-    throw new Error(`routing validation failed:\n${routingIssues.join("\n")}`);
-  }
+  // Locks the read (findTicket) -> write span: the acceptance scenario this
+  // closes is exactly a Run Log comment (appendTicketComment) racing this
+  // complete-step on the same ticket.
+  const result = await withTicketLock(
+    root,
+    ticketId,
+    async () => {
+      const { ticket } = await findTicket(root, ticketId);
+      if (options.__afterRead) {
+        await options.__afterRead();
+      }
+      const token = stepToken(action, executor);
+      const routingIssues = validateStepRouting(ticket, config, action, executor, { enforceModel: true });
+      if (routingIssues.length > 0) {
+        throw new Error(`routing validation failed:\n${routingIssues.join("\n")}`);
+      }
 
-  if (
-    action === "design"
-    && (ticket.frontMatter.type === "task" || ticket.frontMatter.type === "bug")
-    && config.estimation?.enabled === true
-    && (ticket.frontMatter.estimate === null || ticket.frontMatter.estimate === undefined)
-  ) {
-    throw new Error(
-      `complete-step design refused: ticket has no estimate. Run local-board estimate ${ticket.id} POINTS [--basis ID] before completing design (config.estimation.enabled is true).`,
-    );
-  }
+      if (
+        action === "design"
+        && (ticket.frontMatter.type === "task" || ticket.frontMatter.type === "bug")
+        && config.estimation?.enabled === true
+        && (ticket.frontMatter.estimate === null || ticket.frontMatter.estimate === undefined)
+      ) {
+        throw new Error(
+          `complete-step design refused: ticket has no estimate. Run local-board estimate ${ticket.id} POINTS [--basis ID] before completing design (config.estimation.enabled is true).`,
+        );
+      }
 
-  const now = options.now ?? new Date();
-  const frontMatter = withUpdated(
-    {
-      ...ticket.frontMatter,
-      completedSteps: addUnique(asList(ticket.frontMatter.completedSteps), token),
+      const now = options.now ?? new Date();
+      const frontMatter = withUpdated(
+        {
+          ...ticket.frontMatter,
+          completedSteps: addUnique(asList(ticket.frontMatter.completedSteps), token),
+        },
+        now,
+      );
+      const body = appendToSection(
+        ticket.body,
+        "Run Log",
+        `- ${formatIsoSeconds(now)}: Completed ${action} via ${executor}: ${evidence.trim()}`,
+      );
+      await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
+      return { ticket: ticket.id, action, executor, path: ticket.path };
     },
-    now,
+    options.lock,
   );
-  const body = appendToSection(
-    ticket.body,
-    "Run Log",
-    `- ${formatIsoSeconds(now)}: Completed ${action} via ${executor}: ${evidence.trim()}`,
-  );
-  await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
-  await clearActiveStep(root, ticket.id).catch(() => {});
-  return { ticket: ticket.id, action, executor, path: ticket.path };
+  await clearActiveStep(root, result.ticket).catch(() => {});
+  return result;
 }
 
+// linkParent/unlinkParent/blockTicket/unblockTicket each read-then-write two
+// ticket files with no atomicity across the pair. Acquiring both ticket locks
+// in sorted-id order (withOrderedTicketLocks) prevents a concurrent writer to
+// either file from clobbering the other's half of the pair. It does NOT give
+// two-file crash atomicity: a power-loss between the two renames can still
+// leave a half-link. That residual is accepted because both halves are
+// idempotent (addUnique, and linkParent's parent !== null guard tolerates a
+// re-run) and self-healing: validateLinks flags either half, and re-running
+// the same link/block command completes the missing side.
 export async function linkParent(root, childId, parentId, options = {}) {
-  const { child, parent } = await findTicketPair(root, childId, parentId, "parent");
-  if (child.frontMatter.parent !== null && child.frontMatter.parent !== undefined && child.frontMatter.parent !== parent.id) {
-    throw new Error(`ticket ${child.id} already has parent ${child.frontMatter.parent}; unlink it before reparenting`);
-  }
-  const now = options.now ?? new Date();
+  return withOrderedTicketLocks(
+    root,
+    childId,
+    parentId,
+    async () => {
+      const { child, parent } = await findTicketPair(root, childId, parentId, "parent");
+      if (
+        child.frontMatter.parent !== null
+        && child.frontMatter.parent !== undefined
+        && child.frontMatter.parent !== parent.id
+      ) {
+        throw new Error(`ticket ${child.id} already has parent ${child.frontMatter.parent}; unlink it before reparenting`);
+      }
+      const now = options.now ?? new Date();
 
-  await writeTicketUpdate(child, {
-    ...child.frontMatter,
-    parent: parent.id,
-    updated: formatIsoSeconds(now),
-  });
-  await writeTicketUpdate(parent, {
-    ...parent.frontMatter,
-    children: addUnique(asList(parent.frontMatter.children), child.id),
-    updated: formatIsoSeconds(now),
-  });
+      await writeTicketUpdate(child, {
+        ...child.frontMatter,
+        parent: parent.id,
+        updated: formatIsoSeconds(now),
+      });
+      await writeTicketUpdate(parent, {
+        ...parent.frontMatter,
+        children: addUnique(asList(parent.frontMatter.children), child.id),
+        updated: formatIsoSeconds(now),
+      });
 
-  return { childPath: child.path, parentPath: parent.path };
+      return { childPath: child.path, parentPath: parent.path };
+    },
+    options.lock,
+  );
 }
 
 export async function unlinkParent(root, childId, parentId, options = {}) {
-  const { child, parent } = await findTicketPair(root, childId, parentId, "parent");
-  const now = options.now ?? new Date();
+  return withOrderedTicketLocks(
+    root,
+    childId,
+    parentId,
+    async () => {
+      const { child, parent } = await findTicketPair(root, childId, parentId, "parent");
+      const now = options.now ?? new Date();
 
-  await writeTicketUpdate(child, {
-    ...child.frontMatter,
-    parent: child.frontMatter.parent === parent.id ? null : child.frontMatter.parent,
-    updated: formatIsoSeconds(now),
-  });
-  await writeTicketUpdate(parent, {
-    ...parent.frontMatter,
-    children: removeValue(asList(parent.frontMatter.children), child.id),
-    updated: formatIsoSeconds(now),
-  });
+      await writeTicketUpdate(child, {
+        ...child.frontMatter,
+        parent: child.frontMatter.parent === parent.id ? null : child.frontMatter.parent,
+        updated: formatIsoSeconds(now),
+      });
+      await writeTicketUpdate(parent, {
+        ...parent.frontMatter,
+        children: removeValue(asList(parent.frontMatter.children), child.id),
+        updated: formatIsoSeconds(now),
+      });
 
-  return { childPath: child.path, parentPath: parent.path };
+      return { childPath: child.path, parentPath: parent.path };
+    },
+    options.lock,
+  );
 }
 
 export async function blockTicket(root, ticketId, dependencyId, options = {}) {
-  const { child: ticket, parent: dependency } = await findTicketPair(root, ticketId, dependencyId, "dependency");
-  const now = options.now ?? new Date();
+  return withOrderedTicketLocks(
+    root,
+    ticketId,
+    dependencyId,
+    async () => {
+      const { child: ticket, parent: dependency } = await findTicketPair(root, ticketId, dependencyId, "dependency");
+      const now = options.now ?? new Date();
 
-  await writeTicketUpdate(ticket, {
-    ...ticket.frontMatter,
-    blockedBy: addUnique(asList(ticket.frontMatter.blockedBy), dependency.id),
-    updated: formatIsoSeconds(now),
-  });
-  await writeTicketUpdate(dependency, {
-    ...dependency.frontMatter,
-    blocks: addUnique(asList(dependency.frontMatter.blocks), ticket.id),
-    updated: formatIsoSeconds(now),
-  });
+      await writeTicketUpdate(ticket, {
+        ...ticket.frontMatter,
+        blockedBy: addUnique(asList(ticket.frontMatter.blockedBy), dependency.id),
+        updated: formatIsoSeconds(now),
+      });
+      await writeTicketUpdate(dependency, {
+        ...dependency.frontMatter,
+        blocks: addUnique(asList(dependency.frontMatter.blocks), ticket.id),
+        updated: formatIsoSeconds(now),
+      });
 
-  return { ticketPath: ticket.path, dependencyPath: dependency.path };
+      return { ticketPath: ticket.path, dependencyPath: dependency.path };
+    },
+    options.lock,
+  );
 }
 
 export async function unblockTicket(root, ticketId, dependencyId, options = {}) {
-  const { child: ticket, parent: dependency } = await findTicketPair(root, ticketId, dependencyId, "dependency");
-  const now = options.now ?? new Date();
+  return withOrderedTicketLocks(
+    root,
+    ticketId,
+    dependencyId,
+    async () => {
+      const { child: ticket, parent: dependency } = await findTicketPair(root, ticketId, dependencyId, "dependency");
+      const now = options.now ?? new Date();
 
-  await writeTicketUpdate(ticket, {
-    ...ticket.frontMatter,
-    blockedBy: removeValue(asList(ticket.frontMatter.blockedBy), dependency.id),
-    updated: formatIsoSeconds(now),
-  });
-  await writeTicketUpdate(dependency, {
-    ...dependency.frontMatter,
-    blocks: removeValue(asList(dependency.frontMatter.blocks), ticket.id),
-    updated: formatIsoSeconds(now),
-  });
+      await writeTicketUpdate(ticket, {
+        ...ticket.frontMatter,
+        blockedBy: removeValue(asList(ticket.frontMatter.blockedBy), dependency.id),
+        updated: formatIsoSeconds(now),
+      });
+      await writeTicketUpdate(dependency, {
+        ...dependency.frontMatter,
+        blocks: removeValue(asList(dependency.frontMatter.blocks), ticket.id),
+        updated: formatIsoSeconds(now),
+      });
 
-  return { ticketPath: ticket.path, dependencyPath: dependency.path };
+      return { ticketPath: ticket.path, dependencyPath: dependency.path };
+    },
+    options.lock,
+  );
 }
 
 export function byTicketId(board) {

@@ -1,6 +1,8 @@
+import { execFile } from "node:child_process";
 import { mkdtemp, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { promisify } from "node:util";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -13,21 +15,32 @@ import {
   completeStep,
   createTicket,
   discover,
+  findTicket,
   linkParent,
   moveTicket,
   nextTicket,
   queryNext,
   queryTicket,
+  renderMarkdownTicket,
   setTicketField,
   setTicketSection,
   stateReport,
   suggestCalibration,
   unblockTicket,
+  unlinkParent,
   validate,
   writeTicketFile,
 } from "../src/tickets.js";
 import { initProject } from "../src/scaffold.js";
 import { loadConfig } from "../src/config.js";
+
+const execFileAsync = promisify(execFile);
+const CLI_PATH = path.resolve("bin", "local-board.js");
+const RUN_SLOW_TESTS = process.env.LOCAL_BOARD_SLOW_TESTS === "1";
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 async function withBoard(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "local-board-"));
@@ -1025,6 +1038,100 @@ test("block and unblock update reciprocal dependency fields", async () => {
   });
 });
 
+// --- Per-ticket RMW locking (B20260707T1322Z) ---
+
+test("control: an unlocked find+write RMW on the same ticket loses an update (reproduces the pre-lock bug)", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Racing unlocked mutation", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    // Hand-rolled analog of the OLD (unlocked) setTicketField/completeStep
+    // body: findTicket (read), hold, mutate frontMatter, writeTicketFile.
+    // Deliberately bypasses withTicketLock entirely to prove the seam
+    // reproduces a real lost update.
+    async function unsafeSetField(field, value, holdMs) {
+      const { ticket } = await findTicket(root, ticketId);
+      await delay(holdMs);
+      const frontMatter = { ...ticket.frontMatter, [field]: value };
+      await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, ticket.body));
+    }
+
+    await Promise.all([unsafeSetField("priority", "P0", 60), unsafeSetField("estimate", "3", 5)]);
+
+    const { ticket } = await findTicket(root, ticketId);
+    // The "estimate" writer read before "priority" wrote and finishes first,
+    // then "priority" writes last with a frontMatter copy that never saw the
+    // estimate change, clobbering it back to null.
+    assert.equal(ticket.frontMatter.priority, "P0");
+    assert.equal(ticket.frontMatter.estimate, null, "the concurrent estimate update must be lost by the naive unlocked RMW");
+  });
+});
+
+test("appendTicketComment racing completeStep on the same ticket: the per-ticket lock serializes the RMW so neither update is lost", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Racing locked mutations", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    // completeStep reads first and is forced to hold the ticket lock for a
+    // while between its read and its write; appendTicketComment starts
+    // concurrently and must block on the same lock (retrying) until
+    // completeStep releases, then read completeStep's already-written state.
+    await Promise.all([
+      completeStep(
+        root,
+        ticketId,
+        "implement",
+        "claude-subagent:local-board-implementer@sonnet",
+        "Implemented and tested.",
+        { __afterRead: () => delay(60) },
+      ),
+      appendTicketComment(root, ticketId, "Run Log", "Concurrent Run Log comment."),
+    ]);
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \["implement:claude-subagent:local-board-implementer@sonnet"\]$/m);
+    assert.match(text, /Concurrent Run Log comment\./);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("linkParent/unlinkParent ordered dual-lock: reversed argument order across concurrent calls never deadlocks", async () => {
+  await withBoard(async (root) => {
+    const parentPath = await createTicket(root, "epic", "Parent", {
+      status: "ready_for_decomposition",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const childPath = await createTicket(root, "story", "Child", {
+      status: "ready_for_decomposition",
+      now: new Date("2026-05-14T20:57:00Z"),
+    });
+    const parentId = path.basename(parentPath).split("_", 1)[0];
+    const childId = path.basename(childPath).split("_", 1)[0];
+
+    await linkParent(root, childId, parentId, { now: new Date("2026-05-14T21:03:00Z") });
+
+    // Concurrently unlink (child, parent) and re-link (parent, child) -- one
+    // call's sorted-lock order is the reverse of the other's argument order.
+    // Sorted-id acquisition means both actually contend for the same lock
+    // first regardless of argument order, so this must serialize rather than
+    // deadlock (a bounded test timeout would otherwise catch a real deadlock).
+    await Promise.all([
+      unlinkParent(root, childId, parentId, { now: new Date("2026-05-14T21:04:00Z") }),
+      linkParent(root, childId, parentId, { now: new Date("2026-05-14T21:04:30Z") }).catch(() => {}),
+    ]);
+
+    // Whichever order the two operations actually serialized in, the board
+    // must remain internally consistent (no dangling/mismatched half-link).
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
 test("stateReport summarizes ticket state and next action", async () => {
   await withBoard(async (root) => {
     await createTicket(root, "task", "Ready design", {
@@ -1830,6 +1937,45 @@ test("an orphaned non-.md temp sibling is invisible to discover and validate", a
     assert.deepEqual(validate(board), []);
   });
 });
+
+// Probabilistic backstop (B20260707T1322Z): two real, separately-spawned
+// `local-board` CLI processes racing `comment` on the same ticket. This is
+// a secondary smoke test, not the primary guarantee -- the deterministic
+// __afterRead-seam tests above are what actually prove the lock; this only
+// adds confidence the lock also holds under real process-level scheduling.
+// Gated behind an explicit env flag since spawning ~40 CLI processes is slow
+// and any residual flakiness belongs in an opt-in slow-test lane, not the
+// default `npm test` run.
+test(
+  "smoke (slow): two racing local-board CLI processes appending comments to the same ticket never lose an entry",
+  { skip: !RUN_SLOW_TESTS },
+  async () => {
+    await withBoard(async (root) => {
+      const ticketPath = await createTicket(root, "task", "Racing CLI processes", {
+        status: "ready_for_implementation",
+        now: new Date("2026-05-14T20:56:00Z"),
+      });
+      const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+      const iterations = 20;
+      async function commentLoop(label) {
+        for (let i = 0; i < iterations; i += 1) {
+          await execFileAsync(process.execPath, [CLI_PATH, "--root", root, "comment", ticketId, `${label}-${i}`], {
+            encoding: "utf8",
+          });
+        }
+      }
+
+      await Promise.all([commentLoop("proc-a"), commentLoop("proc-b")]);
+
+      const text = await readFile(ticketPath, "utf8");
+      for (let i = 0; i < iterations; i += 1) {
+        assert.match(text, new RegExp(`proc-a-${i}\\b`), `proc-a-${i} must not be lost`);
+        assert.match(text, new RegExp(`proc-b-${i}\\b`), `proc-b-${i} must not be lost`);
+      }
+    });
+  },
+);
 
 async function replaceText(filePath, search, replacement) {
   const text = await readFile(filePath, "utf8");

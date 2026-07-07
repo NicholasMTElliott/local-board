@@ -1,19 +1,19 @@
 ---
 id: B20260707T1322Z
 type: bug
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/B20260707T1322Z-no-locking-for-concurrent-ticket-mutations-link-and-block-write-two-files-non-atomically
 estimate: 4
 estimateBasis: B20260707T1321Z
-workStartedAt: null
+workStartedAt: 2026-07-07T20:49:23Z
 workCompletedAt: null
 created: 2026-07-07T13:22:54Z
-updated: 2026-07-07T20:49:22Z
+updated: 2026-07-07T21:03:07Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
@@ -198,6 +198,127 @@ keep the process race as a secondary smoke test.
 
 ## Implementation Notes
 
+Implemented the primary design: a dependency-free `withFileLock` mkdir-sentinel
+primitive, applied to all three identified hot spots. Read-only paths
+(`check-dispatch`, `query-*`, `validate`, `discover`) are untouched.
+
+**New `src/lock.js`:**
+- `withFileLock(lockPath, fn, options)` -- `mkdir(lockPath)` (non-recursive,
+  atomic EEXIST-on-held) acquire; writes a `meta` file (pid, ISO ts, hostname)
+  for diagnostics/stale-detection; retries EEXIST with doubling backoff
+  (10/20/40/80... ) up to `options.retryBudgetMs` (default 2000ms); on
+  exhaustion, breaks the lock if `meta` age > `options.staleMs` (default
+  30000ms, generous per the design) and re-acquires once, else throws a clear
+  error naming the lock path and holder (pid/host/ts). Release is best-effort
+  `rm(lockPath, { recursive: true, force: true })`. `options.onStaleBreak` is
+  a test/diagnostic hook; the default logs a warning to stderr.
+- `resolveMainRoot(root)` -- moved here from `active-steps.js` (was
+  duplicated logic); both the ledger lock and per-ticket locks anchor at the
+  main worktree root via git-common-dir, falling back to `root` outside git.
+- `ticketLockPath` / `withTicketLock(root, ticketId, fn, options)` -- resolves
+  `<mainRoot>/.local-board/locks/<ticketId>.lock`.
+- `withOrderedTicketLocks(root, idA, idB, fn, options)` -- sorts the two ids
+  and acquires in that order (dedupes to a single lock if idA === idB),
+  making concurrent dual-lock callers deadlock-free regardless of argument
+  order.
+
+**`src/active-steps.js`:** `stampActiveStep`/`clearActiveStep` now take an
+`options` param (`{ __afterRead, lock }`) and wrap their read
+(`readLedgerSelfHeal`) -> mutate -> write (`writeLedgerAtomic`) body in
+`withFileLock(<ledgerPath>.lock, ...)`. `__afterRead` is a test-only hook
+(mirrors the existing `renameFn` seam) invoked between the read and the write
+to force a deterministic overlap in tests. All existing call sites (`0`/`1`/
+`2`/`3`-arg forms) are unaffected -- `options` defaults to `{}`.
+
+**`src/tickets.js`:** added `withTicketLock`/`withOrderedTicketLocks` import.
+Wrapped the read (`findTicket`) -> write (`writeTicketFile`) span, with the
+same `__afterRead` test seam, in: `setTicketField` (non-`status` branch only;
+the `status` branch still delegates to `moveTicket`, which takes its own
+lock -- no double-lock/self-deadlock), `setTicketSection`,
+`appendTicketComment`, `completeStep`, `approveInline`, and `moveTicket`
+(spans the rename + rewrite). `completeStep`/`approveInline` call
+`clearActiveStep` for their own ticket id *after* releasing the ticket lock
+(no lock-ordering hazard: the ledger lock and per-ticket lock are different
+resources acquired sequentially, never nested).
+
+`linkParent`/`unlinkParent`/`blockTicket`/`unblockTicket` each wrap their
+find-pair + two-`writeTicketUpdate` body in
+`withOrderedTicketLocks(root, idA, idB, ...)`. This prevents a concurrent
+writer to either file in the pair from clobbering the other side, but (per
+design, explicitly accepted) does **not** give two-file crash atomicity -- a
+power-loss between the two renames still leaves a half-link. That residual
+is unchanged from before this ticket and is self-healing:
+`validateLinks`/`validate` flags either half, and re-running the same
+`link-parent`/`block` command completes the missing side (both halves are
+idempotent -- `addUnique`, and `linkParent`'s `parent !== null` guard
+tolerates a re-run).
+
+All lock paths live under `.local-board/` (already gitignored), so they
+never dirty `git status` or the auto-merge closeout check.
+
+**`package.json`:** added `src/lock.js` to the `check` script's `node
+--check` file list.
+
+## Tests added
+
+- `test/lock.test.js` (new, 10 tests): `resolveMainRoot`/`ticketLockPath`
+  resolution; `withFileLock` mutual exclusion (two overlapping critical
+  sections never interleave), lock release on `fn` throw, stale-lock
+  break-and-proceed (with `onStaleBreak` firing), contention timeout
+  (clear path-carrying "held by" error on a live, non-stale lock);
+  `withTicketLock` serialization; `withOrderedTicketLocks` reversed-argument
+  concurrent calls (proves the dual-lock ordering is deadlock-free) and the
+  same-id self-pair case; lock-directory cleanup after release.
+- `test/active-steps.test.js` (+4 tests): a **control** test using a
+  hand-rolled unlocked read+delay+write against the raw ledger file, proving
+  the naive RMW pattern loses an update under a forced interleave (sanity-
+  checks that the seam reproduces the real bug); `stampActiveStep` for two
+  different ticket ids racing via `__afterRead` -- both entries survive;
+  `clearActiveStep` racing a concurrent `stampActiveStep` -- neither is lost;
+  a stale-ledger-lock break-and-proceed test via the public API.
+- `test/tickets.test.js` (+4 tests, +1 slow/gated): a **control** test using
+  hand-rolled unlocked `findTicket`+delay+`writeTicketFile`, proving the
+  naive per-ticket RMW pattern loses a concurrent field update (same
+  bug-reproduction rationale); `appendTicketComment` racing `completeStep` on
+  the same ticket via `__afterRead` -- this is the ticket's literal
+  acceptance scenario, and both the Run Log comment and the `completedSteps`
+  token survive; `linkParent`/`unlinkParent` with reversed argument order run
+  concurrently -- proves no deadlock and the board stays internally
+  consistent; a probabilistic smoke test spawning two real
+  `node ./bin/local-board.js comment` processes racing 20 iterations each on
+  the same ticket, asserting no Run Log line is lost -- gated behind
+  `LOCAL_BOARD_SLOW_TESTS=1` (skipped by default; verified manually, passes
+  in ~2.3s).
+
+## Verification
+
+- `npm run check` -- green (added `src/lock.js` to the file list).
+- `npm test` -- 284 passed, 1 skipped (the gated slow smoke test), 0 failed.
+- `LOCAL_BOARD_SLOW_TESTS=1 node --test --test-name-pattern="smoke" test/tickets.test.js`
+  -- the gated smoke test passes on its own (~2.3s).
+- `node ./bin/local-board.js validate` -- "Ticket validation OK" (live board
+  unaffected; no stray lock directories left in `.local-board/`).
+
+## Deviations from the design
+
+None. Implemented the primary option (not the ledger-lock-only fallback):
+`withFileLock` primitive, ledger lock, per-ticket lock spanning read->write
+on all six listed entry points, and ordered dual-locks for
+link/block/unlink/unblock. Open questions resolved as the design
+recommended: read-only paths stay lock-free; locks anchor at
+`resolveMainRoot` (shared with the ledger); stale-break defaults to 30s and
+warns to stderr (via the default `onStaleBreak`, overridable).
+
+## Residual risks (unchanged from the design's own risk list)
+
+- Two-file link/block writes are still not crash-atomic across the pair
+  (locking prevents concurrent-writer clobber, not a mid-pair crash);
+  documented as self-healing via `validateLinks`/re-run, same as before.
+- Stale-break trades a small risk of breaking a legitimately slow holder for
+  not hanging forever on a crashed one; mitigated by the generous default
+  `staleMs` (30s).
+- Locks are process-local mutual exclusion, not fsync durability.
+
 ## Review Findings
 
 ## Test Evidence
@@ -209,3 +330,5 @@ keep the process race as a secondary smoke test.
 ## Run Log
 
 - 2026-07-07T20:48:25Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): withFileLock mkdir-sentinel primitive (bounded retry, age-based stale break) on the ledger RMW and per-ticket mutation spans, ordered dual-locks for link/block, deterministic + probabilistic race tests; read paths stay lock-free. Estimate 4 (basis B20260707T1321Z).
+
+- 2026-07-07T20:49:23Z: Ensured git branch local-board/B20260707T1322Z-no-locking-for-concurrent-ticket-mutations-link-and-block-write-two-files-non-atomically (created).
