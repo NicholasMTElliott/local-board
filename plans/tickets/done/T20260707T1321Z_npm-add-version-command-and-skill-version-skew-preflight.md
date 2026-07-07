@@ -1,7 +1,7 @@
 ---
 id: T20260707T1321Z
 type: task
-status: implementing
+status: done
 priority: P2
 parent: null
 children: []
@@ -11,10 +11,10 @@ branch: local-board/T20260707T1321Z-npm-add-version-command-and-skill-version-sk
 estimate: 2
 estimateBasis: T20260707T1325Z
 workStartedAt: 2026-07-07T19:35:55Z
-workCompletedAt: null
+workCompletedAt: 2026-07-07T19:50:44Z
 created: 2026-07-07T13:21:26Z
-updated: 2026-07-07T19:40:16Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-07T19:50:44Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # npm: add version command and skill version-skew preflight
@@ -257,9 +257,42 @@ skills only, not the team skills).
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) against commit 64029b8.
+
+No blocking findings.
+
+Non-blocking observations:
+- src/cli.js:48-53 — version dispatch precedes board discovery; reviewer verified --version works from %TEMP% (prints 0.1.0).
+- src/cli.js:174-177 + src/install.js:154-161 — resolution matches both layouts; package.json still copied to the install root.
+- src/cli.js:162-164 — missing/unparseable package.json errors surface as clean exit-2 messages; that failure path lacks a direct unit test (residual gap).
+- <<VERSION>> remains only in intended source templates; team skills carry no raw stamp.
+- Advisory preflight wording explicit: warn and continue, never hard gate.
+- Tests cover both command forms, the rendered stamp, install-info.json, flattened-runtime --version, and codex preflight rendering.
+
+Verdict: pass
+
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/T20260707T1321Z-..., commit 64029b8.
+
+**Suite:** `npm run check` pass; `npm test` 261/261 pass; `npm run validate` OK.
+
+**Probes:**
+- `--version` and `version` print bare `0.1.0` exit 0 from the project root AND from an unrelated temp dir.
+- Throwaway-HOME install (npm link + USERPROFILE override, unlinked/cleaned after): both installed local-board skills carry "Installed from local-board v0.1.0"; the preflight line (quoted in full in the run) explicitly says "advisory: warn and continue; never treat it as a hard gate or block the ticket". Zero <<VERSION>> residue in the rendered .claude/.codex trees (raw placeholders remain only in the unrendered ~/.local-board source templates, as intended). install-info.json carries "version": "0.1.0".
+- Reviewer's residual gap closed live: a package copy without package.json yields a clean single-line ENOENT error, exit 2, no stack trace.
+
+**Gaps / caveats:** install has no --home flag (test seam only) — probing needed npm link + USERPROFILE, noted for future ergonomics; -v intentionally not implemented.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `README.md` — version command added to the CLI list; RELEASING paragraph checked and left unchanged.
+- `memory-bank/systemPatterns.md` — version added to the MVP CLI command surface.
+- Skill stamp + advisory preflight lines were written during implementation (SKILL.md, skills/codex/local-board/SKILL.md).
 
 ## Questions
 
@@ -268,3 +301,11 @@ skills only, not the team skills).
 - 2026-07-07T19:34:53Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): --version/version command via package.json URL resolution (both layouts verified), <<VERSION>> stamp in the skill metadata block, install-info version field, advisory preflight line; T1322 seam noted. Estimate 2 (basis T20260707T1325Z).
 
 - 2026-07-07T19:35:55Z: Ensured git branch local-board/T20260707T1321Z-npm-add-version-command-and-skill-version-skew-preflight (created).
+
+- 2026-07-07T19:40:40Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): --version/version command, <<VERSION>> stamp + install-info field, advisory preflight lines; 261/261 green.
+
+- 2026-07-07T19:44:40Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict pass: dispatch order, dual-layout resolution, stamp scoping, and advisory wording all verified; one residual test gap noted (corrupt package.json path).
+
+- 2026-07-07T19:49:02Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 261/261; version probes in and out of repo, stamped skills verified with advisory wording quoted, zero placeholder residue in rendered trees, missing-package.json error path closed live. Result: pass.
+
+- 2026-07-07T19:50:44Z: Completed document via codex-task:workspace-write: Codex (workspace-write): README + systemPatterns CLI lists gain version; skill stamps landed in impl pass.
