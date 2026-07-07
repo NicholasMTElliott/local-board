@@ -71,7 +71,7 @@ Required fields:
 - `updated`
 
 ## Atomic Writes
-Existing ticket rewrites go through `writeTicketFile` (`src/tickets.js`): same-directory temp file (name never ends in `.md`), then `rename()` over the target with bounded retry on Windows `EPERM`/`EBUSY`/`EACCES`; `createTicket` uses exclusive `wx` create; same-folder `moveTicket` rewrites in place, while cross-folder `moveTicket` renames first with `renameWithRetry`, rewrites in place, and rolls back on rewrite failure. This gives crash-consistency (atomic rename), not mutual exclusion or fsync durability; remaining gaps are the two-file update/locking race (B20260707T1322Z) and the accepted double-fault/power-loss residual, which should be retry-healable.
+Existing ticket rewrites go through `writeTicketFile` (`src/tickets.js`): same-directory temp file (name never ends in `.md`), then `rename()` over the target with bounded retry on Windows `EPERM`/`EBUSY`/`EACCES`; `createTicket` uses exclusive `wx` create; same-folder `moveTicket` rewrites in place, while cross-folder `moveTicket` renames first with `renameWithRetry`, rewrites in place, and rolls back on rewrite failure. Ticket mutations serialize read-modify-write spans with mkdir sentinel locks under the main root's `.local-board/locks`; the active-step ledger uses the same lock primitive for stamps/clears. Lock acquisition has bounded retry and breaks holders older than 30s with a pid/timestamp/hostname diagnostic. Residuals: this is mutual exclusion, not fsync durability; two-file link/dependency pairs still lack crash atomicity and rely on validation/retry self-healing; a live holder running longer than 30s can theoretically be broken.
 
 ## Status Folders
 ```text

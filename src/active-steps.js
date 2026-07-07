@@ -1,26 +1,10 @@
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { gitOutput } from "./git.js";
+import { resolveMainRoot, withFileLock } from "./lock.js";
 import { modelSatisfies, resolveExpectedStep, writeTicketFile } from "./tickets.js";
 
 const CLAUDE_SUBAGENT_PREFIX = "claude-subagent:";
-
-// Resolves the ledger's anchor directory: the main worktree root, shared by
-// every linked worktree of the same repo. `git rev-parse --git-common-dir`
-// returns the common .git directory (relative to `root` in the ordinary case,
-// absolute when `root` is a linked worktree); its parent is the main worktree
-// root. Falls back to the passed root when git resolution fails (non-git
-// directories, e.g. test fixtures), so the module stays usable outside git.
-async function resolveMainRoot(root) {
-  try {
-    const commonDir = await gitOutput(root, ["rev-parse", "--git-common-dir"]);
-    const absoluteCommonDir = path.resolve(root, commonDir);
-    return path.dirname(absoluteCommonDir);
-  } catch {
-    return path.resolve(root);
-  }
-}
 
 export async function ledgerPath(root) {
   const mainRoot = await resolveMainRoot(root);
@@ -79,24 +63,49 @@ async function writeLedgerAtomic(filePath, data) {
 // re-`begin-step` for the same ticket simply overwrites its own key, so a
 // stale entry self-heals. Not best-effort by design -- a failure here is a
 // real filesystem problem and should surface to the caller.
-export async function stampActiveStep(root, ticketId, record) {
+//
+// Locked read-modify-write: many tickets share this one ledger file, so two
+// concurrent stamps/clears (for the same or different tickets) racing the
+// read->write window is a classic lost update -- the atomic rename alone only
+// prevents torn writes, not a stale overwrite. `options.__afterRead` is a
+// test-only hook invoked after the read, before the write, to deterministically
+// force an overlapping second call into the retry window.
+export async function stampActiveStep(root, ticketId, record, options = {}) {
   const filePath = await ledgerPath(root);
-  const current = await readLedgerSelfHeal(filePath);
-  current[ticketId] = record;
-  await writeLedgerAtomic(filePath, current);
+  return withFileLock(
+    `${filePath}.lock`,
+    async () => {
+      const current = await readLedgerSelfHeal(filePath);
+      if (options.__afterRead) {
+        await options.__afterRead();
+      }
+      current[ticketId] = record;
+      await writeLedgerAtomic(filePath, current);
+    },
+    options.lock,
+  );
 }
 
 // Best-effort, idempotent clear: a missing key (no prior `begin-step`, or an
 // already-cleared entry) is a no-op, not an error.
-export async function clearActiveStep(root, ticketId) {
+export async function clearActiveStep(root, ticketId, options = {}) {
   const filePath = await ledgerPath(root);
-  const current = await readLedgerSelfHeal(filePath);
-  if (!Object.hasOwn(current, ticketId)) {
-    return;
-  }
-  const next = { ...current };
-  delete next[ticketId];
-  await writeLedgerAtomic(filePath, next);
+  return withFileLock(
+    `${filePath}.lock`,
+    async () => {
+      const current = await readLedgerSelfHeal(filePath);
+      if (!Object.hasOwn(current, ticketId)) {
+        return;
+      }
+      if (options.__afterRead) {
+        await options.__afterRead();
+      }
+      const next = { ...current };
+      delete next[ticketId];
+      await writeLedgerAtomic(filePath, next);
+    },
+    options.lock,
+  );
 }
 
 function bareRoute(route) {

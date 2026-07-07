@@ -236,9 +236,9 @@ Documented limits: inline work produces no tool call, so hooks cannot see it;
 a skipped step produces no event; a same-session loop-back through a step can
 still satisfy the evidence gate from an earlier iteration's ledger entry
 (CLI-side loop-back invalidation is a separate concern); Codex has no
-deny-hook equivalent, so Codex enforcement stays CLI-side. The ledger file is
-append-only JSONL with no rotation or write-locking in v1 — entries are small
-and unlocked concurrent writes are a known, low-impact race.
+deny-hook equivalent, so Codex enforcement stays CLI-side. Active-step ledger
+writes are lock-serialized by the CLI; the hook dispatch ledger remains an
+append-only, best-effort JSONL audit log with no rotation.
 
 ## Optional Steps
 
