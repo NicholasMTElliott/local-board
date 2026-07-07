@@ -1,7 +1,7 @@
 ---
 id: B20260707T1319Z
 type: bug
-status: implementing
+status: done
 priority: P1
 parent: null
 children: []
@@ -11,10 +11,10 @@ branch: local-board/B20260707T1319Z-worktrees-are-created-outside-the-workspace-
 estimate: 4
 estimateBasis: B20260707T1318Z
 workStartedAt: 2026-07-07T15:34:40Z
-workCompletedAt: null
+workCompletedAt: 2026-07-07T16:08:40Z
 created: 2026-07-07T13:19:54Z
-updated: 2026-07-07T16:00:00Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only]
+updated: 2026-07-07T16:08:40Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # Worktrees are created outside the workspace root, breaking the Codex workspace-write sandbox
@@ -631,9 +631,37 @@ Verdict: changes_requested
 
 - 2026-07-07T15:56:01Z: Re-review (codex) narrowed to one remaining edge: gitignore idempotency must accept an existing equivalent entry without trailing slash (worktrees.js:83-90, scaffold.js:250-258). Looping back for a surgical fix.
 
+- 2026-07-07T16:02:11Z: Final re-review (codex): bare-entry idempotency fix verified in both helpers, tests cover the no-op cases, no new issues. Verdict: pass.
+
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/B20260707T1319Z-..., commits 1c4feba + 6081724 + 9d09553.
+
+**Suite:** `npm run check` pass; `npm test` 173/173 pass; `npm run validate` OK.
+
+**Independent end-to-end probe (throwaway git repo):**
+- Sibling default: worktree lands at `<parent>/<repo>-worktrees/<id>`; list finds it; remove works.
+- Inside layout: worktree lands at `<repo>/.worktrees/<id>`; .gitignore entry present exactly once; `git status --porcelain` empty (no worktree noise); list/remove work.
+- Bare-entry idempotency: pre-seeded `.worktrees` (no slash) — .gitignore byte-identical (sha256-verified) after worktree-add.
+- plans/-interior rejection: exit 2 with a clear actionable error message.
+- Probe repo removed; project repo untouched.
+
+**Docs check:** docs/CodexSupport.md "Worktrees and the sandbox" section covers all three location values, the sibling layout's writable_roots requirement, and recommends "inside" for Codex parallel runs; stale Limits claim reworded.
+
+**Acceptance:** config option verified live; sibling back-compat intact; gitignore guard idempotent across slash/bare forms; clear rejection for plans/ paths; docs state the required Codex config. Actual Codex sandbox execution is out of scope in this environment — acceptance satisfied via the inside layout + documentation, per the ticket's own framing.
+
+**Gaps / caveats:** init --overwrite clobber protection verified via unit tests only (adequate); mixed-mode drift and git clean -fdx exposure remain documented residual risks, out of scope per three review passes.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `docs/CodexSupport.md` — "Worktrees and the sandbox" section added during implementation: all three worktrees.location values, the sibling layout's sandbox_workspace_write.writable_roots requirement, and the "inside" recommendation for Codex parallel runs.
+- `memory-bank/systemPatterns.md` — mint-offset wording generalized from sibling worktrees to ticket worktrees under the configured worktrees root; Parallel Mode section checked, already path-agnostic.
+- `memory-bank/techContext.md` — one terse constraint line for worktrees.location (sibling default | inside .worktrees | explicit non-plans/ path).
+- `README.md` — checked; no concrete worktree paths mentioned; unchanged.
 
 ## Questions
 
@@ -654,3 +682,11 @@ Verdict: changes_requested
 - 2026-07-07T15:56:01Z: Completed review via codex-task:read-only: Re-review (gpt-5.5): both prior blockers fixed; one residual edge — no-slash equivalent gitignore entries not treated as present. changes_requested, scoped to that edge.
 
 - 2026-07-07T15:56:01Z: Ensured git branch local-board/B20260707T1319Z-worktrees-are-created-outside-the-workspace-root-breaking-the-codex-workspace-write-sandbox (already-current).
+
+- 2026-07-07T16:00:32Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Second rework (sonnet): both gitignore presence checks accept the bare (no-slash) equivalent entry; 2 new byte-identical tests; 173/173 green.
+
+- 2026-07-07T16:02:11Z: Completed review via codex-task:read-only: Final re-review (gpt-5.5): verdict pass — both blockers and the residual bare-entry edge verified fixed across three review passes.
+
+- 2026-07-07T16:06:45Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 173/173 green; live probe of all three layouts, byte-identical gitignore idempotency, plans/ rejection, and CodexSupport docs verified. Result: pass.
+
+- 2026-07-07T16:08:39Z: Completed document via codex-task:workspace-write: Codex (workspace-write): CodexSupport sandbox section (impl pass) + memory-bank generalization; README checked unchanged.
