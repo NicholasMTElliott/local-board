@@ -23,6 +23,16 @@ async function listFiles(dir) {
   return results.sort();
 }
 
+// Working-copy files only pick up the repo's `eol=lf` .gitattributes policy on
+// (re)checkout, so a stale checkout can have CRLF in plans/ while resources/ is
+// LF (or vice versa) even though committed content is identical. Normalize
+// \r\n -> \n (only) before comparing content so this working-tree eol noise
+// doesn't fail the drift check. Do not strip or collapse anything else here;
+// that would blunt genuine drift detection. A contributor with a persistently
+// mismatched working copy should run `git add --renormalize .` (or re-checkout
+// plans/resources) to fix it at the source.
+export const normalizeEol = (s) => s.replace(/\r\n/g, "\n");
+
 async function assertMirrored(sourceDir, targetDir) {
   const [sourceFiles, targetFiles] = await Promise.all([listFiles(sourceDir), listFiles(targetDir)]);
 
@@ -38,8 +48,8 @@ async function assertMirrored(sourceDir, targetDir) {
       readFile(path.join(targetDir, relativeFile), "utf8"),
     ]);
     assert.equal(
-      targetContent,
-      sourceContent,
+      normalizeEol(targetContent),
+      normalizeEol(sourceContent),
       `${path.join(targetDir, relativeFile)} content has drifted from ${path.join(sourceDir, relativeFile)}; run "npm run sync-resources"`,
     );
   }
@@ -51,6 +61,11 @@ test("resources/prompts mirrors plans/prompts byte-for-byte", async () => {
 
 test("resources/templates mirrors plans/templates byte-for-byte", async () => {
   await assertMirrored(path.join(ROOT, "plans", "templates"), path.join(ROOT, "resources", "templates"));
+});
+
+test("normalizeEol collapses CRLF to LF and leaves LF untouched", () => {
+  assert.equal(normalizeEol("a\r\nb"), "a\nb");
+  assert.equal(normalizeEol("a\nb"), "a\nb");
 });
 
 test("resources directories are not empty (guards against a silently-broken walk)", async () => {

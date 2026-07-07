@@ -1,19 +1,19 @@
 ---
 id: B20260707T1437Z
 type: bug
-status: ready_for_implementation
+status: implementing
 priority: P1
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/B20260707T1437Z-resources-sync-drift-test-fails-on-line-endings-after-checkout-compare-normalized-content
 estimate: 2
 estimateBasis: B20260707T1317Z
-workStartedAt: null
+workStartedAt: 2026-07-07T14:41:38Z
 workCompletedAt: null
 created: 2026-07-07T14:37:50Z
-updated: 2026-07-07T14:41:37Z
+updated: 2026-07-07T14:45:10Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
@@ -149,6 +149,61 @@ project-state fact.
 
 ## Implementation Notes
 
+Implemented per Technical Design, both primary and secondary changes.
+
+**test/resources-sync.test.js**
+- Added exported `normalizeEol = (s) => s.replace(/\r\n/g, "\n")` with a comment
+  explaining the working-copy eol-drift rationale and pointing stale copies at
+  `git add --renormalize .`.
+- Applied `normalizeEol` to both sides of the per-file content `assert.equal` in
+  `assertMirrored`. The file-list `assert.deepEqual` (set equality) is untouched
+  — still exact.
+- Added a small unit test: `normalizeEol("a\r\nb") === "a\nb"` and
+  `normalizeEol("a\nb") === "a\nb"` (regression guard per design's optional
+  Test Strategy item 3).
+
+**scripts/sync-resources.mjs**
+- Replaced the `cpSync` byte copy with a recursive `copyNormalized` walk that
+  reads each file as utf8, replaces `\r\n` with `\n`, and writes it back, so a
+  freshly generated mirror always matches the repo's `eol=lf` policy regardless
+  of the source working copy's line endings.
+- Added a comment above the walk with the same `git add --renormalize .`
+  guidance for persistently mismatched working copies.
+
+**Verification**
+- `npm run check`: clean, no syntax errors.
+- `npm test`: 143/143 pass, 0 fail (was failing 2 before the fix, confirmed live
+  via `node --test test/resources-sync.test.js` going from `pass 1 / fail 2` to
+  `pass 4 / fail 0` — the file gained one test, the new `normalizeEol` unit
+  test).
+- `npm run validate`: `Ticket validation OK`.
+- `npm run sync-resources`: regenerated resources/prompts and resources/templates;
+  `git status --porcelain plans/ resources/` showed zero diff in those trees
+  afterward, confirming the LF-normalized writer output is byte-identical to
+  what's committed (no drift introduced).
+
+**Perturbation probe (drift-detection still works)**
+- Changed `id: TYYYYMMDDTHHMMZ` to `id: TYYYYMMDDTHHMMZDRIFTPROBE` in
+  `resources/templates/ticket.md` only (not `plans/templates/ticket.md`).
+- Re-ran `node --test test/resources-sync.test.js`: 1 of 4 tests failed
+  (`resources/templates mirrors plans/templates byte-for-byte`) with the
+  expected "content has drifted" assertion message and a word-level diff
+  showing the injected difference. Confirms normalizeEol only tolerates eol
+  differences, not genuine content changes.
+- Restored via `git checkout -- resources/templates/ticket.md`;
+  `git status --porcelain resources/` showed no diff (exact restore).
+- Re-ran both the single test file and the full suite: 4/4 and 143/143 pass, 0
+  fail — back to green.
+
+**Deviations from design**
+- None on the required primary fix or the recommended secondary hardening.
+  Both were included per the design's recommendation ("ship both in this
+  ticket").
+- Included the optional exported-helper unit test (design's Test Strategy item
+  3) since it was cheap and deterministic, as the design suggested.
+- Did not touch the file-list set-equality assertion, `plans/`, or `resources/`
+  content, matching the design's explicit constraint.
+
 ## Review Findings
 
 ## Test Evidence
@@ -160,3 +215,5 @@ project-state fact.
 ## Run Log
 
 - 2026-07-07T14:40:51Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): normalizeEol on both sides of content assertion only; file-list equality stays exact; sync script writes LF; renormalize guidance in comment. Estimate 2 (basis B20260707T1317Z). Live failure reproduced.
+
+- 2026-07-07T14:41:38Z: Ensured git branch local-board/B20260707T1437Z-resources-sync-drift-test-fails-on-line-endings-after-checkout-compare-normalized-content (created).
