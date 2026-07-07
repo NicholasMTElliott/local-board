@@ -16,11 +16,15 @@ import {
   createTicket,
   discover,
   findTicket,
+  gateConsultationRecords,
+  gateStageForForwardMove,
   linkParent,
   moveTicket,
   nextTicket,
   queryNext,
   queryTicket,
+  recordGateConsultation,
+  recordGateSkippedEmptyCatalog,
   renderMarkdownTicket,
   setTicketField,
   setTicketSection,
@@ -49,6 +53,11 @@ async function withBoard(fn) {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+}
+
+async function writeConfig(root, body) {
+  await mkdir(path.join(root, "plans"), { recursive: true });
+  await writeFile(path.join(root, "plans", "local-board.config.jsonc"), body, "utf8");
 }
 
 test("create and validate ticket", async () => {
@@ -1935,6 +1944,270 @@ test("an orphaned non-.md temp sibling is invisible to discover and validate", a
     assert.deepEqual(board.loadErrors, []);
     assert.equal(board.tickets.length, 1);
     assert.deepEqual(validate(board), []);
+  });
+});
+
+// --- Gate-check consultation recording and move-time enforcement (T20260707T1327Z) ---
+
+test("gateConsultationRecords parses gate: tokens; unrelated completedSteps tokens are ignored", () => {
+  const ticket = {
+    frontMatter: {
+      completedSteps: [
+        "gate:design:skipped-empty-catalog",
+        "gate:implement:claude-subagent:local-board-gatecheck@haiku",
+        "design:claude-subagent:local-board-designer@opus",
+      ],
+    },
+  };
+
+  assert.deepEqual(gateConsultationRecords(ticket), [
+    { stage: "design", executor: "skipped-empty-catalog" },
+    { stage: "implement", executor: "claude-subagent:local-board-gatecheck@haiku" },
+  ]);
+});
+
+test("gateStageForForwardMove identifies only the three forward gated pairs", () => {
+  assert.equal(gateStageForForwardMove("ready_for_design", "ready_for_implementation"), "design");
+  assert.equal(gateStageForForwardMove("designing", "ready_for_implementation"), "design");
+  assert.equal(gateStageForForwardMove("ready_for_implementation", "ready_for_review"), "implement");
+  assert.equal(gateStageForForwardMove("implementing", "ready_for_review"), "implement");
+  assert.equal(gateStageForForwardMove("ready_for_test", "ready_for_docs"), "test");
+  assert.equal(gateStageForForwardMove("testing", "ready_for_docs"), "test");
+
+  // Backward, lateral, and archive/done moves are never gated.
+  assert.equal(gateStageForForwardMove("ready_for_implementation", "ready_for_design"), null);
+  assert.equal(gateStageForForwardMove("ready_for_design", "questions"), null);
+  assert.equal(gateStageForForwardMove("ready_for_test", "blocked"), null);
+  assert.equal(gateStageForForwardMove("done", "archived"), null);
+  assert.equal(gateStageForForwardMove("ready_for_docs", "done"), null);
+  // Wrong from/to pairing does not accidentally match a different stage.
+  assert.equal(gateStageForForwardMove("testing", "ready_for_implementation"), null);
+});
+
+test("recordGateSkippedEmptyCatalog stamps gate:<stage>:skipped-empty-catalog idempotently without a Run Log entry", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Empty catalog gate", {
+      status: "testing",
+      now: new Date("2026-07-07T10:00:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await recordGateSkippedEmptyCatalog(root, ticketId, "test", { now: new Date("2026-07-07T10:05:00Z") });
+    const { ticket: afterFirst } = await findTicket(root, ticketId);
+    assert.deepEqual(afterFirst.frontMatter.completedSteps, ["gate:test:skipped-empty-catalog"]);
+    // No Run Log entry: this is a deterministic CLI self-certification, not a
+    // recorded agent verdict.
+    assert.doesNotMatch(afterFirst.body, /Gate consultation/);
+
+    // Idempotent re-run (e.g. gate-check called twice) must not duplicate the token.
+    await recordGateSkippedEmptyCatalog(root, ticketId, "test", { now: new Date("2026-07-07T10:06:00Z") });
+    const { ticket: afterSecond } = await findTicket(root, ticketId);
+    assert.deepEqual(afterSecond.frontMatter.completedSteps, ["gate:test:skipped-empty-catalog"]);
+  });
+});
+
+test("recordGateSkippedEmptyCatalog rejects an unknown stage", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Bad stage", { status: "testing" });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    await assert.rejects(recordGateSkippedEmptyCatalog(root, ticketId, "docs"), /stage must be one of/);
+  });
+});
+
+test("recordGateConsultation stamps gate:<stage>:<executor>, appends a Run Log line, and accepts route or route@model executor forms", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Gate consultation recorded", {
+      status: "designing",
+      now: new Date("2026-07-07T11:00:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const result = await recordGateConsultation(
+      root,
+      ticketId,
+      "design",
+      "claude-subagent:local-board-gatecheck@haiku",
+      "security_threat_model",
+      { now: new Date("2026-07-07T11:05:00Z") },
+    );
+
+    assert.equal(result.ticket, ticketId);
+    assert.equal(result.stage, "design");
+    assert.equal(result.executor, "claude-subagent:local-board-gatecheck@haiku");
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(
+      text,
+      /^completedSteps: \["gate:design:claude-subagent:local-board-gatecheck@haiku"\]$/m,
+    );
+    assert.match(
+      text,
+      /Gate consultation design via claude-subagent:local-board-gatecheck@haiku: security_threat_model/,
+    );
+
+    // Route-only executor form (no @model suffix) is also accepted.
+    const ticketPath2 = await createTicket(root, "task", "Gate consultation route only", {
+      status: "designing",
+      now: new Date("2026-07-07T11:10:00Z"),
+    });
+    const ticketId2 = path.basename(ticketPath2).split("_", 1)[0];
+    await recordGateConsultation(root, ticketId2, "design", "claude-subagent:local-board-gatecheck", "none");
+    assert.match(
+      await readFile(ticketPath2, "utf8"),
+      // No "@model" suffix means the token's characters are all unreserved
+      // YAML-scalar-safe (see formatString), so it serializes unquoted.
+      /^completedSteps: \[gate:design:claude-subagent:local-board-gatecheck\]$/m,
+    );
+  });
+});
+
+test("recordGateConsultation rejects a bad stage, an invalid executor, and empty evidence", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Gate consultation rejections", { status: "designing" });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await assert.rejects(
+      recordGateConsultation(root, ticketId, "docs", "claude-subagent:local-board-gatecheck", "none"),
+      /stage must be one of/,
+    );
+    await assert.rejects(
+      recordGateConsultation(root, ticketId, "design", "not-a-route", "none"),
+      /executor must be one of/,
+    );
+    await assert.rejects(
+      recordGateConsultation(root, ticketId, "design", "claude-subagent:local-board-gatecheck", "  "),
+      /non-empty evidence/,
+    );
+  });
+});
+
+test("gate: tokens never trip done-time routing validation (top regression risk: token-collision)", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Gate token collision guard", {
+      status: "ready_for_docs",
+      now: new Date("2026-07-07T12:00:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    // Hand-write gate tokens for all three stages alongside the mandatory
+    // action evidence: `gate:design:skipped-empty-catalog` splits on the
+    // FIRST ":" as action="gate", executor="design:skipped-empty-catalog"
+    // unless completedStepRecords filters it out first.
+    await replaceText(
+      ticketPath,
+      "completedSteps: []",
+      "completedSteps: [gate:design:skipped-empty-catalog, gate:implement:claude-subagent:local-board-gatecheck@haiku, gate:test:skipped-empty-catalog, design:claude-subagent:local-board-designer@opus, implement:claude-subagent:local-board-implementer@sonnet, review:codex-task:read-only, test:claude-subagent:local-board-tester@sonnet, document:codex-task:workspace-write]",
+    );
+
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+
+    const moved = await moveTicket(root, ticketId, "done");
+    assert.match(await readFile(moved, "utf8"), /^status: done$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("moveTicket refuses each of the three forward gated transitions without a recorded consultation, and allows it once recorded", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { requireGateConsultation: true } }));
+
+    const cases = [
+      { from: "ready_for_design", to: "ready_for_implementation", stage: "design" },
+      { from: "designing", to: "ready_for_implementation", stage: "design" },
+      { from: "ready_for_implementation", to: "ready_for_review", stage: "implement" },
+      { from: "implementing", to: "ready_for_review", stage: "implement" },
+      { from: "ready_for_test", to: "ready_for_docs", stage: "test" },
+      { from: "testing", to: "ready_for_docs", stage: "test" },
+    ];
+
+    for (const { from, to, stage } of cases) {
+      const ticketPath = await createTicket(root, "task", `Gated ${from} to ${to}`, { status: from });
+      const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+      await assert.rejects(
+        moveTicket(root, ticketId, to),
+        new RegExp(`no recorded gate consultation for stage "${stage}".*gate-check.*gate-complete`, "s"),
+        `${from} -> ${to} must be refused without a recorded consultation`,
+      );
+
+      await recordGateSkippedEmptyCatalog(root, ticketId, stage);
+      const moved = await moveTicket(root, ticketId, to);
+      assert.match(await readFile(moved, "utf8"), new RegExp(`^status: ${to}$`, "m"));
+    }
+  });
+});
+
+test("moveTicket gating never blocks backward, lateral, or archive/done moves, even with the switch on", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { requireGateConsultation: true } }));
+
+    const backward = await createTicket(root, "task", "Backward loop-back", { status: "ready_for_implementation" });
+    const backwardId = path.basename(backward).split("_", 1)[0];
+    await moveTicket(root, backwardId, "ready_for_design");
+
+    const questions = await createTicket(root, "task", "Needs questions", { status: "ready_for_design" });
+    const questionsId = path.basename(questions).split("_", 1)[0];
+    await moveTicket(root, questionsId, "questions");
+
+    const blocked = await createTicket(root, "task", "Non-ticket blocker", { status: "ready_for_test" });
+    const blockedId = path.basename(blocked).split("_", 1)[0];
+    await moveTicket(root, blockedId, "blocked");
+
+    const doneTicket = await createTicket(root, "task", "Already done", { status: "done" });
+    const doneId = path.basename(doneTicket).split("_", 1)[0];
+    await moveTicket(root, doneId, "archived");
+  });
+});
+
+test("moveTicket gating is disabled by default (switch off) and via explicit false", async () => {
+  await withBoard(async (root) => {
+    // No config file at all: DEFAULT_CONFIG fallback keeps requireGateConsultation false.
+    const noConfig = await createTicket(root, "task", "No config gate", { status: "ready_for_design" });
+    const noConfigId = path.basename(noConfig).split("_", 1)[0];
+    await moveTicket(root, noConfigId, "ready_for_implementation");
+
+    await writeConfig(root, JSON.stringify({ routing: { requireGateConsultation: false } }));
+    const explicitOff = await createTicket(root, "task", "Explicit switch off", { status: "ready_for_implementation" });
+    const explicitOffId = path.basename(explicitOff).split("_", 1)[0];
+    await moveTicket(root, explicitOffId, "ready_for_review");
+  });
+});
+
+test("set <id> status routes through moveTicket and is gated too", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { requireGateConsultation: true } }));
+    const ticketPath = await createTicket(root, "task", "Gated via setTicketField", { status: "ready_for_test" });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await assert.rejects(
+      setTicketField(root, ticketId, "status", "ready_for_docs"),
+      /no recorded gate consultation for stage "test"/,
+    );
+
+    await recordGateSkippedEmptyCatalog(root, ticketId, "test");
+    await setTicketField(root, ticketId, "status", "ready_for_docs");
+    assert.match(await readFile(ticketPath, "utf8"), /^status: ready_for_docs$/m);
+  });
+});
+
+test("back-compat: a ticket already at ready_for_docs with no gate tokens still moves to done (switch on)", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { requireGateConsultation: true } }));
+    const ticketPath = await createTicket(root, "task", "Pre-existing ready_for_docs ticket", {
+      status: "ready_for_docs",
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Design evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer@sonnet", "Implementation evidence.");
+    await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
+    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester@sonnet", "Test evidence.");
+    await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
+
+    // ready_for_docs -> done is not one of the three gated forward pairs, so
+    // no gate token is required even with the switch on.
+    const moved = await moveTicket(root, ticketId, "done");
+    assert.match(await readFile(moved, "utf8"), /^status: done$/m);
   });
 });
 

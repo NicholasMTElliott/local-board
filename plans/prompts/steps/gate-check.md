@@ -22,3 +22,5 @@ Output contract:
 - Strict JSON only. No prose, no code fences, no trailing comments.
 - Shape: `{ "requestedSteps": ["<step-name>", ...] }`.
 - The array may be empty.
+
+Note for the orchestrator (not this agent): after receiving this response, record that the consultation happened with `gate-complete <ticket-id> --stage <stage> --executor <executor> --evidence "<requestedSteps summary>"` before moving the ticket. This agent does not call `gate-complete` itself — it is return-only.

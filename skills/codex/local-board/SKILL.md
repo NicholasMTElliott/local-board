@@ -150,6 +150,14 @@ Dispatch the returned prompt and agent route, then record:
 local-board complete-step <ticket-id> <step-name> --executor <logical-route> --evidence "<VERDICT>: <short summary>"
 ```
 
+`gate-check` auto-records the consultation itself when the stage catalog is empty (`gate:<stage>:skipped-empty-catalog`, no dispatch). When the catalog is non-empty, record the consultation after the gate agent answers:
+
+```sh
+local-board gate-complete <ticket-id> --stage <stage> --executor <logical-route> --evidence "<requestedSteps summary>"
+```
+
+When `routing.requireGateConsultation` is `true` (the `init` scaffold default), `move` refuses the forward transition out of `design`/`implement`/`test` until this token is recorded for that stage. Backward, `questions`, `blocked`, and archive/done moves are unaffected.
+
 ## Done and Auto-Merge
 
 Use `move <ticket-id> done --json` only after required design, implementation, review, test, and documentation evidence is recorded. If auto-merge refuses to proceed, fix the reported git state or ask the user. Do not mark the ticket done by manual front matter edits.
@@ -169,6 +177,7 @@ local-board check-dispatch --agent <subagent-type> [--model <model>] [--ticket <
 local-board complete-step <ticket-id> <action> --executor <executor> --evidence "<evidence>" [--json]
 local-board approve-inline <ticket-id> <action> --reason "<reason>" [--executor <executor>] [--json]
 local-board gate-check <ticket-id> --stage <stage> [--json]
+local-board gate-complete <ticket-id> --stage <stage> --executor <executor> [--evidence "<evidence>"] [--json]
 local-board specialty-run <ticket-id> <step-name> [--json]
 local-board calibration suggest <ticket-id> [--json]
 local-board estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]

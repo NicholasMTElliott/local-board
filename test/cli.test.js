@@ -767,6 +767,175 @@ test("CLI gate-check rejects invalid stage, missing stage, and unknown ticket", 
   });
 });
 
+test("CLI gate-check auto-stamps gate:<stage>:skipped-empty-catalog on the empty-catalog branch and is idempotent", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const create = await runCli([
+      "--root", root, "create", "task", "Empty catalog auto-stamp",
+      "--status", "testing", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketPath = create.stdout.trim();
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    // optionalSteps.test is empty in the default config: no dispatch, no
+    // gate-check.md prompt read, yet the consultation is still recorded.
+    const first = await runCli(["--root", root, "gate-check", ticketId, "--stage", "test", "--json"]);
+    assert.equal(first.code, 0, first.stderr);
+    assert.match(await readFile(ticketPath, "utf8"), /^completedSteps: \[gate:test:skipped-empty-catalog\]$/m);
+
+    // Idempotent re-run does not duplicate the token or fail.
+    const second = await runCli(["--root", root, "gate-check", ticketId, "--stage", "test", "--json"]);
+    assert.equal(second.code, 0, second.stderr);
+    assert.match(await readFile(ticketPath, "utf8"), /^completedSteps: \[gate:test:skipped-empty-catalog\]$/m);
+  });
+});
+
+test("CLI gate-check does not stamp a gate token on a non-empty catalog (pure read)", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const create = await runCli([
+      "--root", root, "create", "task", "Non-empty catalog no auto-stamp",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketPath = create.stdout.trim();
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const result = await runCli(["--root", root, "gate-check", ticketId, "--stage", "design", "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(await readFile(ticketPath, "utf8"), /^completedSteps: \[\]$/m);
+  });
+});
+
+test("CLI gate-complete records gate:<stage>:<executor>, appends a Run Log line, and supports route and route@model executor forms", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const create = await runCli([
+      "--root", root, "create", "task", "Gate-complete recording",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketPath = create.stdout.trim();
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const jsonResult = await runCli([
+      "--root", root, "gate-complete", ticketId,
+      "--stage", "design",
+      "--executor", "claude-subagent:local-board-gatecheck@haiku",
+      "--evidence", "security_threat_model",
+      "--json",
+    ]);
+    assert.equal(jsonResult.code, 0, jsonResult.stderr);
+    const out = JSON.parse(jsonResult.stdout);
+    assert.equal(out.ticket, ticketId);
+    assert.equal(out.stage, "design");
+    assert.equal(out.executor, "claude-subagent:local-board-gatecheck@haiku");
+
+    const textAfterFirst = await readFile(ticketPath, "utf8");
+    assert.match(textAfterFirst, /^completedSteps: \["gate:design:claude-subagent:local-board-gatecheck@haiku"\]$/m);
+    assert.match(textAfterFirst, /Gate consultation design via claude-subagent:local-board-gatecheck@haiku: security_threat_model/);
+
+    // Route-only executor form (no @model suffix), plain output, and a
+    // default evidence of "none" when --evidence is omitted.
+    const create2 = await runCli([
+      "--root", root, "create", "task", "Gate-complete route only",
+      "--status", "ready_for_implementation", "--priority", "P2",
+    ]);
+    assert.equal(create2.code, 0, create2.stderr);
+    const ticketPath2 = create2.stdout.trim();
+    const ticketId2 = path.basename(ticketPath2).split("_", 1)[0];
+
+    const plainResult = await runCli([
+      "--root", root, "gate-complete", ticketId2,
+      "--stage", "implement",
+      "--executor", "claude-subagent:local-board-gatecheck",
+    ]);
+    assert.equal(plainResult.code, 0, plainResult.stderr);
+    assert.equal(plainResult.stdout.trim(), `${ticketId2} implement claude-subagent:local-board-gatecheck ${ticketPath2}`);
+    const textAfterSecond = await readFile(ticketPath2, "utf8");
+    assert.match(textAfterSecond, /^completedSteps: \[gate:implement:claude-subagent:local-board-gatecheck\]$/m);
+    assert.match(textAfterSecond, /Gate consultation implement via claude-subagent:local-board-gatecheck: none/);
+  });
+});
+
+test("CLI gate-complete rejects an invalid stage and missing required arguments", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    const create = await runCli([
+      "--root", root, "create", "task", "Gate-complete errors",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const badStage = await runCli([
+      "--root", root, "gate-complete", ticketId, "--stage", "docs", "--executor", "claude-subagent:local-board-gatecheck",
+    ]);
+    assert.equal(badStage.code, 2);
+    assert.match(badStage.stderr, /--stage must be one of design, implement, test/);
+
+    const missingExecutor = await runCli(["--root", root, "gate-complete", ticketId, "--stage", "design"]);
+    assert.equal(missingExecutor.code, 2);
+    assert.match(missingExecutor.stderr, /gate-complete requires/);
+
+    const missingTicket = await runCli(["--root", root, "gate-complete", "--stage", "design", "--executor", "claude-subagent:local-board-gatecheck"]);
+    assert.equal(missingTicket.code, 2);
+    assert.match(missingTicket.stderr, /gate-complete requires/);
+  });
+});
+
+test("CLI move refuses a forward gated transition with an actionable error (post-init default), then succeeds once recorded", async () => {
+  await withBoard(async (root) => {
+    // local-board init scaffolds requireGateConsultation: true.
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const create = await runCli([
+      "--root", root, "create", "task", "Gated move via CLI",
+      "--status", "ready_for_test", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const refused = await runCli(["--root", root, "move", ticketId, "ready_for_docs"]);
+    assert.equal(refused.code, 2);
+    assert.match(refused.stderr, /no recorded gate consultation for stage "test"/);
+    assert.match(refused.stderr, /gate-check/);
+    assert.match(refused.stderr, /gate-complete/);
+
+    // optionalSteps.test is empty by default: gate-check auto-stamps the
+    // consultation, no gate-complete call needed.
+    assert.equal((await runCli(["--root", root, "gate-check", ticketId, "--stage", "test", "--json"])).code, 0);
+
+    const moved = await runCli(["--root", root, "move", ticketId, "ready_for_docs"]);
+    assert.equal(moved.code, 0, moved.stderr);
+  });
+});
+
+test("CLI move gating is disabled when routing.requireGateConsultation is set to false", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({ routing: { requireGateConsultation: false } }),
+      "utf8",
+    );
+
+    const create = await runCli([
+      "--root", root, "create", "task", "Switch off restores old behavior",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const moved = await runCli(["--root", root, "move", ticketId, "ready_for_implementation"]);
+    assert.equal(moved.code, 0, moved.stderr);
+  });
+});
+
 test("CLI completes an optional specialty step and the board still validates", async () => {
   await withBoard(async (root) => {
     assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);

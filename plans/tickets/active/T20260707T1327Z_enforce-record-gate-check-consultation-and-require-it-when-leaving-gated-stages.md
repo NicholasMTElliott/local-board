@@ -1,19 +1,19 @@
 ---
 id: T20260707T1327Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: null
 children: []
 blockedBy: []
 blocks: [T20260707T1333Z]
-branch: null
+branch: local-board/T20260707T1327Z-enforce-record-gate-check-consultation-and-require-it-when-leaving-gated-stages
 estimate: 4
 estimateBasis: T20260707T1325Z
-workStartedAt: null
+workStartedAt: 2026-07-07T21:22:36Z
 workCompletedAt: null
 created: 2026-07-07T13:27:41Z
-updated: 2026-07-07T21:22:35Z
+updated: 2026-07-07T21:39:25Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
@@ -108,6 +108,39 @@ Only these three *forward* pairs return non-null. Backward moves (e.g. `ready_fo
 
 ## Implementation Notes
 
+Implemented per the Technical Design, resolving all three open questions as recommended (two-path recording; `completedSteps` per the requirement; dogfood config left untouched — see below).
+
+**src/tickets.js**
+- Added `gateConsultationRecords(ticket)` (parses `gate:<stage>:<executor>` via `/^gate:(design|implement|test):(.+)$/`) and `gateStageForForwardMove(fromStatus, toStatus)` (returns the stage for exactly the three forward pairs — `ready_for_design|designing`→`ready_for_implementation`, `ready_for_implementation|implementing`→`ready_for_review`, `ready_for_test|testing`→`ready_for_docs` — `null` otherwise, so backward/lateral/archive/done moves are never gated).
+- `completedStepRecords` now filters out `gate:` tokens before the first-`:` split, so they never surface as routing evidence (`validateStepRouting`/`doneRequires`/done-time `validate`).
+- `moveTicket` computes `gateStageForForwardMove` before the write; when non-null and `config.routing.requireGateConsultation === true`, it requires a matching `gateConsultationRecords` entry or throws an actionable error naming the stage and remedy (`gate-check` then `gate-complete`). Config is loaded once, only when the gate check or the done-time `validateRouting` needs it (unchanged perf characteristics for the common backward/lateral/in-stage move). `setTicketField(..., "status", ...)` routes through `moveTicket`, so `set <id> status <forward>` is gated too, as noted in the design.
+- Added exported writers `recordGateSkippedEmptyCatalog(root, ticketId, stage, options)` (stamps `gate:<stage>:skipped-empty-catalog`, no Run Log line — deterministic CLI self-certification) and `recordGateConsultation(root, ticketId, stage, executor, evidence, options)` (stamps `gate:<stage>:<executor>` and appends a Run Log line), both under `withTicketLock` via a shared `stampGateToken` helper, both idempotent via `addUnique`.
+
+**src/cli.js**
+- `commandGateCheck`: on the empty-catalog branch (and only there), calls `recordGateSkippedEmptyCatalog` before returning the payload; the non-empty branch stays a pure read.
+- New `commandGateComplete` + `gate-complete` switch case + `printUsage` line: `gate-complete <ticket-id> --stage <stage> --executor <executor> [--evidence <text>]` (evidence defaults to `"none"` when omitted, per the Technical Design's bracketed-optional signature).
+
+**src/config.js**
+- `DEFAULT_CONFIG.routing.requireGateConsultation = false` (ENOENT fallback / merge base — backward compat).
+- `defaultConfigJsonc()` routing block: `"requireGateConsultation": true` with an inline comment; updated the `DEFAULT_CONFIG` header comment to document this as the third intentional divergence (alongside `estimation.enabled` and `optionalSteps`).
+
+**test/config.test.js**
+- Guard test `defaultConfigJsonc matches DEFAULT_CONFIG except for documented differences`: added `expected.routing.requireGateConsultation = true` and `"routing.requireGateConsultation"` to the collapsed-diff allowlist (third entry, alphabetically after `optionalSteps`).
+
+**test/tickets.test.js** (11 new tests) — pure-function coverage for `gateConsultationRecords`/`gateStageForForwardMove`; `recordGateSkippedEmptyCatalog` (idempotent, no Run Log) and its bad-stage rejection; `recordGateConsultation` (route and route@model executor forms, Run Log line) and its bad-stage/invalid-executor/empty-evidence rejections; the token-collision regression test (hand-written `gate:design:...`/`gate:implement:...`/`gate:test:...` tokens alongside full mandatory evidence still `validate` clean and reach `done`); `moveTicket` refusal for all six from/to variants of the three gated pairs (refused without token, succeeds once `recordGateSkippedEmptyCatalog` runs) with one `writeConfig` helper added; a backward/lateral/archive/done non-gating test with the switch on; a switch-off test (both no-config-file default and explicit `false`); `set status` routing-through-`moveTicket` gating; and a back-compat test (pre-existing `ready_for_docs` ticket with no gate tokens still reaches `done` with the switch on, since `ready_for_docs`→`done` is not one of the three gated pairs).
+
+**test/cli.test.js** (8 new tests) — CLI-level empty-catalog auto-stamp + idempotency; non-empty-catalog pure-read (no stamp); `gate-complete` JSON + plain output covering both `route@model` and route-only executor forms plus the default `"none"` evidence; `gate-complete` argument/stage validation; an end-to-end `move` refusal-then-success test against the `init`-scaffolded config (switch on by default); and a switch-off override test.
+
+**Docs**: `SKILL.md` and `skills/codex/local-board/SKILL.md` document `gate-complete`, the move precondition, and correct the prior "never blocks closeout" line to distinguish gated *consultation* (now enforced) from non-gating specialty *evidence* (unchanged). `memory-bank/systemPatterns.md` updated (Config, Role/Step Prompts, MVP CLI sections). Added a short "record before move" note to `plans/prompts/steps/{design,test,gate-check}.md` and `plans/prompts/roles/implementer.md`, mirrored byte-for-byte into their `resources/prompts/...` counterparts (required by `test/resources-sync.test.js`).
+
+**Dogfood config — intentionally NOT changed**: per the dispatch instruction, this repo's own `plans/local-board.config.jsonc` routing block still omits `requireGateConsultation`, so it defaults to `false` (unaffected). The orchestrator will flip it to `true` after this ticket merges, to avoid refusing in-flight tickets mid-run.
+
+**Verification**: `npm run check` clean; `npm test` → 303 tests, 302 pass, 1 skipped (pre-existing opt-in slow smoke test, unrelated), 0 fail; `npm run validate` → "Ticket validation OK" against this repo's own live board (confirms the switch-off default leaves in-flight tickets, including this one, unaffected). Ran `resources-sync`/`prompt-scaffold`/`install` suites individually after doc edits to confirm the `plans/`↔`resources/` mirror and rendered-SKILL invariants still hold.
+
+**Deviations from the dispatch summary's paraphrase**: the dispatch text's prose sketch showed `gate-complete <ticket-id> <stage> --executor ...` (stage positional). The Technical Design section is explicit and authoritative on the actual signature — `gate-complete <ticket-id> --stage <stage> --executor <executor> [--evidence <text>]` — so that is what's implemented and tested; no ambiguity remained once the Technical Design was read.
+
+**No known remaining risks** beyond what the design flagged: the token-collision regression is covered directly; all three config states (unset/false/true) are covered; the three forward pairs and their active-status variants are covered individually.
+
 ## Review Findings
 
 ## Test Evidence
@@ -119,3 +152,5 @@ Only these three *forward* pairs return non-null. Backward moves (e.g. `ready_fo
 ## Run Log
 
 - 2026-07-07T21:21:40Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): gate tokens via honest two-path recording (auto-stamp skipped-empty-catalog; gate-complete verb after real dispatch), move-time enforcement on three forward pairs only, routing.requireGateConsultation defaulting per the B1321 pattern; gate-token filtering flagged as top regression risk. Estimate 4 (basis T20260707T1325Z).
+
+- 2026-07-07T21:22:36Z: Ensured git branch local-board/T20260707T1327Z-enforce-record-gate-check-consultation-and-require-it-when-leaving-gated-stages (created).

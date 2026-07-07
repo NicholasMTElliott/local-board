@@ -21,7 +21,7 @@ const MANDATORY_ACTION_NAMES = new Set([
 //      DEFAULT_CONFIG, so every key here is a backward-compat default for
 //      configs that omit that block.
 // It deliberately differs from defaultConfigJsonc() (the blessed `init`
-// scaffold, below) in exactly two places, both required by role 2:
+// scaffold, below) in exactly three places, all required by role 2:
 //   - estimation.enabled: false here (vs true in the scaffold) so a
 //     pre-estimation config that omits the `estimation` block does not
 //     silently start enforcing the estimation gate.
@@ -29,13 +29,16 @@ const MANDATORY_ACTION_NAMES = new Set([
 //     because optionalSteps arrays are merged wholesale per stage; a
 //     populated default here would make a user config that omits a stage
 //     silently inherit built-in specialties.
-// These two differences are pinned by tests in test/config.test.js (search
+//   - routing.requireGateConsultation: false here (vs true in the scaffold)
+//     so a pre-gate-consultation config that omits the key does not suddenly
+//     start refusing forward moves out of design/implement/test on upgrade.
+// These differences are pinned by tests in test/config.test.js (search
 // "backward-compat disabled" and "empty optionalSteps catalog"). Do NOT
 // converge them to match the scaffold — see the guard test
 // "defaultConfigJsonc matches DEFAULT_CONFIG except for documented
 // differences" in test/config.test.js, which locks the remaining shared
 // blocks (workflow, agents, routing, retention, git, worktrees) in sync
-// while allowlisting only these two intentional differences.
+// while allowlisting only these three intentional differences.
 export const DEFAULT_CONFIG = {
   version: 1,
   workflow: {
@@ -257,6 +260,7 @@ export const DEFAULT_CONFIG = {
       task: ["design", "implement", "review", "test", "document"],
       bug: ["design", "implement", "review", "test", "document"],
     },
+    requireGateConsultation: false,
   },
   retention: {
     archiveDoneAfterDays: 30,
@@ -797,7 +801,14 @@ export function defaultConfigJsonc() {
       "story": ["decompose"],
       "task": ["design", "implement", "review", "test", "document"],
       "bug": ["design", "implement", "review", "test", "document"]
-    }
+    },
+    // requireGateConsultation: true refuses "move" out of design/implement/test
+    // (the ready_for_* or active variant) toward the next stage unless a
+    // gate:<stage>:<executor> consultation token is recorded in completedSteps
+    // (via gate-check's empty-catalog auto-stamp or the gate-complete verb).
+    // Backward, lateral (questions/blocked), and archive/done moves are never
+    // gated. Set to false to opt out.
+    "requireGateConsultation": true
   },
 
   // Done tickets are recent closeout history. Older done tickets are retained

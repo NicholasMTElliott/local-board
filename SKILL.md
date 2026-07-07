@@ -166,6 +166,14 @@ Dispatch the gate-check prompt through the returned `agent` route, pinning the s
 
 An empty `requestedSteps` array is the normal case; skip the specialty pass and proceed to `move`.
 
+`gate-check` itself records that the consultation happened: on an **empty** stage catalog it auto-stamps a `gate:<stage>:skipped-empty-catalog` token in `completedSteps` and dispatches no agent. On a **non-empty** catalog, `gate-check` stays a pure read — after the gate agent answers (per the JSON above), record the consultation yourself:
+
+```sh
+local-board gate-complete <ticket-id> --stage <stage> --executor <executor> --evidence "<requestedSteps summary>"
+```
+
+Use the resolved gate-check `agent` route (suffixed with `@model` when pinned) as `<executor>`, and summarize the answer (which specialties, or `none`) as `--evidence`. This records `gate:<stage>:<executor>` and a Run Log line.
+
 For each name in `requestedSteps`, resolve the specialty:
 
 ```sh
@@ -183,6 +191,8 @@ Use the exact `<step-name>` returned by gate-check. `specialty-run` rejects unkn
 Only after every requested specialty has recorded completion evidence does the orchestrator run `move <ticket-id> <next-status>`.
 
 Specialty evidence is never gated by `routing.doneRequires`; it lives in `completedSteps` for traceability but never blocks closeout. Tickets that run zero specialties still pass `validate` and `move ... done`.
+
+The gate **consultation** is a separate, stricter concern from specialty evidence. When `routing.requireGateConsultation` is `true` (the `init` scaffold default), `move` refuses the three forward transitions out of a gated stage — `ready_for_design`/`designing` → `ready_for_implementation`, `ready_for_implementation`/`implementing` → `ready_for_review`, `ready_for_test`/`testing` → `ready_for_docs` — unless a `gate:<stage>:...` token is recorded for that stage. Backward, lateral (`questions`/`blocked`), and archive/done moves are never gated. If `move` refuses with a "no recorded gate consultation" error, run `gate-check` (and `gate-complete` if the catalog was non-empty) for the named stage, then retry the move.
 
 ## Delegation
 
@@ -253,6 +263,7 @@ local-board check-dispatch --agent <subagent-type> [--model <model>] [--ticket <
 local-board complete-step <ticket-id> <action> --executor <executor> --evidence "<evidence>" [--json]
 local-board approve-inline <ticket-id> <action> --reason "<reason>" [--executor <executor>] [--json]
 local-board gate-check <ticket-id> --stage <stage> [--json]
+local-board gate-complete <ticket-id> --stage <stage> --executor <executor> [--evidence "<evidence>"] [--json]
 local-board specialty-run <ticket-id> <step-name> [--json]
 local-board calibration suggest <ticket-id> [--json]
 local-board estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]
