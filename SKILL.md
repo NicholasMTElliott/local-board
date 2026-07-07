@@ -30,7 +30,7 @@ Operate in the user's current project unless they specify another root. Pass `--
 5. For whole-project work, run `local-board query-next --json`.
 6. For a specific ticket, run `local-board query-ticket <id> --json`.
 7. Read the returned ticket `path`, returned `prompt`, `branch`, `transitions`, and relevant project context.
-8. Run `local-board begin-step <ticket-id> --json`. It returns `configuredAgent` (the route), `configuredModel` (the per-step model, or null), and `configuredPrompt`.
+8. Run `local-board begin-step <ticket-id> --json`. It returns `configuredAgent` (the route), `configuredModel` (the per-step model, or null), and `configuredPrompt`, and records the in-flight step for dispatch verification.
 9. Execute the returned `action` through the configured route. For `claude-subagent:<agent-name>`, dispatch the named Claude subagent after the colon and, when `configuredModel` is non-null, pin that subagent's model to `configuredModel` at dispatch. For `codex-task:<mode>`, shell out to codex in that mode. For `inline`, do the work yourself on your own model. Per-step models only take effect on subagent/codex routes — `inline` always runs on the orchestrator's model.
 10. Run `local-board complete-step <ticket-id> <action> --executor <configuredAgent>[@<configuredModel>] --evidence "<evidence>"`. Append `@<configuredModel>` when a model was pinned, so the evidence records which model ran. Under strict routing, when the route matches the configured route and a model is pinned, `complete-step` requires the executor's `@model` suffix to match `configuredModel` (or `@codex-default` for a Codex-translated run, or an `approve-inline --executor <route>@<model>` approval) — otherwise it is rejected.
 11. Mutate ticket state only through CLI commands.
@@ -103,6 +103,8 @@ Use those statuses after completing the action. Examples:
 - any stage needs user input: move to `questions` and write the question;
 - ticket dependency blocks progress: use `block <ticket-id> <dependency-id>` and keep or return the ticket to its intended ready status;
 - non-ticket blocker stops progress: move to `blocked` and record the blocker.
+
+`begin-step` also stamps the active dispatch ledger, so do not treat it as a side-effect-free query.
 
 ## Branch Discipline
 
@@ -183,7 +185,7 @@ Specialty evidence is never gated by `routing.doneRequires`; it lives in `comple
 
 Use `plans/local-board.config.jsonc` to decide how each action is handled. Comments and trailing commas are valid:
 
-Each entry is a route string or a `{ route, model?, prompt? }` profile. `begin-step` resolves it to `configuredAgent` (route), `configuredModel`, and `configuredPrompt`.
+Each entry is a route string or a `{ route, model?, prompt? }` profile. `begin-step` resolves it to `configuredAgent` (route), `configuredModel`, and `configuredPrompt`, and records the active step for dispatch verification.
 
 - `inline`: do the work in the current agent, on the orchestrator's model. `inline` cannot carry a per-step model.
 - `claude-subagent:<agent-name>`: dispatch the named Claude subagent. When `configuredModel` is set, pin the subagent's model to it at dispatch — this is how per-step models (haiku gate-check, opus design, sonnet implement, etc.) take effect.
@@ -244,6 +246,7 @@ local-board schema --json
 local-board create <epic|story|task|bug> "<title>" --status <status> --priority <priority> [--parent <id>]
 local-board start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--json]
 local-board begin-step <ticket-id> [--action <action>] [--json]
+local-board check-dispatch --agent <subagent-type> [--model <model>] [--ticket <ticket-id>] [--json]
 local-board complete-step <ticket-id> <action> --executor <executor> --evidence "<evidence>" [--json]
 local-board approve-inline <ticket-id> <action> --reason "<reason>" [--executor <executor>] [--json]
 local-board gate-check <ticket-id> --stage <stage> [--json]
