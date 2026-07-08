@@ -1,7 +1,7 @@
 ---
 id: T20260707T1336Z
 type: task
-status: implementing
+status: ready_for_review
 priority: P3
 parent: null
 children: []
@@ -13,8 +13,8 @@ estimateBasis: T20260707T1329Z
 workStartedAt: 2026-07-08T03:42:54Z
 workCompletedAt: null
 created: 2026-07-07T13:36:55Z
-updated: 2026-07-08T03:47:43Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-08T03:49:13Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # skills: dedupe CLI command blocks across skill texts
@@ -159,3 +159,7 @@ Risks: the block tokenizer in the test and the `usageCommandNames()` tokenizer i
 - 2026-07-08T03:42:54Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (docs + test hygiene)
 
 - 2026-07-08T03:42:54Z: Ensured git branch local-board/T20260707T1336Z-skills-dedupe-cli-command-blocks-across-skill-texts (created).
+
+- 2026-07-08T03:48:07Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): curated blocks + pointer + skill-usage-sync drift guard with a verified failure probe; 383 pass + 1 gated-skip.
+
+- 2026-07-08T03:49:13Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (docs + test hygiene)

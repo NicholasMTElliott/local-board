@@ -1,7 +1,7 @@
 ---
 id: T20260707T1334Z
 type: task
-status: ready_for_review
+status: ready_for_implementation
 priority: P3
 parent: null
 children: []
@@ -13,8 +13,8 @@ estimateBasis: T20260707T1329Z
 workStartedAt: 2026-07-08T03:09:32Z
 workCompletedAt: null
 created: 2026-07-07T13:34:55Z
-updated: 2026-07-08T03:20:23Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-08T03:52:31Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # cli: complete-step accepts --model and composes executor evidence server-side
@@ -174,6 +174,8 @@ No deviations from the approved design. Left `approve-inline`'s existing `@model
 
 ## Review Findings
 
+- 2026-07-08T03:52:31Z: Review (codex): one line — SKILL.md:251's post-approval completion example still uses manual @ splicing; switch it to --executor <configuredAgent> --model <actualModel> (approve-inline itself stays combined-form). Everything else passed.
+
 ## Test Evidence
 
 ## Documentation Updates
@@ -191,3 +193,7 @@ No deviations from the approved design. Left `approve-inline`'s existing `@model
 - 2026-07-08T03:19:12Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): composeExecutor helper + --model on both verbs + skill updates; 373 pass + 1 gated-skip. (This very evidence was recorded with the new two-flag form.)
 
 - 2026-07-08T03:20:23Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (CLI ergonomics)
+
+- 2026-07-08T03:52:31Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) changes_requested: single stale example line in SKILL.md; helper/parity/tests verified.
+
+- 2026-07-08T03:52:31Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku, review:codex-task:read-only].
