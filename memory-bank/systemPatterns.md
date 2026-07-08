@@ -52,7 +52,7 @@ A guard test (`test/config.test.js`) keeps the rest of the two defaults in sync.
 ## Ticket ID Convention
 Preferred: `{Prefix}{yyyyMMddTHHmmZ}_{slug}.md`.
 Example: `T20260514T1234Z_implement-leaderboard-feature.md`.
-
+Collision/worktree offset bumps apply to the ID timestamp only; `created`/`updated` use wall-clock time.
 ## Canonical State
 Front matter is canonical. Folder is secondary.
 List item charset is write-enforced: values with commas, quotes, backslashes, or control characters are rejected at serialization because they cannot round-trip.
@@ -183,7 +183,7 @@ When `git.autoMerge` is true, `move ... done` validates routing, requires the cu
 When `retention.archiveOnMoveDone` is true, `move ... done` archives other done tickets older than the configured retention window. Archived tickets count as closed dependencies.
 `start-work` stamps `workStartedAt` once. `move ... done` stamps `workCompletedAt` only when `workStartedAt` is set. Archive does not touch wall-clock fields.
 When estimation is enabled, `complete-step design` refuses tasks and bugs without an estimate.
-`create` derives a per-worktree minute offset when invoked from inside a registered ticket worktree (sorted-index position among ticket worktrees under the configured root) and shifts the starting timestamp by that many minutes. Peer worktree workers therefore mint distinct child IDs without coordinating. Test-mode invocations that pass `now` skip the offset to keep timestamps deterministic.
+`create` derives a per-worktree minute offset when invoked from inside a registered ticket worktree (sorted-index position among ticket worktrees under the configured root) and applies the bump to the ID timestamp only; `created`/`updated` stay wall-clock. Peer worktree workers therefore mint distinct child IDs without coordinating. Test-mode invocations that pass `now` skip the ID offset to keep timestamps deterministic.
 When `worktrees.guardWrongRoot` is true (scaffold default for new boards; false for older configs that omit the key), per-ticket mutation commands and `gate-check` refuse when the ticket has a registered worktree and `--root` is neither that worktree nor overridden with `--allow-main-root`; no-op when the ticket has no worktree, fail-open on git errors. `worktree-remove` always resolves the repo's main root via `resolveMainRoot`, so it works given either the main root or the ticket's worktree root.
 
 ## Parallel Mode (per-step orchestrator)
