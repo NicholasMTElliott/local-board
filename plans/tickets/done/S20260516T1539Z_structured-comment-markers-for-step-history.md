@@ -1,10 +1,10 @@
 ---
 id: S20260516T1539Z
 type: story
-status: ready_for_decomposition
+status: done
 priority: P3
 parent: null
-children: []
+children: [T20260708T2015Z, T20260708T2016Z]
 blockedBy: []
 blocks: []
 branch: null
@@ -13,8 +13,8 @@ estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-05-16T15:39:38Z
-updated: 2026-07-08T20:12:50Z
-completedSteps: []
+updated: 2026-07-08T20:16:18Z
+completedSteps: ["decompose:claude-subagent:local-board-decomposer@opus"]
 routingApprovals: []
 ---
 # Structured comment markers for step history
@@ -114,3 +114,7 @@ No migration. Existing comments continue to parse as before. Marker support is p
 ## Questions
 
 ## Run Log
+
+- 2026-07-08T20:16:18Z: Completed decompose via claude-subagent:local-board-decomposer@opus: 2 children: T20260708T2015Z (marker write path + parser + validate + vocab docs), T20260708T2016Z (comments read/filter subcommand, blockedBy 2015); 3 stale acceptance items corrected (colon render form, markers-not-evidence, moot sequencing note)
+
+- 2026-07-08T20:16:18Z: Decomposition corrections to the original acceptance: (1) marked lines keep the existing '- <ts>: ' prefix with the marker block inserted before the body; (2) markers are run-log/grep annotations only, never routing or gate evidence (completedSteps/gate tokens remain the ledger); (3) the 'ship before specialty steps' ordering note is moot — specialty steps shipped.
