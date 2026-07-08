@@ -53,7 +53,7 @@ For each returned ticket:
 3. Before `implement`, `review`, `test`, or `document`, run `start-work <ticket-id> --json`.
 4. Dispatch the returned action through the route translation contract below.
 5. Persist return-only output with `section --file`; self-writing workers write their own scoped changes.
-6. Run `complete-step <ticket-id> <action> --executor <logical-route>[@<codex-model>] --evidence "<evidence>"`.
+6. Run `complete-step <ticket-id> <action> --executor <logical-route> [--model <codex-model-or-codex-default>] --evidence "<evidence>"`. `complete-step` composes the `<route>@<model>` token server-side; the combined `--executor <route>@<model>` form still works.
 7. For `design`, `implement`, and `test`, run the gate-check/specialty flow before `move`.
 8. Choose the next status from the returned `transitions` list and run `move <ticket-id> <status> --json`.
 9. Choose `done` only when all required evidence is recorded.
@@ -63,7 +63,7 @@ When `routing.enforceTransitions` is `true` (the `init` scaffold default), `move
 
 ## Route Translation Contract
 
-Strict routing validates the configured logical route, not the physical Codex worker. Preserve the configured route when recording completion. When the route matches and the action's profile pins a model, `complete-step` also requires the executor's `@model` suffix to match `configuredModel`, or `@codex-default` (always accepted — see below), or an approved deviation via `approve-inline --executor <route>@<model>`.
+Strict routing validates the configured logical route, not the physical Codex worker. Preserve the configured route when recording completion. When the route matches and the action's profile pins a model, `complete-step` also requires the recorded model (via `--model` or the combined `@model` suffix) to match `configuredModel`, or `codex-default` (always accepted — see below), or an approved deviation via `approve-inline --executor <route>@<model>`.
 
 Known route mapping:
 
@@ -82,7 +82,7 @@ Known route mapping:
 
 For unknown `claude-subagent:*` routes, ask the user before falling back to inline. If approved, run `approve-inline <ticket-id> <action> --reason "<reason>"`, then record `complete-step` with `--executor inline`. If not approved, move the ticket to `questions` and record the blocker.
 
-Do not pass Claude model aliases (`opus`, `sonnet`, `haiku`) as Codex model overrides. Only set a Codex model override when `configuredModel` is a valid Codex model id. Otherwise omit the model and let the spawned agent inherit the current Codex model. When a route was translated from Claude, use an executor suffix such as `@codex-default` unless a valid Codex model id was explicitly used.
+Do not pass Claude model aliases (`opus`, `sonnet`, `haiku`) as Codex model overrides. Only set a Codex model override when `configuredModel` is a valid Codex model id. Otherwise omit the model and let the spawned agent inherit the current Codex model. When a route was translated from Claude, record completion with `--model codex-default` (equivalent to the combined `@codex-default` suffix) unless a valid Codex model id was explicitly used.
 
 ## Dispatch Rules
 
@@ -176,10 +176,10 @@ local-board create <epic|story|task|bug> "<title>" --status <status> --priority 
 local-board start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--json]
 local-board begin-step <ticket-id> [--action <action>] [--json]
 local-board check-dispatch --agent <subagent-type> [--model <model>] [--ticket <ticket-id>] [--json]
-local-board complete-step <ticket-id> <action> --executor <executor> --evidence "<evidence>" [--json]
+local-board complete-step <ticket-id> <action> --executor <executor> [--model <model>] --evidence "<evidence>" [--json]
 local-board approve-inline <ticket-id> <action> --reason "<reason>" [--executor <executor>] [--json]
 local-board gate-check <ticket-id> --stage <stage> [--json]
-local-board gate-complete <ticket-id> --stage <stage> --executor <executor> [--evidence "<evidence>"] [--json]
+local-board gate-complete <ticket-id> --stage <stage> --executor <executor> [--model <model>] [--evidence "<evidence>"] [--json]
 local-board specialty-run <ticket-id> <step-name> [--json]
 local-board calibration suggest <ticket-id> [--json]
 local-board estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]

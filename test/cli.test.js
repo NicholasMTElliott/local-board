@@ -895,6 +895,46 @@ test("CLI gate-complete records gate:<stage>:<executor>, appends a Run Log line,
   });
 });
 
+test("CLI gate-complete --model composes gate:<stage>:<route>@<model>, mirroring complete-step", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const create = await runCli([
+      "--root", root, "create", "task", "Gate-complete two-flag model",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketPath = create.stdout.trim();
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const twoFlag = await runCli([
+      "--root", root, "gate-complete", ticketId,
+      "--stage", "design",
+      "--executor", "claude-subagent:local-board-gatecheck", "--model", "haiku",
+      "--evidence", "security_threat_model",
+    ]);
+    assert.equal(twoFlag.code, 0, twoFlag.stderr);
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \["gate:design:claude-subagent:local-board-gatecheck@haiku"\]$/m);
+
+    // Conflict: disagreeing --model vs the --executor @suffix throws naming both.
+    const create2 = await runCli([
+      "--root", root, "create", "task", "Gate-complete model conflict",
+      "--status", "ready_for_implementation", "--priority", "P2",
+    ]);
+    assert.equal(create2.code, 0, create2.stderr);
+    const ticketId2 = path.basename(create2.stdout.trim()).split("_", 1)[0];
+
+    const conflict = await runCli([
+      "--root", root, "gate-complete", ticketId2,
+      "--stage", "implement",
+      "--executor", "claude-subagent:local-board-gatecheck@haiku", "--model", "opus",
+    ]);
+    assert.notEqual(conflict.code, 0);
+    assert.match(conflict.stderr, /--executor pins @haiku but --model says opus; pass only one or make them agree/);
+  });
+});
+
 test("CLI gate-complete rejects an invalid stage and missing required arguments", async () => {
   await withBoard(async (root) => {
     assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
@@ -1059,6 +1099,120 @@ test("CLI complete-step rejects a model on an inline executor", async () => {
     ]);
     assert.notEqual(res.code, 0);
     assert.match(res.stderr, /executor must be/);
+  });
+});
+
+test("CLI complete-step --model composes route@model server-side, equivalent to the combined --executor route@model form", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const create = await runCli([
+      "--root", root, "create", "task", "Two-flag model composition",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const id = path.basename(create.stdout.trim()).split("_", 1)[0];
+    assert.equal((await runCli(["--root", root, "estimate", id, "2"])).code, 0);
+
+    const twoFlag = await runCli([
+      "--root", root, "complete-step", id, "design",
+      "--executor", "claude-subagent:local-board-designer", "--model", "opus",
+      "--evidence", "Design evidence.",
+    ]);
+    assert.equal(twoFlag.code, 0, twoFlag.stderr);
+    const text = await readFile(create.stdout.trim(), "utf8");
+    assert.match(text, /^completedSteps: \["design:claude-subagent:local-board-designer@opus"\]$/m);
+
+    // Equivalence: the combined --executor route@model form on a second
+    // ticket produces the identical recorded token.
+    const create2 = await runCli([
+      "--root", root, "create", "task", "Combined-form equivalence",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create2.code, 0, create2.stderr);
+    const id2 = path.basename(create2.stdout.trim()).split("_", 1)[0];
+    assert.equal((await runCli(["--root", root, "estimate", id2, "2"])).code, 0);
+
+    const combined = await runCli([
+      "--root", root, "complete-step", id2, "design",
+      "--executor", "claude-subagent:local-board-designer@opus",
+      "--evidence", "Design evidence.",
+    ]);
+    assert.equal(combined.code, 0, combined.stderr);
+    const text2 = await readFile(create2.stdout.trim(), "utf8");
+    assert.match(text2, /^completedSteps: \["design:claude-subagent:local-board-designer@opus"\]$/m);
+  });
+});
+
+test("CLI complete-step: --executor @suffix disagreeing with --model throws naming both; an identical suffix is a no-op", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const create = await runCli([
+      "--root", root, "create", "task", "Disagreeing model flags",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const id = path.basename(create.stdout.trim()).split("_", 1)[0];
+    assert.equal((await runCli(["--root", root, "estimate", id, "2"])).code, 0);
+
+    const conflict = await runCli([
+      "--root", root, "complete-step", id, "design",
+      "--executor", "claude-subagent:local-board-designer@opus", "--model", "sonnet",
+      "--evidence", "Design evidence.",
+    ]);
+    assert.notEqual(conflict.code, 0);
+    assert.match(conflict.stderr, /--executor pins @opus but --model says sonnet; pass only one or make them agree/);
+
+    const agree = await runCli([
+      "--root", root, "complete-step", id, "design",
+      "--executor", "claude-subagent:local-board-designer@opus", "--model", "opus",
+      "--evidence", "Design evidence.",
+    ]);
+    assert.equal(agree.code, 0, agree.stderr);
+    const text = await readFile(create.stdout.trim(), "utf8");
+    assert.match(text, /^completedSteps: \["design:claude-subagent:local-board-designer@opus"\]$/m);
+  });
+});
+
+test("CLI complete-step: --model with --executor inline throws the specific inline error", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    const create = await runCli([
+      "--root", root, "create", "task", "Inline model flag rejection",
+      "--status", "ready_for_review", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const id = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const res = await runCli([
+      "--root", root, "complete-step", id, "review",
+      "--executor", "inline", "--model", "opus", "--evidence", "x",
+    ]);
+    assert.notEqual(res.code, 0);
+    assert.match(res.stderr, /--model cannot be used with --executor inline/);
+  });
+});
+
+test("CLI complete-step: --model codex-default composes route@codex-default and satisfies the pinned-model check", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    const create = await runCli([
+      "--root", root, "create", "task", "Codex-default two-flag form",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const id = path.basename(create.stdout.trim()).split("_", 1)[0];
+    assert.equal((await runCli(["--root", root, "estimate", id, "2"])).code, 0);
+
+    const res = await runCli([
+      "--root", root, "complete-step", id, "design",
+      "--executor", "claude-subagent:local-board-designer", "--model", "codex-default",
+      "--evidence", "Codex-translated design evidence.",
+    ]);
+    assert.equal(res.code, 0, res.stderr);
+    const text = await readFile(create.stdout.trim(), "utf8");
+    assert.match(text, /^completedSteps: \["design:claude-subagent:local-board-designer@codex-default"\]$/m);
   });
 });
 

@@ -35,7 +35,7 @@ Version-skew check (advisory): this skill was installed from local-board `v<<VER
 7. Read the returned ticket `path`, returned `prompt`, `branch`, `transitions`, and relevant project context.
 8. Run `local-board begin-step <ticket-id> --json`. It returns `configuredAgent` (the route), `configuredModel` (the per-step model, or null), and `configuredPrompt`, and records the in-flight step for dispatch verification.
 9. Execute the returned `action` through the configured route. For `claude-subagent:<agent-name>`, dispatch the named Claude subagent after the colon and, when `configuredModel` is non-null, pin that subagent's model to `configuredModel` at dispatch. For `codex-task:<mode>`, shell out to codex in that mode. For `inline`, do the work yourself on your own model. Per-step models only take effect on subagent/codex routes — `inline` always runs on the orchestrator's model. **Every Claude subagent dispatch prompt must begin with a first line of the exact form `Ticket: <id>`** — this is the machine-readable anchor the optional dispatch-ledger/routing-validator hooks (`local-board install --hooks`) parse to verify the dispatch actually happened.
-10. Run `local-board complete-step <ticket-id> <action> --executor <configuredAgent>[@<configuredModel>] --evidence "<evidence>"`. Append `@<configuredModel>` when a model was pinned, so the evidence records which model ran. Under strict routing, when the route matches the configured route and a model is pinned, `complete-step` requires the executor's `@model` suffix to match `configuredModel` (or `@codex-default` for a Codex-translated run, or an `approve-inline --executor <route>@<model>` approval) — otherwise it is rejected.
+10. Run `local-board complete-step <ticket-id> <action> --executor <configuredAgent> --model <configuredModel> --evidence "<evidence>"`, passing `--executor` and `--model` verbatim from `begin-step` output; omit `--model` when `configuredModel` is null. `complete-step` composes the `<route>@<model>` evidence token server-side — do not hand-splice `@<model>` yourself. (The combined `--executor <route>@<model>` form is still accepted for back-compat and is equivalent.) Under strict routing, when the route matches the configured route and a model is pinned, `complete-step` requires the recorded model to match `configuredModel` (or `codex-default` for a Codex-translated run, or an `approve-inline --executor <route>@<model>` approval) — otherwise it is rejected.
 11. Mutate ticket state only through CLI commands.
 12. After the action, choose the next status from the returned `transitions` list and run `local-board move <ticket-id> <status> --json`.
 13. Choose `done` only when all required stages are complete.
@@ -170,10 +170,10 @@ An empty `requestedSteps` array is the normal case; skip the specialty pass and 
 `gate-check` itself records that the consultation happened: on an **empty** stage catalog it auto-stamps a `gate:<stage>:skipped-empty-catalog` token in `completedSteps` and dispatches no agent. On a **non-empty** catalog, `gate-check` stays a pure read — after the gate agent answers (per the JSON above), record the consultation yourself:
 
 ```sh
-local-board gate-complete <ticket-id> --stage <stage> --executor <executor> --evidence "<requestedSteps summary>"
+local-board gate-complete <ticket-id> --stage <stage> --executor <agent> --model <model> --evidence "<requestedSteps summary>"
 ```
 
-Use the resolved gate-check `agent` route (suffixed with `@model` when pinned) as `<executor>`, and summarize the answer (which specialties, or `none`) as `--evidence`. This records `gate:<stage>:<executor>` and a Run Log line.
+Use the resolved gate-check `agent` and `model` fields verbatim as `--executor` and `--model` (omit `--model` when `model` is null), and summarize the answer (which specialties, or `none`) as `--evidence`. `gate-complete` composes the same `<route>@<model>` token server-side as `complete-step` (the combined `--executor <route>@<model>` form still works). This records `gate:<stage>:<executor>` and a Run Log line.
 
 For each name in `requestedSteps`, resolve the specialty:
 
@@ -232,7 +232,7 @@ Whenever a CLI command needs a file argument (such as `section --file`), create 
 
 The orchestrator remains responsible for canonical ticket state unless a delegated worker was explicitly assigned write scope.
 
-When recording completion evidence, use the configured route from `begin-step`, suffixed with `@<configuredModel>` when a model was pinned — for example `claude-subagent:local-board-designer@opus`. Strict routing matches the route, and when the route matches and a model is pinned, also requires the `@model` suffix to match (or `@codex-default`, or an approved deviation — see below).
+When recording completion evidence, pass `--executor <configuredAgent> --model <configuredModel>` verbatim from `begin-step` (omit `--model` when `configuredModel` is null); `complete-step`/`gate-complete` compose the `<route>@<model>` token server-side — for example `claude-subagent:local-board-designer` + `--model opus` records `claude-subagent:local-board-designer@opus`. The combined `--executor <route>@<model>` form remains equivalent and accepted for back-compat. Strict routing matches the route, and when the route matches and a model is pinned, also requires the recorded model to match (or `codex-default`, or an approved deviation — see below).
 
 If the configured agent is unavailable, do not continue inline by default. Ask the user for approval. If approved, run:
 
@@ -262,10 +262,10 @@ local-board create <epic|story|task|bug> "<title>" --status <status> --priority 
 local-board start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--json]
 local-board begin-step <ticket-id> [--action <action>] [--json]
 local-board check-dispatch --agent <subagent-type> [--model <model>] [--ticket <ticket-id>] [--json]
-local-board complete-step <ticket-id> <action> --executor <executor> --evidence "<evidence>" [--json]
+local-board complete-step <ticket-id> <action> --executor <executor> [--model <model>] --evidence "<evidence>" [--json]
 local-board approve-inline <ticket-id> <action> --reason "<reason>" [--executor <executor>] [--json]
 local-board gate-check <ticket-id> --stage <stage> [--json]
-local-board gate-complete <ticket-id> --stage <stage> --executor <executor> [--evidence "<evidence>"] [--json]
+local-board gate-complete <ticket-id> --stage <stage> --executor <executor> [--model <model>] [--evidence "<evidence>"] [--json]
 local-board specialty-run <ticket-id> <step-name> [--json]
 local-board calibration suggest <ticket-id> [--json]
 local-board estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]
