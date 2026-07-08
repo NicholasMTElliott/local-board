@@ -39,9 +39,9 @@
 
     // Status outcomes for each workflow decision point.
     // Use exact status values with "move <ticket-id> <status>".
-    // This board has not enabled routing.enforceTransitions, so this map stays
-    // advisory guidance for now (the hard-validator switch exists in src/config.js
-    // but flipping it on for this repo's own board is a separate follow-up call).
+    // routing.enforceTransitions is enabled on this board: moves outside this
+    // map (plus the structural allow-set) are refused unless --override is
+    // passed with a reason, which is recorded in the Run Log.
     // Ticket dependencies should use blockedBy and stay in the intended ready status.
     // status: blocked is reserved for non-ticket blockers.
     "transitions": {
@@ -247,6 +247,8 @@
     // Forward moves out of design/implement/test require a recorded gate
     // consultation token (gate-check auto-stamp or gate-complete).
     "requireGateConsultation": true,
+    // Hard transition validation: refuse off-map moves without --override.
+    "enforceTransitions": true,
     // Loop-back moves to an earlier ready_* status strip downstream
     // completedSteps evidence and matching approvals (Run Log records it).
     "invalidateOnLoopBack": true,
