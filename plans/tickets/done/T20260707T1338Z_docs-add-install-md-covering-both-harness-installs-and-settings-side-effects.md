@@ -1,7 +1,7 @@
 ---
 id: T20260707T1338Z
 type: task
-status: ready_for_docs
+status: done
 priority: P3
 parent: null
 children: []
@@ -11,9 +11,9 @@ branch: local-board/T20260707T1338Z-docs-add-install-md-covering-both-harness-in
 estimate: 2
 estimateBasis: T20260707T1337Z
 workStartedAt: 2026-07-08T05:00:10Z
-workCompletedAt: null
+workCompletedAt: 2026-07-08T05:18:50Z
 created: 2026-07-07T13:38:06Z
-updated: 2026-07-08T05:18:49Z
+updated: 2026-07-08T05:18:50Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
