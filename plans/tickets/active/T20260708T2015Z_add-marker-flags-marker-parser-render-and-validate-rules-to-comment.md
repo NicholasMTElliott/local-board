@@ -13,7 +13,7 @@ estimateBasis: T20260707T1338Z
 workStartedAt: 2026-07-08T20:16:33Z
 workCompletedAt: null
 created: 2026-07-08T20:15:33Z
-updated: 2026-07-08T20:24:37Z
+updated: 2026-07-08T20:41:43Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -193,6 +193,15 @@ The skill-usage-sync test (test/skill-usage-sync.test.js) requires only that eac
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) on the implement commit (worktree). A security_audit specialty pass ran separately (PASS).
+
+- [P2] `src/tickets.js:872,906,912` — `parseCommentLine` strands a trailing `\r` when callers split CRLF text on `\n`: `COMMENT_LINE_RE` captures the CR into `rest`, so a marked no-body line parses with `body === "\r"` and legacy unmarked bodies gain a `\r` suffix. Normalize one terminal `\r` before returning; add CRLF tests for marked, unmarked, and marker-block-at-end lines.
+- [P3] `docs/comment-markers.md:55` — the `executor` example value `claude-subagent:local-board-designer` contains `:`, which `MARKER_VALUE_RE` (src/cli.js:1236) and `MARKER_TOKEN_RE` (src/tickets.js:875) reject. Change the example to a legal value or document a legal encoding.
+
+Passed: takeAllOptions mirrors takeOption semantics; unmarked render byte-identical; ordered marker rendering; per-ticket fence-aware validation; contentLines matches locateSection fence semantics (backtick/tilde, indented, unclosed).
+
+Verdict: changes_requested
+
 ## Test Evidence
 
 ## Documentation Updates
@@ -208,3 +217,13 @@ The skill-usage-sync test (test/skill-usage-sync.test.js) requires only that eac
 - 2026-07-08T20:24:36Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (internal CLI tooling design)
 
 - 2026-07-08T20:24:37Z: Ensured git branch local-board/T20260708T2015Z-add-marker-flags-marker-parser-render-and-validate-rules-to-comment (already-current).
+
+- 2026-07-08T20:36:45Z: Completed implement via claude-subagent:local-board-implementer@sonnet: takeAllOptions/parseMarkerFlags; renderMarkerBlock + parseCommentLine + fence-aware validateCommentMarkers; docs/comment-markers.md + README index; 10 tests; 394 pass + 1 skip; skill-sync green
+
+- 2026-07-08T20:38:52Z: Completed security_audit via inline: PASS: strict anchored charsets on marker keys/values block Markdown/structure injection into ticket files; regexes linear (no ReDoS); no path/command construction from input; parser never throws; no data exposure
+
+- 2026-07-08T20:38:53Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [security_audit] - completed inline with PASS
+
+- 2026-07-08T20:41:43Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, security_audit:inline, gate:implement:claude-subagent:local-board-gatecheck@haiku].
+
+- 2026-07-08T20:41:43Z: Ensured git branch local-board/T20260708T2015Z-add-marker-flags-marker-parser-render-and-validate-rules-to-comment (already-current).

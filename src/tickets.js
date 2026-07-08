@@ -879,10 +879,15 @@ const MARKER_TOKEN_RE = /^([A-Za-z0-9_.-]+):([A-Za-z0-9_./-]+)$/;
 // grammar falls back to treating the whole remainder as body text. Callers
 // are responsible for feeding real comment lines (fence-awareness lives in
 // the contentLines walker, not here).
+//
+// Normalizes a single trailing "\r" up front so callers that split CRLF text
+// on "\n" (leaving a stray "\r" on every line) get clean bodies rather than
+// a "\r" suffix (or, for a marker block with no body, a body of just "\r").
 export function parseCommentLine(line) {
-  const match = COMMENT_LINE_RE.exec(line);
+  const normalized = line.endsWith("\r") ? line.slice(0, -1) : line;
+  const match = COMMENT_LINE_RE.exec(normalized);
   if (match === null) {
-    return { timestamp: null, markers: [], body: line };
+    return { timestamp: null, markers: [], body: normalized };
   }
 
   const { ts, rest } = match.groups;

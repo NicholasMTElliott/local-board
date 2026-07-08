@@ -52,7 +52,9 @@ These keys are documented and validated for *syntax only* (charset, `key=value` 
 | `kind` | The category of the comment, e.g. `mandatory`, `specialty`, `gate`, `human`, `orchestrator`. |
 | `step` | The stage or step name the comment is about, e.g. `design`, `implement`, `security_audit`. |
 | `outcome` | The result being logged, e.g. `PASS`, `CONCERNS`, `FAIL`, `INFO`. |
-| `executor` | The executor route that produced the comment, e.g. `inline`, `claude-subagent:local-board-designer`. |
+| `executor` | The executor route that produced the comment, e.g. `inline`, `claude-subagent-local-board-designer`. |
+
+**Executor routes containing `:`.** Some executor route strings (e.g. `claude-subagent:local-board-designer`) contain a `:`, which the value charset above rejects — `:` is reserved as the marker `key:value` separator. Such a route cannot be recorded as-is in an `executor` marker value in v1. Either record the full route in the comment body text instead of a marker, or substitute a hyphenated shorthand (e.g. `claude-subagent-local-board-designer`) as the marker value.
 
 ## Round-trip and backward compatibility
 

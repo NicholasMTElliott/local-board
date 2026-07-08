@@ -222,6 +222,47 @@ test("parseCommentLine: stray or malformed brackets fall back to body without th
   });
 });
 
+// --- parseCommentLine: CRLF normalization ---
+//
+// CRLF ticket text split on "\n" leaves a stray trailing "\r" on every line.
+// parseCommentLine must strip exactly one terminal "\r" before scanning for a
+// marker block so the returned body is clean in all three shapes below.
+
+test("parseCommentLine: CRLF marked line strips the trailing \\r from the body", () => {
+  const parsed = parseCommentLine(
+    "- 2026-05-14T21:02:00Z: [step:implement outcome:PASS] Reviewed the diff.\r",
+  );
+  assert.deepEqual(parsed, {
+    timestamp: "2026-05-14T21:02:00Z",
+    markers: [
+      { key: "step", value: "implement" },
+      { key: "outcome", value: "PASS" },
+    ],
+    body: "Reviewed the diff.",
+  });
+});
+
+test("parseCommentLine: CRLF unmarked line strips the trailing \\r from the body", () => {
+  const parsed = parseCommentLine("- 2026-05-14T21:02:00Z: Checked the ticket.\r");
+  assert.deepEqual(parsed, {
+    timestamp: "2026-05-14T21:02:00Z",
+    markers: [],
+    body: "Checked the ticket.",
+  });
+});
+
+test("parseCommentLine: CRLF marker-block-with-no-body line yields an empty body, not \\r", () => {
+  const parsed = parseCommentLine("- 2026-05-14T21:02:00Z: [step:implement outcome:PASS]\r");
+  assert.deepEqual(parsed, {
+    timestamp: "2026-05-14T21:02:00Z",
+    markers: [
+      { key: "step", value: "implement" },
+      { key: "outcome", value: "PASS" },
+    ],
+    body: "",
+  });
+});
+
 // --- validate: marker syntax rule ---
 
 test("validate flags a synthetically malformed marker line and does not flag a prose bracket aside", async () => {
