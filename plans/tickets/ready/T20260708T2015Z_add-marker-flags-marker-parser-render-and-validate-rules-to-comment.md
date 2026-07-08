@@ -7,13 +7,13 @@ parent: S20260516T1539Z
 children: []
 blockedBy: []
 blocks: [T20260708T2016Z]
-branch: null
+branch: local-board/T20260708T2015Z-add-marker-flags-marker-parser-render-and-validate-rules-to-comment
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-08T20:15:33Z
-updated: 2026-07-08T20:16:18Z
+updated: 2026-07-08T20:16:32Z
 completedSteps: []
 routingApprovals: []
 ---
