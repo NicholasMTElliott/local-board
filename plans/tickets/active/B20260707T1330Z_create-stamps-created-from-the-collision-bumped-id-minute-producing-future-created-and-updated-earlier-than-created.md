@@ -1,19 +1,19 @@
 ---
 id: B20260707T1330Z
 type: bug
-status: ready_for_implementation
+status: implementing
 priority: P3
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/B20260707T1330Z-create-stamps-created-from-the-collision-bumped-id-minute-producing-future-created-and-updated-earlier-than-created
 estimate: 2
 estimateBasis: B20260707T1326Z
-workStartedAt: null
+workStartedAt: 2026-07-08T02:30:59Z
 workCompletedAt: null
 created: 2026-07-07T13:30:06Z
-updated: 2026-07-08T02:30:59Z
+updated: 2026-07-08T02:35:14Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -122,6 +122,26 @@ None blocking. Proceeding on: primary decouple fix only; no clamp; no migration;
 
 ## Implementation Notes
 
+Implemented the two-line decouple exactly per the Technical Design: no deviations.
+
+- `src/tickets.js` `createTicket`: `created` now binds to `formatIsoSeconds(now)` instead of `formatIsoSeconds(timestamp)` (line ~1807). The ID (`ticketId`, built from `timestamp`) is untouched and keeps the worktree-offset/collision-bumped minute.
+- `src/tickets.js` `createTicket`: `linkParent(root, ticketId, parent, { now: timestamp })` changed to `{ now }` (line ~1816), so the reciprocal parent `updated` stamp is also truthful wall-clock time, not the bumped minute.
+- No clamp, no migration, no new validation invariant added, per the design's explicit rejection of those alternatives.
+
+Tests added to `test/tickets.test.js` (after the existing "create advances timestamp to keep ticket ids unique" test):
+- "collision-bumped id keeps a truthful created/updated stamp, not the bumped minute" — two same-`now` sequential creates; asserts the second id bumps a minute (`S...2057Z`) while `created`/`updated` both equal the injected `now` (`2026-05-14T20:56:00Z`), and `updated >= created`.
+- "create with parent propagates truthful now through linkParent on collision-bumped ids" — parent and child both typed `story` (same id prefix) so the child's mint collides with the parent's minute and bumps; asserts child `created == updated == now`, parent `updated == now`, and `updated >= created` on both sides.
+
+Existing test at test/tickets.test.js:84 ("create advances timestamp...") required no changes — it only asserted filenames/IDs, which are unaffected by this fix (uniqueness logic is untouched).
+
+Verification:
+- `npm run check`: clean (all `node --check` syntax checks pass).
+- `npm test`: 365 tests, 364 pass, 0 fail, 1 skipped (pre-existing "smoke (slow)" skip, unrelated).
+- `npm run validate`: "Ticket validation OK".
+- Live check on a throwaway `--root` board (init, create twice in immediate succession): first ticket `S20260708T0234Z` with `created`/`updated` = `2026-07-08T02:34:40Z`; second ticket `S20260708T0235Z` (id minute bumped to `35`) with `created`/`updated` = `2026-07-08T02:34:41Z` — id minute (35) != created minute (34), and created is truthful wall-clock time, not a fabricated future minute. Throwaway board removed after the check.
+
+Risks: none beyond what the design already flagged (hot path, two-line change, pinned by two new regression tests covering both the uniqueness half and the timestamp-truthfulness half independently).
+
 ## Review Findings
 
 ## Test Evidence
@@ -135,3 +155,5 @@ None blocking. Proceeding on: primary decouple fix only; no clamp; no migration;
 - 2026-07-08T02:30:10Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): two-line decouple — ID keeps the bumped/offset minute, created/updated bind to real now (linkParent threaded); clamp rejected as masking; no migration (legacy artifacts self-heal as the clock passes); injected-now determinism preserved. Estimate 2 (basis B20260707T1326Z).
 
 - 2026-07-08T02:30:58Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (timestamp hygiene)
+
+- 2026-07-08T02:30:59Z: Ensured git branch local-board/B20260707T1330Z-create-stamps-created-from-the-collision-bumped-id-minute-producing-future-created-and-updated-earlier-than-created (created).
