@@ -19,6 +19,11 @@ import { fileURLToPath } from "node:url";
 // level up from this file's directory.
 const SCRIPT_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
 
+// The single Claude permission rule the installer manages. Uninstall removes
+// an entry from permissions.allow ONLY when it equals this string, so a
+// user-narrowed/renamed rule is never silently deleted.
+const CLAUDE_ALLOW_RULE = "Bash(local-board *)";
+
 export function buildTargets(home) {
   return [
     {
@@ -166,7 +171,6 @@ function performInstall(args, targets, home, installDir, options = {}) {
   copyDir(join("resources", "templates"), "templates", installDir);
 
   const scriptPath = join(installDir, "bin", "local-board.js").replace(/\\/g, "/");
-  const allowRule = "Bash(local-board *)";
   writeInstallInfo(installDir, {
     nodeVersion,
     version,
@@ -193,7 +197,7 @@ function performInstall(args, targets, home, installDir, options = {}) {
       installClaudeAgents(home);
     }
     if (target.settingsPath !== null) {
-      patchSettings(target.settingsPath, allowRule);
+      patchSettings(target.settingsPath, CLAUDE_ALLOW_RULE);
       if (hooksEnabled) {
         patchHooks(target.settingsPath, installDir);
       } else if (args.hooks === false) {
@@ -331,6 +335,7 @@ function performUninstall(targets, home, installDir) {
     removeLegacyDirs(target, "legacySkillDirs", target.skillDir, "skill");
     removeLegacyDirs(target, "legacyTeamSkillDirs", target.teamSkillDir, "team skill");
     if (target.settingsPath !== null && existsSync(target.settingsPath)) {
+      unpatchSettings(target.settingsPath, CLAUDE_ALLOW_RULE);
       patchHooks(target.settingsPath, installDir, { remove: true });
     }
   }
@@ -455,6 +460,40 @@ function patchSettings(settingsPath, allowRule) {
     renameSync(tmpPath, settingsPath);
     console.log(`added Claude allow rule to ${settingsPath}`);
   }
+}
+
+// Symmetric counterpart to patchSettings: removes exactly the managed allow
+// rule from permissions.allow. No-op when the file is absent, when
+// permissions/allow are missing or non-arrays, or when the rule is not
+// present. Matches by exact string equality against the managed constant, so
+// a user-edited rule (e.g. "Bash(local-board move *)") is left untouched.
+// Preserves every other allow entry and does not touch permissions.deny,
+// hooks, or any other key. Prunes an emptied allow array and an emptied
+// permissions object, matching patchHooks's prune-when-empty behavior.
+function unpatchSettings(settingsPath, allowRule) {
+  if (!existsSync(settingsPath)) {
+    return;
+  }
+  const settings = JSON.parse(readFileSync(settingsPath, "utf8"));
+  if (typeof settings !== "object" || settings === null) {
+    throw new Error(`${settingsPath} is not a JSON object`);
+  }
+  const allow = settings.permissions?.allow;
+  if (!Array.isArray(allow) || !allow.includes(allowRule)) {
+    return;
+  }
+  settings.permissions.allow = allow.filter((rule) => rule !== allowRule);
+  if (settings.permissions.allow.length === 0) {
+    delete settings.permissions.allow;
+  }
+  if (settings.permissions && Object.keys(settings.permissions).length === 0) {
+    delete settings.permissions;
+  }
+  mkdirSync(dirname(settingsPath), { recursive: true });
+  const tmpPath = `${settingsPath}.tmp-${process.pid}`;
+  writeFileSync(tmpPath, `${JSON.stringify(settings, null, 2)}\n`);
+  renameSync(tmpPath, settingsPath);
+  console.log(`removed Claude allow rule from ${settingsPath}`);
 }
 
 // Managed Claude Code hook entries. `matcher` "Task|Agent" covers both the

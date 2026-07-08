@@ -151,7 +151,8 @@ subcommand without a further prompt once this rule is present. Ticket content
 should be treated as untrusted input given this grant.
 
 The write is atomic (temp file + rename) and does not touch anything else in
-`settings.json`.
+`settings.json`. `local-board install --uninstall` reverses this write
+(exact-match only — see "Uninstall / manual removal" below).
 
 ## Hooks (opt-in)
 
@@ -188,17 +189,17 @@ Removes:
 - Every target's skill dir, team skill dir, and configured legacy dirs
   (checked for all six targets, not just installed ones; `codex` has no
   legacy dirs to remove).
+- The `Bash(local-board *)` allow rule from `permissions.allow` in
+  `~/.claude/settings.json`, when it exactly matches the installer's rule
+  text. A user-narrowed or renamed rule (e.g. `Bash(local-board move *)`) is
+  left in place — uninstall never guesses at a hand-edited grant.
 - The four managed hooks entries from `~/.claude/settings.json`, if present.
 - The seven `~/.claude/agents/local-board-*.md` files.
 
-**Uninstall does not remove the `Bash(local-board *)` allow rule.** Install
-and uninstall are asymmetric here: install adds the rule, uninstall leaves
-it in `~/.claude/settings.json`. The consent-sensitive grant survives a full
-uninstall. To remove it, manually delete the
-`Bash(local-board *)` entry from `permissions.allow` in
-`~/.claude/settings.json`. (Tracked as a follow-up: see bug
-`B20260708T0459Z`, which proposes having `--uninstall` remove this rule too,
-mirroring hook removal.)
+Install and uninstall are now symmetric for the allow rule: install adds it,
+uninstall removes it (exact-match only). If `permissions.allow` and
+`permissions` are left empty by the removal, both are pruned from
+`settings.json`.
 
 ## Per-harness notes
 
