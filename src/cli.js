@@ -51,11 +51,12 @@ export { commandWhere };
 
 export async function main(argv) {
   const args = [...argv];
-  const root = takeOption(args, "--root") ?? ".";
-  const allowMainRoot = takeFlag(args, "--allow-main-root");
-  const command = args.shift();
 
   try {
+    const root = takeOption(args, "--root") ?? ".";
+    const allowMainRoot = takeFlag(args, "--allow-main-root");
+    const command = args.shift();
+
     if (command === "--version" || command === "version") {
       console.log(await readPackageVersion());
       return 0;

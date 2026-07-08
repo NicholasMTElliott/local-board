@@ -994,10 +994,11 @@ test("CLI complete-step rejects a flag swallowed as an option value", async () =
     );
 
     const res = await runCli([
-      "--root", root, "complete-step", id, "design",
-      "--executor", "inline", "--evidence", "--json",
+      "--root", root, "complete-step", id, "test",
+      "--executor", "--evidence", "x",
     ]);
     assert.equal(res.code, 2);
+    assert.match(res.stderr, /--executor/);
     assert.match(res.stderr, /--evidence/);
 
     // A value that merely contains dashes (not a leading --) still parses.
@@ -1007,6 +1008,14 @@ test("CLI complete-step rejects a flag swallowed as an option value", async () =
     ]);
     assert.equal(ok.code, 0, ok.stderr);
   });
+});
+
+test("CLI global --root option rejects a following flag as its value with a clean usage error", async () => {
+  const res = await runCli(["--root", "--json", "validate"]);
+  assert.equal(res.code, 2);
+  assert.match(res.stderr, /--root/);
+  // The clean takeOption message, not an uncaught exception stack trace.
+  assert.doesNotMatch(res.stderr, /\bat\s+\S+\s+\(.*:\d+:\d+\)/);
 });
 
 test("CLI approve-inline --executor approves a model deviation on a pinned action", async () => {

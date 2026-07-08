@@ -13,7 +13,7 @@ estimateBasis: B20260707T2245Z
 workStartedAt: 2026-07-08T00:40:42Z
 workCompletedAt: null
 created: 2026-07-07T13:24:08Z
-updated: 2026-07-08T00:44:04Z
+updated: 2026-07-08T00:52:10Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -64,7 +64,21 @@ Added `test/cli.test.js` test "CLI complete-step rejects a flag swallowed as an 
 
 Verification: `npm run check` (syntax check across all CLI/hook files) green; `npm test` 337 tests, 336 pass / 1 skipped (pre-existing unrelated smoke test), 0 fail; `npm run validate` — "Ticket validation OK". No deviations from the approved design.
 
+### Rework (2026-07-08, addressing codex review of a8fc108)
+
+Two fixes applied:
+
+1. **Non-exercising regression test.** The original sad-path case (`complete-step ... --evidence --json`) passed even without the guard: `commandCompleteStep` calls `takeFlag(args, "--json")` before `takeOption(args, "--evidence")`, so `--json` is stripped from `args` first and `--evidence` ends up trailing with no following token — it hits the pre-existing "`--evidence requires a value`" branch, not the new `startsWith("--")` guard. Replaced the case with `complete-step <id> test --executor --evidence x`: since `--executor` is parsed via `takeOption` before `--evidence`, its value resolves to the literal token `"--evidence"`, which does exercise the new guard. Now asserts exit 2 and stderr matching both `/--executor/` (the option) and `/--evidence/` (the offending token).
+
+   Revert-check performed: temporarily removed the `startsWith("--")` guard block in `takeOption` (`src/cli.js`), re-ran `test/cli.test.js` — both the reworked "flag swallowed" test and the new global-`--root` test failed as expected (`unexpected argument: x` / exit 1 instead of 2), confirming they genuinely exercise the fix. Guard restored immediately after; full suite re-run green.
+
+2. **Global `--root` parsing outside the try block.** `main()` in `src/cli.js` previously ran `takeOption(args, "--root")` and `takeFlag(args, "--allow-main-root")` before entering the `try { ... } catch (error) { console.error(error.message); return 2; }` block, so a value-swallowing throw from the new guard (e.g. `local-board --root --json validate`) escaped uncaught, producing a stack trace and process exit 1 instead of the CLI's clean usage-error exit 2. Moved the `root`/`allowMainRoot`/`command` declarations inside the `try` (no other logic changed; indentation of the existing command-dispatch chain was already at the right depth since it was already inside `try`). Added `test/cli.test.js` test "CLI global --root option rejects a following flag as its value with a clean usage error": asserts `["--root", "--json", "validate"]` exits 2, stderr matches `/--root/`, and stderr does not match a stack-trace line pattern (`at ... (...:N:N)`).
+
+Verification after rework: `npm run check` green; `npm test` — 338 tests, 337 pass / 1 skipped (same pre-existing unrelated smoke test), 0 fail; `npm run validate` — "Ticket validation OK".
+
 ## Review Findings
+
+- 2026-07-08T00:48:08Z: Review (codex): two fixes — the regression test passes pre-fix (--json is pre-consumed by takeFlag; use --executor --evidence x instead), and global --root parses outside the try so the new guard stack-traces (exit 1) for local-board --root --json validate; move initial parsing inside the try. Guard placement/message and caller coverage otherwise verified.
 
 ## Test Evidence
 
@@ -79,3 +93,13 @@ Verification: `npm run check` (syntax check across all CLI/hook files) green; `n
 - 2026-07-08T00:40:41Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (CLI parsing guard)
 
 - 2026-07-08T00:40:42Z: Ensured git branch local-board/B20260707T1324Z-takeoption-consumes-a-following-flag-as-its-option-value (created).
+
+- 2026-07-08T00:44:23Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): takeOption throws on --prefixed values naming the option; regression + precision tests; 336 pass + 1 gated-skip.
+
+- 2026-07-08T00:45:03Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (parsing guard)
+
+- 2026-07-08T00:48:08Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) changes_requested: non-exercising regression test and an uncaught path for the global --root option.
+
+- 2026-07-08T00:48:08Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku, review:codex-task:read-only].
+
+- 2026-07-08T00:48:08Z: Ensured git branch local-board/B20260707T1324Z-takeoption-consumes-a-following-flag-as-its-option-value (already-current).
