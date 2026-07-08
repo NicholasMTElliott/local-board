@@ -13,7 +13,7 @@ estimateBasis: T20260707T1336Z
 workStartedAt: 2026-07-08T04:42:35Z
 workCompletedAt: null
 created: 2026-07-07T13:37:06Z
-updated: 2026-07-08T04:42:35Z
+updated: 2026-07-08T04:48:08Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -88,6 +88,18 @@ Keep **`LOCAL_BOARD_MAX_TEAMMATES`** as the documented name. It is the shipping 
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) on the implement commit.
+
+- [P3] `docs/PerStepOrchestration.md:66` — the illustrative config sample is labeled but still a fragment: it opens with a top-level `"agents": {...}` property, so a copied block fails standalone JSONC parsing. Wrap it in `{ ... }` inside the fence (or label it a fragment; braces preferred since the review check asks for copy-valid JSONC).
+- [P3] `docs/PerStepOrchestration.md:37` — the comparison table still labels the new column `Per-step orchestration (proposed)`, conflicting with the retitled current-state doc. Change to `Per-step orchestration` or `(current)`.
+
+Checks that passed:
+- Code check: `src/team.js:5-6` (`MAX_TEAMMATES_ENV = "LOCAL_BOARD_MAX_TEAMMATES"`, `DEFAULT_MAX_TEAMMATES = 6`) matches all edited doc claims; ≈3 kept as guidance everywhere.
+- Stale-string sweep: "(Design Proposal)", "feature/per-step-orchestration", "deferred to a real run" remain only in the ticket's own requirement text, not in any refreshed doc prose.
+- Acceptance: exactly one documented answer for the default across README, SKILL_TEAM, and the doc.
+
+Verdict: changes_requested
+
 ## Test Evidence
 
 ## Documentation Updates
@@ -101,3 +113,11 @@ Keep **`LOCAL_BOARD_MAX_TEAMMATES`** as the documented name. It is the shipping 
 - 2026-07-08T04:42:34Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (docs-only design)
 
 - 2026-07-08T04:42:35Z: Ensured git branch local-board/T20260707T1337Z-docs-refresh-persteporchestration-status-and-reconcile-the-maxinflight-default (created).
+
+- 2026-07-08T04:45:01Z: Completed implement via claude-subagent:local-board-implementer@sonnet: PerStepOrchestration retitled + status fixed + sample labeled illustrative; README line 97 reconciled; SKILL_TEAM/techContext verified; 384 pass + 1 skip
+
+- 2026-07-08T04:45:45Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (Markdown-only)
+
+- 2026-07-08T04:48:08Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
+
+- 2026-07-08T04:48:08Z: Ensured git branch local-board/T20260707T1337Z-docs-refresh-persteporchestration-status-and-reconcile-the-maxinflight-default (already-current).

@@ -34,7 +34,7 @@ background-dispatch concurrency both work. See the run log in the design ticket.
 
 ## Core idea
 
-| Concern | Team mode (today) | Per-step orchestration (proposed) |
+| Concern | Team mode (today) | Per-step orchestration |
 |---|---|---|
 | Who owns a ticket | one teammate, end to end | the orchestrator; no per-ticket session |
 | Model boundary | the ticket (one model) | the step (any model) |
@@ -64,14 +64,16 @@ The models below (`gpt-5.5`, `claude-opus-4-6`, etc.) are **illustrative** — t
 live config does not pin these; they show the shape of a profile object.
 
 ```jsonc
-"agents": {
-  "decompose":  { "route": "claude-subagent:local-board-decomposer", "model": "opus" },
-  "gate-check": { "route": "claude-subagent:local-board-gatecheck",   "model": "haiku" },
-  "design":     { "route": "claude-subagent:local-board-designer",    "model": "opus" },
-  "implement":  { "route": "claude-subagent:local-board-implementer", "model": "sonnet" },
-  "review":     { "route": "codex-task:read-only",                    "model": "gpt-5.5" },
-  "test":       { "route": "claude-subagent:local-board-tester",      "model": "claude-opus-4-6" },
-  "document":   { "route": "codex-task:workspace-write" }
+{
+  "agents": {
+    "decompose":  { "route": "claude-subagent:local-board-decomposer", "model": "opus" },
+    "gate-check": { "route": "claude-subagent:local-board-gatecheck",   "model": "haiku" },
+    "design":     { "route": "claude-subagent:local-board-designer",    "model": "opus" },
+    "implement":  { "route": "claude-subagent:local-board-implementer", "model": "sonnet" },
+    "review":     { "route": "codex-task:read-only",                    "model": "gpt-5.5" },
+    "test":       { "route": "claude-subagent:local-board-tester",      "model": "claude-opus-4-6" },
+    "document":   { "route": "codex-task:workspace-write" }
+  }
 }
 ```
 
