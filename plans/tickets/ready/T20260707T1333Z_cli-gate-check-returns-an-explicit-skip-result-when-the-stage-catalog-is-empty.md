@@ -1,20 +1,20 @@
 ---
 id: T20260707T1333Z
 type: task
-status: ready_for_design
+status: ready_for_implementation
 priority: P3
 parent: null
 children: []
 blockedBy: [T20260707T1327Z]
 blocks: []
 branch: null
-estimate: null
-estimateBasis: null
+estimate: 2
+estimateBasis: T20260707T1329Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-07T13:33:55Z
-updated: 2026-07-07T13:29:51Z
-completedSteps: []
+updated: 2026-07-08T02:48:13Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # cli: gate-check returns an explicit skip result when the stage catalog is empty
@@ -33,6 +33,135 @@ Acceptance: empty-catalog gate-checks require no agent dispatch in any skill; th
 
 ## Technical Design
 
+## Scope check (do this first)
+
+This ticket predates `T20260707T1327Z`, which already landed the empty-catalog
+auto-stamp. Re-reading the current code, that work is done and part of this
+ticket's ask (c) is satisfied:
+
+- `commandGateCheck` (`src/cli.js:962-970`) already branches on
+  `catalog.length`: non-empty asserts the prompt exists; empty calls
+  `recordGateSkippedEmptyCatalog(root, ticket.id, stage)`, which deterministically
+  stamps `gate:<stage>:skipped-empty-catalog` in `completedSteps`
+  (`src/tickets.js:1093-1100`), idempotently, dispatching no agent.
+- All three skill families already tell the orchestrator to skip dispatch on an
+  empty catalog and describe the auto-stamp:
+  - `SKILL.md:168-171` ("empty `requestedSteps` … skip"; "on an **empty** stage
+    catalog it auto-stamps `gate:<stage>:skipped-empty-catalog` … dispatches no
+    agent").
+  - `SKILL_TEAM.md:125-128` ("When `gate-check` returns an empty `catalog`, skip
+    the gate-agent dispatch entirely").
+  - `skills/codex/local-board/SKILL.md:137,155` ("If the catalog is empty, skip
+    dispatch"; auto-records `gate:<stage>:skipped-empty-catalog`).
+
+**What remains (the requirement's ask (a), and a touch of (b)):** the gate-check
+JSON payload does **not** carry any explicit skip indicator. Today the empty
+branch is inferred only from `catalog: []` (`src/cli.js:987-996`). The requirement
+asks for an explicit `{ skip: true, … }` result and for the skills to key off that
+flag. The skills currently key off `catalog` (semantically equivalent, but not the
+explicit signal the ticket wants). So this is a **small** ticket: add the
+response field(s), echo the recorded token, add a human-mode line, and do a light
+skill-wording alignment. Ask (c) needs nothing.
+
+## Approach
+
+Make the empty-catalog skip an explicit, machine-checkable field in the
+`gate-check` result rather than an inference from `catalog.length`.
+
+In `commandGateCheck` (`src/cli.js`), compute the branch once and thread it into
+the payload:
+
+- Add `skip` (boolean) to the JSON `payload`: `true` on the empty-catalog branch,
+  `false` on the non-empty branch.
+- On the empty branch, echo the token the CLI just recorded as
+  `recorded: "gate:<stage>:skipped-empty-catalog"`; on the non-empty branch set
+  `recorded: null`. Prefer sourcing the string from the return value of
+  `recordGateSkippedEmptyCatalog` rather than re-deriving it — that function
+  already builds the token via `gateToken(stage, GATE_SKIPPED_EMPTY_CATALOG_EXECUTOR)`.
+  If it does not currently return the token, extend its return object with
+  `token` (additive) and use it here, so the wire string has a single producer
+  and cannot drift from what was stamped.
+- Non-JSON mode: when `skip` is true, print one extra human line, e.g.
+  `skip: empty catalog — recorded gate:<stage>:skipped-empty-catalog (no dispatch)`.
+  Keep the existing first line (`gate-check … catalog=0`) unchanged so current
+  output is a superset.
+
+Keep `catalog` in the payload unchanged; `skip` is a derived convenience, not a
+replacement. Do not add `requestedSteps: []` to the CLI payload — `requestedSteps`
+is the *gate agent's* response contract, not the CLI's, and the CLI never
+classifies. Adding it here would blur the two contracts. The explicit `skip`
+flag is the CLI-side signal the orchestrator needs.
+
+Skill sweep (ask b): update the three skill texts so the empty-catalog rule reads
+off the flag — "dispatch the gate agent only when `skip` is `false`" — while
+retaining the existing auto-stamp sentence. This is a one-line clarification per
+skill, not a rewrite:
+
+- `SKILL.md` (~168-171)
+- `SKILL_TEAM.md` (~125-128)
+- `skills/codex/local-board/SKILL.md` (~137,155)
+
+## Affected files
+
+- `src/cli.js` — `commandGateCheck`: add `skip` + `recorded` to `payload`; add the
+  human-mode skip line.
+- `src/tickets.js` — `recordGateSkippedEmptyCatalog`: return the `token` string
+  (additive) so `cli.js` echoes the exact stamped value. (Skip if the design
+  reviewer prefers re-deriving via `gateToken`; single-producer is cleaner.)
+- `SKILL.md`, `SKILL_TEAM.md`, `skills/codex/local-board/SKILL.md` — align the
+  empty-catalog rule to the `skip` flag.
+- `test/cli.test.js` — extend the two existing gate-check branch tests.
+- Possibly `skills/` mirror/pack sync — confirm no generated copy of the skill
+  text needs regeneration (see risks).
+
+## Back-compat
+
+Purely additive. `skip`/`recorded` are new keys; every existing consumer that
+reads `catalog`, `prompt`, `agent`, etc. is unaffected. The non-JSON first line is
+unchanged; the skip line is additive. No behavior change on the wire beyond new
+fields — the auto-stamp side effect already exists.
+
+## Test strategy
+
+Extend the existing, already-passing tests rather than adding parallel ones:
+
+- **Empty branch** (build on `test/cli.test.js:783` "auto-stamps … skipped-empty-catalog"
+  and `:703-707`/`:720-747`): assert `out.skip === true` and
+  `out.recorded === "gate:test:skipped-empty-catalog"` (or the design stage used),
+  alongside the existing `catalog: []` and stamp assertions.
+- **Non-empty branch** (build on `:808` "does not stamp … pure read" and
+  `:646-716`): assert `out.skip === false` and `out.recorded === null`, and that
+  no gate token was stamped (existing assertion).
+- **Idempotent re-run** (`:802-804`): assert the second invocation still reports
+  `skip: true` and the same `recorded` token.
+- **Non-JSON mode**: assert the skip line appears on the empty branch and is absent
+  on the non-empty branch (extends the plain-output assertion at `:712-716`).
+
+Run `node --test` for the suite.
+
+## Risks / edge cases
+
+- **Token drift.** If the echoed `recorded` string is re-derived in `cli.js`
+  instead of sourced from `recordGateSkippedEmptyCatalog`, the wire value could
+  silently diverge from the stamped value in a future refactor. Mitigate by
+  returning the token from the recorder (single producer) and asserting equality
+  in tests.
+- **Skill/pack mirror.** Confirm whether any bundled/packed copy of the skill
+  markdown is generated from these sources (check `test/pack.test.js` /
+  `test/resources-sync.test.js`); if so, regenerate or the sync test fails. Light
+  check, likely no-op, but must be verified before closeout.
+- **Semantic overlap.** `skip` must be strictly `catalog.length === 0`; do not let
+  it encode anything else (e.g. an agent's empty `requestedSteps`). Keeping the CLI
+  flag = "no catalog to consult" preserves the clean split from the gate agent's
+  response contract.
+- Low blast radius overall: one command, additive fields, no status-machine or
+  routing changes.
+
+## Open questions
+
+None blocking. One judgment call for the implementer, defaulted above: echo the
+token via the recorder's return value (preferred) vs. re-derive in `cli.js`.
+
 ## Implementation Notes
 
 ## Review Findings
@@ -44,3 +173,7 @@ Acceptance: empty-catalog gate-checks require no agent dispatch in any skill; th
 ## Questions
 
 ## Run Log
+
+- 2026-07-08T02:47:20Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): scope-checked against T1327 (stamp + skill alignment already done); remaining work is the additive skip boolean + recorded token echo in gate-check JSON, human-mode line, one-line skill clarifications. Estimate 2 (basis T20260707T1329Z).
+
+- 2026-07-08T02:48:13Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (response shape)
