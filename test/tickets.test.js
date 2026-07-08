@@ -18,6 +18,7 @@ import {
   findTicket,
   gateConsultationRecords,
   gateStageForForwardMove,
+  getSectionText,
   invalidateDownstreamEvidence,
   linkParent,
   moveTicket,
@@ -482,6 +483,149 @@ test("setTicketSection replaces section content and updates front matter", async
     const text = await readFile(ticketPath, "utf8");
     assert.match(text, /^updated: 2026-05-14T21:06:00Z$/m);
     assert.match(text, /## Requirement\n\nA clear requirement\.\n\n## Acceptance Criteria/);
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+for (const fence of ["```", "```md", "~~~"]) {
+  test(`getSectionText round-trips a fenced heading-like line (fence: ${fence})`, async () => {
+    await withBoard(async (root) => {
+      const ticketPath = await createTicket(root, "task", "Fenced section target", {
+        status: "backlog",
+        now: new Date("2026-05-14T20:56:00Z"),
+      });
+      const ticketId = path.basename(ticketPath).split("_", 1)[0];
+      const closer = fence.startsWith("~") ? "~~~" : "```";
+      const fencedBody = `Sample template:\n\n${fence}\n## Fake Heading\nsome body text\n${closer}\n\nTrailing note.`;
+
+      await setTicketSection(root, ticketId, "Review Findings", fencedBody, {
+        now: new Date("2026-05-14T21:06:00Z"),
+      });
+
+      const text = await readFile(ticketPath, "utf8");
+      assert.equal(getSectionText(text, "Review Findings"), fencedBody);
+      // The fenced fake heading must not have been mistaken for the real
+      // "Test Evidence" heading that follows it.
+      assert.equal(getSectionText(text, "Test Evidence"), "");
+      assert.deepEqual(validate(await discover(root)), []);
+    });
+  });
+}
+
+test("appendTicketComment lands in the true last section past a fenced heading in an earlier section", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Fenced append target", {
+      status: "backlog",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    const fencedEvidence = "Ticket template sample:\n\n```\n## Documentation Updates\nfake content\n```";
+
+    await setTicketSection(root, ticketId, "Test Evidence", fencedEvidence, {
+      now: new Date("2026-05-14T21:00:00Z"),
+    });
+    await appendTicketComment(root, ticketId, "Run Log", "Checked past the fence.", {
+      now: new Date("2026-05-14T21:02:00Z"),
+    });
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.equal(getSectionText(text, "Test Evidence"), fencedEvidence);
+    assert.match(getSectionText(text, "Run Log"), /- 2026-05-14T21:02:00Z: Checked past the fence\./);
+    assert.equal(getSectionText(text, "Documentation Updates"), "");
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+test("setTicketSection is idempotent across a double round-trip through a fenced heading-like line", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Idempotent fenced target", {
+      status: "backlog",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    const fencedBody = "```\n## Fake Heading\n```";
+
+    await setTicketSection(root, ticketId, "Review Findings", fencedBody, {
+      now: new Date("2026-05-14T21:06:00Z"),
+    });
+    const firstRead = getSectionText(await readFile(ticketPath, "utf8"), "Review Findings");
+
+    await setTicketSection(root, ticketId, "Review Findings", firstRead, {
+      now: new Date("2026-05-14T21:07:00Z"),
+    });
+    const secondRead = getSectionText(await readFile(ticketPath, "utf8"), "Review Findings");
+
+    assert.equal(firstRead, fencedBody);
+    assert.equal(secondRead, fencedBody);
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+test("a genuine non-fenced heading still boundaries sections correctly (regression)", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Plain section target", {
+      status: "backlog",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await setTicketSection(root, ticketId, "Test Evidence", "Plain evidence, no fences.", {
+      now: new Date("2026-05-14T21:00:00Z"),
+    });
+    await setTicketSection(root, ticketId, "Documentation Updates", "Docs note.", {
+      now: new Date("2026-05-14T21:01:00Z"),
+    });
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.equal(getSectionText(text, "Test Evidence"), "Plain evidence, no fences.");
+    assert.equal(getSectionText(text, "Documentation Updates"), "Docs note.");
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+test("appendTicketComment into a non-last section preserves the blank-line separator before the next heading", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Non-last append target", {
+      status: "backlog",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await appendTicketComment(root, ticketId, "Questions", "Is this in scope?", {
+      now: new Date("2026-05-14T21:02:00Z"),
+    });
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(
+      text,
+      /- 2026-05-14T21:02:00Z: Is this in scope\?\n\n## Run Log/,
+    );
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+test("appendTicketComment into a non-last section with a fenced heading-like line still preserves the separator", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Non-last fenced append target", {
+      status: "backlog",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    const fencedQuestion = "Example prompt:\n\n```\n## Run Log\nfake content\n```";
+
+    await setTicketSection(root, ticketId, "Questions", fencedQuestion, {
+      now: new Date("2026-05-14T21:00:00Z"),
+    });
+    await appendTicketComment(root, ticketId, "Questions", "Follow-up after the fence.", {
+      now: new Date("2026-05-14T21:02:00Z"),
+    });
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(
+      text,
+      /- 2026-05-14T21:02:00Z: Follow-up after the fence\.\n\n## Run Log/,
+    );
+    assert.equal(getSectionText(text, "Run Log"), "");
     assert.deepEqual(validate(await discover(root)), []);
   });
 });

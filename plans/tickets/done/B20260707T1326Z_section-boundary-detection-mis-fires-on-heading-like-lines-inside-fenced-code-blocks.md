@@ -1,0 +1,301 @@
+---
+id: B20260707T1326Z
+type: bug
+status: done
+priority: P3
+parent: null
+children: []
+blockedBy: []
+blocks: []
+branch: local-board/B20260707T1326Z-section-boundary-detection-mis-fires-on-heading-like-lines-inside-fenced-code-blocks
+estimate: 2
+estimateBasis: B20260707T1325Z
+workStartedAt: 2026-07-08T01:22:15Z
+workCompletedAt: 2026-07-08T01:43:34Z
+created: 2026-07-07T13:26:08Z
+updated: 2026-07-08T01:43:34Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
+routingApprovals: []
+---
+# Section boundary detection mis-fires on heading-like lines inside fenced code blocks
+
+## Requirement
+
+`getSectionText`/`appendToSection`/`replaceSection` (`src/tickets.js:1330-1372`) each re-derive the same section-boundary search and treat any line starting with `## ` as a section heading — including lines inside fenced code blocks. Review Findings or Test Evidence containing a fenced code sample with `## ` truncates or misplaces section content.
+
+Fix: extract a shared `locateSection` helper that tracks fence state (``` and ~~~) and ignores heading-like lines inside fences; use it from all three call sites.
+
+Acceptance: section commands round-trip content containing fenced code blocks with heading-like lines; a regression test covers this.
+
+## Acceptance Criteria
+
+## Related Tickets
+
+## Technical Design
+
+## Problem
+
+`src/tickets.js` locates `## ` section boundaries with a naive scan repeated in
+four places. Each treats *any* line beginning with `## ` (via literal `\n## `
+search or an `m`-flag regex) as a section heading, with no awareness of fenced
+code blocks. A Review Findings / Test Evidence body that embeds a fenced markdown
+sample containing a heading-like line (e.g. a fence showing a ticket template)
+will be split at that fake heading — truncating the section on read and
+misplacing appended content on write.
+
+### Current call sites (verified line numbers)
+
+- `appendToSection(body, section, line)` — `src/tickets.js:1930`. Uses
+  `body.slice(sectionStart).search(/\n## /)` (line 1938) to find the section end,
+  then inserts before it. Backs `appendTicketComment` (`:705`, e.g. Run Log
+  comments) and any set that appends.
+- `getSectionText(body, section)` — `src/tickets.js:1945` (exported). Same
+  `/\n## /` search (line 1953). Consumed by `cli.js:976` and `cli.js:1074` to
+  build `ticketContext.requirement` / `acceptanceCriteria` for gate-check /
+  dispatch payloads.
+- `replaceSection(body, section, text)` — `src/tickets.js:1958`. Same `/\n## /`
+  search (line 1966). Backs `setTicketSection` (`:733`) — the exact path this
+  designer uses to persist sections, and the path the executor uses for evidence.
+
+All three first find the heading with `new RegExp(`^## ${escapeRegExp(section)}\\s*$`, "m")`
+then slice forward to the next `\n## `. Both halves are fence-blind: a fenced
+`## Fake` after the target heading ends the section early, and a fenced heading
+matching the *target* name before the real one could anchor to the wrong spot.
+
+### Adjacent scanner (lower priority, in scope to note)
+
+- Validation `validateTicketBody` loop — `src/tickets.js:1210-1215`. Uses
+  `sectionRe.test(ticket.body)` (existence only, `m` flag). A fenced
+  `## Requirement` would falsely satisfy the "section present" check. Existence
+  testing is far less fragile than boundary slicing, so I will route it through
+  the shared helper *only if* it is cheap; otherwise leave it and note the
+  residual edge case. Not part of Acceptance.
+- `extractTitle` (`:1781`) scans for `# ` (H1, front-matter title) — unaffected;
+  out of scope. Front-matter parsing (`:441`, `parseFrontMatter`) is unaffected.
+
+### Are existing tickets already mis-parsed?
+
+Checked. A fence-state-tracking scan of every `plans/tickets/**/*.md` found
+**zero** lines starting with `## ` inside a fence (` ``` ` or `~~~`). Many done
+tickets carry fenced samples (front-matter, JSON, config), but none currently
+embed a bare column-0 `## ` heading inside a fence. We have been silently lucky,
+not correct — the board is one evidence paste away from corruption, which is why
+this ticket exists.
+
+## Approach
+
+Add one shared, fence-aware `locateSection(body, section)` helper and route all
+three boundary functions through it. Keep it pure and offset-returning so the
+existing slice/insert logic is reused unchanged.
+
+### The helper
+
+```
+function locateSection(body, section)
+  -> null if the section heading is not found (outside fences), else
+  -> { headingStart, headingEnd, contentStart, contentEnd }
+     (character offsets into `body`)
+```
+
+Algorithm — single line-by-line pass tracking fence state:
+
+1. Split on `/\r?\n/` but keep a running character offset so we can return exact
+   indices (or iterate with a regex over line starts). Preserve CRLF: compute
+   offsets against the original `body`, do not reserialize.
+2. Maintain `inFence` boolean and the opening `fenceMarker` char (`` ` `` or `~`).
+   A line whose trimmed-left content starts with three or more of the *same*
+   fence char toggles: when closed, `inFence=false` on any `>=`-length run of the
+   opener's char; when open, record marker. Pragmatic per decision 1 — we do not
+   enforce that the closing run be `>=` the opener length; any 3+ run of the
+   active marker closes. Info strings after an opener are ignored.
+3. While `!inFence`, a line matching `^## <section>\s*$` (escaped) is the heading:
+   record `headingStart`/`headingEnd`; `contentStart` = offset after that line's
+   newline.
+4. After the heading, the first subsequent line (again `!inFence`) matching
+   `^## ` marks `contentEnd` (its start); if none, `contentEnd = body.length`.
+5. Return offsets. Callers keep their current trimming/insertion arithmetic
+   verbatim, just sourced from these offsets instead of `search(/\n## /)`.
+
+### Rewire the three functions
+
+- `getSectionText`: `const loc = locateSection(body, section); if (!loc) return null;`
+  then `body.slice(loc.contentStart, loc.contentEnd).trim()`.
+- `appendToSection`: derive `insertAt = loc.contentEnd`; keep the existing
+  `before`/`after` splice.
+- `replaceSection`: `sectionStart = loc.contentStart`, `insertAt = loc.contentEnd`;
+  keep the before/after reflow (`:1968-1971`) unchanged.
+
+Error/`null` semantics stay identical (getSectionText returns null; the other two
+throw `section "…" not found`).
+
+### Write-side is the same helper (decision 3)
+
+`setTicketSection --file` writes fenced content, then the *next* read
+(`getSectionText`) and the next `append`/`replace` must compute extents
+fence-aware. Because all four operations share `locateSection`, inserting a body
+with a fenced `## Fake` no longer poisons subsequent reads or appends — the
+round-trip is closed by construction. No separate write-path change needed.
+
+## Affected files
+
+- `src/tickets.js` — add `locateSection`; rewire `appendToSection` (:1930),
+  `getSectionText` (:1945), `replaceSection` (:1958). Optionally route the
+  validation existence check (:1210).
+- `test/tickets.test.js` — new regression tests (below).
+- No `cli.js` change: it consumes `getSectionText`, which is fixed underneath it.
+- No production doc change expected; if `memory-bank/systemPatterns.md` documents
+  section handling, add a one-line note that section scanning is fence-aware.
+
+## Risks / blast radius
+
+- **Behavior change on read for already-stored tickets.** Any ticket whose stored
+  body *does* contain a fenced `## ` would start parsing differently (correctly)
+  after this change — content previously truncated becomes visible. Blast radius
+  is currently **nil**: the repo scan found no such ticket. So this is a latent
+  correctness improvement with no observable regression on existing data; nothing
+  needs migration.
+- **Fence grammar is intentionally pragmatic (decision 1).** Not handled:
+  4-space-indented code blocks (never toggle fences, so a `## ` in one is still
+  mis-read — pre-existing behavior, explicitly out of scope), nested fences, and
+  fences opened inside blockquotes/lists with indentation beyond the trim we do.
+  Acknowledged; note in the helper's comment.
+- **Unbalanced fences.** A body with an odd number of fence lines leaves
+  `inFence=true` to EOF, hiding real trailing `## ` headings. Mitigation: this
+  only affects malformed input; the failure mode (section runs to EOF) is no
+  worse than today for that pathological body, and validation still flags missing
+  sections. Low risk.
+- **CRLF / offset drift.** Must compute offsets against original `body`, not a
+  normalized copy, or `writeTicketFile` round-trip could shift bytes. Covered by
+  an explicit CRLF round-trip assertion if the suite has CRLF fixtures; otherwise
+  keep offset math on the raw string.
+- **Performance.** Line scan is O(n) vs. the old single `indexOf`; negligible for
+  ticket-sized bodies.
+
+## Test strategy
+
+Add to `test/tickets.test.js` (mirrors existing `setTicketSection` /
+`appendTicketComment` tests at :451, :470):
+
+1. **Round-trip with fenced fake heading (core acceptance).**
+   `setTicketSection(root, id, "Review Findings", <body with a fenced block whose
+   body line is "## Fake Heading">)`, then `getSectionText` returns the *entire*
+   body including the fence, untruncated. Assert the fenced `## Fake Heading` line
+   survives and no sibling section absorbed it.
+2. **Append into a later section past a fence.** Seed Test Evidence with a fenced
+   `## ` sample, then `appendTicketComment(root, id, "Run Log", …)`. Assert the
+   comment lands under Run Log (the true last section), not mid-Test-Evidence.
+3. **Both fence markers.** Parameterize case 1 over ` ``` ` and `~~~` openers,
+   and one case with an info string (` ```md `).
+4. **Idempotent double round-trip.** Set the section, read, set again with the
+   read value; assert stable output (guards offset/reflow arithmetic).
+5. **Validation stays green.** Run the board validation over a ticket carrying a
+   fenced heading-like line; assert no spurious missing/extra-section issues.
+6. **Negative guard.** A genuine, non-fenced `## ` still boundaries correctly
+   (regression protection for the common path).
+
+## Open questions
+
+- Should the validation existence check (:1210) also become fence-aware, or is
+  guarding the three boundary functions sufficient for this ticket? Proposed:
+  fix the three (Acceptance), route validation through the helper only if trivial,
+  else defer with a noted edge case.
+- Do we care about 4-space-indented code blocks now, or explicitly defer? Proposed:
+  defer (documented out of scope), since no ticket uses them for headings and
+  CommonMark indented-code detection adds real complexity.
+
+## Implementation Notes
+
+Added a shared, fence-aware `locateSection(body, section)` helper in `src/tickets.js` (line-by-line scan tracking ``` / ~~~ fence state per the design's pragmatic grammar: any 3+ run of the active fence char closes regardless of opener length; info strings ignored; 4-space-indented code blocks explicitly out of scope). Returns `{ headingStart, headingEnd, contentStart, contentEnd }` offsets into the original `body` (CRLF-safe — offsets computed against the raw string, no reserialization), or `null` if the heading isn't found outside a fence.
+
+Rewired all three call sites to use it: `appendToSection`, `getSectionText` (exported), `replaceSection` — replacing the fence-blind `/\n## /` searches. Slice/insert arithmetic in each function is unchanged, just sourced from the helper's offsets.
+
+Also routed the validation existence check (`validateTicketBody`, was `sectionRe.test(ticket.body)` with the `m` flag) through `locateSection(ticket.body, section) === null`, per the design's proposal that this was trivial to fix alongside the three boundary functions. Same fix eliminates the false-positive "section present" case where a fenced heading-like line could satisfy the existence check.
+
+Tests added to `test/tickets.test.js` (6 new test cases, covering the design's test strategy items 1-6):
+- Round-trip a fenced fake heading, parameterized over ` ``` `, ` ```md ` (info string), and `~~~` (3 tests via a loop).
+- Append a Run Log comment past a fenced heading-like line seeded in Test Evidence; asserts the comment lands in Run Log, not swallowed into Test Evidence.
+- Idempotent double round-trip through a fenced heading (set, read, set again with the read value, assert stable).
+- Regression guard: genuine non-fenced headings still boundary correctly across two adjacent sections.
+- Validation-stays-green is asserted inline (`validate(...) === []`) in every new test, including one case where the fenced fake heading text is literally `## Documentation Updates` (a real STANDARD_SECTIONS name) to exercise the validation-existence-check fix specifically.
+
+Verification:
+- `npm run check`: pass (syntax check across all listed files).
+- `npm test`: 348 tests, 347 pass, 1 skipped (pre-existing slow smoke test gated behind `LOCAL_BOARD_SLOW_TESTS`), 0 fail.
+- `npm run validate`: `Ticket validation OK`.
+- Live-data spot check (no CLI surface exists to dump an arbitrary section of an arbitrary ticket, so checked via a small script importing `getSectionText` directly): read `Approach` off the done ticket `T20260707T1332Z` (contains 3 fenced JS code samples inline). Returned content spans all three fences fully intact (2617 chars, contains both the first and last fenced-code fragments) and stops cleanly before the next real `## Back-compat` heading — no truncation, no bleed. `Technical Design` on the same ticket correctly returns empty (0 chars), since that document's real content lives in sibling `## ` sections between `Technical Design` and `Implementation Notes` — expected, unchanged from prior behavior.
+
+Deviations from design: none. Implemented exactly as specified, including the optional validation-existence-check fix (design left this as "route through the helper only if trivial" — it was).
+
+### Rework (2026-07-08): non-last-section append separator fix
+
+Review (codex, P2) found `appendToSection` to a non-last section (one followed by another `## ` heading) dropped the blank-line separator, emitting `content\n## Next` instead of `content\n\n## Next`. Root cause: `locateSection`'s `contentEnd` points at the *first character* of the next heading line (no leading newline of its own — the fence-aware rewrite changed this from the old code's `search(/\n## /)`, which located the newline immediately preceding the next heading and left it as the leading char of `after`). `appendToSection` spliced `line + "\n" + after` unconditionally, so for a non-last section `after` began directly with `"## Next"` and only one newline separated the appended line from the heading; for the last section (`after === ""`) there was no regression, since `insertAt === body.length` in both the old and new code.
+
+Fix (`src/tickets.js`, `appendToSection`): choose the separator based on whether `after` is empty — `"\n"` when the section is last (`after === ""`, matches prior behavior, no change), `"\n\n"` otherwise (restores the blank line before the next heading). `locateSection`'s `contentEnd` semantics are unchanged; `getSectionText` and `replaceSection` were untouched (already verified correct by review) and remain untouched.
+
+Tests added to `test/tickets.test.js`:
+- `appendTicketComment into a non-last section preserves the blank-line separator before the next heading` — comments into `Questions` (followed by `Run Log`), asserts the exact byte sequence `...Is this in scope?\n\n## Run Log`.
+- `appendTicketComment into a non-last section with a fenced heading-like line still preserves the separator` — seeds `Questions` with a fenced block containing a fake `## Run Log` heading-like line, appends a comment, asserts the same exact separator sequence and that the real `Run Log` section is untouched (empty).
+
+Verification:
+- `npm run check`: pass.
+- `npm test`: 350 tests, 349 pass, 1 skipped (same pre-existing gated smoke test), 0 fail.
+- `npm run validate`: `Ticket validation OK`.
+- Live spot check: ran `node ./bin/local-board.js comment B20260707T1326Z "separator probe" --section "Questions"` (Questions is followed by Run Log) and read the raw file. Confirmed byte sequence `...separator probe\n\n## Run Log` — blank line preserved. The probe comment is left in place under Questions as evidence of the fix.
+
+## Review Findings
+
+- 2026-07-08T01:33:03Z: Review (codex): P2 regression — appendToSection to a non-last section now emits content\n## Next instead of content\n\n## Next (contentEnd sits at the heading start; old splice used the pre-heading newline); the append test only covered the last section. Fix the boundary/separator and add a non-last-section append test. Mixed-marker fences, in-fence openers, and consumer rewiring all verified correct.
+
+- 2026-07-08T01:36:57Z: Final disposition: the single P2 regression was fixed exactly as the review specified with byte-exact tests plus a live probe on this ticket itself; all other review dimensions had already passed. Treating review as complete per the established pattern.
+
+## Test Evidence
+
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/B20260707T1326Z-..., commits 5bd8284 + 8ed4ccd.
+
+**Suite:** `npm run check` pass; `npm test` 349 pass / 1 gated-skip of 350; `npm run validate` OK; all 8 fence/separator tests re-run in isolation (no order dependence).
+
+**Live probes (throwaway board, via the comment/append path which routes through the same locateSection helper — the tester's return-only contract forbids it running section --file itself; full-body replace covered by the unit round-trip tests):**
+- Acceptance case (``` and ```md): a fenced fake "## Test Evidence" heading stayed inside Review Findings; the real section remained separate; a subsequent comment landed under the real heading; validate green.
+- Byte-exact separator check on a non-last section: content followed by a blank line then the next heading — the rework fix confirmed live.
+- ~~~ variant: fenced fake "## Technical Design" stayed contained; real heading intact.
+
+**Gaps / caveats:** the literal section --file CLI probe was substituted with the append path per the tester's tool restrictions (unit tests cover replace); indented/nested/unbalanced fences remain documented out-of-scope. Persisting THIS evidence (which contains fenced heading-like samples) through section --file is itself the live replace-path check — performed by the orchestrator now.
+
+Result: pass
+
+## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `memory-bank/systemPatterns.md` — one clause: section boundaries are fence-aware for backtick/tilde fenced blocks.
+- SKILL/codex skill fence warnings checked and correctly left alone (they concern shell-redirection escaping, not section parsing).
+
+## Questions
+
+- 2026-07-08T01:35:31Z: separator probe
+
+## Run Log
+
+- 2026-07-08T01:21:30Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): fence-aware locateSection helper replacing the three fence-blind scanners (append/get/replace); repo-wide fence scan found zero affected real tickets (latent fix, nil blast radius); indented code blocks out of scope. Estimate 2 (basis B20260707T1325Z).
+
+- 2026-07-08T01:22:15Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (parser hygiene)
+
+- 2026-07-08T01:22:15Z: Ensured git branch local-board/B20260707T1326Z-section-boundary-detection-mis-fires-on-heading-like-lines-inside-fenced-code-blocks (created).
+
+- 2026-07-08T01:28:59Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): locateSection helper across all four scanners, 6 tests; live-data spot check on a fenced done ticket returned intact spans; 347 pass + 1 gated-skip.
+
+- 2026-07-08T01:29:48Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (parser hygiene)
+
+- 2026-07-08T01:33:03Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) changes_requested: non-last-section append loses the blank-line separator; everything else verified.
+
+- 2026-07-08T01:33:03Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku, review:codex-task:read-only].
+
+- 2026-07-08T01:33:03Z: Ensured git branch local-board/B20260707T1326Z-section-boundary-detection-mis-fires-on-heading-like-lines-inside-fenced-code-blocks (already-current).
+
+- 2026-07-08T01:36:57Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework (sonnet): conditional separator restores byte-identical non-last appends (live-probed on this ticket's own Questions section); 2 new byte-exact tests; 349 pass + 1 gated-skip.
+
+- 2026-07-08T01:36:57Z: Completed review via codex-task:read-only: Review complete: separator regression fixed verbatim per review with byte-exact coverage; remainder verified in the first pass.
+
+- 2026-07-08T01:41:26Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 349+1 gated; live probes contained fenced fake headings across both markers, byte-exact separator verified; persisting this very evidence through section --file was the live replace-path check (validate green after). Result: pass.
+
+- 2026-07-08T01:43:34Z: Completed document via codex-task:workspace-write: Codex (workspace-write): fence-aware clause added to systemPatterns; shell-escaping warnings correctly untouched.
