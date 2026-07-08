@@ -13,7 +13,7 @@ estimateBasis: T20260707T1329Z
 workStartedAt: 2026-07-08T03:09:32Z
 workCompletedAt: null
 created: 2026-07-07T13:34:55Z
-updated: 2026-07-08T03:20:23Z
+updated: 2026-07-08T03:54:51Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -172,6 +172,8 @@ Verification:
 
 No deviations from the approved design. Left `approve-inline`'s existing `@model` combined-form examples in `SKILL.md` (lines ~248/251) untouched — `approve-inline` was out of scope for this ticket (design only covers `complete-step` and `gate-complete`).
 
+Rework (review finding on commit f1fe667): `SKILL.md` line 251 still showed the post-approval `complete-step` example in the manual combined-form (`--executor <configuredAgent>@<actualModel>`) instead of the two-flag form; fixed to `complete-step` with `--executor <configuredAgent> --model <actualModel>`. Left the preceding `approve-inline --executor <configuredAgent>@<actualModel>` line untouched (approve-inline stays combined-form, out of scope). Checked `skills/codex/local-board/SKILL.md` for the same pattern — its deviation guidance already used the two-flag form throughout, no change needed there. Re-verified `npm run check`, `npm test` (374 tests, 373 pass, 1 pre-existing skip, 0 fail), and `npm run validate` (`Ticket validation OK`).
+
 ## Review Findings
 
 ## Test Evidence
@@ -191,3 +193,5 @@ No deviations from the approved design. Left `approve-inline`'s existing `@model
 - 2026-07-08T03:19:12Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): composeExecutor helper + --model on both verbs + skill updates; 373 pass + 1 gated-skip. (This very evidence was recorded with the new two-flag form.)
 
 - 2026-07-08T03:20:23Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (CLI ergonomics)
+
+- 2026-07-08T03:52:44Z: Ensured git branch local-board/T20260707T1334Z-cli-complete-step-accepts-model-and-composes-executor-evidence-server-side (switched-existing).
