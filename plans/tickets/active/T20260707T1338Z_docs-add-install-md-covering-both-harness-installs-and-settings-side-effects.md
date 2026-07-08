@@ -1,16 +1,16 @@
 ---
 id: T20260707T1338Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P3
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260707T1338Z-docs-add-install-md-covering-both-harness-installs-and-settings-side-effects
 estimate: 2
 estimateBasis: T20260707T1337Z
-workStartedAt: null
+workStartedAt: 2026-07-08T05:00:10Z
 workCompletedAt: null
 created: 2026-07-07T13:38:06Z
 updated: 2026-07-08T05:00:10Z
@@ -135,3 +135,5 @@ This ticket *is* the documentation change. Acceptance: `docs/Install.md` exists,
 - 2026-07-08T04:59:37Z: Completed design via claude-subagent:local-board-designer@opus: Verified install surface (src/install.js canonical, 6 targets, settings.json allow rule + hooks opt-in, uninstall exists but leaves allow rule); Install.md outline + README index; estimate 2 basis T1337
 
 - 2026-07-08T05:00:09Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (docs-only design)
+
+- 2026-07-08T05:00:10Z: Ensured git branch local-board/T20260707T1338Z-docs-add-install-md-covering-both-harness-installs-and-settings-side-effects (created).

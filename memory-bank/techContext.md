@@ -23,7 +23,7 @@ plans/templates/      ticket templates
 plans/local-board.config.jsonc workflow and routing config
 resources/            packaged prompt/template mirror synced from plans/ via npm run sync-resources (sync writes LF; mirror comparison is line-ending-insensitive)
 src/                  parser, validator, writer, git workflow, priority picker, CLI
-src/install.js       installer behind local-board install
+src/install.js       installer behind local-board install (human-facing reference: docs/Install.md)
 skills/codex/         Codex skill templates and metadata
 scripts/              maintainer tooling, not packaged
 bin/                  executable CLI entrypoint
