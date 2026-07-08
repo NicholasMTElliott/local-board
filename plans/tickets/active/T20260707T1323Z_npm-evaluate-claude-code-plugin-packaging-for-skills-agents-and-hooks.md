@@ -13,7 +13,7 @@ estimateBasis: T20260707T1331Z
 workStartedAt: 2026-07-08T00:22:34Z
 workCompletedAt: null
 created: 2026-07-07T13:23:26Z
-updated: 2026-07-08T00:24:32Z
+updated: 2026-07-08T00:32:34Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -244,7 +244,125 @@ skip — unchanged from baseline, `test/install.test.js` and
 
 No deviations from the Technical Design.
 
+## Rework (2026-07-08, sonnet)
+
+Addressed review findings on `docs/PluginPackaging.md` (commit fe0a40a review):
+
+- **npm-source claim corrected.** The doc no longer claims plugins are "never"
+  sourced from npm. Per the marketplace docs
+  (https://code.claude.com/docs/en/plugin-marketplaces#npm-packages), a
+  marketplace *entry* can source its plugin contents from an npm package
+  (`package`/`version`/`registry` fields, installed via `npm install`). Revised
+  the narrower true claim: users still only install plugins via marketplaces
+  or session flags (`--plugin-dir`/`--plugin-url`), never directly via
+  `npm install local-board`; the npm-as-source path exists one level down, at
+  the marketplace-entry layer.
+- **Defer rationale reassessed honestly**, not just patched: the
+  second-channel cost *shrinks* (the existing npm package could be referenced
+  by a marketplace entry instead of a separate git/zip release) but does not
+  *vanish* (a marketplace manifest — `.claude-plugin/marketplace.json` — must
+  still be authored and hosted; the npm package's layout would need a
+  `.claude-plugin/plugin.json` manifest plus plugin-shaped directories added
+  alongside its current CLI layout). The precedence-shadowing footgun and the
+  churning hook-contract legs are called out as unchanged by this fact. Defer
+  decision itself is unchanged (still the ticket's accepted design) — only the
+  npm-source premise and its downstream cost analysis were corrected.
+- **Revisit trigger added**: folded into the existing "marketplace
+  discoverability" trigger — "When we want marketplace distribution, the npm
+  package can be the source — spike a `.claude-plugin` manifest then." The old
+  trigger #4 ("a supported npm-as-plugin-source path appears") is now moot
+  (the path already exists) and was removed/merged rather than left stale.
+- **"Where the plugin would live" section** updated to reflect that the
+  marketplace-entry source can be git/zip/local-path/npm-package-reference
+  (previously implied only git/zip); the sibling-repo recommendation is
+  unchanged and now explicitly reasoned to hold even under npm-as-source
+  (separate release cadence from the npm CLI package; `npm pack`
+  file-collision risk; a marketplace manifest still needs a home regardless
+  of artifact type).
+- **skills/ reference fixed.** Intro paragraph previously said the evaluated
+  assets were `skills/`, `agents/claude/`, and hooks. Corrected: the Claude
+  skill templates are `SKILL.md`/`SKILL_TEAM.md` at the repo root; this repo's
+  `skills/` directory is Codex-only and is not a Claude skill source
+  (verified: `skills/` contains only a `codex/` subdirectory). Added an
+  explicit parenthetical calling this out so a reader doesn't conflate the
+  two.
+
+No other content changed — layout sketch, migration notes, related tickets,
+open item, and the CLI-stays-npm-only / precedence-footgun / hooks-churn /
+frontmatter-ignore rationale bullets are untouched (review did not flag them
+and the rework instructions scoped only the two fixes above).
+
+No production code, installer, skill, agent, or hook changes. README
+Documentation Index line for `docs/PluginPackaging.md` already present and
+unchanged (description still accurate: defer decision, layout sketch,
+migration notes, revisit triggers).
+
+Verification (rerun after rework): `npm run check` (clean, all 15
+`node --check` targets), `npm test` (336 tests: 335 pass, 1 skip — unchanged
+from baseline), `npm run validate` (Ticket validation OK). Counts unchanged
+from the pre-rework state.
+
+## Rework (2026-07-08, sonnet)
+
+Addressed review findings on `docs/PluginPackaging.md` (commit fe0a40a review):
+
+- **npm-source claim corrected.** The doc no longer claims plugins are "never"
+  sourced from npm. Per the marketplace docs
+  (https://code.claude.com/docs/en/plugin-marketplaces#npm-packages), a
+  marketplace *entry* can source its plugin contents from an npm package
+  (`package`/`version`/`registry` fields, installed via `npm install`). Revised
+  the narrower true claim: users still only install plugins via marketplaces
+  or session flags (`--plugin-dir`/`--plugin-url`), never directly via
+  `npm install local-board`; the npm-as-source path exists one level down, at
+  the marketplace-entry layer.
+- **Defer rationale reassessed honestly**, not just patched: the
+  second-channel cost *shrinks* (the existing npm package could be referenced
+  by a marketplace entry instead of a separate git/zip release) but does not
+  *vanish* (a marketplace manifest — `.claude-plugin/marketplace.json` — must
+  still be authored and hosted; the npm package's layout would need a
+  `.claude-plugin/plugin.json` manifest plus plugin-shaped directories added
+  alongside its current CLI layout). The precedence-shadowing footgun and the
+  churning hook-contract legs are called out as unchanged by this fact. Defer
+  decision itself is unchanged (still the ticket's accepted design) — only the
+  npm-source premise and its downstream cost analysis were corrected.
+- **Revisit trigger added**: folded into the existing "marketplace
+  discoverability" trigger — "When we want marketplace distribution, the npm
+  package can be the source — spike a `.claude-plugin` manifest then." The old
+  trigger #4 ("a supported npm-as-plugin-source path appears") is now moot
+  (the path already exists) and was removed/merged rather than left stale.
+- **"Where the plugin would live" section** updated to reflect that the
+  marketplace-entry source can be git/zip/local-path/npm-package-reference
+  (previously implied only git/zip); the sibling-repo recommendation is
+  unchanged and now explicitly reasoned to hold even under npm-as-source
+  (separate release cadence from the npm CLI package; `npm pack`
+  file-collision risk; a marketplace manifest still needs a home regardless
+  of artifact type).
+- **skills/ reference fixed.** Intro paragraph previously said the evaluated
+  assets were `skills/`, `agents/claude/`, and hooks. Corrected: the Claude
+  skill templates are `SKILL.md`/`SKILL_TEAM.md` at the repo root; this repo's
+  `skills/` directory is Codex-only and is not a Claude skill source
+  (verified: `skills/` contains only a `codex/` subdirectory). Added an
+  explicit parenthetical calling this out so a reader doesn't conflate the
+  two.
+
+No other content changed — layout sketch, migration notes, related tickets,
+open item, and the CLI-stays-npm-only / precedence-footgun / hooks-churn /
+frontmatter-ignore rationale bullets are untouched (review did not flag them
+and the rework instructions scoped only the two fixes above).
+
+No production code, installer, skill, agent, or hook changes. README
+Documentation Index line for `docs/PluginPackaging.md` already present and
+unchanged (description still accurate: defer decision, layout sketch,
+migration notes, revisit triggers).
+
+Verification (rerun after rework): `npm run check` (clean, all 15
+`node --check` targets), `npm test` (336 tests: 335 pass, 1 skip — unchanged
+from baseline), `npm run validate` (Ticket validation OK). Counts unchanged
+from the pre-rework state.
+
 ## Review Findings
+
+- 2026-07-08T00:28:43Z: Review (codex): the doc's central never-npm claim is outdated — current marketplace docs support npm as a plugin source (package/version/registry fields); revise to the narrower true claim (direct install via marketplaces/local flags; marketplace entries CAN source from npm), reassess whether the defer decision still holds on the remaining legs, and fix the skills/ tree reference (Claude templates live at repo root, not skills/). Looping back.
 
 ## Test Evidence
 
@@ -259,3 +377,13 @@ No deviations from the Technical Design.
 - 2026-07-08T00:22:34Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (docs-only evaluation)
 
 - 2026-07-08T00:22:34Z: Ensured git branch local-board/T20260707T1323Z-npm-evaluate-claude-code-plugin-packaging-for-skills-agents-and-hooks (created).
+
+- 2026-07-08T00:24:51Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): docs/PluginPackaging.md written (decision, rationale, layout sketch, migration notes, revisit triggers) + README index line; docs-only, 335+1 unchanged.
+
+- 2026-07-08T00:25:31Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (docs-only)
+
+- 2026-07-08T00:28:43Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) changes_requested: outdated npm-source claim (docs URL cited) and a wrong tree reference; layout/migration/README checks passed.
+
+- 2026-07-08T00:28:43Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku, review:codex-task:read-only].
+
+- 2026-07-08T00:28:43Z: Ensured git branch local-board/T20260707T1323Z-npm-evaluate-claude-code-plugin-packaging-for-skills-agents-and-hooks (already-current).

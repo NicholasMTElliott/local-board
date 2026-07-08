@@ -1,10 +1,16 @@
 # Plugin Packaging (Claude Code)
 
 Claude Code plugins bundle skills, agents, hooks, MCP servers, and default
-settings into one installable unit sourced from a marketplace, git repo, zip
-(`--plugin-url`), or local path (`--plugin-dir`). This document evaluates
-packaging local-board's Claude-side assets (`skills/`, `agents/claude/`, and
-the enforcement hooks) as a plugin.
+settings into one installable unit. Users install plugins via a marketplace
+(`/plugin marketplace add` + `/plugin install`), or in-session via
+`--plugin-dir`/`--plugin-url`. A marketplace *entry*, in turn, can source its
+plugin contents from a git repo, a local path, a zip — or, per the
+[marketplace docs](https://code.claude.com/docs/en/plugin-marketplaces#npm-packages),
+an npm package (`package`/`version`/`registry` fields, installed with `npm
+install`). This document evaluates packaging local-board's Claude-side
+assets — the Claude skill templates `SKILL.md`/`SKILL_TEAM.md` (repo root),
+`agents/claude/`, and the enforcement hooks — as a plugin. (This repo's
+`skills/` directory is Codex-only; it is not a Claude skill source.)
 
 ## Decision
 
@@ -17,13 +23,22 @@ investigation.
 
 ## Rationale
 
-- **npm is not a plugin source.** Claude Code installs plugins from
-  marketplace, git repo, zip, or local path — never npm. The CLI already
-  ships via npm (`npm install -g local-board`), and installed skills/agents
-  invoke the on-`PATH` `local-board` command. Adopting a plugin would add a
-  *second, differently-sourced distribution channel* to maintain alongside
-  the npm package, not replace it — net complexity at a stage where the
-  installer was just consolidated.
+- **npm-as-plugin-source narrows, but does not remove, the second-channel
+  cost.** Users still only install plugins via a marketplace or session
+  flags (`--plugin-dir`/`--plugin-url`) — never directly via `npm install
+  local-board`. But a marketplace *entry* can source its plugin contents from
+  npm (`package`/`version`/`registry`), so in principle the existing npm
+  package could be referenced by a marketplace entry instead of a separate
+  git/zip artifact. That shrinks the second-channel cost — no forked
+  git/zip release process — but does not vanish it: a marketplace manifest
+  (`.claude-plugin/marketplace.json`) must still be authored and hosted
+  somewhere, and the npm package's layout would need a
+  `.claude-plugin/plugin.json` manifest plus plugin-shaped directories
+  (`skills/`, `agents/`, `hooks/`) added alongside its current CLI layout.
+  The CLI already ships via npm (`npm install -g local-board`), and
+  installed skills/agents invoke the on-`PATH` `local-board` command;
+  marketplace installation is a separate, additional entry point on top of
+  that, not a replacement for it.
 
 - **Precedence footgun is real and load-bearing.** Plugin-delivered
   skills/agents rank **below** user-dir (`~/.claude/skills`,
@@ -111,11 +126,15 @@ Before any plugin ships:
 ## Where the plugin would live
 
 Recommend a **sibling repo / separate marketplace entry**, not this repo's
-root. The plugin's source-of-truth (marketplace/git/zip) and release cadence
-differ from the npm package; co-locating risks `npm pack` picking up plugin
-files (the `files` allowlist would need to exclude them). Keep the canonical
-skill/agent/hook *content* in this repo; a plugin, if built, is a packaging
-view over it.
+root — even accounting for npm-as-plugin-source. The plugin's
+marketplace-entry source (git repo, zip, local path, or npm package
+reference) and release cadence differ from the npm CLI package's own
+release cadence; co-locating risks `npm pack` picking up plugin files (the
+`files` allowlist would need to exclude them), and a
+`.claude-plugin/marketplace.json` manifest must still be authored and
+hosted somewhere regardless of which artifact type backs the entry. Keep
+the canonical skill/agent/hook *content* in this repo; a plugin, if built,
+is a packaging view over it.
 
 ## Open item for a future adopt
 
@@ -128,10 +147,11 @@ simpler and matches current shipped skills.
 Adopt when *any* of the following holds:
 
 1. The Claude hook API and subagent tool name (`Task`/`Agent`) stabilize.
-2. There is demand for marketplace discoverability.
+2. There is demand for marketplace discoverability. When we want marketplace
+   distribution, the npm package can be the plugin source — spike a
+   `.claude-plugin` manifest then.
 3. The installer's `settings.json` patching becomes a real maintenance or
    support burden.
-4. A supported npm-as-plugin-source path appears.
 
 ## Related tickets
 
