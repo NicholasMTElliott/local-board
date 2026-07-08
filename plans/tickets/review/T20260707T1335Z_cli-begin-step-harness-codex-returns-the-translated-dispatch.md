@@ -1,7 +1,7 @@
 ---
 id: T20260707T1335Z
 type: task
-status: implementing
+status: ready_for_review
 priority: P3
 parent: null
 children: []
@@ -13,8 +13,8 @@ estimateBasis: T20260707T1329Z
 workStartedAt: 2026-07-08T03:26:07Z
 workCompletedAt: null
 created: 2026-07-07T13:35:55Z
-updated: 2026-07-08T03:36:12Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-08T03:38:02Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # cli: begin-step --harness codex returns the translated dispatch
@@ -313,3 +313,7 @@ Deviations / judgment calls (flagging for reviewer):
 - 2026-07-08T03:26:07Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (CLI orchestration)
 
 - 2026-07-08T03:26:07Z: Ensured git branch local-board/T20260707T1335Z-cli-begin-step-harness-codex-returns-the-translated-dispatch (created).
+
+- 2026-07-08T03:36:46Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): codex-dispatch module + --harness flag + table shrinkage; 380 pass + 1 gated-skip; live check produced the expected codexDispatch block; three judgment calls flagged for review.
+
+- 2026-07-08T03:38:02Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (CLI orchestration)
