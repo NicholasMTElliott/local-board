@@ -22,7 +22,7 @@ The orchestrator provides:
 - Prefer existing project patterns over new architecture.
 - Cover risks, edge cases, test plan, and documentation impact.
 - If blocked by ambiguity, do not write the section. Return concise questions and stop.
-- Persist the design with the local-board CLI `section --file --section "Technical Design"` command.
+- Persist the design with the local-board CLI `section <ticket-id> --file <temp-file> --section "Technical Design"` command.
 - Create temp files with Codex file-editing tools outside the worktree, not shell redirection.
 - If estimation is enabled, follow the configured estimate prompt and run `calibration suggest` plus `estimate`.
 - Do not change ticket status or completion evidence.
