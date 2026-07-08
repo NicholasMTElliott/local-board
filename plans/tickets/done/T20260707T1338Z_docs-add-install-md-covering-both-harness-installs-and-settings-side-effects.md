@@ -1,20 +1,20 @@
 ---
 id: T20260707T1338Z
 type: task
-status: ready_for_implementation
+status: done
 priority: P3
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260707T1338Z-docs-add-install-md-covering-both-harness-installs-and-settings-side-effects
 estimate: 2
 estimateBasis: T20260707T1337Z
-workStartedAt: null
-workCompletedAt: null
+workStartedAt: 2026-07-08T05:00:10Z
+workCompletedAt: 2026-07-08T05:18:50Z
 created: 2026-07-07T13:38:06Z
-updated: 2026-07-08T05:00:10Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-08T05:18:50Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # docs: add Install.md covering both harness installs and settings side effects
@@ -124,9 +124,59 @@ This ticket *is* the documentation change. Acceptance: `docs/Install.md` exists,
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) on the implement commit.
+
+- [P3] `docs/Install.md:92` — the documented `install-info.json` field list omits `name: "local-board"`, which `src/install.js:272` writes. Add `name` to the generated-fields list.
+- [P3] `docs/Install.md:110` and `docs/Install.md:186` — the legacy-dir cleanup wording implies it applies to all six targets, but `src/install.js:39-41` gives the Codex target empty `legacySkillDirs`/`legacyTeamSkillDirs` and uninstall removes only the configured arrays (`src/install.js:331-332`). Rephrase as "configured legacy dirs" or note Codex has none.
+
+Checks that passed: six-target inventory, runtime copy list, seven agent files, exact allow-rule text, four hook entries, uninstall scope and the documented allow-rule gap, README index entry format, CodexSupport invocation form, consent-callout tone (prominent but factual), techContext edit terse.
+
+Verdict: changes_requested
+
 ## Test Evidence
 
+Verified by claude-subagent:local-board-tester (sonnet).
+
+### Repo-level checks
+
+| Command | Result |
+|---|---|
+| `npm run check` | PASS |
+| `npm test` | PASS — 385 tests, 384 pass, 0 fail, 1 skipped |
+| `npm run validate` | PASS — Ticket validation OK |
+
+### Static accuracy audit (docs/Install.md vs src/install.js)
+
+All matched exactly: six targets with skillDir/teamSkillDir/settingsPath/detectPath and selection policy (`buildTargets`); runtime copy list line-for-line (`performInstall`); seven agent filenames; allow-rule text `Bash(local-board *)` verbatim; four HOOK_SPECS entries in order; install-info.json fields including `name`; legacy-dir wording (codex has none, all others one each); uninstall scope and the documented allow-rule gap (`performUninstall` never calls `patchSettings`).
+
+### Live probe (sandboxed HOME via runInstall test seam)
+
+The CLI has no --home/--json on install, and `local-board` is not on PATH here, so the probe called the exported `runInstall()` with a scratchpad-only `home` and a hard sandbox assertion.
+
+- Install (`--target=claude`): full recursive file-set under the sandbox matched the doc's runtime + claude-target tables completely — no undocumented paths, no missing documented paths. `settings.json` written was exactly `{"permissions":{"allow":["Bash(local-board *)"]}}`. install-info.json fields exactly as documented.
+- Uninstall: removed runtime dir, both skill dirs, all 7 agent files; the allow rule REMAINED — matching the documented uninstall gap (follow-up B20260708T0459Z).
+- Sandbox removed afterward.
+
+### README / CodexSupport
+
+- README line 43 inline pointer + Documentation Index entry (line 133) format-consistent with neighbors.
+- `local-board install --target=codex` in CodexSupport.md matches `parseArgs` `--target=` handling.
+
+### Incident (test-harness error, not a doc/code defect)
+
+The tester's FIRST probe attempt passed `home: undefined` (unset env var) so `runInstall` fell through to the real `os.homedir()` and performed a real claude-target install. Runtime/agents/skills re-copies were verified byte-identical to the existing real install (no harm), but the broad allow rule `Bash(local-board *)` was genuinely ADDED to the real `C:\Users\Nicho\.claude\settings.json` (it was not present before; only a script-path-specific rule was). The orchestrator attempted to revert the single entry and was blocked by the permission system; the removal is left to the user (delete the one `"Bash(local-board *)"` line from `permissions.allow`). Incident is a live demonstration of the consent-sensitive side effect docs/Install.md warns about.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `docs/Install.md` — the ticket's main deliverable, written at the implement stage (six-target path tables, consent callout, hooks opt-in, uninstall + allow-rule gap).
+- `memory-bank/systemPatterns.md` — install facts tightened: six targets, allow-rule management, hooks opt-in, uninstall gap tracked by B20260708T0459Z.
+- `memory-bank/techContext.md` — terse current-state install constraints.
+- `README.md` — Documentation Index entry + install pointer verified, no change needed.
+- `docs/CodexSupport.md` — deprecated install.mjs invocation fixed at implement stage.
 
 ## Questions
 
@@ -135,3 +185,23 @@ This ticket *is* the documentation change. Acceptance: `docs/Install.md` exists,
 - 2026-07-08T04:59:37Z: Completed design via claude-subagent:local-board-designer@opus: Verified install surface (src/install.js canonical, 6 targets, settings.json allow rule + hooks opt-in, uninstall exists but leaves allow rule); Install.md outline + README index; estimate 2 basis T1337
 
 - 2026-07-08T05:00:09Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (docs-only design)
+
+- 2026-07-08T05:00:10Z: Ensured git branch local-board/T20260707T1338Z-docs-add-install-md-covering-both-harness-installs-and-settings-side-effects (created).
+
+- 2026-07-08T05:03:28Z: Completed implement via claude-subagent:local-board-implementer@sonnet: docs/Install.md created (all 6 targets, path tables verified against src/install.js, consent callout, uninstall gap); README indexed; CodexSupport invocation fixed; 384 pass + 1 skip
+
+- 2026-07-08T05:04:14Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (Markdown only)
+
+- 2026-07-08T05:06:54Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
+
+- 2026-07-08T05:06:54Z: Ensured git branch local-board/T20260707T1338Z-docs-add-install-md-covering-both-harness-installs-and-settings-side-effects (already-current).
+
+- 2026-07-08T05:08:27Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework: name field added to install-info list; legacy-dir wording accurate (codex has none); verified against src/install.js; 384 pass + 1 skip
+
+- 2026-07-08T05:09:02Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (Markdown rework)
+
+- 2026-07-08T05:09:03Z: Completed review via codex-task:read-only: changes_requested (2x P3: install-info name field, legacy-dir wording); addressed in rework commit; recorded post-move per evidence-invalidation ordering
+
+- 2026-07-08T05:16:35Z: Completed test via claude-subagent:local-board-tester@sonnet: 384 pass + 1 skip; static audit exact match; live sandboxed install+uninstall file-set matched doc completely; incident: accidental real-HOME install added allow rule, user removal pending
+
+- 2026-07-08T05:18:49Z: Completed document via codex-task:workspace-write: memory-bank install facts tightened (systemPatterns, techContext); README verified; main doc shipped at implement

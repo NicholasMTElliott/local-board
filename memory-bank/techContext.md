@@ -23,7 +23,7 @@ plans/templates/      ticket templates
 plans/local-board.config.jsonc workflow and routing config
 resources/            packaged prompt/template mirror synced from plans/ via npm run sync-resources (sync writes LF; mirror comparison is line-ending-insensitive)
 src/                  parser, validator, writer, git workflow, priority picker, CLI
-src/install.js       installer behind local-board install
+src/install.js       installer behind local-board install (human-facing reference: docs/Install.md)
 skills/codex/         Codex skill templates and metadata
 scripts/              maintainer tooling, not packaged
 bin/                  executable CLI entrypoint
@@ -38,6 +38,11 @@ SKILL.md              installable orchestration skill template
 - Avoid external services for core workflow.
 - Preserve portability across Windows/macOS/Linux.
 - Installer requires `local-board` to resolve on PATH before rendering skills/agents.
+- `local-board install` has six targets: `claude` default-on,
+  `codex`/`opencode`/`cline`/`cursor` detect-only, and `agents` explicit-only.
+- Claude target adds consent-sensitive `Bash(local-board *)` to
+  `~/.claude/settings.json`; hooks are opt-in with `--hooks`; uninstall currently
+  leaves that allow rule in place (`B20260708T0459Z`).
 - `worktrees.location` controls ticket worktree placement: sibling default, inside `.worktrees`, or explicit non-`plans/` path.
 - `package.json` `files` allowlist defines the npm package surface.
 

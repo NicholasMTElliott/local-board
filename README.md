@@ -40,6 +40,8 @@ local-board install --target=codex    # install only Codex skills
 
 Installed skill and agent text always invokes the `local-board` command on `PATH` — never an absolute script path — so it is byte-identical regardless of how or where it was installed. The installer verifies `local-board` resolves on `PATH` before installing and fails fast with targeted guidance (`npm install -g .` / `npm link` for a checkout, `npm install -g local-board` otherwise) if it does not.
 
+See [docs/Install.md](docs/Install.md) for every path the installer writes per target and the `~/.claude/settings.json` consent side effect.
+
 **`npx local-board` is not supported.** A first run of `npx` needs network access to fetch the package, which sandboxed environments (including the Codex sandbox) deny. Install the package globally first, as above.
 
 `node ./bin/local-board.js install` and `node install.mjs` remain available as deprecated aliases for running the installer from a checkout, but they still require a prior `npm install -g .` or `npm link` from that checkout — the installer's PATH check fails fast otherwise, and rendered skills need the `local-board` command on `PATH` to be invoked correctly.
@@ -128,6 +130,7 @@ The test suite includes function-level ticket kernel coverage and CLI command-su
 - [docs/Workflow.md](docs/Workflow.md) — lifecycle from epic/story decomposition through implementation, review, test, docs, and closeout.
 - [docs/EnforcementHooks.md](docs/EnforcementHooks.md) — Claude Code hook enforcement for dispatch routing, evidence gating, and inline-fallback consent.
 - [docs/CodexSupport.md](docs/CodexSupport.md) — installing and using local-board directly in Codex, including route translation and parallel team mode.
+- [docs/Install.md](docs/Install.md) — installer targets, paths written per harness, the settings.json permission side effect, opt-in hooks, and uninstall/manual removal.
 - [docs/specialty-steps.md](docs/specialty-steps.md) — optional security, UI, and UX specialty review steps and how the gate-check classifier dispatches them.
 - [docs/PerStepOrchestration.md](docs/PerStepOrchestration.md) — current-state parallel orchestration: a single top-level orchestrator dispatches each pipeline step to a model-specialized executor, enabling full per-step model/prompt/route variety. Operational contract in `SKILL_TEAM.md`.
 - [docs/TeamMode.md](docs/TeamMode.md) — superseded historical context for the original agent-teams "one teammate per ticket" parallel mode.

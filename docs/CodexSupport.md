@@ -5,7 +5,7 @@ local-board can be installed directly into Codex. Codex uses the same Markdown t
 ## Install
 
 ```sh
-node install.mjs --target=codex
+local-board install --target=codex
 ```
 
 The installer writes:
@@ -18,7 +18,7 @@ The installer writes:
 
 Codex executor prompts resolve from the running CLI package reported by `local-board where --json`, using its `agentsDir` field. The `~/.local-board/` copy remains only for hooks and provenance.
 
-Use `node install.mjs --list-targets` to see detected targets. A normal `node install.mjs` includes Codex when `~/.codex/` exists.
+Use `local-board install --list-targets` to see detected targets. A normal `local-board install` includes Codex when `~/.codex/` exists. See [docs/Install.md](Install.md) for the full path inventory and other harness targets.
 
 ## Skills
 
