@@ -7,13 +7,13 @@ parent: S20260516T1539Z
 children: []
 blockedBy: [T20260708T2015Z]
 blocks: []
-branch: null
+branch: local-board/T20260708T2016Z-add-comments-subcommand-to-list-and-filter-ticket-comments-with-json
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-08T20:15:34Z
-updated: 2026-07-08T20:16:18Z
+updated: 2026-07-08T20:53:57Z
 completedSteps: []
 routingApprovals: []
 ---
