@@ -1,7 +1,7 @@
 ---
 id: T20260707T1329Z
 type: task
-status: ready_for_docs
+status: done
 priority: P3
 parent: null
 children: []
@@ -11,10 +11,10 @@ branch: local-board/T20260707T1329Z-enforce-promote-workflow-transitions-to-a-ha
 estimate: 4
 estimateBasis: T20260707T1331Z
 workStartedAt: 2026-07-08T01:50:54Z
-workCompletedAt: null
+workCompletedAt: 2026-07-08T02:24:50Z
 created: 2026-07-07T13:29:41Z
-updated: 2026-07-08T02:21:40Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+updated: 2026-07-08T02:24:50Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # enforce: promote workflow.transitions to a hard validator with an override escape
@@ -312,16 +312,11 @@ routing.enforceTransitions to false for advisory-only mode.
 
 ## Documentation Updates
 
-- `docs/Workflow.md` — document the hard validator, the switch, and `--override`.
-- `memory-bank/techContext.md` — remove/flip the "Open Decision" bullet
-  ("Whether advisory transition guidance should become a hard transition
-  validator").
-- `memory-bank/systemPatterns.md` — record the map-vs-structural split and the
-  override-records-to-Run-Log invariant.
-- `SKILL.md` + `skills/codex/local-board/SKILL.md` — the `--override` verb and
-  when to use it.
-- Hand-off note: flipping `enforceTransitions` on in this repo's own
-  `plans/local-board.config.jsonc` is a post-merge orchestrator decision.
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `SKILL.md`, `skills/codex/local-board/SKILL.md`, `src/config.js` scaffold comment — structural allow-set descriptions completed (same-status re-save, backlog promote, start-work, active->own-ready revert, questions/blocked resume, any->archived/questions/blocked).
+- `src/tickets.js` — allowedTargetsFor comment corrected (self-transition can appear via the unconditional structural targets).
+- `docs/Workflow.md` verified already complete; memory-bank/techContext updated during implementation.
 
 ## Open Questions
 
@@ -425,3 +420,5 @@ Result: pass
 - 2026-07-08T02:16:50Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict pass: allow-set, ordering, gate/invalidation interplay, and override semantics all audited correct; two doc-precision nits deferred to the doc pass.
 
 - 2026-07-08T02:21:40Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 362+1 gated; refusal (md5-identical file), override Run Log lines with/without reason, structural categories, gate-machinery composition, set parity, and fallback advisory mode all live-verified. Result: pass.
+
+- 2026-07-08T02:24:50Z: Completed document via codex-task:workspace-write: Codex (workspace-write): allow-set descriptions completed in both skills and the scaffold comment; tickets.js comment corrected; Workflow verified.
