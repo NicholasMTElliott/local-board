@@ -1208,8 +1208,7 @@ function validateTicketShape(board, ticket) {
   }
 
   for (const section of STANDARD_SECTIONS) {
-    const sectionRe = new RegExp(`^## ${escapeRegExp(section)}\\s*$`, "m");
-    if (!sectionRe.test(ticket.body)) {
+    if (locateSection(ticket.body, section) === null) {
       issues.push(`${ticket.path}: missing ## ${section} section`);
     }
   }
@@ -1927,44 +1926,112 @@ function assertFieldValue(field, value) {
   }
 }
 
+// Fence-aware section boundary finder. Tracks ``` / ~~~ fence state line by
+// line so heading-like lines (`## …`) inside a fenced code block are not
+// mistaken for real section boundaries. Pragmatic grammar: any 3+ run of the
+// active fence char closes the fence (the closing run need not be >= the
+// opening run's length); info strings after an opener are ignored. Does not
+// recognize 4-space-indented code blocks (out of scope; pre-existing
+// behavior for that case is unchanged). An unbalanced fence leaves the
+// scanner "in fence" through EOF, so a real trailing heading after a
+// malformed body is not found — no worse than prior behavior for that
+// pathological input.
+//
+// Returns null if the heading is not found (outside fences). Otherwise
+// returns character offsets into the original `body`:
+//   { headingStart, headingEnd, contentStart, contentEnd }
+// contentStart is just after the heading line's newline; contentEnd is the
+// start of the next top-level `## ` heading, or body.length if none.
+function locateSection(body, section) {
+  const headingRe = new RegExp(`^## ${escapeRegExp(section)}\\s*$`);
+  const anySectionRe = /^## /;
+  const fenceRe = /^\s*(`{3,}|~{3,})/;
+
+  let inFence = false;
+  let fenceChar = null;
+
+  let headingStart = null;
+  let headingEnd = null;
+  let contentStart = null;
+
+  let offset = 0;
+  const lineRe = /[^\n]*\n|[^\n]+$/g;
+  let m;
+  while ((m = lineRe.exec(body)) !== null) {
+    const rawLine = m[0];
+    const line = rawLine.endsWith("\n") ? rawLine.slice(0, -1) : rawLine;
+    const lineStart = offset;
+    const lineLen = rawLine.length;
+    offset += lineLen;
+
+    const fenceMatch = fenceRe.exec(line);
+    if (fenceMatch !== null) {
+      const runChar = fenceMatch[1][0];
+      if (!inFence) {
+        inFence = true;
+        fenceChar = runChar;
+        continue;
+      }
+      if (runChar === fenceChar) {
+        inFence = false;
+        fenceChar = null;
+        continue;
+      }
+    }
+
+    if (inFence) {
+      continue;
+    }
+
+    if (headingStart === null) {
+      if (headingRe.test(line)) {
+        headingStart = lineStart;
+        headingEnd = lineStart + line.length;
+        contentStart = offset;
+      }
+      continue;
+    }
+
+    if (anySectionRe.test(line)) {
+      return { headingStart, headingEnd, contentStart, contentEnd: lineStart };
+    }
+  }
+
+  if (headingStart === null) {
+    return null;
+  }
+  return { headingStart, headingEnd, contentStart, contentEnd: body.length };
+}
+
 function appendToSection(body, section, line) {
-  const sectionRe = new RegExp(`(^## ${escapeRegExp(section)}\\s*$)`, "m");
-  const match = body.match(sectionRe);
-  if (match === null || match.index === undefined) {
+  const loc = locateSection(body, section);
+  if (loc === null) {
     throw new Error(`section "${section}" not found`);
   }
 
-  const sectionStart = match.index + match[0].length;
-  const nextSection = body.slice(sectionStart).search(/\n## /);
-  const insertAt = nextSection === -1 ? body.length : sectionStart + nextSection;
+  const insertAt = loc.contentEnd;
   const before = body.slice(0, insertAt).replace(/\s*$/, "\n\n");
   const after = body.slice(insertAt);
   return `${before}${line}\n${after}`;
 }
 
 export function getSectionText(body, section) {
-  const sectionRe = new RegExp(`(^## ${escapeRegExp(section)}\\s*$)`, "m");
-  const match = body.match(sectionRe);
-  if (match === null || match.index === undefined) {
+  const loc = locateSection(body, section);
+  if (loc === null) {
     return null;
   }
 
-  const sectionStart = match.index + match[0].length;
-  const nextSection = body.slice(sectionStart).search(/\n## /);
-  const endAt = nextSection === -1 ? body.length : sectionStart + nextSection;
-  return body.slice(sectionStart, endAt).trim();
+  return body.slice(loc.contentStart, loc.contentEnd).trim();
 }
 
 function replaceSection(body, section, text) {
-  const sectionRe = new RegExp(`(^## ${escapeRegExp(section)}\\s*$)`, "m");
-  const match = body.match(sectionRe);
-  if (match === null || match.index === undefined) {
+  const loc = locateSection(body, section);
+  if (loc === null) {
     throw new Error(`section "${section}" not found`);
   }
 
-  const sectionStart = match.index + match[0].length;
-  const nextSection = body.slice(sectionStart).search(/\n## /);
-  const insertAt = nextSection === -1 ? body.length : sectionStart + nextSection;
+  const sectionStart = loc.contentStart;
+  const insertAt = loc.contentEnd;
   const before = body.slice(0, sectionStart).replace(/\s*$/, "");
   const after = body.slice(insertAt).replace(/^\n*/, "");
   const sectionBody = text === "" ? "" : `\n\n${text}`;
