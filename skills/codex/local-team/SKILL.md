@@ -33,9 +33,9 @@ Use wave-barrier mode first:
 
 1. For each ready ticket up to `maxInFlight`, run `worktree-add <ticket-id> --json` from the project root and store `worktreePath`.
 2. For each in-flight ticket without an outstanding executor:
-   - run `begin-step --root <worktreePath> --json`;
+   - run `begin-step <id> --root <worktreePath> --harness codex --json`;
    - run `start-work --root <worktreePath> --json` before implement/review/test/document;
-   - dispatch the step through the Codex route translation table from the `local-board` skill.
+   - dispatch from the returned `codexDispatch` block (`agentType`, `promptPath`, `model`, `evidenceExecutor`).
 3. Await the wave of spawned agents.
 4. Persist each result, record `complete-step`, run gate-check/specialty flow for design/implement/test, then `move`.
 5. Refill open slots with newly ready tickets.

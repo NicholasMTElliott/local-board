@@ -29,7 +29,18 @@ Both skills treat the local-board CLI as the state authority. Codex should query
 
 ## Route Translation
 
-Existing projects can keep Claude-first config in `plans/local-board.config.jsonc`. `begin-step <ticket-id> --harness codex --json` computes the translation from the configured route directly (single authority: `src/codex-dispatch.js`) and returns it as an additive `codexDispatch` block — `agentType` (`worker`/`explorer`), absolute `promptPath`, sanitized `model`, and `evidenceExecutor`. Dispatch straight from that block instead of a hand-maintained table. One row, illustrative only:
+Existing projects can keep Claude-first config in `plans/local-board.config.jsonc`. `begin-step <ticket-id> --harness codex --json` computes the translation from the configured route directly (single authority: `src/codex-dispatch.js`) and returns it as an additive `codexDispatch` block. Dispatch straight from that block instead of a hand-maintained table.
+
+The required `codexDispatch` fields are:
+
+- `dispatchKind`: `inline` or `spawn_agent`.
+- `agentType`: `worker`, `explorer`, or `null`.
+- `promptPath`: absolute prompt path, or `null` when no safe prompt is known.
+- `model`: denylist-sanitized Codex model override, or `null` for no Codex override.
+- `evidenceExecutor`: exact `complete-step --executor` value; uses `@codex-default` when `model` is `null`.
+- `known`: `false` means the orchestrator must ask before inline fallback, then use `approve-inline`, or move the ticket to `questions`.
+
+One row, illustrative only:
 
 | Configured route | Codex behavior |
 |---|---|
@@ -67,7 +78,7 @@ where ticket worktrees are created:
 
 ## Models
 
-Do not pass Claude aliases such as `opus`, `sonnet`, or `haiku` to Codex spawned agents. `begin-step --harness codex` sanitizes this automatically: `codexDispatch.model` is `null` and `codexDispatch.evidenceExecutor` carries `@codex-default` whenever the configured model has no valid Codex id.
+Do not pass Claude aliases such as `opus`, `sonnet`, or `haiku` to Codex spawned agents. `begin-step --harness codex` sanitizes this automatically: `codexDispatch.model` is `null` and `codexDispatch.evidenceExecutor` carries `@codex-default` whenever the configured model has no valid Codex id. A null `model` means do not pass a model override to Codex.
 
 ## Single-Ticket Flow
 
@@ -97,7 +108,7 @@ The first Codex team mode uses wave-barrier scheduling. It waits for a batch of 
 
 ## Limits
 
-- Unknown `claude-subagent:*` routes need user approval before inline fallback.
+- Unknown or unconfigured routes return `known:false`; ask the user before inline fallback and record `approve-inline`, or move the ticket to `questions`.
 - Return-only executors must not edit files or run ticket mutation commands.
 - Workers must stay in their assigned worktree and must not revert unrelated edits.
 - Codex support does not add a new route grammar. `worktrees.location` is a
