@@ -134,7 +134,7 @@ After mandatory `design`, `implement`, or `test` evidence is recorded and before
 local-board gate-check <ticket-id> --stage <stage> --json
 ```
 
-If the catalog is empty, skip dispatch. Otherwise dispatch through the returned route, translating `claude-subagent:local-board-gatecheck` to the Codex gate-check explorer prompt. Parse strict JSON:
+When `skip` is `false`, dispatch the gate agent through the returned route, translating `claude-subagent:local-board-gatecheck` to the Codex gate-check explorer prompt. When `skip` is `true` (the stage catalog is empty), do not dispatch — the consultation token is already recorded. Parse strict JSON:
 
 ```json
 { "requestedSteps": ["security_audit"] }

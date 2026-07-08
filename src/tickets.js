@@ -1096,7 +1096,7 @@ export async function recordGateSkippedEmptyCatalog(root, ticketId, stage, optio
   }
   const token = gateToken(stage, GATE_SKIPPED_EMPTY_CATALOG_EXECUTOR);
   const writtenPath = await stampGateToken(root, ticketId, token, null, options);
-  return { ticket: ticketId, stage, path: writtenPath };
+  return { ticket: ticketId, stage, path: writtenPath, token };
 }
 
 // Backs the `gate-complete` verb: records that a gate agent actually

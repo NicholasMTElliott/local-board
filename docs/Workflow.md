@@ -302,6 +302,8 @@ With `--json`, the command returns:
   "prompt": "<absolute-path-to-plans/prompts/steps/gate-check.md>",
   "agent": "claude-subagent:local-board-gatecheck",
   "model": "haiku",
+  "skip": false,
+  "recorded": null,
   "ticketPath": "plans/tickets/ready/<ticket-file>.md",
   "ticketContext": {
     "id": "<ticket-id>",
@@ -324,7 +326,7 @@ With `--json`, the command returns:
 }
 ```
 
-The CLI does not invoke an agent and does not decide which optional steps are required. It records that consultation happened with a `gate:<stage>:...` token in `completedSteps`: if `catalog` is empty, `gate-check` self-certifies the empty catalog as `gate:<stage>:skipped-empty-catalog` and the orchestrator skips gate-agent dispatch. Otherwise it dispatches the returned `prompt`, `catalog`, and narrow `ticketContext` to the configured gate-check `agent`, pinning its `model` (the bundled `local-board-gatecheck` agent on `haiku` by default), then records the real consultation with `gate-complete`. That agent pattern-matches the completed work against the catalog trigger criteria and returns strict JSON shaped:
+The CLI does not invoke an agent and does not decide which optional steps are required. It records that consultation happened with a `gate:<stage>:...` token in `completedSteps`: if `catalog` is empty, `gate-check` self-certifies the empty catalog as `gate:<stage>:skipped-empty-catalog`, returns `skip: true` with `recorded` set to that token, and the orchestrator skips gate-agent dispatch. Otherwise it dispatches the returned `prompt`, `catalog`, and narrow `ticketContext` to the configured gate-check `agent`, pinning its `model` (the bundled `local-board-gatecheck` agent on `haiku` by default), then records the real consultation with `gate-complete`; that branch returns `skip: false` and `recorded: null`. That agent pattern-matches the completed work against the catalog trigger criteria and returns strict JSON shaped:
 
 ```json
 { "requestedSteps": ["security_audit"] }

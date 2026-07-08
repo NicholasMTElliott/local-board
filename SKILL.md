@@ -157,7 +157,7 @@ Gate-check is not run after `decompose` or `document`.
 local-board gate-check <ticket-id> --stage <stage> --json
 ```
 
-`<stage>` must be one of `design`, `implement`, or `test`. The CLI returns the gate-check `prompt` path, the configured gate-check `agent` (route) and `model`, a narrow `ticketContext`, and the stage `catalog` of available specialty entries. The CLI does not invoke an agent.
+`<stage>` must be one of `design`, `implement`, or `test`. The CLI returns the gate-check `prompt` path, the configured gate-check `agent` (route) and `model`, a narrow `ticketContext`, the stage `catalog` of available specialty entries, and an explicit `skip` boolean (`true` when `catalog` is empty). The CLI does not invoke an agent. Dispatch the gate agent only when `skip` is `false`.
 
 Dispatch the gate-check prompt through the returned `agent` route, pinning the subagent's model to the returned `model` when non-null (the bundled `local-board-gatecheck` agent runs on `haiku` by default). Parse the agent's strict JSON response:
 
