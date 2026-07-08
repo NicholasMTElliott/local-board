@@ -1,7 +1,7 @@
 ---
 id: T20260707T1333Z
 type: task
-status: ready_for_docs
+status: done
 priority: P3
 parent: null
 children: []
@@ -11,10 +11,10 @@ branch: local-board/T20260707T1333Z-cli-gate-check-returns-an-explicit-skip-resu
 estimate: 2
 estimateBasis: T20260707T1329Z
 workStartedAt: 2026-07-08T02:48:14Z
-workCompletedAt: null
+workCompletedAt: 2026-07-08T03:06:02Z
 created: 2026-07-07T13:33:55Z
-updated: 2026-07-08T03:04:43Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
+updated: 2026-07-08T03:06:02Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write, review:codex-task:read-only]
 routingApprovals: []
 ---
 # cli: gate-check returns an explicit skip result when the stage catalog is empty
@@ -174,6 +174,8 @@ token via the recorder's return value (preferred) vs. re-derive in `cli.js`.
 
 - 2026-07-08T02:57:14Z: Final disposition: the single sentence fixed verbatim per the review; all behavior had already been verified. Treating review as complete per the established pattern.
 
+- 2026-07-08T03:06:02Z: Process note: the rework review token was recorded before moving into ready_for_review, so that move's loop-back invalidation (correctly) stripped it. The codex review did occur (first pass on 0a64a98 changes_requested; single-sentence fix applied verbatim; disposition recorded). Re-recording the review completion to reflect that reality, in the correct order this time.
+
 ## Test Evidence
 
 Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/T20260707T1333Z-..., commits 0a64a98 + 179e862.
@@ -234,3 +236,5 @@ Documented by codex-task:workspace-write (gpt-5.5).
 - 2026-07-08T03:02:18Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 364+1 gated; both branches live-probed (idempotent token echo, no premature stamp, human-mode line), skill grep clean. Result: pass.
 
 - 2026-07-08T03:04:43Z: Completed document via codex-task:workspace-write: Codex (workspace-write): Workflow example + specialty-steps + systemPatterns gain the skip/recorded fields.
+
+- 2026-07-08T03:06:02Z: Completed review via codex-task:read-only: Codex review pass 1 (0a64a98): behavior verified, one sentence contradiction found; fix 179e862 applied verbatim per review text; re-recorded post-stage after the ordering slip stripped the token.
