@@ -978,6 +978,46 @@ test("CLI complete-step rejects a model on an inline executor", async () => {
   });
 });
 
+test("CLI complete-step rejects a flag swallowed as an option value", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    const create = await runCli([
+      "--root", root, "create", "task", "Flag swallowed as value",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const id = path.basename(create.stdout.trim()).split("_", 1)[0];
+    assert.equal((await runCli(["--root", root, "estimate", id, "2"])).code, 0);
+    assert.equal(
+      (await runCli(["--root", root, "approve-inline", id, "design", "--reason", "flag-swallow regression test"])).code,
+      0,
+    );
+
+    const res = await runCli([
+      "--root", root, "complete-step", id, "test",
+      "--executor", "--evidence", "x",
+    ]);
+    assert.equal(res.code, 2);
+    assert.match(res.stderr, /--executor/);
+    assert.match(res.stderr, /--evidence/);
+
+    // A value that merely contains dashes (not a leading --) still parses.
+    const ok = await runCli([
+      "--root", root, "complete-step", id, "design",
+      "--executor", "inline", "--evidence", "pre--post",
+    ]);
+    assert.equal(ok.code, 0, ok.stderr);
+  });
+});
+
+test("CLI global --root option rejects a following flag as its value with a clean usage error", async () => {
+  const res = await runCli(["--root", "--json", "validate"]);
+  assert.equal(res.code, 2);
+  assert.match(res.stderr, /--root/);
+  // The clean takeOption message, not an uncaught exception stack trace.
+  assert.doesNotMatch(res.stderr, /\bat\s+\S+\s+\(.*:\d+:\d+\)/);
+});
+
 test("CLI approve-inline --executor approves a model deviation on a pinned action", async () => {
   await withBoard(async (root) => {
     assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);

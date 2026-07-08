@@ -51,11 +51,12 @@ export { commandWhere };
 
 export async function main(argv) {
   const args = [...argv];
-  const root = takeOption(args, "--root") ?? ".";
-  const allowMainRoot = takeFlag(args, "--allow-main-root");
-  const command = args.shift();
 
   try {
+    const root = takeOption(args, "--root") ?? ".";
+    const allowMainRoot = takeFlag(args, "--allow-main-root");
+    const command = args.shift();
+
     if (command === "--version" || command === "version") {
       console.log(await readPackageVersion());
       return 0;
@@ -1142,6 +1143,9 @@ function takeOption(args, name) {
     throw new Error(`${name} requires a value`);
   }
   const value = args[index + 1];
+  if (value.startsWith("--")) {
+    throw new Error(`option ${name} requires a value but got ${value}`);
+  }
   args.splice(index, 2);
   return value;
 }
