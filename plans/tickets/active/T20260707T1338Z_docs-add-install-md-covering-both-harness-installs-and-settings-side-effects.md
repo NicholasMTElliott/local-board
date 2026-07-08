@@ -13,7 +13,7 @@ estimateBasis: T20260707T1337Z
 workStartedAt: 2026-07-08T05:00:10Z
 workCompletedAt: null
 created: 2026-07-07T13:38:06Z
-updated: 2026-07-08T05:00:10Z
+updated: 2026-07-08T05:06:54Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -124,6 +124,15 @@ This ticket *is* the documentation change. Acceptance: `docs/Install.md` exists,
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) on the implement commit.
+
+- [P3] `docs/Install.md:92` — the documented `install-info.json` field list omits `name: "local-board"`, which `src/install.js:272` writes. Add `name` to the generated-fields list.
+- [P3] `docs/Install.md:110` and `docs/Install.md:186` — the legacy-dir cleanup wording implies it applies to all six targets, but `src/install.js:39-41` gives the Codex target empty `legacySkillDirs`/`legacyTeamSkillDirs` and uninstall removes only the configured arrays (`src/install.js:331-332`). Rephrase as "configured legacy dirs" or note Codex has none.
+
+Checks that passed: six-target inventory, runtime copy list, seven agent files, exact allow-rule text, four hook entries, uninstall scope and the documented allow-rule gap, README index entry format, CodexSupport invocation form, consent-callout tone (prominent but factual), techContext edit terse.
+
+Verdict: changes_requested
+
 ## Test Evidence
 
 ## Documentation Updates
@@ -137,3 +146,11 @@ This ticket *is* the documentation change. Acceptance: `docs/Install.md` exists,
 - 2026-07-08T05:00:09Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (docs-only design)
 
 - 2026-07-08T05:00:10Z: Ensured git branch local-board/T20260707T1338Z-docs-add-install-md-covering-both-harness-installs-and-settings-side-effects (created).
+
+- 2026-07-08T05:03:28Z: Completed implement via claude-subagent:local-board-implementer@sonnet: docs/Install.md created (all 6 targets, path tables verified against src/install.js, consent callout, uninstall gap); README indexed; CodexSupport invocation fixed; 384 pass + 1 skip
+
+- 2026-07-08T05:04:14Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (Markdown only)
+
+- 2026-07-08T05:06:54Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
+
+- 2026-07-08T05:06:54Z: Ensured git branch local-board/T20260707T1338Z-docs-add-install-md-covering-both-harness-installs-and-settings-side-effects (already-current).

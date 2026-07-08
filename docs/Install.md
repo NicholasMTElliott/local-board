@@ -89,7 +89,7 @@ other target renders from the repo-root `SKILL.md` / `SKILL_TEAM.md`, with
 | `~/.local-board/templates/` | copied from `resources/templates` |
 | `~/.local-board/install-info.json` | generated (see below) |
 
-`install-info.json` records `installedAt`, `installDir`, `scriptPath`,
+`install-info.json` records `name`, `installedAt`, `installDir`, `scriptPath`,
 `nodeVersion`, `version`, `skillName`, `teamSkillName`, `claudeAgents[]`.
 
 This copy exists for hooks and provenance, not for day-to-day skill use.
@@ -108,7 +108,9 @@ field, not from `~/.local-board/`.
 | `agents` | `~/.agents/skills/local-board` | `~/.agents/skills/local-team` |
 
 Each directory is rendered fresh on every install. Legacy directories from
-older layouts (`*-orchestrator`, `local-board-team`) are removed if present.
+older layouts (`*-orchestrator`, `local-board-team`) are removed if present,
+for each target's configured legacy dirs (`codex` has none — it never used
+the older layout).
 
 ### Claude agents (`claude` target only)
 
@@ -183,8 +185,9 @@ local-board install --uninstall
 Removes:
 
 - `~/.local-board/` (the whole runtime directory).
-- Every target's skill dir, team skill dir, and legacy dirs (checked for all
-  six targets, not just installed ones).
+- Every target's skill dir, team skill dir, and configured legacy dirs
+  (checked for all six targets, not just installed ones; `codex` has no
+  legacy dirs to remove).
 - The four managed hooks entries from `~/.claude/settings.json`, if present.
 - The seven `~/.claude/agents/local-board-*.md` files.
 
