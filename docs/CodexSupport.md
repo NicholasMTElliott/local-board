@@ -27,6 +27,8 @@ Use `node install.mjs --list-targets` to see detected targets. A normal `node in
 
 Both skills treat the local-board CLI as the state authority. Codex should query workflow state with `query-next`, `query-ticket`, and `begin-step`; mutate state with `create`, `section`, `comment`, `complete-step`, `move`, and relationship commands; and finish by running `validate`.
 
+When maintaining skill text, keep the repo-root `SKILL.md` and `skills/codex/local-board/SKILL.md` `## CLI Commands` blocks byte-identical; `test/skill-usage-sync.test.js` treats root `SKILL.md` as canonical.
+
 ## Route Translation
 
 Existing projects can keep Claude-first config in `plans/local-board.config.jsonc`. `begin-step <ticket-id> --harness codex --json` computes the translation from the configured route directly (single authority: `src/codex-dispatch.js`) and returns it as an additive `codexDispatch` block. Dispatch straight from that block instead of a hand-maintained table.
