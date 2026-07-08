@@ -1,20 +1,20 @@
 ---
 id: T20260707T1333Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P3
 parent: null
 children: []
 blockedBy: [T20260707T1327Z]
 blocks: []
-branch: null
+branch: local-board/T20260707T1333Z-cli-gate-check-returns-an-explicit-skip-result-when-the-stage-catalog-is-empty
 estimate: 2
 estimateBasis: T20260707T1329Z
-workStartedAt: null
+workStartedAt: 2026-07-08T02:48:14Z
 workCompletedAt: null
 created: 2026-07-07T13:33:55Z
-updated: 2026-07-08T02:48:13Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-08T02:51:41Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
 # cli: gate-check returns an explicit skip result when the stage catalog is empty
@@ -164,6 +164,19 @@ token via the recorder's return value (preferred) vs. re-derive in `cli.js`.
 
 ## Implementation Notes
 
+Implemented the additive `skip`/`recorded` fields in `gate-check` per the design's default (single-producer echo).
+
+- `src/tickets.js`: `recordGateSkippedEmptyCatalog` now returns `{ ticket, stage, path, token }` (added `token`, additive).
+- `src/cli.js` (`commandGateCheck`): computes `skip = catalog.length === 0` once; on the empty branch captures `recorded` from the recorder's return value (`skipResult.token`) instead of re-deriving the string, so the wire value cannot drift from the stamped token; on the non-empty branch `recorded` stays `null`. Both `skip` and `recorded` added to the JSON payload (additive, `catalog` unchanged). Non-JSON mode prints an additional line on the skip branch: `skip: empty catalog — recorded gate:<stage>:skipped-empty-catalog (no dispatch)`; the existing first line is unchanged.
+- `SKILL.md`, `SKILL_TEAM.md`, `skills/codex/local-board/SKILL.md`: one-line clarifications so dispatch is keyed off the `skip` flag ("dispatch the gate agent only when `skip` is `false`"), keeping the existing auto-stamp sentences.
+- `test/cli.test.js`: extended the empty-branch test (idempotent-rerun test, ~line 783) to assert `skip: true` / `recorded: "gate:test:skipped-empty-catalog"` on both the first and idempotent second call, plus a new non-JSON assertion that the skip line appears. Extended the non-empty-branch "pure read" test (~line 808) to assert `skip: false` / `recorded: null`, plus a non-JSON assertion that the skip line is absent.
+
+No mirrored/generated copy of the skill markdown was found (checked for other files containing the same SKILL.md prose); `test/pack.test.js` only checks file inclusion, not content, so no regeneration was needed.
+
+Verification: `npm run check`, `npm test` (365 tests, 364 pass, 1 pre-existing unrelated skip, 0 fail), `npm run validate` all green. Live check on this ticket (`gate-check T20260707T1333Z --stage test --json`) returns `skip: true` and `recorded: "gate:test:skipped-empty-catalog"` — the expected auto-stamp side effect this ticket's own empty test-stage catalog triggers.
+
+No deviations from the Technical Design's default choices (single-producer token echo; `requestedSteps` not added to the CLI payload; `catalog` left unchanged).
+
 ## Review Findings
 
 ## Test Evidence
@@ -177,3 +190,5 @@ token via the recorder's return value (preferred) vs. re-derive in `cli.js`.
 - 2026-07-08T02:47:20Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): scope-checked against T1327 (stamp + skill alignment already done); remaining work is the additive skip boolean + recorded token echo in gate-check JSON, human-mode line, one-line skill clarifications. Estimate 2 (basis T20260707T1329Z).
 
 - 2026-07-08T02:48:13Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (response shape)
+
+- 2026-07-08T02:48:14Z: Ensured git branch local-board/T20260707T1333Z-cli-gate-check-returns-an-explicit-skip-result-when-the-stage-catalog-is-empty (created).

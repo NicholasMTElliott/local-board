@@ -797,11 +797,23 @@ test("CLI gate-check auto-stamps gate:<stage>:skipped-empty-catalog on the empty
     const first = await runCli(["--root", root, "gate-check", ticketId, "--stage", "test", "--json"]);
     assert.equal(first.code, 0, first.stderr);
     assert.match(await readFile(ticketPath, "utf8"), /^completedSteps: \[gate:test:skipped-empty-catalog\]$/m);
+    const firstOut = JSON.parse(first.stdout);
+    assert.equal(firstOut.skip, true);
+    assert.equal(firstOut.recorded, "gate:test:skipped-empty-catalog");
 
-    // Idempotent re-run does not duplicate the token or fail.
+    // Idempotent re-run does not duplicate the token or fail, and still
+    // reports skip: true with the same recorded token.
     const second = await runCli(["--root", root, "gate-check", ticketId, "--stage", "test", "--json"]);
     assert.equal(second.code, 0, second.stderr);
     assert.match(await readFile(ticketPath, "utf8"), /^completedSteps: \[gate:test:skipped-empty-catalog\]$/m);
+    const secondOut = JSON.parse(second.stdout);
+    assert.equal(secondOut.skip, true);
+    assert.equal(secondOut.recorded, "gate:test:skipped-empty-catalog");
+
+    // Non-JSON mode: the skip line is present on the empty-catalog branch.
+    const plain = await runCli(["--root", root, "gate-check", ticketId, "--stage", "test"]);
+    assert.equal(plain.code, 0, plain.stderr);
+    assert.match(plain.stdout, /^skip: empty catalog — recorded gate:test:skipped-empty-catalog \(no dispatch\)$/m);
   });
 });
 
@@ -820,6 +832,14 @@ test("CLI gate-check does not stamp a gate token on a non-empty catalog (pure re
     const result = await runCli(["--root", root, "gate-check", ticketId, "--stage", "design", "--json"]);
     assert.equal(result.code, 0, result.stderr);
     assert.match(await readFile(ticketPath, "utf8"), /^completedSteps: \[\]$/m);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.skip, false);
+    assert.equal(out.recorded, null);
+
+    // Non-JSON mode: the skip line is absent on the non-empty-catalog branch.
+    const plain = await runCli(["--root", root, "gate-check", ticketId, "--stage", "design"]);
+    assert.equal(plain.code, 0, plain.stderr);
+    assert.doesNotMatch(plain.stdout, /^skip:/m);
   });
 });
 

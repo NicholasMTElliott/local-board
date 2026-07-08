@@ -123,9 +123,10 @@ scheduling cache and is cheap to rebuild after a compaction.
      already wrote its section/files in the worktree; just record
      `complete-step <action> --executor <route>[@<model>] --root <worktreePath> --evidence "..."`.
    - Run gate-check + specialty-run for `design`/`implement`/`test` stages (same
-     contract as single-ticket mode) before transitioning. When `gate-check`
-     returns an empty `catalog`, skip the gate-agent dispatch entirely — there is
-     nothing to classify.
+     contract as single-ticket mode) before transitioning. Dispatch the
+     gate-agent only when `gate-check`'s `skip` field is `false`; when `skip` is
+     `true` (empty `catalog`) skip the dispatch entirely — there is nothing to
+     classify.
    - Choose the next status from the returned `transitions` and `move`. If the
      ticket continues, dispatch its next step. If it hits `questions`/`blocked`,
      surface it and drop it from in-flight (keep in `assignedLog`).

@@ -959,14 +959,19 @@ async function commandGateCheck(root, args, allowMainRoot) {
   // empty catalog for this stage means gate-check.md is never opened, so a
   // missing file here must not fail what would otherwise be a legitimate
   // empty-catalog result.
-  if (catalog.length > 0) {
+  const skip = catalog.length === 0;
+  let recorded = null;
+  if (!skip) {
     await assertPromptExists(promptPath, "gate-check");
   } else {
     // Empty-catalog branch: the CLI itself has deterministically established
     // there is nothing to consult, so it self-certifies the consultation by
     // stamping gate:<stage>:skipped-empty-catalog. Idempotent (addUnique), so
-    // a re-run is safe and dispatches no agent (B1320).
-    await recordGateSkippedEmptyCatalog(root, ticket.id, stage);
+    // a re-run is safe and dispatches no agent (B1320). Echo the exact
+    // stamped token back on the wire, sourced from the recorder's return
+    // value so it cannot drift from what was actually written.
+    const skipResult = await recordGateSkippedEmptyCatalog(root, ticket.id, stage);
+    recorded = skipResult.token;
   }
 
   const baseRecord = ticketRecord(root, ticket);
@@ -993,6 +998,8 @@ async function commandGateCheck(root, args, allowMainRoot) {
     ticketPath: ticket.path,
     ticketContext,
     catalog,
+    skip,
+    recorded,
   };
 
   if (asJson) {
@@ -1003,6 +1010,9 @@ async function commandGateCheck(root, args, allowMainRoot) {
     console.log(promptPath);
     for (const entry of catalog) {
       console.log(`- ${entry.name}: ${entry.triggers}`);
+    }
+    if (skip) {
+      console.log(`skip: empty catalog — recorded ${recorded} (no dispatch)`);
     }
   }
   return 0;
