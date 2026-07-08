@@ -7,13 +7,13 @@ parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/B20260708T0459Z-install-uninstall-leaves-the-bash-local-board-allow-rule-in-settings-json
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-08T04:59:37Z
-updated: 2026-07-08T20:12:50Z
+updated: 2026-07-08T20:12:51Z
 completedSteps: []
 routingApprovals: []
 ---
