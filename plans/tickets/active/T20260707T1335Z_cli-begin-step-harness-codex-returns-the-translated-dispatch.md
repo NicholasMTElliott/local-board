@@ -1,19 +1,19 @@
 ---
 id: T20260707T1335Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P3
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260707T1335Z-cli-begin-step-harness-codex-returns-the-translated-dispatch
 estimate: 2
 estimateBasis: T20260707T1329Z
-workStartedAt: null
+workStartedAt: 2026-07-08T03:26:07Z
 workCompletedAt: null
 created: 2026-07-07T13:35:55Z
-updated: 2026-07-08T03:26:07Z
+updated: 2026-07-08T03:36:12Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -265,6 +265,39 @@ present. Add a one-line `begin-step` usage note for `--harness codex`.
 
 ## Implementation Notes
 
+Implemented `begin-step --harness codex` per the Technical Design.
+
+New module `src/codex-dispatch.js` (pure): `translateCodexDispatch({ route, model, prompt, agentsDir })` returns a `codexDispatch` block. Static `ROLE_AGENT_TYPES` map for the seven `claude-subagent:local-board-<role>` roles (worker: designer/implementer/documenter, explorer: decomposer/reviewer/tester/gatecheck). Model sanitization (`sanitizeModel`): `null`/`opus`/`sonnet`/`haiku`/`claude*`-prefixed -> `null` (no Codex model); anything else passes through unchanged. `evidenceExecutorFor(route, sanitizedModel)` composes `<route>@codex-default` or `<route>@<model>`. Handles `inline` (dispatchKind `inline`, `evidenceExecutor: "inline"`, no model), the two `codex-task:*` routes (`passthrough: true` marker, same sanitization), known claude-subagent roles (`promptPath = path.join(agentsDir, "local-board-<role>.md")`), and unknown claude-subagent roles / any other route shape (`known: false`, `promptPath: null`, guidance `note`, no fabricated path).
+
+`src/cli.js`: `commandBeginStep` gained `--harness claude|codex` (default `claude`, rejects other values with exit 2). On `--harness codex`, resolves `agentsDir` via a new shared `agentsDirFor(packageRoot)` helper (factored out of `commandWhere`, both now use it against `selfPackageRoot()`), calls `translateCodexDispatch` with the already-computed `configuredAgent`/`configuredModel`/`configuredPrompt`, and splices `codexDispatch` onto the result object before printing. Human (non-JSON) mode prints one extra `codexDispatch: ...` line. `beginStep` in `src/tickets.js` is untouched — the translation is CLI post-processing after the ledger stamp already ran, so the active-steps ledger continues to record the logical route/model unconditionally (verified by a new test reading the ledger directly). Usage text and `package.json`'s `check` script (added `src/codex-dispatch.js`) updated.
+
+Docs: `skills/codex/local-board/SKILL.md`, `docs/CodexSupport.md`, and `skills/codex/local-team/SKILL.md` all had their "Route Translation" table/prose shrunk to a pointer at `begin-step --harness codex --json` / the `codexDispatch` block, keeping exactly one illustrative row (`claude-subagent:local-board-designer`) plus the prose rules that are not mechanically encoded (unknown-route approval, return-only vs self-writing dispatch discipline). `memory-bank/systemPatterns.md`'s Codex-translation paragraph now describes the `begin-step --harness codex` mechanism instead of only prose.
+
+Tests added:
+- `test/codex-dispatch.test.js` (new, 6 tests): all seven role mappings; alias/null/claude-prefixed sanitization -> `@codex-default`; a real Codex model id passes through (`modelSatisfies` asserted); `inline` shape; `codex-task:read-only`/`workspace-write` passthrough with `passthrough: true`; unknown `claude-subagent:foo` -> `known:false`, `promptPath:null`, non-empty `note`.
+- `test/cli.test.js` (extended, +1 test): `begin-step --harness codex` on a designer-routed ticket returns all base fields byte-identical to the no-flag call plus a correct `codexDispatch`; asserts the active-steps ledger stamp still records the logical route/model; `--harness bogus` exits 2 with a message naming `--harness`.
+- `test/install.test.js` (updated 2 pre-existing tests): the old assertions expected the full seven-role table/all nine routes verbatim in `SKILL.md`; since the ticket's explicit goal is shrinking that table to a pointer + one row, these were rewritten to assert the pointer language (`--harness codex`, `codexDispatch`, `evidenceExecutor`) and exactly one remaining illustrative row (`claude-subagent:local-board-designer`), rather than checking for now-removed rows.
+
+Verification: `npm run check` (added `src/codex-dispatch.js` to the check list) clean; `npm test` 381 tests, 380 pass, 1 skipped (pre-existing slow smoke test, unrelated), 0 fail; `npm run validate` -> "Ticket validation OK".
+
+Live check: `node ./bin/local-board.js begin-step T20260707T1335Z --action implement --harness codex --json` returns base fields unchanged plus:
+```
+"codexDispatch": {
+  "dispatchKind": "spawn_agent",
+  "agentType": "worker",
+  "promptPath": "C:\\Users\\Nicho\\Documents\\local-board\\agents\\codex\\local-board-implementer.md",
+  "model": null,
+  "evidenceExecutor": "claude-subagent:local-board-implementer@codex-default",
+  "known": true
+}
+```
+Matches the ticket's stated expectation exactly (worker, absolute prompt path, sonnet sanitized to null, `@codex-default` evidence). Also confirmed the no-flag call has no `codexDispatch` key, and `--harness bogus` exits 2 with an actionable error.
+
+Deviations / judgment calls (flagging for reviewer):
+1. The design's prose for `codex-task:*` passthrough said "evidenceExecutor = the route (with @model when a real model is pinned)", which read literally could mean no `@codex-default` suffix when no model is pinned. I applied the same `sanitizeModel`/`evidenceExecutorFor` helper uniformly across claude-subagent and codex-task branches (so codex-task with an alias/no model also gets `@codex-default`), for internal consistency with the general model-sanitization rule and because `modelSatisfies` already treats `codex-default` as the universal wildcard. Worth a design-review confirmation.
+2. For unknown/unrecognized routes (`known: false`), the design only specified `promptPath: null` and a `note`; I additionally compute `model`/`evidenceExecutor` the same way as the known case (rather than nulling them out), since those two fields don't depend on role knowledge. Not explicitly tested by the design's Test Strategy, so flagging as a judgment call.
+3. Chose the illustrative table row as `claude-subagent:local-board-designer` in all three docs (SKILL.md, CodexSupport.md, local-team SKILL.md) for consistency with each other and with pre-existing `install.test.js` assertions, rather than `implementer` (this ticket's own action).
+
 ## Review Findings
 
 ## Test Evidence
@@ -278,3 +311,5 @@ present. Add a one-line `begin-step` usage note for `--harness codex`.
 - 2026-07-08T03:25:18Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): begin-step --harness codex emits an additive codexDispatch block from a new pure src/codex-dispatch.js (agentType, absolute prompt path, sanitized model, evidenceExecutor); alias sanitization to @codex-default; tables become pointers; ledger stamp unchanged. Estimate 2 (basis T20260707T1329Z).
 
 - 2026-07-08T03:26:07Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (CLI orchestration)
+
+- 2026-07-08T03:26:07Z: Ensured git branch local-board/T20260707T1335Z-cli-begin-step-harness-codex-returns-the-translated-dispatch (created).

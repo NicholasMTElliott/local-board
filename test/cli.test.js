@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { commandWhere, main } from "../src/cli.js";
 import { loadConfig } from "../src/config.js";
 import { createTicket, discover, queryNext } from "../src/tickets.js";
+import { readActiveSteps } from "../src/active-steps.js";
 import { removeFixtureDir } from "./helpers/fixtures.js";
 
 async function withBoard(fn) {
@@ -219,6 +220,47 @@ test("where --json resolves the flattened ~/.local-board runtime layout via a pa
   } finally {
     await removeFixtureDir(fixtureRoot);
   }
+});
+
+test("begin-step --harness codex adds an additive codexDispatch block; base fields and the ledger stamp are unchanged", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    const create = await runCli([
+      "--root", root, "create", "task", "Harness codex task",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const baseline = await runCli(["--root", root, "begin-step", ticketId, "--json"]);
+    assert.equal(baseline.code, 0);
+    const baselineResult = JSON.parse(baseline.stdout);
+    assert.equal(baselineResult.configuredAgent, "claude-subagent:local-board-designer");
+    assert.equal("codexDispatch" in baselineResult, false);
+
+    const codexResult = await runCli(["--root", root, "begin-step", ticketId, "--harness", "codex", "--json"]);
+    assert.equal(codexResult.code, 0);
+    const parsed = JSON.parse(codexResult.stdout);
+    for (const key of Object.keys(baselineResult)) {
+      assert.deepEqual(parsed[key], baselineResult[key], `base field ${key} must be unchanged by --harness codex`);
+    }
+    assert.equal(parsed.codexDispatch.known, true);
+    assert.equal(parsed.codexDispatch.dispatchKind, "spawn_agent");
+    assert.equal(parsed.codexDispatch.agentType, "worker");
+    assert.match(parsed.codexDispatch.promptPath.replace(/\\/g, "/"), /agents\/codex\/local-board-designer\.md$/);
+    assert.equal(parsed.codexDispatch.evidenceExecutor, "claude-subagent:local-board-designer@codex-default");
+
+    // The active-steps ledger stamp records the CONFIGURED logical route and
+    // model regardless of --harness; the translation is presentation only.
+    const steps = await readActiveSteps(root);
+    const stamped = steps[ticketId];
+    assert.equal(stamped.route, "claude-subagent:local-board-designer");
+    assert.equal(stamped.model, baselineResult.configuredModel);
+
+    const bogusHarness = await runCli(["--root", root, "begin-step", ticketId, "--harness", "bogus", "--json"]);
+    assert.equal(bogusHarness.code, 2);
+    assert.match(bogusHarness.stderr, /--harness/);
+  });
 });
 
 test("list --ready uses config-aware eligibility, ordering, JSON shape, status filter, and limit", async () => {
