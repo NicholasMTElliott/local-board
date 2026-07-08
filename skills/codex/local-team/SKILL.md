@@ -71,7 +71,7 @@ Use the same translation rules as the Codex `local-board` skill:
 - known `claude-subagent:local-board-*`: translate to the matching Codex executor prompt in the `agentsDir` reported by `local-board where --json`.
 - unknown `claude-subagent:*`: ask before inline fallback; otherwise move to `questions`.
 
-Preserve the configured logical route in `complete-step`, suffixed with `@codex-default` when a Claude route was physically handled by Codex and no valid Codex model id was used. Do not pass Claude model aliases (`opus`, `sonnet`, `haiku`) as Codex model overrides.
+Preserve the configured logical route in `complete-step --executor <route>`, adding `--model codex-default` when a Claude route was physically handled by Codex and no valid Codex model id was used (equivalent to the combined `@codex-default` suffix). Do not pass Claude model aliases (`opus`, `sonnet`, `haiku`) as Codex model overrides.
 
 ## Orchestrator-Owned State
 

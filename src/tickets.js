@@ -2011,6 +2011,41 @@ export function modelSatisfies(configuredModel, executorModel) {
   return executorModel === configuredModel || executorModel === "codex-default";
 }
 
+// Compose the `<route>@<model>` executor evidence string server-side so
+// callers (CLI, skills) do not have to hand-splice the suffix that
+// isValidAgentValue/validateStepRouting validate strictly.
+//
+// - No model given (undefined/empty/whitespace-only): return executor
+//   verbatim; any existing "@model" combined form still flows through
+//   unchanged (today's behavior, downstream-validated as before).
+// - executor already carries "@" and model is given:
+//   - same value -> no-op, return executor as-is (idempotent).
+//   - different value -> throw naming both, so the caller fixes the
+//     disagreement instead of one flag silently winning.
+// - executor is "inline" and model is given -> throw a targeted error
+//   (inline runs on the orchestrator's own model and cannot pin one).
+// - otherwise -> return `${executor}@${model}`.
+export function composeExecutor(executor, model) {
+  if (model === undefined || model === null || model.trim() === "") {
+    return executor;
+  }
+  if (executor === "inline") {
+    throw new Error(
+      "--model cannot be used with --executor inline: inline runs on the orchestrator's own model and cannot pin one",
+    );
+  }
+  const existingModel = modelOf(executor);
+  if (existingModel !== null) {
+    if (existingModel === model) {
+      return executor;
+    }
+    throw new Error(
+      `--executor pins @${existingModel} but --model says ${model}; pass only one or make them agree`,
+    );
+  }
+  return `${executor}@${model}`;
+}
+
 function isValidAgentValue(value) {
   if (typeof value !== "string") {
     return false;

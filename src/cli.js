@@ -9,6 +9,7 @@ import {
   beginStep,
   blockTicket,
   completeStep,
+  composeExecutor,
   createTicket,
   discover,
   findTicket,
@@ -548,18 +549,22 @@ async function commandBeginStep(root, args) {
 async function commandCompleteStep(root, args, allowMainRoot) {
   const asJson = takeFlag(args, "--json");
   const executor = takeOption(args, "--executor");
+  const model = takeOption(args, "--model");
   const evidence = takeOption(args, "--evidence");
   const ticketId = args.shift();
   const action = args.shift();
   ensureNoArgs(args);
 
   if (ticketId === undefined || action === undefined || executor === undefined || evidence === undefined) {
-    throw new Error("complete-step requires: <ticket-id> <action> --executor <executor> --evidence <text> [--allow-main-root]");
+    throw new Error(
+      "complete-step requires: <ticket-id> <action> --executor <executor> [--model <model>] --evidence <text> [--allow-main-root]",
+    );
   }
 
   await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
-  const result = await completeStep(root, ticketId, action, executor, evidence);
+  const composedExecutor = composeExecutor(executor, model);
+  const result = await completeStep(root, ticketId, action, composedExecutor, evidence);
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));
   } else {
@@ -1022,12 +1027,15 @@ async function commandGateComplete(root, args, allowMainRoot) {
   const asJson = takeFlag(args, "--json");
   const stage = takeOption(args, "--stage");
   const executor = takeOption(args, "--executor");
+  const model = takeOption(args, "--model");
   const evidence = takeOption(args, "--evidence") ?? "none";
   const ticketId = args.shift();
   ensureNoArgs(args);
 
   if (ticketId === undefined || stage === undefined || executor === undefined) {
-    throw new Error("gate-complete requires: <ticket-id> --stage <stage> --executor <executor> [--evidence <text>] [--allow-main-root]");
+    throw new Error(
+      "gate-complete requires: <ticket-id> --stage <stage> --executor <executor> [--model <model>] [--evidence <text>] [--allow-main-root]",
+    );
   }
   if (!OPTIONAL_STEP_STAGES.includes(stage)) {
     throw new Error(`gate-complete --stage must be one of ${OPTIONAL_STEP_STAGES.join(", ")}`);
@@ -1035,7 +1043,8 @@ async function commandGateComplete(root, args, allowMainRoot) {
 
   await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
-  const result = await recordGateConsultation(root, ticketId, stage, executor, evidence);
+  const composedExecutor = composeExecutor(executor, model);
+  const result = await recordGateConsultation(root, ticketId, stage, composedExecutor, evidence);
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));
   } else {
@@ -1204,7 +1213,7 @@ function printUsage() {
   local-board [--root <path>] fast-forward [--json]
   local-board team-config [--json]
   local-board [--root <path>] begin-step <ticket-id> [--action <action>] [--json]
-  local-board [--root <path>] complete-step <ticket-id> <action> --executor <executor> --evidence <text> [--allow-main-root] [--json]
+  local-board [--root <path>] complete-step <ticket-id> <action> --executor <executor> [--model <model>] --evidence <text> [--allow-main-root] [--json]
   local-board [--root <path>] approve-inline <ticket-id> <action> --reason <text> [--executor <executor>] [--allow-main-root] [--json]
   local-board [--root <path>] check-dispatch --agent <subagent-type> [--model <model>] [--ticket <ticket-id>] [--json]
   local-board [--root <path>] move <ticket-id> <status> [--override] [--reason <text>] [--allow-main-root] [--json]
@@ -1219,7 +1228,7 @@ function printUsage() {
   local-board [--root <path>] unblock <ticket-id> <dependency-ticket-id> [--allow-main-root]
   local-board [--root <path>] estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--allow-main-root] [--json]
   local-board [--root <path>] gate-check <ticket-id> --stage <stage> [--allow-main-root] [--json]
-  local-board [--root <path>] gate-complete <ticket-id> --stage <stage> --executor <executor> [--evidence <text>] [--allow-main-root] [--json]
+  local-board [--root <path>] gate-complete <ticket-id> --stage <stage> --executor <executor> [--model <model>] [--evidence <text>] [--allow-main-root] [--json]
   local-board [--root <path>] specialty-run <ticket-id> <step-name> [--json]
   local-board [--root <path>] calibration suggest <ticket-id> [--json]
 

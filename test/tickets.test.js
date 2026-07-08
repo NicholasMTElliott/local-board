@@ -13,6 +13,7 @@ import {
   beginStep,
   blockTicket,
   completeStep,
+  composeExecutor,
   createTicket,
   discover,
   findTicket,
@@ -1028,6 +1029,46 @@ test("completeStep accepts @codex-default as satisfying any pinned model", async
     );
     assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
   });
+});
+
+test("composeExecutor: no model given returns the executor verbatim (bare or already-combined)", () => {
+  assert.equal(composeExecutor("claude-subagent:local-board-designer", undefined), "claude-subagent:local-board-designer");
+  assert.equal(composeExecutor("claude-subagent:local-board-designer", null), "claude-subagent:local-board-designer");
+  assert.equal(composeExecutor("claude-subagent:local-board-designer", ""), "claude-subagent:local-board-designer");
+  assert.equal(composeExecutor("claude-subagent:local-board-designer", "   "), "claude-subagent:local-board-designer");
+  assert.equal(
+    composeExecutor("claude-subagent:local-board-designer@opus", undefined),
+    "claude-subagent:local-board-designer@opus",
+  );
+});
+
+test("composeExecutor: composes route@model when the executor is bare", () => {
+  assert.equal(
+    composeExecutor("claude-subagent:local-board-designer", "opus"),
+    "claude-subagent:local-board-designer@opus",
+  );
+  assert.equal(
+    composeExecutor("codex-task:read-only", "codex-default"),
+    "codex-task:read-only@codex-default",
+  );
+});
+
+test("composeExecutor: identical @suffix and --model is a no-op; disagreement throws naming both values", () => {
+  assert.equal(
+    composeExecutor("claude-subagent:local-board-designer@opus", "opus"),
+    "claude-subagent:local-board-designer@opus",
+  );
+  assert.throws(
+    () => composeExecutor("claude-subagent:local-board-designer@opus", "sonnet"),
+    /--executor pins @opus but --model says sonnet; pass only one or make them agree/,
+  );
+});
+
+test("composeExecutor: --model with --executor inline throws a specific, actionable error", () => {
+  assert.throws(
+    () => composeExecutor("inline", "opus"),
+    /--model cannot be used with --executor inline/,
+  );
 });
 
 test("approve-inline --executor approves a model deviation while keeping the configured route", async () => {
