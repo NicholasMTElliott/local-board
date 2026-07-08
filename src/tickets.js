@@ -594,6 +594,7 @@ export function validate(board, config = null) {
 
   for (const ticket of board.tickets) {
     issues.push(...validateTicketShape(board, ticket));
+    issues.push(...validateCommentMarkers(ticket));
     if (ticket.id !== "") {
       if (seenIds.has(ticket.id)) {
         issues.push(`${ticket.path}: duplicate id ${ticket.id}; first seen in ${seenIds.get(ticket.id)}`);
@@ -842,10 +843,11 @@ export async function appendTicketComment(root, ticketId, section, text, options
       if (options.__afterRead) {
         await options.__afterRead();
       }
+      const prefix = renderMarkerBlock(options.markers);
       const body = appendToSection(
         ticket.body,
         section,
-        `- ${formatIsoSeconds(options.now ?? new Date())}: ${text.trim()}`,
+        `- ${formatIsoSeconds(options.now ?? new Date())}: ${prefix}${text.trim()}`,
       );
       const frontMatter = withUpdated({ ...ticket.frontMatter }, options.now);
       await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
@@ -853,6 +855,147 @@ export async function appendTicketComment(root, ticketId, section, text, options
     },
     options.lock,
   );
+}
+
+// Renders an ordered list of {key, value} marker pairs into the bracketed
+// block inserted between the "- <ts>: " prefix and the comment body. Empty
+// or absent markers render "" so unmarked comments stay byte-identical to
+// the pre-marker format. Non-empty output always ends with exactly one
+// trailing space so callers can splice it directly before the body text.
+function renderMarkerBlock(markers) {
+  if (markers === undefined || markers === null || markers.length === 0) {
+    return "";
+  }
+  return `[${markers.map(({ key, value }) => `${key}:${value}`).join(" ")}] `;
+}
+
+const COMMENT_LINE_RE = /^- (?<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})): (?<rest>[\s\S]*)$/;
+const MARKER_KEY_RE = /^[A-Za-z0-9_.-]+$/;
+const MARKER_VALUE_RE = /^[A-Za-z0-9_./-]+$/;
+const MARKER_TOKEN_RE = /^([A-Za-z0-9_.-]+):([A-Za-z0-9_./-]+)$/;
+
+// Parses a single Run Log-style comment line into { timestamp, markers, body }.
+// Pure and never throws: any shape that doesn't cleanly match the marker
+// grammar falls back to treating the whole remainder as body text. Callers
+// are responsible for feeding real comment lines (fence-awareness lives in
+// the contentLines walker, not here).
+export function parseCommentLine(line) {
+  const match = COMMENT_LINE_RE.exec(line);
+  if (match === null) {
+    return { timestamp: null, markers: [], body: line };
+  }
+
+  const { ts, rest } = match.groups;
+
+  if (rest.startsWith("[")) {
+    const closeIndex = rest.indexOf("]");
+    if (closeIndex !== -1) {
+      const inner = rest.slice(1, closeIndex);
+      const tokens = inner.length === 0 ? [] : inner.split(" ");
+      const markers = [];
+      let valid = inner.length > 0;
+      for (const token of tokens) {
+        const tokenMatch = MARKER_TOKEN_RE.exec(token);
+        if (tokenMatch === null) {
+          valid = false;
+          break;
+        }
+        markers.push({ key: tokenMatch[1], value: tokenMatch[2] });
+      }
+      if (valid) {
+        const body = rest.slice(closeIndex + 1).replace(/^ /, "");
+        return { timestamp: ts, markers, body };
+      }
+    }
+  }
+
+  return { timestamp: ts, markers: [], body: rest };
+}
+
+// Shared fence-tracking line walker (the state machine locateSection uses
+// internally to skip fenced code blocks). Yields { line, lineStart } for
+// every line NOT inside a ``` or ~~~ fence, so callers that scan comment
+// text for marker-shaped lines don't mistake fenced example content for
+// real markers. Kept standalone (rather than refactoring locateSection to
+// consume it) to avoid risk to that load-bearing function.
+function* contentLines(body) {
+  const fenceRe = /^\s*(`{3,}|~{3,})/;
+  let inFence = false;
+  let fenceChar = null;
+
+  let offset = 0;
+  const lineRe = /[^\n]*\n|[^\n]+$/g;
+  let m;
+  while ((m = lineRe.exec(body)) !== null) {
+    const rawLine = m[0];
+    const line = rawLine.endsWith("\n") ? rawLine.slice(0, -1) : rawLine;
+    const lineStart = offset;
+    offset += rawLine.length;
+
+    const fenceMatch = fenceRe.exec(line);
+    if (fenceMatch !== null) {
+      const runChar = fenceMatch[1][0];
+      if (!inFence) {
+        inFence = true;
+        fenceChar = runChar;
+        continue;
+      }
+      if (runChar === fenceChar) {
+        inFence = false;
+        fenceChar = null;
+        continue;
+      }
+    }
+
+    if (inFence) {
+      continue;
+    }
+
+    yield { line, lineStart };
+  }
+}
+
+const MARKER_SHAPED_LINE_RE =
+  /^- \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2}): \[/;
+
+// Flags comment lines that look like an attempted marker block but fail the
+// strict marker grammar -- deliberately stricter than parseCommentLine's
+// graceful fallback so real author mistakes surface, without flagging
+// ordinary prose that happens to start with a bracketed aside (no token
+// containing ":" -> not marker syntax -> skipped).
+function validateCommentMarkers(ticket) {
+  const issues = [];
+
+  for (const { line } of contentLines(ticket.body)) {
+    if (!MARKER_SHAPED_LINE_RE.test(line)) {
+      continue;
+    }
+
+    const openIndex = line.indexOf("[");
+    const closeIndex = line.indexOf("]", openIndex);
+    const unclosed = closeIndex === -1;
+    const inner = unclosed ? line.slice(openIndex + 1) : line.slice(openIndex + 1, closeIndex);
+    const tokens = inner.length === 0 ? [] : inner.split(" ");
+
+    const looksIntended = tokens.some((token) => token.includes(":"));
+    if (!looksIntended) {
+      continue;
+    }
+
+    if (unclosed) {
+      issues.push(`${ticket.path}: malformed marker block in comment "${line}": unclosed [`);
+      continue;
+    }
+
+    const badToken = tokens.find((token) => !MARKER_TOKEN_RE.test(token));
+    if (badToken !== undefined) {
+      issues.push(
+        `${ticket.path}: malformed marker block in comment "${line}": token "${badToken}" violates key:value grammar (key ${MARKER_KEY_RE}, value ${MARKER_VALUE_RE})`,
+      );
+    }
+  }
+
+  return issues;
 }
 
 export async function setTicketSection(root, ticketId, section, text, options = {}) {
