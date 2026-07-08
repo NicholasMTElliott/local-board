@@ -1,11 +1,12 @@
-# Per-Step Orchestration (Design Proposal)
+# Per-Step Orchestration
 
-Status: **implemented** on branch `feature/per-step-orchestration`. The
+Status: **implemented** and merged to `mainline`. The
 agent-teams teammate layer is replaced by a single top-level orchestrator that
 dispatches each pipeline step to an ephemeral, model-specialized executor. The
 routing-profile schema, designer self-write, gate-check agent, and the
-`SKILL_TEAM.md` orchestrator contract are live; `maxInFlight`'s default is still
-deferred to a real run (it currently reuses `team-config`).
+`SKILL_TEAM.md` orchestrator contract are live; `maxInFlight` reuses
+`team-config` (`LOCAL_BOARD_MAX_TEAMMATES`, default 6); the real run (§5)
+pinned the recommended working cap at ≈3.
 
 ## Motivation
 
@@ -58,6 +59,9 @@ this discipline by refusing guarded per-ticket calls from the main root unless
 
 Today `agents` maps an action to a route string. Extend each entry to a profile
 object carrying `route`, optional `model`, and optional `prompt`.
+
+The models below (`gpt-5.5`, `claude-opus-4-6`, etc.) are **illustrative** — the
+live config does not pin these; they show the shape of a profile object.
 
 ```jsonc
 "agents": {
@@ -138,7 +142,8 @@ cross-ticket coordination.
 - `readyQueue`: ready tickets not yet picked up (from `list --ready`)
 - `branchReady`: `ticketId -> changedFiles[]` for tickets at/after `ready_for_review`
 - `assignedLog`: every ticket processed this session (for the final summary)
-- `maxInFlight`: concurrency cap (reuse `team-config` / `LOCAL_BOARD_MAX_TEAMMATES`)
+- `maxInFlight`: concurrency cap (reuse `team-config` / `LOCAL_BOARD_MAX_TEAMMATES`,
+  default 6; ≈3 is the recommended working cap)
 
 ### Responsibility split
 
@@ -294,11 +299,9 @@ These figures are proxies; real section sizes vary widely. The *ratios* and the
 
 ## 4. Open decisions
 
-1. **`maxInFlight` default — decide after a real run.** Per the §3 finding it is a
-   reasoning-clarity / peak cap, not the binding token limit. Leave it unset in
-   the design until an actual multi-ticket orchestrator run pins a sensible
-   default; ~3 is the working hypothesis. Reuse `LOCAL_BOARD_MAX_TEAMMATES` or
-   rename to `LOCAL_BOARD_MAX_INFLIGHT` when pinned.
+1. **`maxInFlight` default — resolved, see Resolved below.** The env var stays
+   `LOCAL_BOARD_MAX_TEAMMATES`; a `LOCAL_BOARD_MAX_INFLIGHT` rename is a
+   possible future follow-up, not current state.
 2. **Model in config vs frontmatter.** Config `model` overrides frontmatter at
    dispatch (matches dispatch-param precedence). Keep frontmatter as the default
    for standalone use of an agent.
@@ -315,7 +318,8 @@ These figures are proxies; real section sizes vary widely. The *ratios* and the
   optimizations; plan periodic compaction at wave boundaries.
 - **Designer self-writes its section — yes (hybrid).** Reviewer and tester stay
   return-only.
-- **`maxInFlight` default — ≈3 (§5 real run).** The orchestrator real run drove
+- **`maxInFlight` default — config default 6; ≈3 recommended working cap (§5
+  real run).** The orchestrator real run drove
   2 tickets concurrently and they were trivially manageable; 3 leaves headroom
   before per-wave scheduling/conflict tracking gets hard to hold accurately.
 - **Fate of `local-team` + `local-board-teammate` — resolved.** `local-team` is
