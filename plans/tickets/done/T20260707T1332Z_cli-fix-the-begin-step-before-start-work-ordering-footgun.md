@@ -1,7 +1,7 @@
 ---
 id: T20260707T1332Z
 type: task
-status: implementing
+status: done
 priority: P2
 parent: null
 children: []
@@ -11,10 +11,10 @@ branch: local-board/T20260707T1332Z-cli-fix-the-begin-step-before-start-work-ord
 estimate: 2
 estimateBasis: T20260707T1331Z
 workStartedAt: 2026-07-08T00:00:27Z
-workCompletedAt: null
+workCompletedAt: 2026-07-08T00:18:27Z
 created: 2026-07-07T13:32:54Z
-updated: 2026-07-08T00:07:00Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-08T00:18:27Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # cli: fix the begin-step before start-work ordering footgun
@@ -226,9 +226,42 @@ No deviations from the design. Scope held to `src/tickets.js` as the only produc
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) against commit ef85d47.
+
+No blocking findings.
+
+- Precedence verified: --action > statusActions[status] > ACTIVE_STATUS_TO_READY peer > null (src/tickets.js:760); the peer lookup goes through config so renamed actions are honored.
+- ACTIVE_STATUS_TO_READY covers exactly the four active statuses (:138), adjacent to the T1327 stage maps; all four tested.
+- Consumers consistent: beginStep + resolveExpectedStep share the resolver; check-dispatch on an active ticket now resolves a concrete verdict — strictly better than the prior ticket-not-found; complete-step validation unweakened.
+- Query outputs intentionally unchanged (actionRecord unchanged at :1591).
+- Ordering warnings removed/replaced accurately across all four texts; no dangling references.
+- Tests cover end-to-end start-work->begin-step, explicit-entry-wins, --action override, check-dispatch fallback, and the action-less-status error.
+
+Verdict: pass
+
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/T20260707T1332Z-..., commit ef85d47.
+
+**Suite:** `npm run check` pass; `npm test` 335 pass / 1 gated-skip of 336; `npm run validate` OK.
+
+**Live probes (throwaway git board):**
+- The exact old footgun: start-work (-> implementing) then begin-step with NO --action resolved implement with the configured route/model — no throw.
+- designing-status begin-step resolves design@opus.
+- --action override still wins (review resolved on the implementing ticket).
+- check-dispatch on an active-status ticket returns concrete verdicts both ways (match / agent-mismatch), never ticket-not-found.
+- Explicit statusActions.implementing precedence verified via the passing automated test at tickets.test.js:666 (tester lacks Write to edit a throwaway config live — coverage gap in manual probing only).
+
+**Grep:** zero matches for the old warning phrasing across all four texts; the accurate replacement sentence confirmed in each.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5) — verification pass.
+
+- All prose changes landed with the implementation commit (warnings deleted from SKILL.md, SKILL_TEAM.md, the codex skill, and PerStepOrchestration; replacement sentence in each).
+- memory-bank/systemPatterns.md and docs/Workflow.md verified free of the old ordering constraint; no edits needed.
 
 ## Questions
 
@@ -239,3 +272,13 @@ No deviations from the design. Scope held to `src/tickets.js` as the only produc
 - 2026-07-08T00:00:27Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (CLI ergonomics)
 
 - 2026-07-08T00:00:27Z: Ensured git branch local-board/T20260707T1332Z-cli-fix-the-begin-step-before-start-work-ordering-footgun (created).
+
+- 2026-07-08T00:07:24Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): fallback in resolveStepFromBoard + 8 tests + skill warning removal; live check on this very ticket resolved implement at implementing status; 335 pass + 1 gated-skip.
+
+- 2026-07-08T00:08:22Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (CLI ergonomics)
+
+- 2026-07-08T00:12:23Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict pass: precedence, map coverage, consumer consistency, and doc deletions all verified; check-dispatch behavior strictly improved.
+
+- 2026-07-08T00:17:01Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 335+1 gated; the exact old footgun sequence live-verified fixed; designing/override/check-dispatch probes pass; warning phrasing grep-clean across all four texts. Result: pass.
+
+- 2026-07-08T00:18:27Z: Completed document via codex-task:workspace-write: Codex (workspace-write) verification: all prose landed with implementation; memory-bank and Workflow verified clean.
