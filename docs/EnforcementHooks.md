@@ -1,8 +1,8 @@
 # Enforcement Hooks
 
-local-board can install a small set of Claude Code hooks that make delegated
-Claude subagent work harder to fake. They are opt-in because they edit the
-user's Claude Code settings and depend on Claude Code hook behavior.
+local-board can install a small set of Claude Code hooks that make unobserved
+Claude subagent route claims harder to record. They are opt-in because they edit
+the user's Claude Code settings and depend on Claude Code hook behavior.
 
 Enable them with:
 
@@ -26,7 +26,10 @@ entries and leaves user-authored hooks alone.
 
 ## What They Enforce
 
-The hooks close the self-reported evidence gap for Claude subagent routes.
+The hooks reduce one specific self-reported evidence gap for Claude subagent
+routes: whether a matching dispatch was observed in the current session. They
+do not prove that the recorded evidence text is authentic, complete, or
+tamper-proof; see `SECURITY.md`'s "Orchestrator-authored evidence" limitation.
 Without them, an orchestrator or prompt-injected command could attempt to run:
 
 ```sh
@@ -85,7 +88,7 @@ v1. Entries are small and there is no rotation. The dispatch ledger is
 best-effort hook evidence, not the canonical mutation ledger. A long running
 project can delete old ledger entries when no Claude Code session needs them,
 but do not delete entries in the middle of an active session if `evidence-gate`
-still needs to verify a subagent completion.
+still needs to match a completion claim to a dispatch.
 
 Both paths live under `.local-board/`, which is machine-local runtime state.
 
