@@ -1,7 +1,7 @@
 ---
 id: T20260708T2016Z
 type: task
-status: ready_for_docs
+status: done
 priority: P3
 parent: S20260516T1539Z
 children: []
@@ -11,7 +11,7 @@ branch: local-board/T20260708T2016Z-add-comments-subcommand-to-list-and-filter-t
 estimate: 2
 estimateBasis: T20260707T1338Z
 workStartedAt: 2026-07-08T20:53:57Z
-workCompletedAt: null
+workCompletedAt: 2026-07-08T21:15:41Z
 created: 2026-07-08T20:15:34Z
 updated: 2026-07-08T21:15:41Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
