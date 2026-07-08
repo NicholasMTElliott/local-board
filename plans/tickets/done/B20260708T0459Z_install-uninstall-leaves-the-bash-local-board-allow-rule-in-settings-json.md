@@ -1,7 +1,7 @@
 ---
 id: B20260708T0459Z
 type: bug
-status: ready_for_docs
+status: done
 priority: P3
 parent: null
 children: []
@@ -11,7 +11,7 @@ branch: local-board/B20260708T0459Z-install-uninstall-leaves-the-bash-local-boar
 estimate: 2
 estimateBasis: B20260707T1330Z
 workStartedAt: 2026-07-08T20:13:56Z
-workCompletedAt: null
+workCompletedAt: 2026-07-08T20:46:36Z
 created: 2026-07-08T04:59:37Z
 updated: 2026-07-08T20:46:36Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
