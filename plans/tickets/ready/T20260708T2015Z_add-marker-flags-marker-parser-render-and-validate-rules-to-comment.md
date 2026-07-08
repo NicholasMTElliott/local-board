@@ -1,7 +1,7 @@
 ---
 id: T20260708T2015Z
 type: task
-status: implementing
+status: ready_for_docs
 priority: P3
 parent: S20260516T1539Z
 children: []
@@ -13,8 +13,8 @@ estimateBasis: T20260707T1338Z
 workStartedAt: 2026-07-08T20:16:33Z
 workCompletedAt: null
 created: 2026-07-08T20:15:33Z
-updated: 2026-07-08T20:41:43Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-08T20:52:54Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # Add --marker flags, marker parser, render, and validate rules to comment
@@ -204,7 +204,37 @@ Verdict: changes_requested
 
 ## Test Evidence
 
+Verified by claude-subagent:local-board-tester (sonnet), in the ticket worktree.
+
+### Repo-level checks
+
+| Command | Result |
+|---|---|
+| `npm run check` | PASS |
+| `npm test` | PASS — 398 tests, 397 pass, 0 fail, 1 skipped (pre-existing gated smoke) |
+| `npm run validate` | PASS on this worktree's real board — fence-aware validator clean over all existing bracket-heavy tickets |
+
+### Live CLI probes (throwaway scratchpad board, removed after)
+
+- Two markers → exact `- <ts>: [step:x outcome:PASS] checked step` line, CLI order preserved. PASS.
+- No markers → byte-identical pre-feature shape. PASS.
+- Malformed (missing `=`, bad key charset, bad value charset with `:`, duplicate key) → each exit 2 with a named-offender message; ticket file SHA-256 identical before/after all four. PASS.
+- Validate: clean board OK; hand-appended `[step:x` (unclosed) FAILS with actionable message; `[step:x bad]` FAILS naming the offending token and both grammars; same malformed line inside a ``` fence PASSES (fence-aware). A bare `[broken` with no key:value-shaped token is intentionally ignored per the looksIntended prose guard — correct, not a gap. PASS.
+- `parseCommentLine` via node -e: marked round-trip correct; legacy line → empty markers + full body; CRLF line parses identically to LF with no `\r` in body; garbage and empty string return gracefully (never throws). PASS.
+
+### Docs / README
+
+All doc examples use legal charset values (no `:` in values); reserved-vocabulary table, not-evidence rule, and the CLI `=` ↔ disk `:` mapping present; README Documentation Index entry present.
+
+### Caveats
+
+None against acceptance. Malformed-line probe used node fs scripts on the disposable board only; worktree clean of tester changes.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5). docs/comment-markers.md + README index shipped at implement. Closing audit: docs/Workflow.md gained a one-sentence pointer to comment markers; memory-bank/systemPatterns.md fact tightened (repeatable --marker, strict charsets, [k:v] render, annotation-only, fence-aware validate); SKILL command blocks verified untouched and byte-identical.
 
 ## Questions
 
@@ -227,3 +257,13 @@ Verdict: changes_requested
 - 2026-07-08T20:41:43Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, security_audit:inline, gate:implement:claude-subagent:local-board-gatecheck@haiku].
 
 - 2026-07-08T20:41:43Z: Ensured git branch local-board/T20260708T2015Z-add-marker-flags-marker-parser-render-and-validate-rules-to-comment (already-current).
+
+- 2026-07-08T20:44:26Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework: single-point trailing-CR normalization + 3 CRLF tests; executor doc example legalized with v1 colon-limitation note; 397 pass + 1 skip
+
+- 2026-07-08T20:45:45Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (CRLF normalization rework; prior consultation ran security_audit inline PASS)
+
+- 2026-07-08T20:45:46Z: Completed review via codex-task:read-only: changes_requested (P2 CRLF stranding, P3 illegal doc example) on impl commit; addressed in rework commit; recorded post-move per evidence-invalidation ordering
+
+- 2026-07-08T20:50:59Z: Completed test via claude-subagent:local-board-tester@sonnet: 397 pass + 1 skip; live probes: render shapes, 4 malformed exit-2 no-write, validate catch/fence-pass, parseCommentLine CRLF clean; real-board validate green
+
+- 2026-07-08T20:52:54Z: Completed document via codex-task:workspace-write: Workflow pointer + systemPatterns fact; SKILL blocks verified unchanged
