@@ -13,7 +13,7 @@ estimateBasis: B20260707T1325Z
 workStartedAt: 2026-07-08T01:22:15Z
 workCompletedAt: null
 created: 2026-07-07T13:26:08Z
-updated: 2026-07-08T01:28:26Z
+updated: 2026-07-08T01:36:15Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -226,13 +226,32 @@ Verification:
 
 Deviations from design: none. Implemented exactly as specified, including the optional validation-existence-check fix (design left this as "route through the helper only if trivial" — it was).
 
+### Rework (2026-07-08): non-last-section append separator fix
+
+Review (codex, P2) found `appendToSection` to a non-last section (one followed by another `## ` heading) dropped the blank-line separator, emitting `content\n## Next` instead of `content\n\n## Next`. Root cause: `locateSection`'s `contentEnd` points at the *first character* of the next heading line (no leading newline of its own — the fence-aware rewrite changed this from the old code's `search(/\n## /)`, which located the newline immediately preceding the next heading and left it as the leading char of `after`). `appendToSection` spliced `line + "\n" + after` unconditionally, so for a non-last section `after` began directly with `"## Next"` and only one newline separated the appended line from the heading; for the last section (`after === ""`) there was no regression, since `insertAt === body.length` in both the old and new code.
+
+Fix (`src/tickets.js`, `appendToSection`): choose the separator based on whether `after` is empty — `"\n"` when the section is last (`after === ""`, matches prior behavior, no change), `"\n\n"` otherwise (restores the blank line before the next heading). `locateSection`'s `contentEnd` semantics are unchanged; `getSectionText` and `replaceSection` were untouched (already verified correct by review) and remain untouched.
+
+Tests added to `test/tickets.test.js`:
+- `appendTicketComment into a non-last section preserves the blank-line separator before the next heading` — comments into `Questions` (followed by `Run Log`), asserts the exact byte sequence `...Is this in scope?\n\n## Run Log`.
+- `appendTicketComment into a non-last section with a fenced heading-like line still preserves the separator` — seeds `Questions` with a fenced block containing a fake `## Run Log` heading-like line, appends a comment, asserts the same exact separator sequence and that the real `Run Log` section is untouched (empty).
+
+Verification:
+- `npm run check`: pass.
+- `npm test`: 350 tests, 349 pass, 1 skipped (same pre-existing gated smoke test), 0 fail.
+- `npm run validate`: `Ticket validation OK`.
+- Live spot check: ran `node ./bin/local-board.js comment B20260707T1326Z "separator probe" --section "Questions"` (Questions is followed by Run Log) and read the raw file. Confirmed byte sequence `...separator probe\n\n## Run Log` — blank line preserved. The probe comment is left in place under Questions as evidence of the fix.
+
 ## Review Findings
 
+- 2026-07-08T01:33:03Z: Review (codex): P2 regression — appendToSection to a non-last section now emits content\n## Next instead of content\n\n## Next (contentEnd sits at the heading start; old splice used the pre-heading newline); the append test only covered the last section. Fix the boundary/separator and add a non-last-section append test. Mixed-marker fences, in-fence openers, and consumer rewiring all verified correct.
 ## Test Evidence
 
 ## Documentation Updates
 
 ## Questions
+
+- 2026-07-08T01:35:31Z: separator probe
 
 ## Run Log
 
@@ -241,3 +260,13 @@ Deviations from design: none. Implemented exactly as specified, including the op
 - 2026-07-08T01:22:15Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (parser hygiene)
 
 - 2026-07-08T01:22:15Z: Ensured git branch local-board/B20260707T1326Z-section-boundary-detection-mis-fires-on-heading-like-lines-inside-fenced-code-blocks (created).
+
+- 2026-07-08T01:28:59Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): locateSection helper across all four scanners, 6 tests; live-data spot check on a fenced done ticket returned intact spans; 347 pass + 1 gated-skip.
+
+- 2026-07-08T01:29:48Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (parser hygiene)
+
+- 2026-07-08T01:33:03Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) changes_requested: non-last-section append loses the blank-line separator; everything else verified.
+
+- 2026-07-08T01:33:03Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku, review:codex-task:read-only].
+
+- 2026-07-08T01:33:03Z: Ensured git branch local-board/B20260707T1326Z-section-boundary-detection-mis-fires-on-heading-like-lines-inside-fenced-code-blocks (already-current).

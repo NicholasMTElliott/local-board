@@ -583,6 +583,53 @@ test("a genuine non-fenced heading still boundaries sections correctly (regressi
   });
 });
 
+test("appendTicketComment into a non-last section preserves the blank-line separator before the next heading", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Non-last append target", {
+      status: "backlog",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await appendTicketComment(root, ticketId, "Questions", "Is this in scope?", {
+      now: new Date("2026-05-14T21:02:00Z"),
+    });
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(
+      text,
+      /- 2026-05-14T21:02:00Z: Is this in scope\?\n\n## Run Log/,
+    );
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+test("appendTicketComment into a non-last section with a fenced heading-like line still preserves the separator", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Non-last fenced append target", {
+      status: "backlog",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    const fencedQuestion = "Example prompt:\n\n```\n## Run Log\nfake content\n```";
+
+    await setTicketSection(root, ticketId, "Questions", fencedQuestion, {
+      now: new Date("2026-05-14T21:00:00Z"),
+    });
+    await appendTicketComment(root, ticketId, "Questions", "Follow-up after the fence.", {
+      now: new Date("2026-05-14T21:02:00Z"),
+    });
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(
+      text,
+      /- 2026-05-14T21:02:00Z: Follow-up after the fence\.\n\n## Run Log/,
+    );
+    assert.equal(getSectionText(text, "Run Log"), "");
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
 test("queryNext returns configured action and prefers closest pipeline phase after priority", async () => {
   await withBoard(async (root) => {
     await createTicket(root, "task", "Needs design", {

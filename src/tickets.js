@@ -2012,7 +2012,12 @@ function appendToSection(body, section, line) {
   const insertAt = loc.contentEnd;
   const before = body.slice(0, insertAt).replace(/\s*$/, "\n\n");
   const after = body.slice(insertAt);
-  return `${before}${line}\n${after}`;
+  // contentEnd sits at the next heading's first character (no blank line of
+  // its own), so when a following section exists we must supply the
+  // separating blank line ourselves; the last section (after === "") only
+  // needs the single trailing newline.
+  const separator = after === "" ? "\n" : "\n\n";
+  return `${before}${line}${separator}${after}`;
 }
 
 export function getSectionText(body, section) {
