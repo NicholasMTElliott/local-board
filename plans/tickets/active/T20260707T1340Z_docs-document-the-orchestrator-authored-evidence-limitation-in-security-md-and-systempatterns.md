@@ -1,16 +1,16 @@
 ---
 id: T20260707T1340Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P4
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260707T1340Z-docs-document-the-orchestrator-authored-evidence-limitation-in-security-md-and-systempatterns
 estimate: 1
 estimateBasis: T20260707T1338Z
-workStartedAt: null
+workStartedAt: 2026-07-08T11:53:31Z
 workCompletedAt: null
 created: 2026-07-07T13:40:06Z
 updated: 2026-07-08T11:53:31Z
@@ -100,3 +100,5 @@ This *is* the documentation change. No README Documentation Index update is need
 - 2026-07-08T11:53:01Z: Completed design via claude-subagent:local-board-designer@opus: SECURITY.md Security Model subsection + systemPatterns Safety Pattern paragraph; ledger proves dispatch not content; human diff review mitigation; estimate 1 basis T1338
 
 - 2026-07-08T11:53:30Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (docs-only; documenting a limitation, not changing auth code)
+
+- 2026-07-08T11:53:31Z: Ensured git branch local-board/T20260707T1340Z-docs-document-the-orchestrator-authored-evidence-limitation-in-security-md-and-systempatterns (created).

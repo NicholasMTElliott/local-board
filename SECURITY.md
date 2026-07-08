@@ -29,4 +29,8 @@ The risk surface is delegation, not the CLI itself:
 
 Use local-board only against repositories and workflows you control and review. Treat agent-proposed changes as untrusted until reviewed, the same as any pull request.
 
+### Orchestrator-authored evidence
+
+Return-only subagents (reviewer, tester, gatecheck, decomposer, and read-only Codex routes) have no Write or Edit tool: they return findings, and the orchestrator persists them to the ticket via `section --file`. The orchestrator could substitute or summarize that content before writing it, and nothing detects the divergence. The dispatch ledger and enforcement hooks prove a matching dispatch happened; they do not prove the persisted content matches what the subagent returned. This is inherent to the return-only architecture, not a bug to be fixed. Mitigation: review ticket diffs like any pull request — evidence sections travel through ordinary git commits.
+
 local-board does not store credentials and ships no secrets. If you find a committed secret, report it as a vulnerability rather than opening a public issue.
