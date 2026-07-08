@@ -1,7 +1,7 @@
 ---
 id: B20260708T0459Z
 type: bug
-status: backlog
+status: ready_for_design
 priority: P3
 parent: null
 children: []
@@ -13,7 +13,7 @@ estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-08T04:59:37Z
-updated: 2026-07-08T04:59:46Z
+updated: 2026-07-08T20:12:50Z
 completedSteps: []
 routingApprovals: []
 ---

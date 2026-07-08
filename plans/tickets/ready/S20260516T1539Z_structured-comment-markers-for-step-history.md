@@ -1,7 +1,7 @@
 ---
 id: S20260516T1539Z
 type: story
-status: backlog
+status: ready_for_decomposition
 priority: P3
 parent: null
 children: []
@@ -9,8 +9,11 @@ blockedBy: []
 blocks: []
 branch: null
 estimate: null
+estimateBasis: null
+workStartedAt: null
+workCompletedAt: null
 created: 2026-05-16T15:39:38Z
-updated: 2026-05-16T15:41:18Z
+updated: 2026-07-08T20:12:50Z
 completedSteps: []
 routingApprovals: []
 ---
