@@ -16,7 +16,7 @@ mandatory action -> gate-check --stage <stage> -> for each requested name:
 ```
 
 1. The orchestrator completes the mandatory action (`design`, `implement`, or `test`) and records evidence with `complete-step`.
-2. The orchestrator runs `local-board gate-check <ticket-id> --stage <stage> --json`. If the catalog is empty, the command self-certifies the stage with a `gate:<stage>:skipped-empty-catalog` token and there is no agent dispatch.
+2. The orchestrator runs `local-board gate-check <ticket-id> --stage <stage> --json`. If the catalog is empty, the command self-certifies the stage with a `gate:<stage>:skipped-empty-catalog` token, returns `skip: true` with `recorded` set to that token, and there is no agent dispatch.
 3. If the catalog is non-empty, the orchestrator dispatches the returned `prompt` through the configured gate agent, then records that consultation with `local-board gate-complete <ticket-id> --stage <stage> --executor <executor>`. The gate agent returns strict JSON: `{ "requestedSteps": ["security_audit", ...] }`. An empty array is the normal case.
 4. For each requested name, the orchestrator runs `local-board specialty-run <ticket-id> <name> --json`, dispatches the resolved `prompt` through the resolved `agent`, parses the specialty agent's `verdict` (`PASS` / `CONCERNS` / `FAIL`) plus `findings`, and records evidence with `local-board complete-step <ticket-id> <name> --executor <executor> --evidence "<VERDICT>: <summary>"`.
 5. After every requested specialty completes, the orchestrator advances the ticket using `move`.
