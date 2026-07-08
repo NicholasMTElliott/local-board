@@ -36,6 +36,7 @@ import {
 } from "./tickets.js";
 import { assertAutoMergeReady, autoMergeTicketBranch, startTicketWork } from "./git.js";
 import { checkDispatch } from "./active-steps.js";
+import { translateCodexDispatch } from "./codex-dispatch.js";
 import { loadConfig, OPTIONAL_STEP_STAGES } from "./config.js";
 import { runInstall } from "./install.js";
 import { initProject, packagedResourceDir } from "./scaffold.js";
@@ -206,6 +207,13 @@ function selfPackageRoot() {
   return path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 }
 
+// The Codex executor-prompt directory for a given package root. Single seam
+// so `where` and `begin-step --harness codex` agree; never resolve a second,
+// divergent path.
+function agentsDirFor(packageRoot) {
+  return path.join(packageRoot, "agents", "codex");
+}
+
 // Reports the running CLI's own asset locations: version, package root,
 // packaged prompts/templates dirs (dual-layout aware via packagedResourceDir),
 // and the Codex executor-prompt dir. `packageRoot`, when supplied, overrides
@@ -220,7 +228,7 @@ async function commandWhere(root, args, packageRootOverride) {
   const version = await readPackageVersion(packageRoot);
   const promptsDir = packagedResourceDir("prompts", packageRoot);
   const templatesDir = packagedResourceDir("templates", packageRoot);
-  const agentsDir = path.join(packageRoot, "agents", "codex");
+  const agentsDir = agentsDirFor(packageRoot);
 
   const result = { version, packageRoot, promptsDir, templatesDir, agentsDir };
 
@@ -529,19 +537,43 @@ async function commandTeamConfig(root, args) {
 async function commandBeginStep(root, args) {
   const asJson = takeFlag(args, "--json");
   const action = takeOption(args, "--action") ?? null;
+  const harness = takeOption(args, "--harness") ?? "claude";
   const ticketId = args.shift();
   ensureNoArgs(args);
 
   if (ticketId === undefined) {
-    throw new Error("begin-step requires: <ticket-id> [--action <action>] [--json]");
+    throw new Error("begin-step requires: <ticket-id> [--action <action>] [--harness claude|codex] [--json]");
+  }
+  if (harness !== "claude" && harness !== "codex") {
+    throw new Error(`--harness must be "claude" or "codex", got: ${harness}`);
   }
 
   const result = await beginStep(root, ticketId, action);
+
+  // `--harness codex` splices an additive `codexDispatch` block onto the
+  // already-computed result as CLI post-processing; beginStep's return shape
+  // and its ledger stamp (logical route/model) are untouched (design decision
+  // 5 in T20260707T1335Z). Default `--harness claude` (or no flag) is
+  // byte-for-byte identical to before this flag existed.
+  if (harness === "codex") {
+    const agentsDir = agentsDirFor(selfPackageRoot());
+    result.codexDispatch = translateCodexDispatch({
+      route: result.configuredAgent,
+      model: result.configuredModel,
+      prompt: result.configuredPrompt,
+      agentsDir,
+    });
+  }
+
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));
   } else {
     const model = result.configuredModel ? `@${result.configuredModel}` : "";
     console.log(`${result.ticket} ${result.action} ${result.configuredAgent}${model}`);
+    if (result.codexDispatch) {
+      const cd = result.codexDispatch;
+      console.log(`codexDispatch: ${cd.dispatchKind} ${cd.agentType ?? "-"} ${cd.promptPath ?? "-"} ${cd.evidenceExecutor}`);
+    }
   }
   return 0;
 }
@@ -1212,7 +1244,7 @@ function printUsage() {
   local-board [--root <path>] worktree-list [--json]
   local-board [--root <path>] fast-forward [--json]
   local-board team-config [--json]
-  local-board [--root <path>] begin-step <ticket-id> [--action <action>] [--json]
+  local-board [--root <path>] begin-step <ticket-id> [--action <action>] [--harness claude|codex] [--json]
   local-board [--root <path>] complete-step <ticket-id> <action> --executor <executor> [--model <model>] --evidence <text> [--allow-main-root] [--json]
   local-board [--root <path>] approve-inline <ticket-id> <action> --reason <text> [--executor <executor>] [--allow-main-root] [--json]
   local-board [--root <path>] check-dispatch --agent <subagent-type> [--model <model>] [--ticket <ticket-id>] [--json]

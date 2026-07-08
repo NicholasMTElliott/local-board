@@ -49,7 +49,7 @@ For whole-project work, run `query-next --json`. For a specific ticket, run `que
 For each returned ticket:
 
 1. Read the returned ticket `path`, returned `prompt`, `branch`, `transitions`, and relevant project context.
-2. Run `begin-step <ticket-id> --json` to resolve `action`, `configuredAgent`, `configuredModel`, and `configuredPrompt`, and record the in-flight step for dispatch verification.
+2. Run `begin-step <ticket-id> --harness codex --json` to resolve `action`, `configuredAgent`, `configuredModel`, `configuredPrompt`, and the translated `codexDispatch` block, and record the in-flight step for dispatch verification.
 3. Before `implement`, `review`, `test`, or `document`, run `start-work <ticket-id> --json`.
 4. Dispatch the returned action through the route translation contract below.
 5. Persist return-only output with `section --file`; self-writing workers write their own scoped changes.
@@ -65,24 +65,15 @@ When `routing.enforceTransitions` is `true` (the `init` scaffold default), `move
 
 Strict routing validates the configured logical route, not the physical Codex worker. Preserve the configured route when recording completion. When the route matches and the action's profile pins a model, `complete-step` also requires the recorded model (via `--model` or the combined `@model` suffix) to match `configuredModel`, or `codex-default` (always accepted — see below), or an approved deviation via `approve-inline --executor <route>@<model>`.
 
-Known route mapping:
+Do not hand-translate the route. Run `begin-step <ticket-id> --harness codex --json` and dispatch straight from the returned `codexDispatch` block: `agentType` (`worker`/`explorer`, dispatch with `spawn_agent`), `promptPath` (absolute), `model`, and `evidenceExecutor` (the exact `--executor` value for `complete-step`). This is the single authoritative implementation of the mapping (`src/codex-dispatch.js`); the table below is illustrative only.
 
 | Configured route | Codex dispatch | Prompt |
 |---|---|---|
-| `inline` | current Codex session | returned project prompt |
-| `codex-task:read-only` | `spawn_agent` with `agent_type: explorer` | returned project prompt |
-| `codex-task:workspace-write` | `spawn_agent` with `agent_type: worker` | returned project prompt |
-| `claude-subagent:local-board-decomposer` | `spawn_agent` with `agent_type: explorer` | `agents/codex/local-board-decomposer.md` |
 | `claude-subagent:local-board-designer` | `spawn_agent` with `agent_type: worker` | `agents/codex/local-board-designer.md` |
-| `claude-subagent:local-board-implementer` | `spawn_agent` with `agent_type: worker` | `agents/codex/local-board-implementer.md` |
-| `claude-subagent:local-board-reviewer` | `spawn_agent` with `agent_type: explorer` | `agents/codex/local-board-reviewer.md` |
-| `claude-subagent:local-board-tester` | `spawn_agent` with `agent_type: explorer` | `agents/codex/local-board-tester.md` |
-| `claude-subagent:local-board-documenter` | `spawn_agent` with `agent_type: worker` | `agents/codex/local-board-documenter.md` |
-| `claude-subagent:local-board-gatecheck` | `spawn_agent` with `agent_type: explorer` | `agents/codex/local-board-gatecheck.md` |
 
-For unknown `claude-subagent:*` routes, ask the user before falling back to inline. If approved, run `approve-inline <ticket-id> <action> --reason "<reason>"`, then record `complete-step` with `--executor inline`. If not approved, move the ticket to `questions` and record the blocker.
+For unknown `claude-subagent:*` routes (`codexDispatch.known` is `false`), ask the user before falling back to inline. If approved, run `approve-inline <ticket-id> <action> --reason "<reason>"`, then record `complete-step` with `--executor inline`. If not approved, move the ticket to `questions` and record the blocker.
 
-Do not pass Claude model aliases (`opus`, `sonnet`, `haiku`) as Codex model overrides. Only set a Codex model override when `configuredModel` is a valid Codex model id. Otherwise omit the model and let the spawned agent inherit the current Codex model. When a route was translated from Claude, record completion with `--model codex-default` (equivalent to the combined `@codex-default` suffix) unless a valid Codex model id was explicitly used.
+Do not pass Claude model aliases (`opus`, `sonnet`, `haiku`) as Codex model overrides; `begin-step --harness codex` performs this sanitization for you (`codexDispatch.model` is already `null` when no valid Codex model id exists, and `codexDispatch.evidenceExecutor` already carries `@codex-default`).
 
 ## Dispatch Rules
 
@@ -174,7 +165,7 @@ local-board state-report --json
 local-board schema --json
 local-board create <epic|story|task|bug> "<title>" --status <status> --priority <priority> [--parent <id>]
 local-board start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--json]
-local-board begin-step <ticket-id> [--action <action>] [--json]
+local-board begin-step <ticket-id> [--action <action>] [--harness claude|codex] [--json]
 local-board check-dispatch --agent <subagent-type> [--model <model>] [--ticket <ticket-id>] [--json]
 local-board complete-step <ticket-id> <action> --executor <executor> [--model <model>] --evidence "<evidence>" [--json]
 local-board approve-inline <ticket-id> <action> --reason "<reason>" [--executor <executor>] [--json]

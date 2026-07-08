@@ -33,7 +33,7 @@
     "hooks"
   ],
   "scripts": {
-    "check": "node --check bin/local-board.js && node --check src/active-steps.js && node --check src/cli.js && node --check src/config.js && node --check src/git.js && node --check src/install.js && node --check src/lock.js && node --check src/scaffold.js && node --check src/tickets.js && node --check src/worktrees.js && node --check install.mjs && node --check hooks/dispatch-ledger.js && node --check hooks/routing-validator.js && node --check hooks/evidence-gate.js && node --check hooks/approve-inline-consent.js",
+    "check": "node --check bin/local-board.js && node --check src/active-steps.js && node --check src/cli.js && node --check src/codex-dispatch.js && node --check src/config.js && node --check src/git.js && node --check src/install.js && node --check src/lock.js && node --check src/scaffold.js && node --check src/tickets.js && node --check src/worktrees.js && node --check install.mjs && node --check hooks/dispatch-ledger.js && node --check hooks/routing-validator.js && node --check hooks/evidence-gate.js && node --check hooks/approve-inline-consent.js",
     "test": "node --test",
     "validate": "node ./bin/local-board.js validate",
     "sync-resources": "node ./scripts/sync-resources.mjs",

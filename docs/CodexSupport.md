@@ -29,20 +29,22 @@ Both skills treat the local-board CLI as the state authority. Codex should query
 
 ## Route Translation
 
-Existing projects can keep Claude-first config in `plans/local-board.config.jsonc`. The Codex skill translates known Claude local-board routes at dispatch time:
+Existing projects can keep Claude-first config in `plans/local-board.config.jsonc`. `begin-step <ticket-id> --harness codex --json` computes the translation from the configured route directly (single authority: `src/codex-dispatch.js`) and returns it as an additive `codexDispatch` block. Dispatch straight from that block instead of a hand-maintained table.
+
+The required `codexDispatch` fields are:
+
+- `dispatchKind`: `inline` or `spawn_agent`.
+- `agentType`: `worker`, `explorer`, or `null`.
+- `promptPath`: absolute prompt path, or `null` when no safe prompt is known.
+- `model`: denylist-sanitized Codex model override, or `null` for no Codex override.
+- `evidenceExecutor`: exact `complete-step --executor` value; uses `@codex-default` when `model` is `null`.
+- `known`: `false` means the orchestrator must ask before inline fallback, then use `approve-inline`, or move the ticket to `questions`.
+
+One row, illustrative only:
 
 | Configured route | Codex behavior |
 |---|---|
-| `inline` | current Codex session does the step |
-| `codex-task:read-only` | spawn a Codex explorer |
-| `codex-task:workspace-write` | spawn a Codex worker |
-| `claude-subagent:local-board-decomposer` | spawn a Codex explorer with the decomposer prompt |
 | `claude-subagent:local-board-designer` | spawn a Codex worker with the designer prompt |
-| `claude-subagent:local-board-implementer` | spawn a Codex worker with the implementer prompt |
-| `claude-subagent:local-board-reviewer` | spawn a Codex explorer with the reviewer prompt |
-| `claude-subagent:local-board-tester` | spawn a Codex explorer with the tester prompt |
-| `claude-subagent:local-board-documenter` | spawn a Codex worker with the documenter prompt |
-| `claude-subagent:local-board-gatecheck` | spawn a Codex explorer with the gate-check prompt |
 
 Strict routing still records the configured logical route. For example, if Codex physically runs the designer translated from a Claude route, completion evidence can be:
 
@@ -76,15 +78,15 @@ where ticket worktrees are created:
 
 ## Models
 
-Do not pass Claude aliases such as `opus`, `sonnet`, or `haiku` to Codex spawned agents. The Codex skill inherits the parent Codex model unless the configured model is already a valid Codex model id. When a Claude route is translated without a valid Codex model id, evidence uses `@codex-default`.
+Do not pass Claude aliases such as `opus`, `sonnet`, or `haiku` to Codex spawned agents. `begin-step --harness codex` sanitizes this automatically: `codexDispatch.model` is `null` and `codexDispatch.evidenceExecutor` carries `@codex-default` whenever the configured model has no valid Codex id. A null `model` means do not pass a model override to Codex.
 
 ## Single-Ticket Flow
 
 1. Read project instructions and Memory Bank.
 2. Run `validate`.
 3. Run `query-next --json` or `query-ticket <id> --json`.
-4. Run `begin-step <id> --json`.
-5. Dispatch the step through the route translation table.
+4. Run `begin-step <id> --harness codex --json`.
+5. Dispatch the step from the returned `codexDispatch` block.
 6. Persist return-only output with `section --file`; workers persist their scoped edits.
 7. Run `complete-step`.
 8. Run gate-check and specialty steps for design, implement, or test stages.
@@ -106,7 +108,7 @@ The first Codex team mode uses wave-barrier scheduling. It waits for a batch of 
 
 ## Limits
 
-- Unknown `claude-subagent:*` routes need user approval before inline fallback.
+- Unknown or unconfigured routes return `known:false`; ask the user before inline fallback and record `approve-inline`, or move the ticket to `questions`.
 - Return-only executors must not edit files or run ticket mutation commands.
 - Workers must stay in their assigned worktree and must not revert unrelated edits.
 - Codex support does not add a new route grammar. `worktrees.location` is a

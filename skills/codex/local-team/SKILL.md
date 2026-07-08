@@ -33,9 +33,9 @@ Use wave-barrier mode first:
 
 1. For each ready ticket up to `maxInFlight`, run `worktree-add <ticket-id> --json` from the project root and store `worktreePath`.
 2. For each in-flight ticket without an outstanding executor:
-   - run `begin-step --root <worktreePath> --json`;
+   - run `begin-step <id> --root <worktreePath> --harness codex --json`;
    - run `start-work --root <worktreePath> --json` before implement/review/test/document;
-   - dispatch the step through the Codex route translation table from the `local-board` skill.
+   - dispatch from the returned `codexDispatch` block (`agentType`, `promptPath`, `model`, `evidenceExecutor`).
 3. Await the wave of spawned agents.
 4. Persist each result, record `complete-step`, run gate-check/specialty flow for design/implement/test, then `move`.
 5. Refill open slots with newly ready tickets.
@@ -63,15 +63,9 @@ local-board worktree-remove <ticket-id> --root <project-root>
 
 ## Route Translation
 
-Use the same translation rules as the Codex `local-board` skill:
+Use the same translation the Codex `local-board` skill uses: run `begin-step <ticket-id> --harness codex --json` per ticket and dispatch straight from the returned `codexDispatch` block (`agentType`, `promptPath`, `model`, `evidenceExecutor`). Ask before an inline fallback when `codexDispatch.known` is `false`; otherwise move the ticket to `questions`.
 
-- `inline`: current Codex orchestrator performs the step.
-- `codex-task:read-only`: spawn an `explorer`.
-- `codex-task:workspace-write`: spawn a `worker`.
-- known `claude-subagent:local-board-*`: translate to the matching Codex executor prompt in the `agentsDir` reported by `local-board where --json`.
-- unknown `claude-subagent:*`: ask before inline fallback; otherwise move to `questions`.
-
-Preserve the configured logical route in `complete-step --executor <route>`, adding `--model codex-default` when a Claude route was physically handled by Codex and no valid Codex model id was used (equivalent to the combined `@codex-default` suffix). Do not pass Claude model aliases (`opus`, `sonnet`, `haiku`) as Codex model overrides.
+Preserve the configured logical route in `complete-step --executor <route>`; `codexDispatch.evidenceExecutor` is already the exact value to pass (it carries `@codex-default` when a Claude route was physically handled by Codex with no valid Codex model id, matching the combined `@codex-default` suffix). Do not pass Claude model aliases (`opus`, `sonnet`, `haiku`) as Codex model overrides.
 
 ## Orchestrator-Owned State
 

@@ -153,12 +153,16 @@ documenter/implementer/reviewer/tester `sonnet`, gatecheck `haiku`. The model
 applies whenever the orchestrator dispatches the agent (single-ticket or parallel
 mode); config `agents.<action>.model` overrides the frontmatter default.
 
-Codex translates known `claude-subagent:local-board-*` routes to Codex spawned
-agents while preserving the configured logical route in `complete-step` evidence
-(`--executor <route> --model codex-default` when no valid Codex model id is
-used). This stores a `route@model` token while keeping Claude-first configs
-compatible without a schema migration. `codex-default` is a wildcard that
-satisfies any pinned model in strict-routing model enforcement (see below).
+`begin-step <id> --harness codex --json` computes the Claude-route -> Codex-dispatch
+translation server-side (`src/codex-dispatch.js`, the single authority) and
+returns an additive `codexDispatch` block: `dispatchKind`, `agentType`,
+absolute `promptPath`, sanitized `model` (`null` = no Codex override),
+`evidenceExecutor` (`@codex-default` when no valid Codex model id exists), and
+`known` (`false` = ask before inline fallback or move to `questions`).
+Default `--harness claude` (or no flag) leaves begin-step's output unchanged;
+the active-steps ledger stamp always records the configured logical route/model
+regardless of harness. `codex-default` is a wildcard that satisfies any pinned
+model in strict-routing model enforcement (see below).
 
 Strict routing enforces the per-step pinned model at `complete-step` write time:
 use `--executor <route> --model <model>` to compose evidence server-side; the
