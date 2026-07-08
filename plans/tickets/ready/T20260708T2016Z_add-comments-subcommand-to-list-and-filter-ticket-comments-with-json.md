@@ -1,7 +1,7 @@
 ---
 id: T20260708T2016Z
 type: task
-status: implementing
+status: ready_for_docs
 priority: P3
 parent: S20260516T1539Z
 children: []
@@ -13,8 +13,8 @@ estimateBasis: T20260707T1338Z
 workStartedAt: 2026-07-08T20:53:57Z
 workCompletedAt: null
 created: 2026-07-08T20:15:34Z
-updated: 2026-07-08T20:59:06Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-08T21:15:41Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # Add comments subcommand to list and filter ticket comments with --json
@@ -239,9 +239,43 @@ Documentation Index needs no change.
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5). No findings. Verified: heading tracking limited to level-2 headings with pre-heading bullets skipped and document order preserved (src/tickets.js:963,979); CLI flag-before-positional parsing, exit codes (missing id 2, malformed marker 2, unknown section 0), lock-free/write-free, five-key JSON shape with ordered marker pairs (src/cli.js:788,799,816); SKILL blocks byte-identical (SKILL.md:279); docs consistent with the implemented shape (docs/comment-markers.md:78); state-report regression asserts exact top-level keys (test/comments.test.js:347). Verdict: pass
+
 ## Test Evidence
 
+Verified by claude-subagent:local-board-tester (sonnet), in the ticket worktree.
+
+### Static / unit checks
+
+| Command | Result |
+|---|---|
+| `npm run check` | PASS |
+| `npm test` | PASS — 416 tests, 415 pass, 0 fail, 1 skipped |
+| `npm run validate` | PASS — Ticket validation OK |
+| `node --test test/skill-usage-sync.test.js` | PASS — 4/4 |
+
+### Live probes (throwaway scratchpad board; seeded marked/unmarked comments across sections plus a fenced marker-shaped line)
+
+- Human output grouped by section in document order; unmarked comments bracket-free; fenced line never surfaces. PASS.
+- `--json`: records with exactly `{ ticket, section, timestamp, markers, body }`, document order. PASS.
+- `--section`: exact match returns only that section; unknown section → empty, exit 0 (human and JSON). PASS.
+- `--marker`: single filter, AND pair, non-matching combos → empty exit 0; malformed `k=v:1` → named-offender error, exit 2. PASS.
+- Read-only: ticket file SHA-256 identical before/after all probes; `.local-board/locks/` empty before and after. PASS.
+- `state-report --json` top-level keys unchanged (`byAction, byStatus, byType, eligible, issues, next, ok, total`). PASS.
+
+### Real-board spot check
+
+`comments T20260708T2015Z` parsed all 14 Run Log entries without error; 0/14 false-positive markers despite bracket-heavy, colon-bearing evidence prose (the `[` is not at body start, so the parser correctly treats it as prose). PASS.
+
+### Caveats
+
+None against acceptance; throwaway board removed; worktree clean of tester changes.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5). docs/comment-markers.md reader subsection shipped at implement and verified against the CLI signature (--section, repeatable --marker, --json). Closing audit: memory-bank/systemPatterns.md fact extended with the read-only comments reader clause; docs/Workflow.md pointer verified, no change needed.
 
 ## Questions
 
@@ -254,3 +288,13 @@ Documentation Index needs no change.
 - 2026-07-08T20:59:05Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (read-only reader, reuses validated parser)
 
 - 2026-07-08T20:59:06Z: Ensured git branch local-board/T20260708T2016Z-add-comments-subcommand-to-list-and-filter-ticket-comments-with-json (already-current).
+
+- 2026-07-08T21:04:52Z: Completed implement via claude-subagent:local-board-implementer@sonnet: collectComments pure helper + comments CLI (read-only, reuses parseMarkerFlags/findTicket); SKILL blocks updated byte-identically; 11 tests; 415 pass + 1 skip; skill-sync 4/4
+
+- 2026-07-08T21:07:21Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (read-only reader, reused audited parser)
+
+- 2026-07-08T21:09:16Z: Completed review via codex-task:read-only: pass, no findings; recorded post-move per evidence-invalidation ordering
+
+- 2026-07-08T21:14:14Z: Completed test via claude-subagent:local-board-tester@sonnet: 415 pass + 1 skip; live probes (grouping, JSON shape, filters, exit codes, read-only hash check, state-report keys) all pass; real-board spot check no false-positive markers
+
+- 2026-07-08T21:15:41Z: Completed document via codex-task:workspace-write: systemPatterns fact extended; comment-markers reader docs verified exact; Workflow pointer verified
