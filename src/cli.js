@@ -1142,6 +1142,9 @@ function takeOption(args, name) {
     throw new Error(`${name} requires a value`);
   }
   const value = args[index + 1];
+  if (value.startsWith("--")) {
+    throw new Error(`option ${name} requires a value but got ${value}`);
+  }
   args.splice(index, 2);
   return value;
 }

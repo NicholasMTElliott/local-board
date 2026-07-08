@@ -1,19 +1,19 @@
 ---
 id: B20260707T1324Z
 type: bug
-status: ready_for_implementation
+status: implementing
 priority: P3
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/B20260707T1324Z-takeoption-consumes-a-following-flag-as-its-option-value
 estimate: 1
 estimateBasis: B20260707T2245Z
-workStartedAt: null
+workStartedAt: 2026-07-08T00:40:42Z
 workCompletedAt: null
 created: 2026-07-07T13:24:08Z
-updated: 2026-07-08T00:40:41Z
+updated: 2026-07-08T00:44:04Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -58,6 +58,12 @@ None. The trailing-flag ("requires a value") message and the new following-flag 
 
 ## Implementation Notes
 
+`takeOption` (`src/cli.js:1136-1148`) now rejects a resolved value that starts with `--`, throwing `option <name> requires a value but got <value>` (e.g. `option --evidence requires a value but got --json`), instead of silently swallowing the following flag as the value. The existing trailing-flag ("`<name> requires a value`") throw is unchanged. No other production code touched; the guard covers all ~17 option sites that funnel through this helper.
+
+Added `test/cli.test.js` test "CLI complete-step rejects a flag swallowed as an option value": creates a task, estimates it, approve-inlines the design step, then asserts `complete-step ... --evidence --json` exits 2 with stderr matching `/--evidence/`, and a follow-up `complete-step ... --evidence pre--post` (dashes mid-value, not a leading `--`) exits 0, confirming the prefix-only guard doesn't over-match.
+
+Verification: `npm run check` (syntax check across all CLI/hook files) green; `npm test` 337 tests, 336 pass / 1 skipped (pre-existing unrelated smoke test), 0 fail; `npm run validate` — "Ticket validation OK". No deviations from the approved design.
+
 ## Review Findings
 
 ## Test Evidence
@@ -71,3 +77,5 @@ None. The trailing-flag ("requires a value") message and the new following-flag 
 - 2026-07-08T00:39:51Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): 2-line guard in takeOption rejecting --prefixed values with a usage error, covering all ~17 option sites; suite grep confirms no legitimate flag-like values. Estimate 1 (basis B20260707T2245Z).
 
 - 2026-07-08T00:40:41Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (CLI parsing guard)
+
+- 2026-07-08T00:40:42Z: Ensured git branch local-board/B20260707T1324Z-takeoption-consumes-a-following-flag-as-its-option-value (created).
