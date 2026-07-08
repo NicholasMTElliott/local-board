@@ -1,19 +1,19 @@
 ---
 id: B20260707T1325Z
 type: bug
-status: ready_for_implementation
+status: implementing
 priority: P3
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/B20260707T1325Z-front-matter-list-serialization-does-not-round-trip-values-containing-commas-or-quotes
 estimate: 2
 estimateBasis: B20260707T2245Z
-workStartedAt: null
+workStartedAt: 2026-07-08T01:04:05Z
 workCompletedAt: null
 created: 2026-07-07T13:25:08Z
-updated: 2026-07-08T01:04:05Z
+updated: 2026-07-08T01:07:33Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -128,6 +128,23 @@ None blocking. One judgement call for the implementer: whether to also record th
 
 ## Implementation Notes
 
+Implemented exactly per the Technical Design: added a round-trip guard to `formatListItem` in `src/tickets.js` (was a one-line passthrough to `formatString`). Bare-charset items (`/^[A-Za-z0-9_./:+-]+$/`) still pass through unquoted. Non-bare items are rejected with a thrown `Error` naming the offending value (via `JSON.stringify`) when they contain a comma or when `JSON.stringify` would introduce an escape sequence the parser's `slice(1,-1)` unwrap can't reverse (quote, backslash, control char); otherwise they're quoted as before. No other production code changed — `parseScalar`/`parseListItem` (read path) untouched, per design.
+
+Files changed:
+- `src/tickets.js` — `formatListItem` (was line 2021) now guards before quoting.
+- `test/tickets.test.js` — added `parseFrontMatter`/`serializeFrontMatter` to imports (both already exported); added 4 new tests plus small helpers (`roundTripList`, `makeLcg`, `randomLegalItem`, `LEGAL_LIST_CHARSET`) at end of file:
+  1. Seeded-LCG property test, 1000 trials, random 0-4 item lists over the legal charset — asserts round-trip equality.
+  2. Explicit rejection cases: comma, double quote, backslash — `assert.throws` with message regex naming the value.
+  3. Regression test: real `@`-tokens (`design:...@opus`, `gate:design:skipped-empty-catalog`, `...@codex-default`) — asserts the exact serialized string (byte-identical to pre-fix output) and round-trip.
+  4. Boundary cases: empty list, single item, multi-item list — exact serialized string plus round-trip.
+
+Verification (all green):
+- `npm run check` — no output, exit 0.
+- `npm test` — 342 tests, 341 pass, 1 skipped (pre-existing `smoke (slow)` test, unrelated), 0 fail.
+- `npm run validate` — "Ticket validation OK" against this repo's own board, which has quoted `@`-tokens in `completedSteps` throughout (proves no regression on real data).
+
+No deviations from the design. No memory-bank update made (design left it as optional/non-required).
+
 ## Review Findings
 
 ## Test Evidence
@@ -141,3 +158,5 @@ None blocking. One judgement call for the implementer: whether to also record th
 - 2026-07-08T01:03:15Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): round-trip guard at the formatListItem chokepoint (reject commas / non-round-tripping quotes), preserving existing quoted @-token behavior byte-identically; CSV tokenizer deferred. Estimate 2 (basis B20260707T2245Z).
 
 - 2026-07-08T01:04:05Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (parser hygiene)
+
+- 2026-07-08T01:04:05Z: Ensured git branch local-board/B20260707T1325Z-front-matter-list-serialization-does-not-round-trip-values-containing-commas-or-quotes (created).

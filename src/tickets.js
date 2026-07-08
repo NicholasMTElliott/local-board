@@ -2019,7 +2019,22 @@ function formatScalar(value) {
 }
 
 function formatListItem(value) {
-  return formatString(String(value));
+  const str = String(value);
+  // Bare tokens always round-trip: their charset excludes , " \.
+  if (/^[A-Za-z0-9_./:+-]+$/.test(str)) {
+    return str;
+  }
+  // Otherwise the item is emitted quoted. parseScalar unwraps a quoted list
+  // item with slice(1,-1) (no unescape) after splitting the interior on bare
+  // commas, so a quoted item round-trips ONLY when it contains no comma and
+  // JSON.stringify adds no escape sequences (no " \ or control chars).
+  if (str.includes(",") || JSON.stringify(str) !== `"${str}"`) {
+    throw new Error(
+      `front-matter list item cannot be serialized without corrupting the round trip ` +
+        `(contains a comma, quote, backslash, or control character): ${JSON.stringify(str)}`,
+    );
+  }
+  return JSON.stringify(str);
 }
 
 function formatString(value) {

@@ -22,12 +22,14 @@ import {
   linkParent,
   moveTicket,
   nextTicket,
+  parseFrontMatter,
   queryNext,
   queryTicket,
   recordGateConsultation,
   recordGateSkippedEmptyCatalog,
   renderMarkdownTicket,
   resolveExpectedStep,
+  serializeFrontMatter,
   setTicketField,
   setTicketSection,
   stateReport,
@@ -2680,6 +2682,92 @@ test(
     });
   },
 );
+
+// --- front-matter list round-trip guard (formatListItem) ---
+
+function roundTripList(list) {
+  const serialized = serializeFrontMatter({ completedSteps: list });
+  const lines = serialized.split(/\r?\n/).filter((line) => line !== "");
+  return parseFrontMatter(lines).completedSteps;
+}
+
+// Deterministic LCG so the property test is reproducible without pulling in a
+// fuzz library.
+function makeLcg(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+}
+
+const LEGAL_LIST_CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789:-@./_+";
+
+function randomLegalItem(rand) {
+  const length = 1 + Math.floor(rand() * 8);
+  let item = "";
+  for (let i = 0; i < length; i += 1) {
+    item += LEGAL_LIST_CHARSET[Math.floor(rand() * LEGAL_LIST_CHARSET.length)];
+  }
+  return item;
+}
+
+test("front-matter list serialization round-trips over the legal charset (seeded property test, ~1000 cases)", () => {
+  const rand = makeLcg(0xc0ffee);
+  for (let trial = 0; trial < 1000; trial += 1) {
+    const count = Math.floor(rand() * 5); // 0-4 items
+    const list = Array.from({ length: count }, () => randomLegalItem(rand));
+    assert.deepEqual(roundTripList(list), list, `trial ${trial} failed for list ${JSON.stringify(list)}`);
+  }
+});
+
+test("formatListItem rejects list items that cannot round-trip (comma, double quote, backslash)", () => {
+  assert.throws(
+    () => serializeFrontMatter({ children: ["a, b"] }),
+    /front-matter list item cannot be serialized.*"a, b"/,
+  );
+  assert.throws(
+    () => serializeFrontMatter({ children: ['a"b'] }),
+    /front-matter list item cannot be serialized.*"a\\"b"/,
+  );
+  assert.throws(
+    () => serializeFrontMatter({ children: ["a\\b"] }),
+    /front-matter list item cannot be serialized.*"a\\\\b"/,
+  );
+});
+
+test("formatListItem regression: quoted @-tokens (real completedSteps/gate/codex-task values) serialize byte-identically and round-trip", () => {
+  const tokens = [
+    "design:claude-subagent:local-board-designer@opus",
+    "gate:design:skipped-empty-catalog",
+    "implement:codex-task:read-only@codex-default",
+  ];
+
+  const serialized = serializeFrontMatter({ completedSteps: tokens });
+  assert.equal(
+    serialized,
+    'completedSteps: ["design:claude-subagent:local-board-designer@opus", gate:design:skipped-empty-catalog, ' +
+      '"implement:codex-task:read-only@codex-default"]\n',
+  );
+
+  const lines = serialized.split(/\r?\n/).filter((line) => line !== "");
+  assert.deepEqual(parseFrontMatter(lines).completedSteps, tokens);
+});
+
+test("front-matter list boundary cases: empty, single, and multi-item lists format and round-trip", () => {
+  assert.equal(serializeFrontMatter({ children: [] }), "children: []\n");
+  assert.deepEqual(roundTripList([]), []);
+
+  assert.equal(serializeFrontMatter({ children: ["E20260707T0000Z"] }), "children: [E20260707T0000Z]\n");
+  assert.deepEqual(roundTripList(["E20260707T0000Z"]), ["E20260707T0000Z"]);
+
+  const many = ["E20260707T0000Z", "T20260707T0001Z", "design:claude-subagent:local-board-designer@opus"];
+  assert.equal(
+    serializeFrontMatter({ children: many }),
+    'children: [E20260707T0000Z, T20260707T0001Z, "design:claude-subagent:local-board-designer@opus"]\n',
+  );
+  assert.deepEqual(roundTripList(many), many);
+});
 
 async function replaceText(filePath, search, replacement) {
   const text = await readFile(filePath, "utf8");
