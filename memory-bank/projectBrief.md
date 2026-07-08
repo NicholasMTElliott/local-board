@@ -26,4 +26,5 @@ A developer can ask Claude Code or Codex to run the local board. The orchestrato
 - Metrics dashboard.
 - External board provider integrations.
 - Multi-repo orchestration.
+- Claude Code plugin packaging is documented-deferred in `docs/PluginPackaging.md`.
 - Autonomous production deployment.
