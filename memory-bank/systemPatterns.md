@@ -155,15 +155,14 @@ mode); config `agents.<action>.model` overrides the frontmatter default.
 
 `begin-step <id> --harness codex --json` computes the Claude-route -> Codex-dispatch
 translation server-side (`src/codex-dispatch.js`, the single authority) and
-returns it as an additive `codexDispatch` block: `agentType`, absolute
-`promptPath`, sanitized `model`, and `evidenceExecutor` (the exact
-`complete-step --executor` value, `@codex-default` suffixed when no valid Codex
-model id exists; equivalently recorded via `--executor <route> --model codex-default`).
+returns an additive `codexDispatch` block: `dispatchKind`, `agentType`,
+absolute `promptPath`, sanitized `model` (`null` = no Codex override),
+`evidenceExecutor` (`@codex-default` when no valid Codex model id exists), and
+`known` (`false` = ask before inline fallback or move to `questions`).
 Default `--harness claude` (or no flag) leaves begin-step's output unchanged;
 the active-steps ledger stamp always records the configured logical route/model
-regardless of harness. This keeps Claude-first configs
-compatible without a schema migration. `codex-default` is a wildcard that
-satisfies any pinned model in strict-routing model enforcement (see below).
+regardless of harness. `codex-default` is a wildcard that satisfies any pinned
+model in strict-routing model enforcement (see below).
 
 Strict routing enforces the per-step pinned model at `complete-step` write time:
 use `--executor <route> --model <model>` to compose evidence server-side; the

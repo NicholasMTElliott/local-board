@@ -177,6 +177,8 @@ model. `prompt` overrides `workflow.actionPrompts` for that action.
 subagent route it pins the subagent to `configuredModel`; per-step models only
 take effect on subagent/codex routes. Completion should record the model that ran with the two-flag form:
 `complete-step <ticket-id> <action> --executor <route> --model <model>`.
+With `--harness codex`, `begin-step` also returns a `codexDispatch` block for
+Codex orchestrators; see [Codex Support](CodexSupport.md).
 The CLI composes and stores that as `<action>:<route>@<model>` evidence, for
 example `design:claude-subagent:local-board-designer@opus`. The older
 hand-spliced form, `--executor <route>@<model>`, remains accepted. Strict routing
