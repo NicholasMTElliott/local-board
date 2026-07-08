@@ -66,7 +66,7 @@ node ./bin/local-board.js create task "Implement ticket validator" --status read
 node ./bin/local-board.js estimate T20260514T1234Z 4 --basis bootstrap --json
 node ./bin/local-board.js calibration suggest T20260514T1234Z --json
 node ./bin/local-board.js gate-check T20260514T1234Z --stage implement --json
-node ./bin/local-board.js gate-complete T20260514T1234Z --stage implement --executor claude-subagent:local-board-gatecheck --evidence "Consulted implement catalog."
+node ./bin/local-board.js gate-complete T20260514T1234Z --stage implement --executor claude-subagent:local-board-gatecheck [--model <model>] --evidence "Consulted implement catalog."
 node ./bin/local-board.js specialty-run T20260514T1234Z security_audit --json
 node ./bin/local-board.js start-work T20260514T1234Z --json
 node ./bin/local-board.js worktree-add T20260514T1234Z --json
@@ -74,7 +74,7 @@ node ./bin/local-board.js worktree-list --json
 node ./bin/local-board.js worktree-remove T20260514T1234Z --json
 node ./bin/local-board.js fast-forward --json
 node ./bin/local-board.js begin-step T20260514T1234Z --json
-node ./bin/local-board.js complete-step T20260514T1234Z review --executor codex-task:read-only --evidence "Review notes added."
+node ./bin/local-board.js complete-step T20260514T1234Z review --executor codex-task:read-only [--model <model>] --evidence "Review notes added."
 node ./bin/local-board.js approve-inline T20260514T1234Z review --reason "User approved fallback."
 node ./bin/local-board.js move T20260514T1234Z implementing
 node ./bin/local-board.js move T20260514T1234Z done --json

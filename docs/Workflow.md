@@ -123,7 +123,7 @@ node ./bin/local-board.js start-work T20260514T1234Z --json
 node ./bin/local-board.js start-work T20260514T1234Z --branch preseeded/ticket-parser --json
 node ./bin/local-board.js begin-step T20260514T1234Z --json
 node ./bin/local-board.js check-dispatch --agent local-board-implementer --model sonnet --ticket T20260514T1234Z
-node ./bin/local-board.js complete-step T20260514T1234Z review --executor codex-task:read-only --evidence "Review findings recorded."
+node ./bin/local-board.js complete-step T20260514T1234Z review --executor codex-task:read-only --model gpt-5.5 --evidence "Review findings recorded."
 node ./bin/local-board.js approve-inline T20260514T1234Z review --reason "User approved fallback."
 node ./bin/local-board.js move T20260514T1234Z ready_for_design
 node ./bin/local-board.js move T20260514T1234Z done --json
@@ -175,13 +175,15 @@ model. `prompt` overrides `workflow.actionPrompts` for that action.
 `begin-step --json` resolves the entry to `configuredAgent` (route),
 `configuredModel`, and `configuredPrompt`. When the orchestrator dispatches a
 subagent route it pins the subagent to `configuredModel`; per-step models only
-take effect on subagent/codex routes. Completion evidence may record the model
-that ran as `<route>@<model>` (for example
-`design:claude-subagent:local-board-designer@opus`). Strict routing matches the
-route, and — at `complete-step` write time, when the route matches and the
-action's profile pins a model — also requires the `@model` suffix to match
-`configuredModel` (or `@codex-default`, or an approved deviation recorded via
-`approve-inline --executor <route>@<model>`). Done-time re-validation stays
+take effect on subagent/codex routes. Completion should record the model that ran with the two-flag form:
+`complete-step <ticket-id> <action> --executor <route> --model <model>`.
+The CLI composes and stores that as `<action>:<route>@<model>` evidence, for
+example `design:claude-subagent:local-board-designer@opus`. The older
+hand-spliced form, `--executor <route>@<model>`, remains accepted. Strict routing
+matches the route, and — at `complete-step` write time, when the route matches
+and the action's profile pins a model — also requires the recorded model to
+match `configuredModel` (or `codex-default`, or an approved deviation recorded
+via `approve-inline --executor <route>@<model>`). Done-time re-validation stays
 route-only for back-compat with evidence recorded before this rule.
 
 For dispatch verification, `begin-step` also records the ticket's active action,
@@ -326,7 +328,7 @@ With `--json`, the command returns:
 }
 ```
 
-The CLI does not invoke an agent and does not decide which optional steps are required. It records that consultation happened with a `gate:<stage>:...` token in `completedSteps`: if `catalog` is empty, `gate-check` self-certifies the empty catalog as `gate:<stage>:skipped-empty-catalog`, returns `skip: true` with `recorded` set to that token, and the orchestrator skips gate-agent dispatch. Otherwise it dispatches the returned `prompt`, `catalog`, and narrow `ticketContext` to the configured gate-check `agent`, pinning its `model` (the bundled `local-board-gatecheck` agent on `haiku` by default), then records the real consultation with `gate-complete`; that branch returns `skip: false` and `recorded: null`. That agent pattern-matches the completed work against the catalog trigger criteria and returns strict JSON shaped:
+The CLI does not invoke an agent and does not decide which optional steps are required. It records that consultation happened with a `gate:<stage>:...` token in `completedSteps`: if `catalog` is empty, `gate-check` self-certifies the empty catalog as `gate:<stage>:skipped-empty-catalog`, returns `skip: true` with `recorded` set to that token, and the orchestrator skips gate-agent dispatch. Otherwise it dispatches the returned `prompt`, `catalog`, and narrow `ticketContext` to the configured gate-check `agent`, pinning its `model` (the bundled `local-board-gatecheck` agent on `haiku` by default), then records the real consultation with `gate-complete <ticket-id> --stage <stage> --executor <route> --model <model>`; `--executor <route>@<model>` remains accepted. That branch returns `skip: false` and `recorded: null`. That agent pattern-matches the completed work against the catalog trigger criteria and returns strict JSON shaped:
 
 ```json
 { "requestedSteps": ["security_audit"] }

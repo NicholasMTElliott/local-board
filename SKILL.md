@@ -248,7 +248,7 @@ If instead the route is fine but the pinned model is unavailable (e.g. `opus` un
 local-board approve-inline <ticket-id> <action> --executor <configuredAgent>@<actualModel> --reason "<user-approved reason>"
 ```
 
-Then run `complete-step` with `--executor <configuredAgent>@<actualModel>`.
+Then run `complete-step` with `--executor <configuredAgent> --model <actualModel>`.
 
 ## CLI Commands
 

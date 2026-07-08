@@ -1,7 +1,7 @@
 ---
 id: T20260707T1334Z
 type: task
-status: ready_for_review
+status: done
 priority: P3
 parent: null
 children: []
@@ -11,10 +11,10 @@ branch: local-board/T20260707T1334Z-cli-complete-step-accepts-model-and-composes
 estimate: 2
 estimateBasis: T20260707T1329Z
 workStartedAt: 2026-07-08T03:09:32Z
-workCompletedAt: null
+workCompletedAt: 2026-07-08T04:04:05Z
 created: 2026-07-07T13:34:55Z
-updated: 2026-07-08T03:20:23Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-08T04:04:05Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # cli: complete-step accepts --model and composes executor evidence server-side
@@ -172,11 +172,34 @@ Verification:
 
 No deviations from the approved design. Left `approve-inline`'s existing `@model` combined-form examples in `SKILL.md` (lines ~248/251) untouched — `approve-inline` was out of scope for this ticket (design only covers `complete-step` and `gate-complete`).
 
+Rework (review finding on commit f1fe667): `SKILL.md` line 251 still showed the post-approval `complete-step` example in the manual combined-form (`--executor <configuredAgent>@<actualModel>`) instead of the two-flag form; fixed to `complete-step` with `--executor <configuredAgent> --model <actualModel>`. Left the preceding `approve-inline --executor <configuredAgent>@<actualModel>` line untouched (approve-inline stays combined-form, out of scope). Checked `skills/codex/local-board/SKILL.md` for the same pattern — its deviation guidance already used the two-flag form throughout, no change needed there. Re-verified `npm run check`, `npm test` (374 tests, 373 pass, 1 pre-existing skip, 0 fail), and `npm run validate` (`Ticket validation OK`).
+
 ## Review Findings
+
+- 2026-07-08T03:56:45Z: Final disposition: the single stale example line fixed verbatim per the review; helper, parity, and tests had passed. Treating review as complete per the established pattern.
 
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/T20260707T1334Z-..., commits f1fe667 + ff08e87.
+
+**Suite:** `npm run check` pass; `npm test` 373 pass / 1 gated-skip of 374; `npm run validate` OK.
+
+**Live probes (throwaway board):** two-flag form records design:...@opus (file-verified); combined form yields the identical token; disagreement errors naming both values with zero side effects; inline+model gets the specific actionable message; gate-complete parity records gate:design:...@haiku.
+
+**Skill grep:** two-flag-first everywhere with "do not hand-splice" guidance; approve-inline combined form correctly retained; the rework's line-251 fix confirmed landed.
+
+**Gaps / caveats:** codex-default composition and identical-suffix no-op covered by unit/CLI tests rather than live probes; gate-complete disagreement likewise.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `docs/Workflow.md` — complete-step and gate-complete examples lead with the two-flag form; @ form kept as accepted.
+- `memory-bank/systemPatterns.md` — terse two-flag composition fact incl. codex-default evidence.
+- `README.md` — [--model <model>] added to both CLI list lines.
+- Skill texts were updated during implementation/rework.
 
 ## Questions
 
@@ -191,3 +214,13 @@ No deviations from the approved design. Left `approve-inline`'s existing `@model
 - 2026-07-08T03:19:12Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): composeExecutor helper + --model on both verbs + skill updates; 373 pass + 1 gated-skip. (This very evidence was recorded with the new two-flag form.)
 
 - 2026-07-08T03:20:23Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (CLI ergonomics)
+
+- 2026-07-08T03:52:44Z: Ensured git branch local-board/T20260707T1334Z-cli-complete-step-accepts-model-and-composes-executor-evidence-server-side (switched-existing).
+
+- 2026-07-08T03:56:45Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework (sonnet): SKILL.md post-approval example switched to the two-flag form; codex skill already correct; 373+1 green on this branch.
+
+- 2026-07-08T03:56:45Z: Completed review via codex-task:read-only: Review complete: one-line doc fix applied verbatim; all functional checks passed in the codex pass.
+
+- 2026-07-08T04:00:50Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 373+1 gated; all five probe classes live-verified with file-read confirmation; skill grep clean. Result: pass.
+
+- 2026-07-08T04:04:05Z: Completed document via codex-task:workspace-write: Codex (workspace-write): Workflow examples, systemPatterns fact, README flag annotations updated to the two-flag form.

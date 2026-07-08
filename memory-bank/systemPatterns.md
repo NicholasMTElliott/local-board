@@ -127,7 +127,7 @@ Skills should be orchestration entrypoints. Step behavior should live in prompt 
 The installable `local-board` skill is the portable entrypoint. Project-local prompts are runtime inputs; missing configured prompts are loud CLI errors, not silent fallback behavior.
 `init` restores missing packaged prompts/templates but never overwrites existing prompt files, even with `--overwrite`.
 For design/implement/test stages with a non-empty specialty catalog, the orchestrator skill runs `gate-check` + `specialty-run` between mandatory action completion and stage transition.
-`gate-check` records that the consultation happened: on an empty stage catalog it auto-stamps `gate:<stage>:skipped-empty-catalog` in `completedSteps` (idempotent, no dispatch; JSON `skip: true`, `recorded: <token>`); on a non-empty catalog it stays a pure read (`skip: false`, `recorded: null`) and the orchestrator calls `gate-complete <ticket-id> --stage <stage> --executor <executor> [--evidence <text>]` after the gate agent answers. `gate:` tokens are excluded from routing evidence (`completedStepRecords`/`validateStepRouting`/`doneRequires`) via a dedicated parser (`gateConsultationRecords`) so they never trip done-time "unknown action" validation. When `routing.requireGateConsultation` is true, `moveTicket` refuses the three forward transitions out of a gated stage (`ready_for_design`/`designing`→`ready_for_implementation`, `ready_for_implementation`/`implementing`→`ready_for_review`, `ready_for_test`/`testing`→`ready_for_docs`) unless the matching `gate:` token is present; backward, lateral, and archive/done moves are never gated.
+`gate-check` records that the consultation happened: on an empty stage catalog it auto-stamps `gate:<stage>:skipped-empty-catalog` in `completedSteps` (idempotent, no dispatch; JSON `skip: true`, `recorded: <token>`); on a non-empty catalog it stays a pure read (`skip: false`, `recorded: null`) and the orchestrator calls `gate-complete <ticket-id> --stage <stage> --executor <route> [--model <model>] [--evidence <text>]` after the gate agent answers; `--executor <route>@<model>` remains accepted. `gate:` tokens are excluded from routing evidence (`completedStepRecords`/`validateStepRouting`/`doneRequires`) via a dedicated parser (`gateConsultationRecords`) so they never trip done-time "unknown action" validation. When `routing.requireGateConsultation` is true, `moveTicket` refuses the three forward transitions out of a gated stage (`ready_for_design`/`designing`→`ready_for_implementation`, `ready_for_implementation`/`implementing`→`ready_for_review`, `ready_for_test`/`testing`→`ready_for_docs`) unless the matching `gate:` token is present; backward, lateral, and archive/done moves are never gated.
 
 When `routing.invalidateOnLoopBack` is true, `moveTicket` strips stale evidence on a loop-back: moving to any of the six `ready_*` pipeline statuses removes `completedSteps` (action/`gate:`/specialty) and `routingApprovals` tokens whose producing stage ranks at or downstream of the target in `workflow.pipelineOrder` (target-inclusive), and appends one Run Log line enumerating what was removed. `questions`/`blocked`/`done`/`archived`/active-status targets are never affected; a forward move with no downstream evidence yet is a no-op. Pure core: `invalidateDownstreamEvidence(frontMatter, config, targetStatus)` in `src/tickets.js`.
 
@@ -158,19 +158,21 @@ translation server-side (`src/codex-dispatch.js`, the single authority) and
 returns it as an additive `codexDispatch` block: `agentType`, absolute
 `promptPath`, sanitized `model`, and `evidenceExecutor` (the exact
 `complete-step --executor` value, `@codex-default` suffixed when no valid Codex
-model id exists). Default `--harness claude` (or no flag) leaves begin-step's
-output unchanged; the active-steps ledger stamp always records the configured
-logical route/model regardless of harness. This keeps Claude-first configs
+model id exists; equivalently recorded via `--executor <route> --model codex-default`).
+Default `--harness claude` (or no flag) leaves begin-step's output unchanged;
+the active-steps ledger stamp always records the configured logical route/model
+regardless of harness. This keeps Claude-first configs
 compatible without a schema migration. `codex-default` is a wildcard that
 satisfies any pinned model in strict-routing model enforcement (see below).
 
 Strict routing enforces the per-step pinned model at `complete-step` write time:
-when the executor route matches the configured route and the action's profile
-pins a model, the executor's `@model` suffix must equal `configuredModel`, equal
-`codex-default`, or be covered by a `routingApprovals` entry for the full
-`route@model` token (`approve-inline --executor <route>@<model>`). Done-time
-re-validation (`validateRouting`) stays route-only for back-compat with evidence
-recorded before this rule.
+use `--executor <route> --model <model>` to compose evidence server-side; the
+older `--executor <route>@<model>` form remains accepted. When the executor route
+matches the configured route and the action's profile pins a model, the recorded
+model must equal `configuredModel`, equal `codex-default`, or be covered by a
+`routingApprovals` entry for the full `route@model` token (`approve-inline
+--executor <route>@<model>`). Done-time re-validation (`validateRouting`) stays
+route-only for back-compat with evidence recorded before this rule.
 
 Dispatch verification uses `.local-board/active-steps.json` as the deterministic in-flight ledger, anchored at the main checkout's git common dir so linked worktrees share one record. `begin-step` stamps the ticket's resolved action/route/model there and is no longer a pure query; `complete-step` and `approve-inline` clear the ticket's entry. `check-dispatch --agent [--model] [--ticket]` reads the ledger for hook use, always emits JSON on stdout, and exits 0 allow / 1 deny / 2 error while passing through non-local-board agents and unverifiable models. Claude Code enforcement hooks are opt-in via `local-board install --hooks`: routing-validator, dispatch-ledger, evidence-gate, and approve-inline-consent. Hooks fail open on errors/timeouts; CLI strict routing remains the backstop.
 
@@ -214,12 +216,12 @@ Use `node ./bin/local-board.js version`, `where [--json]`, `validate`, `list`, `
 `move` changes status and relocates the ticket; when `routing.requireGateConsultation` is true it also refuses the three forward gated transitions above without a recorded consultation, when `routing.invalidateOnLoopBack` is true a move to a `ready_*` status strips at-or-downstream evidence, and when `routing.enforceTransitions` is true it refuses a target status outside `workflow.transitions` + the structural allow-set unless `--override --reason <text>` is given (see Config above). `set` updates mutable front matter fields (routes through `move` for `status`, so it is gated/invalidated/enforced too, and accepts the same `--override`/`--reason` flags for parity). `section` replaces section content; section boundaries are fence-aware for backtick/tilde fenced blocks. `comment` appends timestamped notes to a ticket section.
 `estimate` records story points and an estimate basis, validates points against the configured scale, and requires `--force` to overwrite.
 `gate-check` returns the gate-check prompt path, stage specialty catalog, and narrow ticket context; the orchestrator dispatches the prompt and consumes its `requestedSteps` JSON. It also self-records the consultation on the empty-catalog branch (see Config above).
-`gate-complete <ticket-id> --stage <stage> --executor <executor> [--evidence <text>]` records a non-empty-catalog gate consultation after the gate agent answers.
+`gate-complete <ticket-id> --stage <stage> --executor <route> [--model <model>] [--evidence <text>]` records a non-empty-catalog gate consultation after the gate agent answers; `--executor <route>@<model>` remains accepted.
 `specialty-run` resolves one configured optional step for the current stage without invoking an agent.
 `section --file <path>` is preferred for generated or multi-line Markdown; inline section text is for short edits. Create the `--file` target with the Write tool, never with shell redirection.
 `query-next`, `query-ticket`, and `begin-step` return advisory transition guidance for the current status. The orchestrator should choose one returned status when moving after an action.
 `start-work` creates or switches to a ticket branch, records `branch`, logs the action, and moves `ready_for_implementation` tickets to `implementing`.
-`complete-step` records `<action>:<executor>` evidence. Strict routing rejects inline completion for delegated actions unless `approve-inline` has recorded user approval.
+`complete-step` records `<action>:<executor>` evidence; use `--executor <route> --model <model>` for model-qualified evidence, with `--executor <route>@<model>` still accepted. Strict routing rejects inline completion for delegated actions unless `approve-inline` has recorded user approval.
 Ticket dependencies use `blockedBy`/`blocks` while the dependent ticket stays in its intended ready status. `status: blocked` is for non-ticket blockers.
 
 ## Test Coverage
