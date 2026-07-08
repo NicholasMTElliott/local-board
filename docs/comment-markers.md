@@ -64,6 +64,21 @@ These keys are documented and validated for *syntax only* (charset, `key=value` 
 - A legacy unmarked comment (`- <ts>: some text`) parses to `markers: []` and the full text as `body` — existing Run Log history is unaffected by this feature.
 - A line whose body happens to start with an unclosed `[` or a bracketed block that fails the marker grammar falls back gracefully: `markers: []`, and `body` is the whole remaining text (brackets included). `parseCommentLine` never throws.
 
+## Reading and filtering markers
+
+`local-board comments <ticket-id>` is the read-only counterpart to `comment`: it lists the parsed comments on a ticket, grouped by section, without taking a lock or writing anything.
+
+```sh
+local-board comments T20260516T1539Z
+local-board comments T20260516T1539Z --section "Run Log"
+local-board comments T20260516T1539Z --marker step=implement --marker outcome=PASS
+local-board comments T20260516T1539Z --json
+```
+
+- `--section <name>` restricts output to the exact `## <name>` heading; an unknown section yields empty output and exit 0 (not an error).
+- `--marker key=value` is repeatable and uses the same `=`-to-`:` mapping and charset as `comment`'s `--marker` flag. Multiple `--marker` flags are AND-ed: a comment is returned only if it carries every requested key with exactly that value.
+- `--json` emits an array of `{ ticket, section, timestamp, markers, body }` records in document order.
+
 ## v1 limitations
 
 - **No quoting.** Marker values are restricted to a charset that never needs escaping; there is no mechanism to embed spaces, colons, or brackets in a value.

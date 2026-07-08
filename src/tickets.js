@@ -960,6 +960,62 @@ function* contentLines(body) {
   }
 }
 
+const SECTION_HEADING_RE = /^## (.+?)\s*$/;
+
+// Single fence-aware pass over a ticket's body, collecting every well-formed
+// Run Log-style bullet comment (per parseCommentLine) into an ordered list of
+// records, each tagged with the `## ` heading it falls under. Reuses the same
+// contentLines fence walker validateCommentMarkers uses, so fenced example
+// lines are never mistaken for real comments. Pure and never throws.
+//
+// `section`: exact-match filter against the heading text (e.g. "Run Log");
+// null (default) keeps every section. An unknown section simply matches no
+// records — no error.
+// `markers`: an ordered `[{ key, value }]` list (as produced by the CLI's
+// parseMarkerFlags); a record is kept only when it has, for every requested
+// pair, some marker with that exact key AND value (AND semantics, exact
+// equality). An empty/absent list is vacuously true for every record,
+// including unmarked ones.
+export function collectComments(ticket, { section = null, markers = [] } = {}) {
+  const records = [];
+  let currentSection = null;
+
+  for (const { line } of contentLines(ticket.body)) {
+    const headingMatch = SECTION_HEADING_RE.exec(line);
+    if (headingMatch !== null) {
+      currentSection = headingMatch[1];
+      continue;
+    }
+
+    if (currentSection === null) {
+      continue;
+    }
+
+    const parsed = parseCommentLine(line);
+    if (parsed.timestamp === null) {
+      continue;
+    }
+
+    records.push({
+      ticket: ticket.id,
+      section: currentSection,
+      timestamp: parsed.timestamp,
+      markers: parsed.markers,
+      body: parsed.body,
+    });
+  }
+
+  return records
+    .filter((record) => section === null || record.section === section)
+    .filter((record) =>
+      markers.every((marker) =>
+        record.markers.some(
+          (recordMarker) => recordMarker.key === marker.key && recordMarker.value === marker.value,
+        ),
+      ),
+    );
+}
+
 const MARKER_SHAPED_LINE_RE =
   /^- \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2}): \[/;
 

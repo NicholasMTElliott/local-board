@@ -181,6 +181,7 @@ local-board set <ticket-id> <field> <value> [--override] [--reason "<text>"]
 local-board section <ticket-id> "<text>" --section "<section>"
 local-board section <ticket-id> --file <path> --section "<section>"
 local-board comment <ticket-id> "<text>" [--section "<section>"]
+local-board comments <ticket-id> [--section "<section>"] [--marker key=value ...] [--json]
 local-board link-parent <child-id> <parent-id>
 local-board link-child <parent-id> <child-id>
 local-board unlink-parent <child-id> <parent-id>
