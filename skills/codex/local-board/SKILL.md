@@ -49,7 +49,7 @@ For whole-project work, run `query-next --json`. For a specific ticket, run `que
 For each returned ticket:
 
 1. Read the returned ticket `path`, returned `prompt`, `branch`, `transitions`, and relevant project context.
-2. Run `begin-step <ticket-id> --json` before `start-work` to resolve `action`, `configuredAgent`, `configuredModel`, and `configuredPrompt`, and record the in-flight step for dispatch verification.
+2. Run `begin-step <ticket-id> --json` to resolve `action`, `configuredAgent`, `configuredModel`, and `configuredPrompt`, and record the in-flight step for dispatch verification.
 3. Before `implement`, `review`, `test`, or `document`, run `start-work <ticket-id> --json`.
 4. Dispatch the returned action through the route translation contract below.
 5. Persist return-only output with `section --file`; self-writing workers write their own scoped changes.
@@ -108,7 +108,7 @@ Workers may edit their assigned worktree scope only. Tell workers they are not a
 
 ## Branch Discipline
 
-Run `begin-step` before `start-work` for implementation. `start-work` moves `ready_for_implementation` to `implementing`, and `implementing` has no configured action.
+`begin-step` resolves the action whether the ticket is still `ready_for_implementation` or already `implementing`, so it may run before or after `start-work`.
 
 Use:
 

@@ -345,16 +345,17 @@ per-step models. Confirmed working:
   backstop** firing when the second ticket's branch was behind the advanced
   default, then succeeding after a rebase.
 
-Two ordering refinements the run surfaced (now folded into `SKILL_TEAM.md` and
+One ordering refinement the run surfaced (now folded into `SKILL_TEAM.md` and
 `SKILL.md`):
 
-1. **`begin-step` before `start-work`.** `start-work` moves
-   `ready_for_implementation → implementing`, and `implementing` has no
-   `statusActions` entry, so `begin-step` must resolve the step first (or pass
-   `--action`).
-2. **Commit planning changes before rebasing.** `move`/`complete-step` leave the
+1. **Commit planning changes before rebasing.** `move`/`complete-step` leave the
    ticket file dirty; `git rebase` refuses a dirty tree, so the orchestrator must
    commit planning state before rebasing in response to the precondition refusal.
+
+(A previously-noted `begin-step`-before-`start-work` ordering constraint was
+since removed in the CLI: `resolveStepFromBoard` now resolves an active
+status's action through its `ready_*` peer, so `begin-step` works regardless
+of ordering around `start-work`.)
 
 ## 6. What is unchanged
 

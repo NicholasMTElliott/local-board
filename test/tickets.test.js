@@ -27,6 +27,7 @@ import {
   recordGateConsultation,
   recordGateSkippedEmptyCatalog,
   renderMarkdownTicket,
+  resolveExpectedStep,
   setTicketField,
   setTicketSection,
   stateReport,
@@ -38,6 +39,7 @@ import {
 } from "../src/tickets.js";
 import { initProject } from "../src/scaffold.js";
 import { loadConfig } from "../src/config.js";
+import { readActiveSteps } from "../src/active-steps.js";
 import { removeFixtureDir } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
@@ -591,6 +593,136 @@ test("beginStep exposes the configured per-step model and prompt", async () => {
     assert.equal(result.configuredAgent, "claude-subagent:local-board-designer");
     assert.equal(result.configuredModel, "opus");
     assert.equal(result.configuredPrompt, "plans/prompts/steps/design.md");
+  });
+});
+
+test("beginStep resolves an implementing-status ticket via the ready_for_implementation fallback (the ordering footgun fix)", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Already implementing", {
+      status: "implementing",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const result = await beginStep(root, ticketId);
+
+    assert.equal(result.action, "implement");
+    assert.equal(result.configuredAgent, "claude-subagent:local-board-implementer");
+    assert.equal(result.configuredModel, "sonnet");
+    assert.equal(result.status, "implementing");
+
+    // Additive side effect: the active-step ledger is stamped exactly as it
+    // would be for a resolve-before-start-work call.
+    const steps = await readActiveSteps(root);
+    assert.deepEqual(steps[ticketId], {
+      ticket: ticketId,
+      action: "implement",
+      route: "claude-subagent:local-board-implementer",
+      model: "sonnet",
+      root: path.resolve(root),
+      ts: steps[ticketId].ts,
+    });
+  });
+});
+
+test("beginStep resolves the other three active statuses via their ready_* fallback", async () => {
+  await withBoard(async (root) => {
+    const cases = [
+      { status: "designing", action: "design", agent: "claude-subagent:local-board-designer", model: "opus" },
+      { status: "reviewing", action: "review", agent: "codex-task:read-only", model: null },
+      { status: "testing", action: "test", agent: "claude-subagent:local-board-tester", model: "sonnet" },
+    ];
+
+    for (const { status, action, agent, model } of cases) {
+      const ticketPath = await createTicket(root, "task", `Already ${status}`, { status });
+      const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+      const result = await beginStep(root, ticketId);
+
+      assert.equal(result.action, action, `${status} should resolve action ${action}`);
+      assert.equal(result.configuredAgent, agent, `${status} should resolve agent ${agent}`);
+      assert.equal(result.configuredModel, model, `${status} should resolve model ${model}`);
+    }
+  });
+});
+
+test("resolveExpectedStep (the check-dispatch path) resolves an active-status ticket the same way as beginStep", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Active for check-dispatch", {
+      status: "implementing",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const resolved = await resolveExpectedStep(root, ticketId);
+
+    assert.equal(resolved.action, "implement");
+    assert.equal(resolved.status, "implementing");
+    assert.equal(resolved.route, "claude-subagent:local-board-implementer");
+    assert.equal(resolved.model, "sonnet");
+  });
+});
+
+test("beginStep prefers an explicit statusActions entry for an active status over the ready_* fallback", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ workflow: { statusActions: { implementing: "review" } } }));
+
+    const ticketPath = await createTicket(root, "task", "Explicit active-status override", {
+      status: "implementing",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const result = await beginStep(root, ticketId);
+
+    assert.equal(result.action, "review", "an explicit statusActions entry must win over the ready_* fallback");
+    assert.equal(result.configuredAgent, "codex-task:read-only");
+  });
+});
+
+test("beginStep still throws for a genuinely action-less status (questions/blocked)", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Needs input", {
+      status: "questions",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await assert.rejects(beginStep(root, ticketId), new RegExp(`${ticketId} has no configured action for status questions`));
+  });
+});
+
+test("beginStep --action override still wins over the active-status fallback", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Override wins", {
+      status: "implementing",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const result = await beginStep(root, ticketId, "review");
+
+    assert.equal(result.action, "review");
+    assert.equal(result.configuredAgent, "codex-task:read-only");
+  });
+});
+
+test("beginStep on an implementing-status ticket is idempotent when re-run (ledger re-stamp)", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Re-run begin-step", {
+      status: "implementing",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const first = await beginStep(root, ticketId);
+    const second = await beginStep(root, ticketId);
+
+    assert.deepEqual(first, second);
+
+    const steps = await readActiveSteps(root);
+    assert.equal(Object.keys(steps).length, 1);
+    assert.equal(steps[ticketId].action, "implement");
   });
 });
 

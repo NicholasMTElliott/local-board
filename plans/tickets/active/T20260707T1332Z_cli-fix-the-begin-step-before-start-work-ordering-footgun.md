@@ -1,19 +1,19 @@
 ---
 id: T20260707T1332Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260707T1332Z-cli-fix-the-begin-step-before-start-work-ordering-footgun
 estimate: 2
 estimateBasis: T20260707T1331Z
-workStartedAt: null
+workStartedAt: 2026-07-08T00:00:27Z
 workCompletedAt: null
 created: 2026-07-07T13:32:54Z
-updated: 2026-07-08T00:00:27Z
+updated: 2026-07-08T00:07:00Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -199,6 +199,31 @@ acceptance loop directly.
 
 ## Implementation Notes
 
+Implemented exactly per the Technical Design.
+
+`src/tickets.js`:
+- Added `ACTIVE_STATUS_TO_READY` map (designing/implementing/reviewing/testing -> their `ready_*` peer) next to `STAGE_TO_STATUS`.
+- `resolveStepFromBoard` now resolves the action as `actionOverride ?? statusActions[ticket.status] ?? statusActions[readyStatus] ?? null`, so an active status without its own `statusActions` entry falls back to its `ready_*` peer's configured action. An explicit `statusActions` entry for an active status still wins (middle clause). Shared by `beginStep` and `resolveExpectedStep` (check-dispatch), so both benefit. `actionRecord` (query-next/query-ticket/list --ready) is untouched, per the design's explicit scope decision.
+
+Skill/doc prose updated per the Affected files list:
+- `SKILL.md`: replaced the "run begin-step before start-work" ordering-warning paragraph with one sentence stating begin-step works either order.
+- `SKILL_TEAM.md`: deleted the "Ordering matters" note in Dispatch, simplified the begin-step/start-work step description, relaxed the Seed step's dangling reference to the removed note, and relaxed the Refill line.
+- `skills/codex/local-board/SKILL.md`: removed "before start-work" from the Single-Ticket Loop step 2 and replaced the Branch Discipline ordering paragraph with the same one-sentence statement used in SKILL.md.
+- `docs/PerStepOrchestration.md`: removed the `begin-step`-before-`start-work` retrospective refinement item, replaced with a note that the CLI fix (this ticket) removed the constraint; kept the unrelated "commit before rebasing" refinement.
+
+Tests added (all pass):
+- `test/tickets.test.js` (+6 tests): implementing-status begin-step resolves `implement` with configured agent/model and correctly stamps the active-step ledger; the other three active statuses (designing/reviewing/testing) resolve via their ready_* fallback; `resolveExpectedStep` resolves the same for an active-status ticket (check-dispatch path); an explicit `statusActions.implementing` override wins over the fallback; a genuinely action-less status (`questions`) still throws "no configured action"; `--action` override still wins; re-running begin-step on an implementing ticket is idempotent (same result, single ledger entry).
+- `test/active-steps.test.js` (+1 test): `check-dispatch --ticket` succeeds for an active-status ticket with no ledger record, via the `resolveExpectedStep` fallback.
+- `test/git.test.js` (+1 test, git-gated): end-to-end `startTicketWork` then `beginStep` succeeds — closes the acceptance loop directly.
+
+Verification:
+- `npm run check`: clean (no output, exit 0).
+- `npm test`: 336 tests, 335 pass, 1 skipped (pre-existing slow smoke test, opt-in), 0 fail.
+- `node ./bin/local-board.js validate`: "Ticket validation OK".
+- Live check on this ticket (status `implementing`): `node ./bin/local-board.js begin-step T20260707T1332Z --json` (no `--action`) now succeeds, resolving `action: "implement"`, `configuredAgent: "claude-subagent:local-board-implementer"`, `configuredModel: "sonnet"` — the exact footgun scenario the ticket describes.
+
+No deviations from the design. Scope held to `src/tickets.js` as the only production change, plus the four listed doc/skill files and their tests.
+
 ## Review Findings
 
 ## Test Evidence
@@ -212,3 +237,5 @@ acceptance loop directly.
 - 2026-07-07T23:59:41Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): ACTIVE_STATUS_TO_READY fallback in resolveStepFromBoard (explicit config wins), shared by begin-step and check-dispatch; skill ordering warnings deleted; query-output contract change flagged out of scope. Estimate 2 (basis T20260707T1331Z).
 
 - 2026-07-08T00:00:27Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (CLI ergonomics)
+
+- 2026-07-08T00:00:27Z: Ensured git branch local-board/T20260707T1332Z-cli-fix-the-begin-step-before-start-work-ordering-footgun (created).
