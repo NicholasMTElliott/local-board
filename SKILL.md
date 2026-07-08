@@ -119,7 +119,7 @@ local-board start-work <ticket-id> --json
 
 `start-work` creates a branch when the ticket has no `branch`, switches to a recorded existing branch when it exists, records the selected branch in front matter, appends a run-log entry, and moves `ready_for_implementation` tickets to `implementing`.
 
-Run `begin-step` (to resolve the action and its `configuredAgent`/`configuredModel`) **before** `start-work` for the implement step: `start-work` moves `ready_for_implementation → implementing`, and `implementing` has no `statusActions` entry, so a later `begin-step` fails with "no configured action". Resolve first, or pass `begin-step --action implement`.
+`begin-step` resolves the action whether the ticket is still `ready_for_implementation` or already `implementing`, so it may run before or after `start-work`.
 
 If the user pre-seeded work on a branch that is not yet recorded in the ticket, run:
 

@@ -99,21 +99,17 @@ final summary). The ticket files are the source of truth; this state is just a
 scheduling cache and is cheap to rebuild after a compaction.
 
 1. **Seed.** For up to `maxInFlight` ready tickets: `worktree-add` (this creates
-   and records the ticket branch). Add to the in-flight map. Do **not** run
-   `start-work` yet — see the ordering note in Dispatch.
+   and records the ticket branch). Add to the in-flight map. Do not run
+   `start-work` yet — see Dispatch.
 2. **Dispatch.** For each in-flight ticket with no outstanding executor and not
    gated on a peer-merge:
-   - `begin-step --root <worktreePath> --json` **first**, to resolve the action +
-     profile while the ticket is still in its `ready_*` status.
+   - `begin-step --root <worktreePath> --json` to resolve the action + profile
+     (works whether the ticket is still `ready_*` or already in its active
+     status).
    - Then `start-work --root <worktreePath>` (records the branch in the run log
      and moves `ready_for_implementation → implementing`).
    - Then dispatch the step per its profile (background for concurrency) and
      record the executor.
-
-   Ordering matters: `start-work` moves `ready_for_implementation` to
-   `implementing`, and `implementing` has no `statusActions` entry, so a
-   `begin-step` run *after* `start-work` fails with "no configured action".
-   Resolve the step before `start-work`, or pass `begin-step --action <action>`.
 3. **Await.** Process executor completions as they arrive. Surface each result to
    the user tagged with the ticket id.
 4. **On completion** for a ticket:
@@ -144,7 +140,7 @@ scheduling cache and is cheap to rebuild after a compaction.
      scope) concurrently — serialize those.
 6. **Refill.** When an in-flight ticket terminates and the ready queue is
    non-empty and in-flight `< maxInFlight`, pull the next ready ticket
-   (`worktree-add`, then `begin-step` before `start-work` as in Dispatch) and
+   (`worktree-add`, then `begin-step`/`start-work` as in Dispatch) and
    begin dispatching it. Newly-unblocked dependents and `decompose` children
    appear on the next `list --ready`.
 7. **Closeout.** On a ticket's terminal step, run `move <ticket-id> done --root <worktreePath> --json`

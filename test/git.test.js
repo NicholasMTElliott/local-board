@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 import { main } from "../src/cli.js";
 import { initProject } from "../src/scaffold.js";
-import { completeStep, createTicket, setTicketField } from "../src/tickets.js";
+import { beginStep, completeStep, createTicket, setTicketField } from "../src/tickets.js";
 import { startTicketWork } from "../src/git.js";
 import { removeFixtureDir } from "./helpers/fixtures.js";
 
@@ -57,6 +57,26 @@ test("startTicketWork creates a branch, records it, and moves implementation tic
     assert.match(text, new RegExp(`^branch: local-board/${ticketId}-implement-branch-support$`, "m"));
     assert.match(text, /^status: implementing$/m);
     assert.match(text, /Ensured git branch local-board\/.* \(created\)\./);
+  });
+});
+
+test("begin-step succeeds after start-work moves the ticket to implementing (the ordering footgun, end to end)", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Order start-work then begin-step", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const started = await startTicketWork(root, ticketId, { now: new Date("2026-05-14T21:00:00Z") });
+    assert.equal(started.status, "implementing");
+
+    const begun = await beginStep(root, ticketId);
+    assert.equal(begun.action, "implement");
+    assert.equal(begun.status, "implementing");
+    assert.equal(begun.configuredAgent, "claude-subagent:local-board-implementer");
   });
 });
 

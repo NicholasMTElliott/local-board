@@ -1,20 +1,20 @@
 ---
 id: T20260707T1332Z
 type: task
-status: ready_for_implementation
+status: done
 priority: P2
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260707T1332Z-cli-fix-the-begin-step-before-start-work-ordering-footgun
 estimate: 2
 estimateBasis: T20260707T1331Z
-workStartedAt: null
-workCompletedAt: null
+workStartedAt: 2026-07-08T00:00:27Z
+workCompletedAt: 2026-07-08T00:18:27Z
 created: 2026-07-07T13:32:54Z
-updated: 2026-07-08T00:00:27Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-08T00:18:27Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # cli: fix the begin-step before start-work ordering footgun
@@ -199,11 +199,69 @@ acceptance loop directly.
 
 ## Implementation Notes
 
+Implemented exactly per the Technical Design.
+
+`src/tickets.js`:
+- Added `ACTIVE_STATUS_TO_READY` map (designing/implementing/reviewing/testing -> their `ready_*` peer) next to `STAGE_TO_STATUS`.
+- `resolveStepFromBoard` now resolves the action as `actionOverride ?? statusActions[ticket.status] ?? statusActions[readyStatus] ?? null`, so an active status without its own `statusActions` entry falls back to its `ready_*` peer's configured action. An explicit `statusActions` entry for an active status still wins (middle clause). Shared by `beginStep` and `resolveExpectedStep` (check-dispatch), so both benefit. `actionRecord` (query-next/query-ticket/list --ready) is untouched, per the design's explicit scope decision.
+
+Skill/doc prose updated per the Affected files list:
+- `SKILL.md`: replaced the "run begin-step before start-work" ordering-warning paragraph with one sentence stating begin-step works either order.
+- `SKILL_TEAM.md`: deleted the "Ordering matters" note in Dispatch, simplified the begin-step/start-work step description, relaxed the Seed step's dangling reference to the removed note, and relaxed the Refill line.
+- `skills/codex/local-board/SKILL.md`: removed "before start-work" from the Single-Ticket Loop step 2 and replaced the Branch Discipline ordering paragraph with the same one-sentence statement used in SKILL.md.
+- `docs/PerStepOrchestration.md`: removed the `begin-step`-before-`start-work` retrospective refinement item, replaced with a note that the CLI fix (this ticket) removed the constraint; kept the unrelated "commit before rebasing" refinement.
+
+Tests added (all pass):
+- `test/tickets.test.js` (+6 tests): implementing-status begin-step resolves `implement` with configured agent/model and correctly stamps the active-step ledger; the other three active statuses (designing/reviewing/testing) resolve via their ready_* fallback; `resolveExpectedStep` resolves the same for an active-status ticket (check-dispatch path); an explicit `statusActions.implementing` override wins over the fallback; a genuinely action-less status (`questions`) still throws "no configured action"; `--action` override still wins; re-running begin-step on an implementing ticket is idempotent (same result, single ledger entry).
+- `test/active-steps.test.js` (+1 test): `check-dispatch --ticket` succeeds for an active-status ticket with no ledger record, via the `resolveExpectedStep` fallback.
+- `test/git.test.js` (+1 test, git-gated): end-to-end `startTicketWork` then `beginStep` succeeds — closes the acceptance loop directly.
+
+Verification:
+- `npm run check`: clean (no output, exit 0).
+- `npm test`: 336 tests, 335 pass, 1 skipped (pre-existing slow smoke test, opt-in), 0 fail.
+- `node ./bin/local-board.js validate`: "Ticket validation OK".
+- Live check on this ticket (status `implementing`): `node ./bin/local-board.js begin-step T20260707T1332Z --json` (no `--action`) now succeeds, resolving `action: "implement"`, `configuredAgent: "claude-subagent:local-board-implementer"`, `configuredModel: "sonnet"` — the exact footgun scenario the ticket describes.
+
+No deviations from the design. Scope held to `src/tickets.js` as the only production change, plus the four listed doc/skill files and their tests.
+
 ## Review Findings
+
+Reviewed by codex-task:read-only (gpt-5.5) against commit ef85d47.
+
+No blocking findings.
+
+- Precedence verified: --action > statusActions[status] > ACTIVE_STATUS_TO_READY peer > null (src/tickets.js:760); the peer lookup goes through config so renamed actions are honored.
+- ACTIVE_STATUS_TO_READY covers exactly the four active statuses (:138), adjacent to the T1327 stage maps; all four tested.
+- Consumers consistent: beginStep + resolveExpectedStep share the resolver; check-dispatch on an active ticket now resolves a concrete verdict — strictly better than the prior ticket-not-found; complete-step validation unweakened.
+- Query outputs intentionally unchanged (actionRecord unchanged at :1591).
+- Ordering warnings removed/replaced accurately across all four texts; no dangling references.
+- Tests cover end-to-end start-work->begin-step, explicit-entry-wins, --action override, check-dispatch fallback, and the action-less-status error.
+
+Verdict: pass
 
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/T20260707T1332Z-..., commit ef85d47.
+
+**Suite:** `npm run check` pass; `npm test` 335 pass / 1 gated-skip of 336; `npm run validate` OK.
+
+**Live probes (throwaway git board):**
+- The exact old footgun: start-work (-> implementing) then begin-step with NO --action resolved implement with the configured route/model — no throw.
+- designing-status begin-step resolves design@opus.
+- --action override still wins (review resolved on the implementing ticket).
+- check-dispatch on an active-status ticket returns concrete verdicts both ways (match / agent-mismatch), never ticket-not-found.
+- Explicit statusActions.implementing precedence verified via the passing automated test at tickets.test.js:666 (tester lacks Write to edit a throwaway config live — coverage gap in manual probing only).
+
+**Grep:** zero matches for the old warning phrasing across all four texts; the accurate replacement sentence confirmed in each.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5) — verification pass.
+
+- All prose changes landed with the implementation commit (warnings deleted from SKILL.md, SKILL_TEAM.md, the codex skill, and PerStepOrchestration; replacement sentence in each).
+- memory-bank/systemPatterns.md and docs/Workflow.md verified free of the old ordering constraint; no edits needed.
 
 ## Questions
 
@@ -212,3 +270,15 @@ acceptance loop directly.
 - 2026-07-07T23:59:41Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): ACTIVE_STATUS_TO_READY fallback in resolveStepFromBoard (explicit config wins), shared by begin-step and check-dispatch; skill ordering warnings deleted; query-output contract change flagged out of scope. Estimate 2 (basis T20260707T1331Z).
 
 - 2026-07-08T00:00:27Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (CLI ergonomics)
+
+- 2026-07-08T00:00:27Z: Ensured git branch local-board/T20260707T1332Z-cli-fix-the-begin-step-before-start-work-ordering-footgun (created).
+
+- 2026-07-08T00:07:24Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): fallback in resolveStepFromBoard + 8 tests + skill warning removal; live check on this very ticket resolved implement at implementing status; 335 pass + 1 gated-skip.
+
+- 2026-07-08T00:08:22Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (CLI ergonomics)
+
+- 2026-07-08T00:12:23Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict pass: precedence, map coverage, consumer consistency, and doc deletions all verified; check-dispatch behavior strictly improved.
+
+- 2026-07-08T00:17:01Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 335+1 gated; the exact old footgun sequence live-verified fixed; designing/override/check-dispatch probes pass; warning phrasing grep-clean across all four texts. Result: pass.
+
+- 2026-07-08T00:18:27Z: Completed document via codex-task:workspace-write: Codex (workspace-write) verification: all prose landed with implementation; memory-bank and Workflow verified clean.

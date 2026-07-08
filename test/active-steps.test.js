@@ -634,6 +634,35 @@ test("check-dispatch: --ticket resolves from the ledger snapshot even after conf
   });
 });
 
+test("check-dispatch: --ticket works for an active-status ticket with no ledger record (resolveExpectedStep fallback)", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Active status, no ledger entry", {
+      status: "implementing",
+      now: new Date("2026-07-07T10:34:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const result = await runCli([
+      "--root",
+      root,
+      "check-dispatch",
+      "--agent",
+      "local-board-implementer",
+      "--model",
+      "sonnet",
+      "--ticket",
+      ticketId,
+    ]);
+    assert.equal(result.code, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout), {
+      ok: true,
+      reason: "match",
+      expected: { agent: "local-board-implementer", model: "sonnet" },
+      ticket: ticketId,
+    });
+  });
+});
+
 test("check-dispatch: unknown ticket with no ledger record returns ticket-not-found (exit 2)", async () => {
   await withBoard(async (root) => {
     const result = await runCli([

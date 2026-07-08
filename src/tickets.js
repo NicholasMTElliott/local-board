@@ -129,6 +129,19 @@ const STAGE_TO_STATUS = {
   test: "ready_for_test",
 };
 
+// Active in-flight statuses have no statusActions entry of their own; they
+// resolve their action through the ready_* status they were promoted from,
+// so `begin-step` works before OR after `start-work` moves the ticket into
+// its active status. Kept structural (not config-derived) for the same
+// reason as STAGE_TO_STATUS: the active<->ready pairing is fixed regardless
+// of how a config renames its mandatory actions.
+const ACTIVE_STATUS_TO_READY = {
+  designing: "ready_for_design",
+  implementing: "ready_for_implementation",
+  reviewing: "ready_for_review",
+  testing: "ready_for_test",
+};
+
 // Rank of a raw status string within config.workflow.pipelineOrder, or null
 // when the status is not in the pipeline (e.g. questions/blocked/done/active
 // statuses). Lower rank = closer to done. Distinct from the ticket-based
@@ -744,7 +757,12 @@ function resolveStepFromBoard(board, config, ticketId, actionOverride) {
     throw new Error(`ticket ${ticketId} not found`);
   }
 
-  const action = actionOverride ?? config.workflow.statusActions[ticket.status] ?? null;
+  const readyStatus = ACTIVE_STATUS_TO_READY[ticket.status] ?? ticket.status;
+  const action =
+    actionOverride ??
+    config.workflow.statusActions[ticket.status] ??
+    config.workflow.statusActions[readyStatus] ??
+    null;
   if (action === null) {
     throw new Error(`ticket ${ticketId} has no configured action for status ${ticket.status}`);
   }
