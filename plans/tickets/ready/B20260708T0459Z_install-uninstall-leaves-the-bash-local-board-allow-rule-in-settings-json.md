@@ -1,7 +1,7 @@
 ---
 id: B20260708T0459Z
 type: bug
-status: implementing
+status: ready_for_docs
 priority: P3
 parent: null
 children: []
@@ -13,8 +13,8 @@ estimateBasis: B20260707T1330Z
 workStartedAt: 2026-07-08T20:13:56Z
 workCompletedAt: null
 created: 2026-07-08T04:59:37Z
-updated: 2026-07-08T20:27:25Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-08T20:46:36Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # install: --uninstall leaves the Bash(local-board *) allow rule in settings.json
@@ -226,7 +226,45 @@ Verdict: changes_requested
 
 ## Test Evidence
 
+Verified by claude-subagent:local-board-tester (sonnet), in the ticket worktree.
+
+### Repo-level checks
+
+| Command | Result |
+|---|---|
+| `npm run check` | PASS |
+| `npm test` | PASS — 392 tests, 391 pass, 0 fail, 1 skipped |
+| `npm run validate` | PASS — Ticket validation OK |
+
+### New-test audit (7 tests in test/install.test.js)
+
+All assert what they claim; no false-pass paths. The two no-write claims are double-asserted (byte content AND mtimeMs) and corroborated by code reading: `unpatchSettings` returns inside the JSON.parse catch (src/install.js:481-483) and at the rule-absent guard (488-489) before any write call.
+
+### Live sandboxed probes (programmatic `home` seam; every home path asserted to contain "scratchpad" before invocation — hard rule after the T1338 incident)
+
+- A (fresh home): install → `allow` exactly `["Bash(local-board *)"]` → uninstall → `permissions` pruned entirely. PASS.
+- B (narrowed rule `Bash(local-board move *)` + `Bash(git status)` + unrelated top-level key): uninstall → byte-identical content and identical mtimeMs (true no-op). PASS.
+- C (malformed JSON seeded): uninstall completes; file untouched byte-for-byte, mtimeMs unchanged. PASS.
+- Probe directories removed afterward.
+
+### Docs / memory-bank
+
+No stale "does not remove"/"leaves the allow rule"/ticket-gap references remain; new wording accurate in docs/Install.md:153-155,192-202, systemPatterns.md:187-189, techContext.md:43-45.
+
+### Sanity
+
+`CLAUDE_ALLOW_RULE` (src/install.js:25) is the single source for both patchSettings (L200) and unpatchSettings (L338); install idempotency test still writes exactly the one rule.
+
+### Caveats
+
+- patchHooks' malformed-JSON remove-path tolerance verified in combination (live probe C) rather than by an isolated unit test; both guards are independent early-returns. Low risk.
+- Windows-only session; change is OS-neutral JSON manipulation.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5). Closing audit: docs/Install.md install/uninstall sections verified mutually consistent (exact-match removal, user-modified-rule caveat); README + docs/ grep clean of stale manual-removal wording; memory-bank/systemPatterns.md tightened to current-state phrasing (removed now/no-longer history wording). Primary doc updates shipped at implement/rework.
 
 ## Questions
 
@@ -249,3 +287,13 @@ Verdict: changes_requested
 - 2026-07-08T20:27:25Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
 
 - 2026-07-08T20:27:25Z: Ensured git branch local-board/B20260708T0459Z-install-uninstall-leaves-the-bash-local-board-allow-rule-in-settings-json (already-current).
+
+- 2026-07-08T20:36:45Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework: malformed-JSON no-op in unpatchSettings + patchHooks remove path; memory-bank current-state; 2 new tests; 391 pass + 1 skip
+
+- 2026-07-08T20:38:03Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (rework: parse robustness + memory-bank)
+
+- 2026-07-08T20:38:03Z: Completed review via codex-task:read-only: changes_requested (malformed-JSON throw, stale memory-bank, 2 test gaps) on impl commit; addressed in rework commit incl. patchHooks remove path; recorded post-move per evidence-invalidation ordering
+
+- 2026-07-08T20:43:40Z: Completed test via claude-subagent:local-board-tester@sonnet: 391 pass + 1 skip; 7 new tests audited no-false-pass; 3 sandboxed probes (remove+prune, narrowed-rule no-op byte-identical, malformed-JSON untouched) all pass
+
+- 2026-07-08T20:46:36Z: Completed document via codex-task:workspace-write: Install.md consistency verified; systemPatterns history-phrasing tightened; no stale wording in README/docs

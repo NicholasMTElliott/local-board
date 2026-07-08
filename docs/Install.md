@@ -152,7 +152,7 @@ should be treated as untrusted input given this grant.
 
 The write is atomic (temp file + rename) and does not touch anything else in
 `settings.json`. `local-board install --uninstall` reverses this write
-(exact-match only — see "Uninstall / manual removal" below).
+(exact-match only — see "Uninstall" below).
 
 ## Hooks (opt-in)
 
@@ -177,7 +177,7 @@ are left untouched.
 See [docs/EnforcementHooks.md](EnforcementHooks.md) for what each hook does
 and why they fail open on errors.
 
-## Uninstall / manual removal
+## Uninstall
 
 ```sh
 local-board install --uninstall
@@ -196,7 +196,7 @@ Removes:
 - The four managed hooks entries from `~/.claude/settings.json`, if present.
 - The seven `~/.claude/agents/local-board-*.md` files.
 
-Install and uninstall are now symmetric for the allow rule: install adds it,
+Install and uninstall are symmetric for the allow rule: install adds it,
 uninstall removes it (exact-match only). If `permissions.allow` and
 `permissions` are left empty by the removal, both are pruned from
 `settings.json`.
