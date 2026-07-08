@@ -1,19 +1,19 @@
 ---
 id: T20260707T1336Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P3
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260707T1336Z-skills-dedupe-cli-command-blocks-across-skill-texts
 estimate: 2
 estimateBasis: T20260707T1329Z
-workStartedAt: null
+workStartedAt: 2026-07-08T03:42:54Z
 workCompletedAt: null
 created: 2026-07-07T13:36:55Z
-updated: 2026-07-08T03:42:54Z
+updated: 2026-07-08T03:47:43Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -119,6 +119,31 @@ The requirement's secondary ask — restructure `SKILL.md` "Branch Discipline" o
 
 ## Implementation Notes
 
+Implemented per the design's curated-inclusion-set decision (reject full generation).
+
+Files changed:
+- `SKILL.md`: `## CLI Commands` block retrimmed to the curated 27-name single-ticket surface (added `--version`, `where [--json]`, `unlink-parent`; kept the existing 24). Added a pointer line under the fence directing to `local-board` (no args), `schema --json`, `where --json`, and naming that worktree/`fast-forward`/`team-config`/`list` live in the `local-team` skill.
+- `skills/codex/local-board/SKILL.md`: identical retrim, keeping the `begin-step <ticket-id> [--action <action>] [--harness claude|codex] [--json]` variant. Same pointer line added.
+- `SKILL_TEAM.md`: untouched (no fenced block; out of scope per design).
+- `src/cli.js`: refactored `printUsage()`'s inline template literal into a module-level `USAGE_TEXT` constant (byte-identical content, zero behavior change) and added a new exported `usageCommandNames()` — a test-support-only function that tokenizes `USAGE_TEXT` into the 36 unique authoritative command names (handles the `[--root <path>]` prefix, `--version`, and the two-word `calibration suggest`). `printUsage()` now just logs `USAGE_TEXT`; runtime output is unchanged.
+- `test/skill-usage-sync.test.js` (new): modeled on `test/resources-sync.test.js`. Reads both skill files, extracts the fenced ` ```sh ` block under `## CLI Commands` with the same tokenizer logic, and asserts (1) the two blocks' command-name sets are deep-equal, (2) each block's name set is a subset of `usageCommandNames()`, with failure messages naming the offending file/command and pointing at "update the CLI Commands block ... to match printUsage / the sibling skill", and (3) both the usage set and each block are non-empty (broken-parser guard, mirroring resources-sync's directory-not-empty check).
+
+Tests added: 3 new tests in `test/skill-usage-sync.test.js`. Full suite: 384 tests total, 383 pass, 1 pre-existing skip (unrelated smoke test), 0 fail.
+
+Verification:
+- `npm run check` — clean (no output = all `node --check` calls passed).
+- `npm test` — 384 tests, 383 pass, 1 skip, 0 fail.
+- `npm run validate` — "Ticket validation OK".
+
+Perturbation probe: appended a bogus line `local-board bogus-command <ticket-id>` to the `SKILL.md` fenced block only, reran `node --test test/skill-usage-sync.test.js`. Both the equality test and the subset test failed as expected:
+- equality test: `AssertionError` diffing the two name arrays, showing `bogus-command` present only in the `SKILL.md`-derived (expected) side.
+- subset test: `AssertionError`: `SKILL.md lists "bogus-command" in its CLI Commands block, but it is not in local-board's usage output; update the CLI Commands block in SKILL.md to match printUsage / the sibling skill`.
+Reverted the perturbation immediately after confirming the failure; reran the three tests plus `npm run check`/`npm test`/`npm run validate` to confirm the clean pass shown above.
+
+Deviations from the design: none. Followed the curated-inclusion recommendation (add `where`, `--version`, `unlink-parent`; exclude worktree/team-config/fast-forward/list/next/init/install) and left Branch Discipline / SKILL_TEAM.md untouched as directed.
+
+Risks: the block tokenizer in the test and the `usageCommandNames()` tokenizer in `src/cli.js` are independent implementations of the same regex idea (by design — the test must not import private skill-block-parsing code, and `usageCommandNames()` only ever needs to parse `USAGE_TEXT`). A future change to either regex without updating the other could reintroduce silent drift in the parsing logic itself, though the non-empty guard test would catch a fully-broken parser.
+
 ## Review Findings
 
 ## Test Evidence
@@ -132,3 +157,5 @@ The requirement's secondary ask — restructure `SKILL.md` "Branch Discipline" o
 - 2026-07-08T03:42:06Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): curated single-ticket command blocks + pointer line + structural drift-guard test (skill-usage-sync) asserting block-name-set equality and subset-of-printUsage; drift enumerated (12 omissions, no stale entries); T1332 restructure already landed so out of scope. Estimate 2 (basis T20260707T1329Z).
 
 - 2026-07-08T03:42:54Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (docs + test hygiene)
+
+- 2026-07-08T03:42:54Z: Ensured git branch local-board/T20260707T1336Z-skills-dedupe-cli-command-blocks-across-skill-texts (created).
