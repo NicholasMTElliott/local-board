@@ -50,7 +50,7 @@ SKILL.md              installable orchestration skill template
   validated by an end-to-end real run (2 tickets × design/implement/test with
   per-step models, loop-back, and rebase backstop). `maxInFlight` reuses
   `team-config` (`LOCAL_BOARD_MAX_TEAMMATES`, default 6); the run confirms a
-  preferred default of ≈3. Limiter is cumulative session tokens + scheduling
+  recommended working cap of ≈3. Limiter is cumulative session tokens + scheduling
   clarity, not raw concurrency.
 
 ## Verification

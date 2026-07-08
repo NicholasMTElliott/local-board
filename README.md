@@ -94,7 +94,7 @@ For multi-line Markdown, `section --file <path>` is preferred. It avoids shell q
 
 `SKILL.md` turns a compatible coding agent into a local-board orchestrator. It tells the agent to call `query-next` or `query-ticket` for deterministic workflow dispatch and transition guidance, then use CLI mutation commands for canonical state changes.
 
-`SKILL_TEAM.md` installs as the `local-team` skill and adds an opt-in parallel-work entry point. It is a single top-level orchestrator (not an agent team): it keeps up to `maxInFlight` tickets in flight (from `team-config`, default 6, set by `LOCAL_BOARD_MAX_TEAMMATES`) and dispatches each pipeline step to an ephemeral, model-specialized executor (subagent or codex), with the ticket file and a per-ticket git worktree as the durable baton. Per-step models work because the orchestrator is top-level. See [docs/PerStepOrchestration.md](docs/PerStepOrchestration.md); [docs/TeamMode.md](docs/TeamMode.md) is the superseded agent-teams design.
+`SKILL_TEAM.md` installs as the `local-team` skill and adds an opt-in parallel-work entry point. It is a single top-level orchestrator (not an agent team): it keeps up to `maxInFlight` tickets in flight (from `team-config`, default 6, set by `LOCAL_BOARD_MAX_TEAMMATES`; a low cap ≈3 is the recommended working value) and dispatches each pipeline step to an ephemeral, model-specialized executor (subagent or codex), with the ticket file and a per-ticket git worktree as the durable baton. Per-step models work because the orchestrator is top-level. See [docs/PerStepOrchestration.md](docs/PerStepOrchestration.md); [docs/TeamMode.md](docs/TeamMode.md) is the superseded agent-teams design.
 
 Workflow routing lives in `plans/local-board.config.jsonc`. Comments and trailing commas are allowed. Strict routing is enforced by `begin-step`, `complete-step`, `approve-inline`, `move ... done`, and `validate`.
 
@@ -129,7 +129,7 @@ The test suite includes function-level ticket kernel coverage and CLI command-su
 - [docs/EnforcementHooks.md](docs/EnforcementHooks.md) — Claude Code hook enforcement for dispatch routing, evidence gating, and inline-fallback consent.
 - [docs/CodexSupport.md](docs/CodexSupport.md) — installing and using local-board directly in Codex, including route translation and parallel team mode.
 - [docs/specialty-steps.md](docs/specialty-steps.md) — optional security, UI, and UX specialty review steps and how the gate-check classifier dispatches them.
-- [docs/PerStepOrchestration.md](docs/PerStepOrchestration.md) — the parallel-work design: a single top-level orchestrator dispatches each pipeline step to a model-specialized executor, enabling full per-step model/prompt/route variety. Operational contract in `SKILL_TEAM.md`.
+- [docs/PerStepOrchestration.md](docs/PerStepOrchestration.md) — current-state parallel orchestration: a single top-level orchestrator dispatches each pipeline step to a model-specialized executor, enabling full per-step model/prompt/route variety. Operational contract in `SKILL_TEAM.md`.
 - [docs/TeamMode.md](docs/TeamMode.md) — superseded historical context for the original agent-teams "one teammate per ticket" parallel mode.
 - [docs/PluginPackaging.md](docs/PluginPackaging.md) — evaluation of Claude Code plugin packaging for skills/agents/hooks; decision is to defer, with a layout sketch, migration notes, and revisit triggers.
 

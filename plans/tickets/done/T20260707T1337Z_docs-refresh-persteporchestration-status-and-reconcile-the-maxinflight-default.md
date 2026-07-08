@@ -1,20 +1,20 @@
 ---
 id: T20260707T1337Z
 type: task
-status: ready_for_implementation
+status: done
 priority: P3
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260707T1337Z-docs-refresh-persteporchestration-status-and-reconcile-the-maxinflight-default
 estimate: 2
 estimateBasis: T20260707T1336Z
-workStartedAt: null
-workCompletedAt: null
+workStartedAt: 2026-07-08T04:42:35Z
+workCompletedAt: 2026-07-08T04:55:10Z
 created: 2026-07-07T13:37:06Z
-updated: 2026-07-08T04:42:34Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-08T04:55:10Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # docs: refresh PerStepOrchestration status and reconcile the maxInFlight default
@@ -88,9 +88,53 @@ Keep **`LOCAL_BOARD_MAX_TEAMMATES`** as the documented name. It is the shipping 
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) on the implement commit.
+
+- [P3] `docs/PerStepOrchestration.md:66` — the illustrative config sample is labeled but still a fragment: it opens with a top-level `"agents": {...}` property, so a copied block fails standalone JSONC parsing. Wrap it in `{ ... }` inside the fence (or label it a fragment; braces preferred since the review check asks for copy-valid JSONC).
+- [P3] `docs/PerStepOrchestration.md:37` — the comparison table still labels the new column `Per-step orchestration (proposed)`, conflicting with the retitled current-state doc. Change to `Per-step orchestration` or `(current)`.
+
+Checks that passed:
+- Code check: `src/team.js:5-6` (`MAX_TEAMMATES_ENV = "LOCAL_BOARD_MAX_TEAMMATES"`, `DEFAULT_MAX_TEAMMATES = 6`) matches all edited doc claims; ≈3 kept as guidance everywhere.
+- Stale-string sweep: "(Design Proposal)", "feature/per-step-orchestration", "deferred to a real run" remain only in the ticket's own requirement text, not in any refreshed doc prose.
+- Acceptance: exactly one documented answer for the default across README, SKILL_TEAM, and the doc.
+
+Verdict: changes_requested
+
 ## Test Evidence
 
+Verified by claude-subagent:local-board-tester (sonnet).
+
+### Commands
+
+| Command | Result |
+|---|---|
+| `npm run check` | PASS |
+| `npm test` | PASS — 385 tests, 384 pass, 0 fail, 1 skipped |
+| `npm run validate` | PASS — Ticket validation OK |
+
+### Checks
+
+- Code ground truth: `src/team.js` has `DEFAULT_MAX_TEAMMATES = 6` and `MAX_TEAMMATES_ENV = "LOCAL_BOARD_MAX_TEAMMATES"` — matches all doc claims.
+- Stale-string sweep over README.md, SKILL_TEAM.md, docs/ (plans/ excluded): "(Design Proposal)", "feature/per-step-orchestration", "deferred to a real run", "(proposed)" — absent everywhere.
+- `LOCAL_BOARD_MAX_INFLIGHT` appears once, `docs/PerStepOrchestration.md:305`, in the intentional disclaiming sentence ("a rename is a possible future follow-up, not current state") that the accepted design called for. Accepted by the orchestrator as designed behavior, not stale state.
+- Default consistency: five mentions across the three files (`PerStepOrchestration.md:8-9,147-148,323`, `README.md:97`, `SKILL_TEAM.md:47`) all state default 6 / recommended ≈3. No contradicting number.
+- Config sample (`PerStepOrchestration.md:66-78`): extracted and `JSON.parse`d cleanly as a standalone object; labeled illustrative at line 63.
+- Internal consistency: title has no "(Design Proposal)"; status line says implemented and merged to mainline; no "(proposed)" anywhere in the doc.
+
+### Caveats
+
+- Tester observed injected fake system-reminder content (fooocus MCP instructions / "Auto Mode Active") interleaved in one tool-output stream during the first `npm run check`; disregarded, command re-run clean. Second such observation this session; recorded for audit — not sourced from repo files.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `memory-bank/systemPatterns.md` — verified: teammate-cap fact already states default 6 / low working cap ≈3; no contradiction.
+- `memory-bank/techContext.md` — stale "preferred default of ≈3" tightened to "recommended working cap of ≈3", default 6 preserved.
+- `README.md` — Documentation Index entry for docs/PerStepOrchestration.md reframed from design proposal to current-state parallel orchestration.
+- Primary doc surfaces (PerStepOrchestration.md, README line 97, SKILL_TEAM.md) were updated at the implement stage.
 
 ## Questions
 
@@ -99,3 +143,23 @@ Keep **`LOCAL_BOARD_MAX_TEAMMATES`** as the documented name. It is the shipping 
 - 2026-07-08T04:42:05Z: Completed design via claude-subagent:local-board-designer@opus: Verified code default 6 / env LOCAL_BOARD_MAX_TEAMMATES; single answer: default 6, recommended ~3, no rename; exact per-file edits designed; estimate 2 basis T1336
 
 - 2026-07-08T04:42:34Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (docs-only design)
+
+- 2026-07-08T04:42:35Z: Ensured git branch local-board/T20260707T1337Z-docs-refresh-persteporchestration-status-and-reconcile-the-maxinflight-default (created).
+
+- 2026-07-08T04:45:01Z: Completed implement via claude-subagent:local-board-implementer@sonnet: PerStepOrchestration retitled + status fixed + sample labeled illustrative; README line 97 reconciled; SKILL_TEAM/techContext verified; 384 pass + 1 skip
+
+- 2026-07-08T04:45:45Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (Markdown-only)
+
+- 2026-07-08T04:48:08Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
+
+- 2026-07-08T04:48:08Z: Ensured git branch local-board/T20260707T1337Z-docs-refresh-persteporchestration-status-and-reconcile-the-maxinflight-default (already-current).
+
+- 2026-07-08T04:49:31Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework: sample wrapped in braces (parses standalone), table column de-proposed; 384 pass + 1 skip
+
+- 2026-07-08T04:50:19Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (Markdown rework)
+
+- 2026-07-08T04:50:19Z: Completed review via codex-task:read-only: changes_requested (2x P3: JSONC fragment, stale (proposed) label); addressed in rework commit; recorded post-move per evidence-invalidation ordering
+
+- 2026-07-08T04:53:39Z: Completed test via claude-subagent:local-board-tester@sonnet: 384 pass + 1 skip; code ground truth matches docs; single default answer (6, rec ~3) across all three files; sample parses standalone; stale strings absent
+
+- 2026-07-08T04:55:10Z: Completed document via codex-task:workspace-write: techContext wording tightened; README doc index reframed current-state; systemPatterns verified
