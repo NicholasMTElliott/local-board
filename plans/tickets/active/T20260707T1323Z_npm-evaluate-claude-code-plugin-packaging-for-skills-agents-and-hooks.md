@@ -1,19 +1,19 @@
 ---
 id: T20260707T1323Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P3
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260707T1323Z-npm-evaluate-claude-code-plugin-packaging-for-skills-agents-and-hooks
 estimate: 2
 estimateBasis: T20260707T1331Z
-workStartedAt: null
+workStartedAt: 2026-07-08T00:22:34Z
 workCompletedAt: null
 created: 2026-07-07T13:23:26Z
-updated: 2026-07-08T00:22:34Z
+updated: 2026-07-08T00:24:32Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -211,6 +211,39 @@ shipped skills.
 
 ## Implementation Notes
 
+Docs-only deliverable, implemented exactly per the ticket's Technical Design / Approach section.
+
+- Added `docs/PluginPackaging.md`: the decision (defer plugin adoption, keep
+  `local-board install` canonical, no spike branch), condensed rationale
+  (npm-not-a-plugin-source second channel; precedence/shadowing footgun vs.
+  user-dir skill/agent copies; unstable hook API/subagent-tool-name surface;
+  CLI stays npm-only, not plugin `bin/`; premature marketplace upside), a
+  layout sketch of what a future plugin would contain (`.claude-plugin/plugin.json`,
+  rendered skills, the 7 `agents/claude/*.md`, `hooks/hooks.json` + 4 hook
+  scripts, pointing at `src/install.js` `HOOK_SPECS` as source of truth rather
+  than duplicating exact JSON), migration notes (installer must stop writing
+  and must delete its own `~/.claude/skills/local-board`,
+  `~/.claude/skills/local-team`, `~/.claude/agents/local-board-*.md`, and
+  remove `patchHooks` settings entries in favor of `hooks.json` before any
+  plugin ships; other harness targets stay on the installer), a
+  where-it-would-live recommendation (sibling repo/marketplace entry, not
+  this repo's root, to avoid `npm pack` capturing plugin files), the open
+  render-vs-on-PATH-invocation question for a future adopt, and four revisit
+  triggers (hook API/tool-name stabilization; marketplace demand;
+  settings.json patching becoming a maintenance burden; a supported
+  npm-as-plugin-source path).
+- Added one README Documentation Index line for the new doc.
+
+No production code, installer, skill, agent, or hook changes — matches the
+ticket's docs-only scope.
+
+Verification: `npm run check` (clean), `npm test` (336 tests, 335 pass, 1
+skip — unchanged from baseline, `test/install.test.js` and
+`test/resources-sync.test.js` untouched/still pass), `npm run validate`
+(Ticket validation OK). No counts moved.
+
+No deviations from the Technical Design.
+
 ## Review Findings
 
 ## Test Evidence
@@ -224,3 +257,5 @@ shipped skills.
 - 2026-07-08T00:21:46Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): defer-don't-reject — installer stays canonical; plugin documented as future work (second-channel cost, precedence shadowing footgun, unstable hook contract). Deliverable: docs/PluginPackaging.md + README index line, no spike. Estimate 2 (basis T20260707T1331Z).
 
 - 2026-07-08T00:22:34Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (docs-only evaluation)
+
+- 2026-07-08T00:22:34Z: Ensured git branch local-board/T20260707T1323Z-npm-evaluate-claude-code-plugin-packaging-for-skills-agents-and-hooks (created).
