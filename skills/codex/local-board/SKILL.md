@@ -59,7 +59,7 @@ For each returned ticket:
 9. Choose `done` only when all required evidence is recorded.
 10. Run `validate` again before reporting completion.
 
-When `routing.enforceTransitions` is `true` (the `init` scaffold default), `move`/`set <id> status` refuse a target status outside `workflow.transitions[fromStatus]` and a fixed structural allow-set (start-work, resume from `questions`/`blocked`, backlog promote, archive/retention); the refusal error names the allowed targets. Only pass `--override --reason "<text>"` when a legitimate move is genuinely outside that set — it forces the move and records `Transition override: <from> -> <to>: <reason>` in the Run Log. Prefer a legal transition over `--override` whenever one exists.
+When `routing.enforceTransitions` is `true` (the `init` scaffold default), `move`/`set <id> status` refuse a target status outside `workflow.transitions[fromStatus]` and a fixed structural allow-set (same-status re-save, backlog promote, ready->active start-work, active->own-ready revert, questions/blocked resume, any->archived/questions/blocked); the refusal error names the allowed targets. Only pass `--override --reason "<text>"` when a legitimate move is genuinely outside that set — it forces the move and records `Transition override: <from> -> <to>: <reason>` in the Run Log. Prefer a legal transition over `--override` whenever one exists.
 
 ## Route Translation Contract
 

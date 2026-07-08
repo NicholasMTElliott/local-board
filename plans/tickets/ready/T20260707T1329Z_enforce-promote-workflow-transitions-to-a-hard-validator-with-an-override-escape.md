@@ -1,7 +1,7 @@
 ---
 id: T20260707T1329Z
 type: task
-status: implementing
+status: ready_for_docs
 priority: P3
 parent: null
 children: []
@@ -13,8 +13,8 @@ estimateBasis: T20260707T1331Z
 workStartedAt: 2026-07-08T01:50:54Z
 workCompletedAt: null
 created: 2026-07-07T13:29:41Z
-updated: 2026-07-08T02:11:14Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-08T02:21:40Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
 # enforce: promote workflow.transitions to a hard validator with an override escape
@@ -376,7 +376,35 @@ Implemented per the Technical Design.
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) against commit 7a27bfc.
+
+No blocking findings.
+
+Non-blocking observations:
+- SKILL.md:49, codex skill:62, and src/config.js:877 understate the structural allow-set (omit active->own-ready and any->questions/blocked); docs/Workflow.md:347 has the full set — precision fix for the doc pass.
+- src/tickets.js:200 comment says self-transitions are omitted from suggestions, but allowedTargetsFor appends archived/questions/blocked unconditionally — comment imprecision only.
+
+Audit verified: allow-set matches the accepted map-vs-structural split (any->archived intentionally covers retention and terminal archival, including in-flight tickets); active->ready reverts still reach T1328 invalidation (ready_* targets strip); validator ordering refusal->gate->invalidation->first mutation with a byte-unchanged refusal test; designing map entry lets active design complete; retention done->archived structurally allowed; override logs in the locked span, reason optional, harmless no-op when enforcement off; the pre-existing test's override is appropriate (decomposition->design is genuinely exceptional).
+
+Verdict: pass
+
 ## Test Evidence
+
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/T20260707T1329Z-..., commit 7a27bfc.
+
+**Suite:** `npm run check` pass; `npm test` 362 pass / 1 gated-skip of 363; `npm run validate` OK.
+
+**End-to-end probes (fresh scaffold, all switches on):**
+- Illegal skip (ready_for_design -> ready_for_test): refused exit 2 with the full allowed-targets list and override guidance (message captured verbatim); ticket md5-identical after refusal — zero side effects.
+- Override with reason: succeeds; Run Log line "Transition override: ready_for_design -> ready_for_test: test"; no-reason variant omits the suffix cleanly.
+- Structural categories live: backlog promote, questions round-trip, in-flight -> archived — all without override.
+- Normal pipeline: the gate-consultation refusal (separate check) fired first as expected; after gate-complete the forward move passed with no override — validator and gate machinery compose correctly.
+- set status parity: identical refusal + override behavior, its own Run Log line.
+- ENOENT-fallback board: illegal move allowed (advisory behavior preserved).
+
+**Gaps / caveats:** representative-path probing; exhaustive map coverage delegated to the 362-test suite; the noted pre-existing working-tree diff is the ticket's own lifecycle move.
+
+Result: pass
 
 ## Documentation Updates
 
@@ -389,3 +417,11 @@ Implemented per the Technical Design.
 - 2026-07-08T01:50:53Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (workflow enforcement)
 
 - 2026-07-08T01:50:54Z: Ensured git branch local-board/T20260707T1329Z-enforce-promote-workflow-transitions-to-a-hard-validator-with-an-override-escape (created).
+
+- 2026-07-08T02:12:01Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): validator first in moveTicket behind routing.enforceTransitions, structural allow-set, override parity on set status, designing map entry; full suite audited green under scaffold-on; 362 pass + 1 gated-skip.
+
+- 2026-07-08T02:13:04Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (workflow enforcement)
+
+- 2026-07-08T02:16:50Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict pass: allow-set, ordering, gate/invalidation interplay, and override semantics all audited correct; two doc-precision nits deferred to the doc pass.
+
+- 2026-07-08T02:21:40Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 362+1 gated; refusal (md5-identical file), override Run Log lines with/without reason, structural categories, gate-machinery composition, set parity, and fallback advisory mode all live-verified. Result: pass.

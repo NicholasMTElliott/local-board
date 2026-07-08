@@ -628,8 +628,9 @@ export function defaultConfigJsonc() {
     // This map is the pipeline-ordering authority when routing.enforceTransitions
     // (below) is true: "move"/"set <id> status" refuse a target status not
     // listed here for the ticket's current status, unless the move is in the
-    // fixed structural allow-set (start-work, resume from questions/blocked,
-    // backlog promote, archive/retention) or --override is used. It is
+    // fixed structural allow-set (same-status re-save, backlog promote,
+    // ready->active start-work, active->own-ready revert, questions/blocked
+    // resume, any->archived/questions/blocked) or --override is used. It is
     // advisory-only guidance when enforceTransitions is false.
     // Ticket dependencies should use blockedBy and stay in the intended ready status.
     // status: blocked is reserved for non-ticket blockers.

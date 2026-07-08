@@ -197,9 +197,9 @@ export function isTransitionAllowed(config, fromStatus, toStatus) {
 
 // Computes the allowed-targets list for a refusal error message: map targets
 // for fromStatus (in map order) followed by any applicable structural targets
-// not already listed, de-duplicated. The self-transition (fromStatus itself)
-// is intentionally omitted — it is allowed but not a useful "did you mean"
-// suggestion.
+// not already listed, de-duplicated. The idempotent self-transition is not
+// added as its own suggestion, but unconditional structural targets can still
+// include the current status (archived/questions/blocked).
 function allowedTargetsFor(config, fromStatus) {
   const targets = [];
   const seen = new Set();
