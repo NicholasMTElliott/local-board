@@ -262,7 +262,7 @@ local-board state-report --json
 local-board schema --json
 local-board create <epic|story|task|bug> "<title>" --status <status> --priority <priority> [--parent <id>]
 local-board start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--json]
-local-board begin-step <ticket-id> [--action <action>] [--json]
+local-board begin-step <ticket-id> [--action <action>] [--harness claude|codex] [--json]
 local-board check-dispatch --agent <subagent-type> [--model <model>] [--ticket <ticket-id>] [--json]
 local-board complete-step <ticket-id> <action> --executor <executor> [--model <model>] --evidence "<evidence>" [--json]
 local-board approve-inline <ticket-id> <action> --reason "<reason>" [--executor <executor>] [--json]

@@ -12,11 +12,17 @@ const SKILL_FILES = [
   path.join(ROOT, "skills", "codex", "local-board", "SKILL.md"),
 ];
 
+// Working-copy files only pick up the repo's `eol=lf` .gitattributes policy on
+// (re)checkout, so a stale checkout can have CRLF on one side while the other
+// is LF even though committed content is identical. Normalize \r\n -> \n
+// (only) before comparing content. Mirrors normalizeEol in
+// test/resources-sync.test.js.
+const normalizeEol = (s) => s.replace(/\r\n/g, "\n");
+
 // Extract the fenced ```sh block that follows the "## CLI Commands" heading,
-// then pull the command name (first token after "local-board") off each
-// non-blank line. Mirrors the tokenizer in src/cli.js's usageCommandNames so
-// both sides agree on what counts as a "command name".
-function extractSkillBlockCommandNames(source, label) {
+// anchored to that specific heading so unrelated fences elsewhere in the file
+// (e.g. the top-of-file `local-board` usage fence) can't be picked up instead.
+function extractSkillBlock(source, label) {
   const headingIndex = source.indexOf("## CLI Commands");
   assert.ok(headingIndex >= 0, `${label} is missing a "## CLI Commands" heading`);
 
@@ -24,8 +30,16 @@ function extractSkillBlockCommandNames(source, label) {
   const fenceMatch = afterHeading.match(/```sh\n([\s\S]*?)\n```/);
   assert.ok(fenceMatch, `${label} is missing a fenced \`\`\`sh block under "## CLI Commands"`);
 
+  return fenceMatch[1];
+}
+
+// Pull the command name (first token after "local-board") off each non-blank
+// line of an already-extracted CLI Commands block. Mirrors the tokenizer in
+// src/cli.js's usageCommandNames so both sides agree on what counts as a
+// "command name".
+function extractSkillBlockCommandNames(block, label) {
   const names = [];
-  for (const rawLine of fenceMatch[1].split("\n")) {
+  for (const rawLine of block.split("\n")) {
     const line = rawLine.trim();
     if (!line) continue;
     assert.ok(line.startsWith("local-board "), `${label}: unexpected non-command line "${line}" in CLI Commands block`);
@@ -43,8 +57,11 @@ test("SKILL.md and skills/codex/local-board/SKILL.md CLI Commands blocks list th
     readFile(SKILL_FILES[1], "utf8"),
   ]);
 
-  const rootNames = new Set(extractSkillBlockCommandNames(rootSource, SKILL_FILES[0]));
-  const codexNames = new Set(extractSkillBlockCommandNames(codexSource, SKILL_FILES[1]));
+  const rootBlock = extractSkillBlock(rootSource, SKILL_FILES[0]);
+  const codexBlock = extractSkillBlock(codexSource, SKILL_FILES[1]);
+
+  const rootNames = new Set(extractSkillBlockCommandNames(rootBlock, SKILL_FILES[0]));
+  const codexNames = new Set(extractSkillBlockCommandNames(codexBlock, SKILL_FILES[1]));
 
   assert.deepEqual(
     [...codexNames].sort(),
@@ -53,12 +70,32 @@ test("SKILL.md and skills/codex/local-board/SKILL.md CLI Commands blocks list th
   );
 });
 
+test("SKILL.md and skills/codex/local-board/SKILL.md CLI Commands blocks are byte-identical", async () => {
+  const [rootSource, codexSource] = await Promise.all([
+    readFile(SKILL_FILES[0], "utf8"),
+    readFile(SKILL_FILES[1], "utf8"),
+  ]);
+
+  const rootBlock = extractSkillBlock(rootSource, SKILL_FILES[0]);
+  const codexBlock = extractSkillBlock(codexSource, SKILL_FILES[1]);
+
+  // A shared command-name set is not sufficient: presentation drift (flag
+  // lists, argument order, option syntax) between the two fenced blocks must
+  // also fail CI, since both files claim to document the same CLI surface.
+  assert.equal(
+    normalizeEol(codexBlock),
+    normalizeEol(rootBlock),
+    `${SKILL_FILES[1]} CLI Commands block text has drifted from ${SKILL_FILES[0]}; treat ${SKILL_FILES[0]} as canonical and copy its CLI Commands block verbatim into ${SKILL_FILES[1]}`,
+  );
+});
+
 test("each skill's CLI Commands block is a subset of the authoritative CLI usage surface", async () => {
   const usageNames = new Set(usageCommandNames());
 
   for (const file of SKILL_FILES) {
     const source = await readFile(file, "utf8");
-    const blockNames = extractSkillBlockCommandNames(source, file);
+    const block = extractSkillBlock(source, file);
+    const blockNames = extractSkillBlockCommandNames(block, file);
     for (const name of blockNames) {
       assert.ok(
         usageNames.has(name),
@@ -74,7 +111,8 @@ test("usage names and skill block names are non-empty (guards against a silently
 
   for (const file of SKILL_FILES) {
     const source = await readFile(file, "utf8");
-    const blockNames = extractSkillBlockCommandNames(source, file);
+    const block = extractSkillBlock(source, file);
+    const blockNames = extractSkillBlockCommandNames(block, file);
     assert.ok(blockNames.length > 0, `${file} CLI Commands block should list at least one command`);
   }
 });
