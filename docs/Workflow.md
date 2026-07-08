@@ -63,7 +63,7 @@ The CLI returns the relevant transition list from `query-next --json`, `query-ti
 - `status`: exact status to pass to `move`;
 - `when`: the condition for choosing it.
 
-This is advisory guidance for the orchestrator. It keeps normal decisions explicit while preserving manual recovery moves.
+This is advisory guidance for the orchestrator when `routing.enforceTransitions` is `false` (the default for a config that omits the key). When `routing.enforceTransitions` is `true` (the `init` scaffold default for new repos), `workflow.transitions` becomes a hard validator: see "Hard transition validation" below.
 
 Typical review outcomes:
 
@@ -127,6 +127,7 @@ node ./bin/local-board.js complete-step T20260514T1234Z review --executor codex-
 node ./bin/local-board.js approve-inline T20260514T1234Z review --reason "User approved fallback."
 node ./bin/local-board.js move T20260514T1234Z ready_for_design
 node ./bin/local-board.js move T20260514T1234Z done --json
+node ./bin/local-board.js move T20260514T1234Z ready_for_test --override --reason "Emergency hotfix, review waived by lead."
 node ./bin/local-board.js set T20260514T1234Z branch feature/T20260514T1234Z-ticket-parser
 node ./bin/local-board.js section T20260514T1234Z "Use the existing parser." --section "Technical Design"
 node ./bin/local-board.js section T20260514T1234Z --file /tmp/design.md --section "Technical Design"
@@ -340,6 +341,24 @@ When `routing.invalidateOnLoopBack` is true, `move` strips stale evidence on a l
 Moves to `questions`, `blocked`, `done`, `archived`, or an active status (`designing`, `implementing`, ...) are never affected — only `ready_*` targets trigger the check. A forward move with no downstream evidence yet is a no-op (no front-matter change, no Run Log line). `estimate`/`estimateBasis`/`workStartedAt` are front-matter fields, not `completedSteps` tokens, and are never touched.
 
 `invalidateOnLoopBack` defaults to `false` for a config file that predates this key (or omits it) and to `true` in the `init` scaffold for new repos. Invalidation only applies going forward: evidence already left stale by a loop-back that happened before this key was enabled on a given board is not retroactively cleaned up.
+
+### Hard transition validation
+
+When `routing.enforceTransitions` is `true`, `move`/`set <id> status` refuse a target status not listed in `workflow.transitions[fromStatus]` for the ticket's current status, unless the move is in a fixed structural allow-set:
+
+- a same-status move (idempotent re-save);
+- `backlog` -> any trigger (`ready_*`) status (promote out of backlog);
+- a `ready_*` status -> its paired active status (`start-work`, e.g. `ready_for_implementation` -> `implementing`);
+- an active status -> its own `ready_*` (revert/back-out);
+- `questions`/`blocked` -> any trigger status (resume; origin is not tracked, so any `ready_*` is allowed);
+- any status -> `archived` (supersede, and the retention `done` -> `archived` move);
+- any status -> `questions` or `blocked` (escape hatches from any state).
+
+This allow-set covers administrative/escape moves that are not pipeline decisions, so it is never surfaced as advisory `transitions` guidance. What stays exclusively map-governed is `ready_*`/active -> `ready_*` forward and backward moves — the exact ordering this validator exists to enforce (for example `ready_for_implementation` -> `ready_for_test`, skipping review, is refused; `ready_for_review` -> `ready_for_test` is in the map, so it passes).
+
+A refusal happens before any other move-time check (gate consultation, loop-back invalidation) and before any file mutation, so it has zero side effects. The error names the allowed targets (map targets for the current status union the applicable structural targets). Re-run with `--override --reason <text>` to force the move; `--reason` is optional but encouraged. An override only matters when enforcement is on and the move would otherwise be refused — using `--override` on an already-allowed move is a silent no-op. A forced move appends one Run Log line: `Transition override: <from> -> <to>: <reason>` (the `: <reason>` suffix is omitted when no reason is given).
+
+`enforceTransitions` defaults to `false` for a config file that predates this key (or omits it) and to `true` in the `init` scaffold for new repos. `set <id> status` routes through `move` and inherits both the validator and the `--override --reason` flags.
 
 ### Specialty-run
 

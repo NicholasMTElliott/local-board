@@ -38,6 +38,10 @@ const MANDATORY_ACTION_NAMES = new Set([
 //   - worktrees.guardWrongRoot: false here (vs true in the scaffold) so a
 //     pre-existing board that omits the key does not silently start refusing
 //     per-ticket mutations invoked from the wrong root.
+//   - routing.enforceTransitions: false here (vs true in the scaffold) so a
+//     pre-existing config that omits the key does not silently start
+//     refusing moves whose target status is outside workflow.transitions +
+//     the structural allow-set (see isTransitionAllowed in src/tickets.js).
 // These differences are pinned by tests in test/config.test.js (search
 // "backward-compat disabled" and "empty optionalSteps catalog"). Do NOT
 // converge them to match the scaffold — see the guard test
@@ -88,6 +92,20 @@ export const DEFAULT_CONFIG = {
         },
       ],
       ready_for_design: [
+        {
+          status: "ready_for_implementation",
+          when: "Use after the technical design is complete and design evidence is recorded.",
+        },
+        {
+          status: "questions",
+          when: "Use when design needs user input before it can continue.",
+        },
+        {
+          status: "blocked",
+          when: "Use only when a non-ticket blocker stops design.",
+        },
+      ],
+      designing: [
         {
           status: "ready_for_implementation",
           when: "Use after the technical design is complete and design evidence is recorded.",
@@ -268,6 +286,7 @@ export const DEFAULT_CONFIG = {
     },
     requireGateConsultation: false,
     invalidateOnLoopBack: false,
+    enforceTransitions: false,
   },
   retention: {
     archiveDoneAfterDays: 30,
@@ -604,9 +623,15 @@ export function defaultConfigJsonc() {
       "document": "plans/prompts/steps/document.md"
     },
 
-    // Advisory status outcomes for each workflow decision point.
+    // Status outcomes for each workflow decision point.
     // Use exact status values with "move <ticket-id> <status>".
-    // This is guidance for orchestrators, not a hard transition validator yet.
+    // This map is the pipeline-ordering authority when routing.enforceTransitions
+    // (below) is true: "move"/"set <id> status" refuse a target status not
+    // listed here for the ticket's current status, unless the move is in the
+    // fixed structural allow-set (same-status re-save, backlog promote,
+    // ready->active start-work, active->own-ready revert, questions/blocked
+    // resume, any->archived/questions/blocked) or --override is used. It is
+    // advisory-only guidance when enforceTransitions is false.
     // Ticket dependencies should use blockedBy and stay in the intended ready status.
     // status: blocked is reserved for non-ticket blockers.
     "transitions": {
@@ -625,6 +650,20 @@ export function defaultConfigJsonc() {
         }
       ],
       "ready_for_design": [
+        {
+          "status": "ready_for_implementation",
+          "when": "Use after the technical design is complete and design evidence is recorded."
+        },
+        {
+          "status": "questions",
+          "when": "Use when design needs user input before it can continue."
+        },
+        {
+          "status": "blocked",
+          "when": "Use only when a non-ticket blocker stops design."
+        }
+      ],
+      "designing": [
         {
           "status": "ready_for_implementation",
           "when": "Use after the technical design is complete and design evidence is recorded."
@@ -835,7 +874,19 @@ export function defaultConfigJsonc() {
     // old behavior). Migration note: invalidation only applies to *future*
     // loop-back moves; evidence already stale from a loop-back before this
     // key was enabled is not retroactively cleaned.
-    "invalidateOnLoopBack": true
+    "invalidateOnLoopBack": true,
+    // enforceTransitions: true promotes workflow.transitions above from
+    // advisory guidance to a hard validator: "move"/"set <id> status" refuse
+    // a target status not listed in workflow.transitions[fromStatus] for the
+    // ticket's current status, unless the move is in a fixed structural
+    // allow-set (start-work's ready_*->active move, reverting an active
+    // status to its ready_*, resuming from questions/blocked, promoting out
+    // of backlog, or any move to archived) or --override --reason <text> is
+    // passed (recorded in the Run Log). The refusal error names the allowed
+    // targets. Set to false for advisory-only mode (nothing is ever refused;
+    // pre-existing boards that omit this key keep that behavior via
+    // DEFAULT_CONFIG's fallback).
+    "enforceTransitions": true
   },
 
   // Done tickets are recent closeout history. Older done tickets are retained

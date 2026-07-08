@@ -250,6 +250,9 @@ test("defaultConfigJsonc matches DEFAULT_CONFIG except for documented difference
   //   - worktrees.guardWrongRoot: DEFAULT_CONFIG keeps it off for backward
   //     compat with boards that omit the key; the scaffold enables it for new
   //     repos (a no-op without a matching ticket worktree).
+  //   - routing.enforceTransitions: DEFAULT_CONFIG keeps it off for backward
+  //     compat with configs that omit the key; the scaffold enables it for
+  //     new repos.
   // Any OTHER difference here means someone edited one copy's shared blocks
   // (workflow, agents, routing, retention, git, worktrees) without updating
   // the other. Fix by updating both DEFAULT_CONFIG and defaultConfigJsonc(),
@@ -260,10 +263,11 @@ test("defaultConfigJsonc matches DEFAULT_CONFIG except for documented difference
   expected.routing.requireGateConsultation = true;
   expected.routing.invalidateOnLoopBack = true;
   expected.worktrees.guardWrongRoot = true;
+  expected.routing.enforceTransitions = true;
   assert.deepEqual(scaffolded, expected);
 
   // Guard against the allowlist above silently growing to mask unrelated
-  // drift: confirm these four paths are the *only* places DEFAULT_CONFIG and
+  // drift: confirm these five paths are the *only* places DEFAULT_CONFIG and
   // the scaffold differ.
   const rawDiffs = leafDiffPaths(DEFAULT_CONFIG, parseJsonc(defaultConfigJsonc()));
   const collapsed = [...new Set(
@@ -272,10 +276,33 @@ test("defaultConfigJsonc matches DEFAULT_CONFIG except for documented difference
   assert.deepEqual(collapsed, [
     "estimation.enabled",
     "optionalSteps",
+    "routing.enforceTransitions",
     "routing.invalidateOnLoopBack",
     "routing.requireGateConsultation",
     "worktrees.guardWrongRoot",
   ]);
+});
+
+test("loadConfig defaults routing.enforceTransitions to false when omitted (backward-compat disabled)", async () => {
+  await withRoot(async (root) => {
+    // No config file at all: DEFAULT_CONFIG fallback keeps it off.
+    assert.equal((await loadConfig(root)).routing.enforceTransitions, false);
+
+    // Config file present but omits the key: deep-merge onto DEFAULT_CONFIG
+    // must not silently turn it on.
+    await writeConfig(root, `{ "version": 1 }`);
+    assert.equal((await loadConfig(root)).routing.enforceTransitions, false);
+
+    // Explicit false stays off; explicit true turns it on.
+    await writeConfig(root, JSON.stringify({ routing: { enforceTransitions: false } }));
+    assert.equal((await loadConfig(root)).routing.enforceTransitions, false);
+    await writeConfig(root, JSON.stringify({ routing: { enforceTransitions: true } }));
+    assert.equal((await loadConfig(root)).routing.enforceTransitions, true);
+
+    // The shipped scaffold enables it for new repos.
+    await writeConfig(root, defaultConfigJsonc());
+    assert.equal((await loadConfig(root)).routing.enforceTransitions, true);
+  });
 });
 
 test("loadConfig defaults routing.invalidateOnLoopBack to false when omitted (backward-compat disabled)", async () => {

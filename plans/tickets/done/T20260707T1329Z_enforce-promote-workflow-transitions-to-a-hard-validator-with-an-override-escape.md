@@ -1,20 +1,20 @@
 ---
 id: T20260707T1329Z
 type: task
-status: ready_for_implementation
+status: done
 priority: P3
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260707T1329Z-enforce-promote-workflow-transitions-to-a-hard-validator-with-an-override-escape
 estimate: 4
 estimateBasis: T20260707T1331Z
-workStartedAt: null
-workCompletedAt: null
+workStartedAt: 2026-07-08T01:50:54Z
+workCompletedAt: 2026-07-08T02:24:50Z
 created: 2026-07-07T13:29:41Z
-updated: 2026-07-08T01:50:53Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-08T02:24:50Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # enforce: promote workflow.transitions to a hard validator with an override escape
@@ -312,16 +312,11 @@ routing.enforceTransitions to false for advisory-only mode.
 
 ## Documentation Updates
 
-- `docs/Workflow.md` — document the hard validator, the switch, and `--override`.
-- `memory-bank/techContext.md` — remove/flip the "Open Decision" bullet
-  ("Whether advisory transition guidance should become a hard transition
-  validator").
-- `memory-bank/systemPatterns.md` — record the map-vs-structural split and the
-  override-records-to-Run-Log invariant.
-- `SKILL.md` + `skills/codex/local-board/SKILL.md` — the `--override` verb and
-  when to use it.
-- Hand-off note: flipping `enforceTransitions` on in this repo's own
-  `plans/local-board.config.jsonc` is a post-merge orchestrator decision.
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `SKILL.md`, `skills/codex/local-board/SKILL.md`, `src/config.js` scaffold comment — structural allow-set descriptions completed (same-status re-save, backlog promote, start-work, active->own-ready revert, questions/blocked resume, any->archived/questions/blocked).
+- `src/tickets.js` — allowedTargetsFor comment corrected (self-transition can appear via the unconditional structural targets).
+- `docs/Workflow.md` verified already complete; memory-bank/techContext updated during implementation.
 
 ## Open Questions
 
@@ -333,9 +328,78 @@ routing.enforceTransitions to false for advisory-only mode.
 
 ## Implementation Notes
 
+Implemented per the Technical Design.
+
+**`src/config.js`**
+- `DEFAULT_CONFIG.routing.enforceTransitions = false` (ENOENT fallback / merge-base default, back-compat).
+- `defaultConfigJsonc()` scaffold sets `routing.enforceTransitions: true` with a comment block mirroring the adjacent switches.
+- Added a `designing` entry to `workflow.transitions` (both `DEFAULT_CONFIG` and the scaffold string), mirroring `ready_for_design` (`-> ready_for_implementation`, `-> questions`, `-> blocked`) — closes the map asymmetry noted in the design.
+- Updated the `workflow.transitions` advisory comment (both copies) to describe the map's dual role (hard-validator authority when `enforceTransitions` is true, advisory otherwise).
+
+**`src/tickets.js`**
+- Added `isStructurallyAllowed(fromStatus, toStatus)` (private) implementing the 7-rule structural allow-set from the design exactly: self-transition, backlog→trigger, ready_*→paired-active, active→its-ready_*, questions/blocked→trigger, any→archived, any→questions/blocked.
+- Added exported `isTransitionAllowed(config, fromStatus, toStatus)`: structural OR map-membership (`config.workflow.transitions[fromStatus]`).
+- Added private `allowedTargetsFor(config, fromStatus)` for the refusal error's allowed-targets list: map order first, then structural extras not already listed, de-duplicated (self-status omitted).
+- `moveTicket`: config is now loaded unconditionally (replaced the old `needsConfig` lazy gate). The hard-validator check is the first gate after `findTicket`/`__afterRead`, before the gate-consultation precondition and before loop-back invalidation — a refusal throws with zero side effects (no fs mutation happens until the `mkdir`/rename block much later). On refusal with `options.overrideTransition` present, appends one Run Log line `Transition override: <from> -> <to>[: <reason>]` (suffix omitted when no reason) and proceeds; without it, throws naming the allowed targets and the `--override --reason` / `enforceTransitions:false` escape hatches. An override on an already-allowed move is a no-op (branch only runs when disallowed).
+
+**`src/cli.js`**
+- `commandMove` and `commandSet` (status branch) both parse `--override` (flag) and `--reason` (option) and build `overrideTransition = override ? { reason } : undefined`, threaded through `moveAndMaybeMerge` → `moveTicket`. `set <id> status` has full parity with `move` per the design's recommendation.
+- Usage/help lines updated for `move` and `set`.
+
+**`plans/local-board.config.jsonc`**
+- Updated the stale "not a hard transition validator yet" comment to reflect the new switch existing but not enabled on this board (orchestrator's call, per the ticket). `enforceTransitions` is **not** set here, so this board stays advisory-only (inherits `false` via deep-merge onto `DEFAULT_CONFIG`); it also picks up the new `designing` map entry automatically via the same merge.
+
+**Tests**
+- `test/config.test.js`: added `routing.enforceTransitions` as the fifth allowlisted scaffold/DEFAULT_CONFIG diff path (updated both the inline expected-diff assignment and the `collapsed` array assertion); added a back-compat test mirroring `invalidateOnLoopBack` (omitted → false; explicit true/false honored; scaffold → true).
+- `test/tickets.test.js`: new section (~280 lines) covering — `isTransitionAllowed` unit coverage of every structural rule + map + illegal case; refusal with allowed-targets error and byte-unchanged file (zero side effects); every structural allow-set category passes under enforcement (start-work, backlog promote, active revert, questions/blocked resume, supersede-to-archived, retention archive via `archiveDoneTickets`, self-transition); `--override` with/without reason (exactly one Run Log line, correct suffix behavior) and no-op on an already-allowed move; ordering interaction (allowed/overridden loop-back still invalidates; refused loop-back strips nothing); `set <id> status` refusal + override parity with `move`; advisory-mode back-compat (omitted/explicit-false); and a full-pipeline integration test under the real scaffold config (`defaultConfigJsonc()`) exercising every hop (design→implement→review→test→docs→done) plus gate consultation and the estimation gate together, to prove the acceptance criterion "all existing tests and skill flows pass under the hard validator."
+- `test/cli.test.js`: fixed one pre-existing test whose CLI move sequence (`ready_for_decomposition -> ready_for_design`, a smoke-test convenience, not a real pipeline decision) is now refused under the scaffold's `enforceTransitions:true` — added `--override --reason` there (this was the one audited breakage the design flagged as a required implementation step; no other test file needed changes — `git.test.js` and `worktrees.test.js` were audited and are unaffected because they either overwrite the scaffold config with a partial object before any illegal move, or their post-`init` moves are all in the structural allow-set, e.g. `move ... questions`). Added two new CLI-level tests: refusal + `--override --reason` end-to-end through `move`, and `set <id> status --override` parity.
+
+**Docs**
+- `docs/Workflow.md`: reworded the advisory-guidance sentence to branch on `enforceTransitions`; added a "Hard transition validation" subsection (structural allow-set enumerated, ordering/zero-side-effects guarantee, override semantics, defaults) after the loop-back invalidation section; added an `--override --reason` example to the MVP command list.
+- `memory-bank/techContext.md`: removed the "advisory vs hard validator" open decision (resolved by this ticket) and replaced it with the real remaining open call — whether to flip `enforceTransitions` on in this repo's own board config.
+- `memory-bank/systemPatterns.md`: added `enforceTransitions` to the Config key list and the `DEFAULT_CONFIG`/scaffold divergence note; added a paragraph documenting the map-vs-structural split and the override-Run-Log invariant; updated the MVP CLI `move`/`set` paragraph.
+- `SKILL.md` and `skills/codex/local-board/SKILL.md`: added a short paragraph on `enforceTransitions`/`--override --reason` (prefer a legal transition; only override for genuine exceptions) and updated the `move`/`set` command-surface lines with `[--override] [--reason "<text>"]`.
+
+**Verification**
+- `npm run check`: clean (no syntax errors).
+- `npm test`: 363 tests, 362 pass, 1 skipped (pre-existing opt-in slow CLI-process test), 0 fail.
+- `npm run validate`: `Ticket validation OK`.
+
+**Deviations from the design**
+- The design's illustrative error-message example ("Allowed targets: ready_for_review, ready_for_design, implementing, questions, blocked, archived") interleaves structural and map targets in an order I could not reverse-engineer into a simple, generalizable rule. I implemented "map targets in map order, then structural extras not already present" (simpler, stable, still de-duplicated) and wrote tests asserting the individual target names appear (word-boundary matches) rather than the exact sequence, since the design frames this as an illustrative example, not a literal string contract.
+- Did not touch `plans/local-board.config.jsonc`'s `routing.enforceTransitions` (left unset/off), per the explicit instruction not to enable it in this repo's own board as part of this ticket.
+
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) against commit 7a27bfc.
+
+No blocking findings.
+
+Non-blocking observations:
+- SKILL.md:49, codex skill:62, and src/config.js:877 understate the structural allow-set (omit active->own-ready and any->questions/blocked); docs/Workflow.md:347 has the full set — precision fix for the doc pass.
+- src/tickets.js:200 comment says self-transitions are omitted from suggestions, but allowedTargetsFor appends archived/questions/blocked unconditionally — comment imprecision only.
+
+Audit verified: allow-set matches the accepted map-vs-structural split (any->archived intentionally covers retention and terminal archival, including in-flight tickets); active->ready reverts still reach T1328 invalidation (ready_* targets strip); validator ordering refusal->gate->invalidation->first mutation with a byte-unchanged refusal test; designing map entry lets active design complete; retention done->archived structurally allowed; override logs in the locked span, reason optional, harmless no-op when enforcement off; the pre-existing test's override is appropriate (decomposition->design is genuinely exceptional).
+
+Verdict: pass
+
 ## Test Evidence
+
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/T20260707T1329Z-..., commit 7a27bfc.
+
+**Suite:** `npm run check` pass; `npm test` 362 pass / 1 gated-skip of 363; `npm run validate` OK.
+
+**End-to-end probes (fresh scaffold, all switches on):**
+- Illegal skip (ready_for_design -> ready_for_test): refused exit 2 with the full allowed-targets list and override guidance (message captured verbatim); ticket md5-identical after refusal — zero side effects.
+- Override with reason: succeeds; Run Log line "Transition override: ready_for_design -> ready_for_test: test"; no-reason variant omits the suffix cleanly.
+- Structural categories live: backlog promote, questions round-trip, in-flight -> archived — all without override.
+- Normal pipeline: the gate-consultation refusal (separate check) fired first as expected; after gate-complete the forward move passed with no override — validator and gate machinery compose correctly.
+- set status parity: identical refusal + override behavior, its own Run Log line.
+- ENOENT-fallback board: illegal move allowed (advisory behavior preserved).
+
+**Gaps / caveats:** representative-path probing; exhaustive map coverage delegated to the 362-test suite; the noted pre-existing working-tree diff is the ticket's own lifecycle move.
+
+Result: pass
 
 ## Documentation Updates
 
@@ -346,3 +410,15 @@ routing.enforceTransitions to false for advisory-only mode.
 - 2026-07-08T01:50:00Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): hard validator first in moveTicket behind routing.enforceTransitions (established defaults pattern), --override --reason escape logging in the locked span, structural allow-set for administrative moves (start-work, resumes, any->archived covering retention), map gap for designing added; set status inherits. Estimate 4 (basis T20260707T1331Z).
 
 - 2026-07-08T01:50:53Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (workflow enforcement)
+
+- 2026-07-08T01:50:54Z: Ensured git branch local-board/T20260707T1329Z-enforce-promote-workflow-transitions-to-a-hard-validator-with-an-override-escape (created).
+
+- 2026-07-08T02:12:01Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): validator first in moveTicket behind routing.enforceTransitions, structural allow-set, override parity on set status, designing map entry; full suite audited green under scaffold-on; 362 pass + 1 gated-skip.
+
+- 2026-07-08T02:13:04Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (workflow enforcement)
+
+- 2026-07-08T02:16:50Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict pass: allow-set, ordering, gate/invalidation interplay, and override semantics all audited correct; two doc-precision nits deferred to the doc pass.
+
+- 2026-07-08T02:21:40Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 362+1 gated; refusal (md5-identical file), override Run Log lines with/without reason, structural categories, gate-machinery composition, set parity, and fallback advisory mode all live-verified. Result: pass.
+
+- 2026-07-08T02:24:50Z: Completed document via codex-task:workspace-write: Codex (workspace-write): allow-set descriptions completed in both skills and the scaffold comment; tickets.js comment corrected; Workflow verified.

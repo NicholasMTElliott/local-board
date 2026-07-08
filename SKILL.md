@@ -46,6 +46,7 @@ Do not invent next statuses. Use the returned `transitions` list or `schema --js
 Do not inspect local-board source files to discover statuses or command contracts. Use `schema --json`.
 Do not bypass configured routing. Strict routing is policy, not preference.
 Do not move ticket-dependency blockers to `blocked`. Use `block <ticket-id> <dependency-id>` and leave or return the ticket to its intended ready status so it becomes eligible when the dependency is `done` or `archived`.
+When `routing.enforceTransitions` is `true` (the `init` scaffold default), `move`/`set <id> status` refuse a target status outside `workflow.transitions[fromStatus]` and a fixed structural allow-set (same-status re-save, backlog promote, ready->active start-work, active->own-ready revert, questions/blocked resume, any->archived/questions/blocked); the refusal error names the allowed targets. Only pass `--override --reason <text>` when a legitimate move is genuinely outside that set (e.g. an explicit user-directed skip) — it forces the move and records `Transition override: <from> -> <to>: <reason>` in the Run Log. Prefer a legal transition over `--override` whenever one exists.
 
 ## Process Contract
 
@@ -268,8 +269,8 @@ local-board gate-complete <ticket-id> --stage <stage> --executor <executor> [--e
 local-board specialty-run <ticket-id> <step-name> [--json]
 local-board calibration suggest <ticket-id> [--json]
 local-board estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]
-local-board move <ticket-id> <status> [--json]
-local-board set <ticket-id> <field> <value>
+local-board move <ticket-id> <status> [--override] [--reason "<text>"] [--json]
+local-board set <ticket-id> <field> <value> [--override] [--reason "<text>"]
 local-board section <ticket-id> "<text>" --section "<section>"
 local-board section <ticket-id> --file <path> --section "<section>"
 local-board comment <ticket-id> "<text>" [--section "<section>"]

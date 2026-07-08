@@ -37,9 +37,11 @@
       "document": "plans/prompts/steps/document.md"
     },
 
-    // Advisory status outcomes for each workflow decision point.
+    // Status outcomes for each workflow decision point.
     // Use exact status values with "move <ticket-id> <status>".
-    // This is guidance for orchestrators, not a hard transition validator yet.
+    // This board has not enabled routing.enforceTransitions, so this map stays
+    // advisory guidance for now (the hard-validator switch exists in src/config.js
+    // but flipping it on for this repo's own board is a separate follow-up call).
     // Ticket dependencies should use blockedBy and stay in the intended ready status.
     // status: blocked is reserved for non-ticket blockers.
     "transitions": {
