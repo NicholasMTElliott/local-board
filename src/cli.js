@@ -1224,8 +1224,7 @@ function ensureNoArgs(args) {
   }
 }
 
-function printUsage() {
-  console.error(`Usage:
+const USAGE_TEXT = `Usage:
   local-board --version
   local-board where [--json]
   local-board [--root <path>] validate [--json]
@@ -1266,5 +1265,27 @@ function printUsage() {
 
 --allow-main-root overrides the wrong-root mutation guard (worktrees.guardWrongRoot)
 for per-ticket commands above; it is a no-op unless the ticket has a registered
-worktree and the invocation root is not that worktree.`);
+worktree and the invocation root is not that worktree.`;
+
+function printUsage() {
+  console.error(USAGE_TEXT);
+}
+
+// Test-support export: derives the authoritative command-name set from the
+// same USAGE_TEXT that printUsage renders. Inert at runtime (no behavior
+// change) — consumed only by test/skill-usage-sync.test.js to check that the
+// curated CLI Commands blocks in SKILL.md / skills/codex/local-board/SKILL.md
+// stay a subset of the real CLI surface.
+export function usageCommandNames() {
+  const names = [];
+  for (const rawLine of USAGE_TEXT.split("\n")) {
+    const line = rawLine.trim();
+    if (!line.startsWith("local-board")) continue;
+    const rest = line.slice("local-board".length).trim();
+    if (!rest) continue;
+    const withoutRoot = rest.replace(/^\[--root <path>\]\s*/, "");
+    const match = withoutRoot.match(/^(--version|calibration suggest|[a-z][a-z-]*)/);
+    if (match) names.push(match[1]);
+  }
+  return names;
 }

@@ -253,6 +253,8 @@ Then run `complete-step` with `--executor <configuredAgent> --model <actualModel
 ## CLI Commands
 
 ```sh
+local-board --version
+local-board where [--json]
 local-board validate
 local-board query-next --json
 local-board query-ticket <ticket-id> --json
@@ -260,7 +262,7 @@ local-board state-report --json
 local-board schema --json
 local-board create <epic|story|task|bug> "<title>" --status <status> --priority <priority> [--parent <id>]
 local-board start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--json]
-local-board begin-step <ticket-id> [--action <action>] [--json]
+local-board begin-step <ticket-id> [--action <action>] [--harness claude|codex] [--json]
 local-board check-dispatch --agent <subagent-type> [--model <model>] [--ticket <ticket-id>] [--json]
 local-board complete-step <ticket-id> <action> --executor <executor> [--model <model>] --evidence "<evidence>" [--json]
 local-board approve-inline <ticket-id> <action> --reason "<reason>" [--executor <executor>] [--json]
@@ -276,9 +278,12 @@ local-board section <ticket-id> --file <path> --section "<section>"
 local-board comment <ticket-id> "<text>" [--section "<section>"]
 local-board link-parent <child-id> <parent-id>
 local-board link-child <parent-id> <child-id>
+local-board unlink-parent <child-id> <parent-id>
 local-board block <ticket-id> <dependency-id>
 local-board unblock <ticket-id> <dependency-id>
 ```
+
+This block is the single-ticket command surface, not the full CLI. Run `local-board` with no arguments for complete usage, `schema --json` for accepted enums, and `where --json` for asset paths. Worktree, `fast-forward`, `team-config`, and `list` live in the parallel (`local-team`) skill. Do not inspect source to discover commands.
 
 Use `comment` for run-log style notes. Use `move` for status transitions. Use relationship commands for parent/child and dependency state.
 Use `section --file <path>` for generated or multi-line Markdown. Inline `section <text>` is only for short edits. Create the `--file` target with the Write tool; never build it with `echo`, heredoc, `Set-Content`, or `Out-File`.

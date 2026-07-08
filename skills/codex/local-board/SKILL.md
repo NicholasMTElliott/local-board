@@ -158,6 +158,8 @@ Use `move <ticket-id> done --json` only after required design, implementation, r
 ## CLI Commands
 
 ```sh
+local-board --version
+local-board where [--json]
 local-board validate
 local-board query-next --json
 local-board query-ticket <ticket-id> --json
@@ -181,6 +183,9 @@ local-board section <ticket-id> --file <path> --section "<section>"
 local-board comment <ticket-id> "<text>" [--section "<section>"]
 local-board link-parent <child-id> <parent-id>
 local-board link-child <parent-id> <child-id>
+local-board unlink-parent <child-id> <parent-id>
 local-board block <ticket-id> <dependency-id>
 local-board unblock <ticket-id> <dependency-id>
 ```
+
+This block is the single-ticket command surface, not the full CLI. Run `local-board` with no arguments for complete usage, `schema --json` for accepted enums, and `where --json` for asset paths. Worktree, `fast-forward`, `team-config`, and `list` live in the parallel (`local-team`) skill. Do not inspect source to discover commands.

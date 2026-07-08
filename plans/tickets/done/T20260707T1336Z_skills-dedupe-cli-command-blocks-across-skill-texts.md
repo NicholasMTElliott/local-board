@@ -1,20 +1,20 @@
 ---
 id: T20260707T1336Z
 type: task
-status: ready_for_implementation
+status: done
 priority: P3
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260707T1336Z-skills-dedupe-cli-command-blocks-across-skill-texts
 estimate: 2
 estimateBasis: T20260707T1329Z
-workStartedAt: null
-workCompletedAt: null
+workStartedAt: 2026-07-08T03:42:54Z
+workCompletedAt: 2026-07-08T04:37:27Z
 created: 2026-07-07T13:36:55Z
-updated: 2026-07-08T03:42:54Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-08T04:37:27Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # skills: dedupe CLI command blocks across skill texts
@@ -119,11 +119,87 @@ The requirement's secondary ask — restructure `SKILL.md` "Branch Discipline" o
 
 ## Implementation Notes
 
+Implemented per the design's curated-inclusion-set decision (reject full generation).
+
+Files changed:
+- `SKILL.md`: `## CLI Commands` block retrimmed to the curated 27-name single-ticket surface (added `--version`, `where [--json]`, `unlink-parent`; kept the existing 24). Added a pointer line under the fence directing to `local-board` (no args), `schema --json`, `where --json`, and naming that worktree/`fast-forward`/`team-config`/`list` live in the `local-team` skill.
+- `skills/codex/local-board/SKILL.md`: identical retrim, keeping the `begin-step <ticket-id> [--action <action>] [--harness claude|codex] [--json]` variant. Same pointer line added.
+- `SKILL_TEAM.md`: untouched (no fenced block; out of scope per design).
+- `src/cli.js`: refactored `printUsage()`'s inline template literal into a module-level `USAGE_TEXT` constant (byte-identical content, zero behavior change) and added a new exported `usageCommandNames()` — a test-support-only function that tokenizes `USAGE_TEXT` into the 36 unique authoritative command names (handles the `[--root <path>]` prefix, `--version`, and the two-word `calibration suggest`). `printUsage()` now just logs `USAGE_TEXT`; runtime output is unchanged.
+- `test/skill-usage-sync.test.js` (new): modeled on `test/resources-sync.test.js`. Reads both skill files, extracts the fenced ` ```sh ` block under `## CLI Commands` with the same tokenizer logic, and asserts (1) the two blocks' command-name sets are deep-equal, (2) each block's name set is a subset of `usageCommandNames()`, with failure messages naming the offending file/command and pointing at "update the CLI Commands block ... to match printUsage / the sibling skill", and (3) both the usage set and each block are non-empty (broken-parser guard, mirroring resources-sync's directory-not-empty check).
+
+Tests added: 3 new tests in `test/skill-usage-sync.test.js`. Full suite: 384 tests total, 383 pass, 1 pre-existing skip (unrelated smoke test), 0 fail.
+
+Verification:
+- `npm run check` — clean (no output = all `node --check` calls passed).
+- `npm test` — 384 tests, 383 pass, 1 skip, 0 fail.
+- `npm run validate` — "Ticket validation OK".
+
+Perturbation probe: appended a bogus line `local-board bogus-command <ticket-id>` to the `SKILL.md` fenced block only, reran `node --test test/skill-usage-sync.test.js`. Both the equality test and the subset test failed as expected:
+- equality test: `AssertionError` diffing the two name arrays, showing `bogus-command` present only in the `SKILL.md`-derived (expected) side.
+- subset test: `AssertionError`: `SKILL.md lists "bogus-command" in its CLI Commands block, but it is not in local-board's usage output; update the CLI Commands block in SKILL.md to match printUsage / the sibling skill`.
+Reverted the perturbation immediately after confirming the failure; reran the three tests plus `npm run check`/`npm test`/`npm run validate` to confirm the clean pass shown above.
+
+Deviations from the design: none. Followed the curated-inclusion recommendation (add `where`, `--version`, `unlink-parent`; exclude worktree/team-config/fast-forward/list/next/init/install) and left Branch Discipline / SKILL_TEAM.md untouched as directed.
+
+Risks: the block tokenizer in the test and the `usageCommandNames()` tokenizer in `src/cli.js` are independent implementations of the same regex idea (by design — the test must not import private skill-block-parsing code, and `usageCommandNames()` only ever needs to parse `USAGE_TEXT`). A future change to either regex without updating the other could reintroduce silent drift in the parsing logic itself, though the non-empty guard test would catch a fully-broken parser.
+
 ## Review Findings
+
+Reviewed by codex-task:read-only (gpt-5.5) on commit 8109d1e (post mainline reconciliation).
+
+- [P2] `test/skill-usage-sync.test.js:46-52` reduces each skill block to a sorted Set of command names and compares only that derived set. This misses the accepted requirement that the two fenced command blocks stay byte-identical and that presentation drift fails CI. The current tree already demonstrates the false pass: `SKILL.md:265` lists `begin-step <ticket-id> [--action <action>] [--json]` while `skills/codex/local-board/SKILL.md:170` lists `begin-step <ticket-id> [--action <action>] [--harness claude|codex] [--json]` (drift introduced by the T1335 mainline merge). Fix: extract the fenced block text and assert exact normalized byte equality alongside the command-name subset check, and re-sync the two blocks.
+
+Additional checks (pass):
+- Curated set is 27 unique names and includes the critical commands (`start-work`, `check-dispatch`, `approve-inline`, `gate-check`, `gate-complete`, `unlink-parent`). No stale names vs the CLI dispatch/usage surface (`src/cli.js:62-170`, `src/cli.js:1228-1264`).
+- Pointer line present in both files (`SKILL.md:286`, `skills/codex/local-board/SKILL.md:191`) referencing `schema --json` and `where --json`.
+- `resources/skills/local-board/SKILL.md` does not exist; packaging uses root `SKILL.md` + `skills/codex/local-board/SKILL.md`, and `test/resources-sync.test.js:58-64` mirrors prompts/templates only — no mirror gap.
+- Reviewer sandbox could not spawn `node --test` (read-only EPERM); verification was source inspection.
+
+Verdict: changes_requested
 
 ## Test Evidence
 
+Verified by claude-subagent:local-board-tester (sonnet).
+
+### Repo-level checks
+
+| Command | Result |
+|---|---|
+| `npm run check` | PASS |
+| `npm test` | PASS — 385 tests, 384 pass, 0 fail, 1 skipped (pre-existing gated smoke) |
+| `npm run validate` | PASS — Ticket validation OK |
+
+### Baseline
+
+- Blocks in `SKILL.md:253-284` and `skills/codex/local-board/SKILL.md:158-189` are byte-identical after `normalizeEol`; 28 command lines / 27 unique names (two `section` forms share one name).
+- Critical commands present: `start-work`, `check-dispatch`, `approve-inline`, `gate-check`, `gate-complete`.
+- `begin-step` line includes `[--harness claude|codex]` in both files.
+
+### Anchoring probe
+
+Both files have an unrelated ` ```sh ` fence near the top (lines 12-14 / 10-12) before the `## CLI Commands` heading; a naive first-fence extraction would grab those. The test anchors via `indexOf("## CLI Commands")` + regex from that offset (`test/skill-usage-sync.test.js:25-34`) — correct.
+
+### Mutation probes (edit → targeted test run → assert FAIL → revert via `git checkout --` → re-run green)
+
+- (a) Trailing space on one line in root SKILL.md only → byte-identical test FAILED with canonical-file guidance message; reverted, 4/4 green.
+- (b) Fake `local-board frobnicate <id>` added identically to both blocks → byte-identical PASSED, subset-of-usage FAILED naming `frobnicate`; reverted, 4/4 green.
+- (c) `unblock` line removed from codex SKILL.md only → both list-same-commands and byte-identical FAILED (26 vs 27 names, diff shows the missing entry); reverted, 4/4 green.
+
+### Gaps / caveats
+
+- Mutation edits performed via inline Node fs scripts (tester has no Write tool; avoids shell backtick mangling of fences); every probe diffed before testing and reverted exactly, `git status` clean of tester changes after each.
+- No flakes across three full suite runs.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `memory-bank/systemPatterns.md` — terse current-state fact: curated 27-command byte-identical skill blocks, enforced by test/skill-usage-sync.test.js, root SKILL.md canonical.
+- `docs/CodexSupport.md` — one maintenance sentence: keep the root and Codex skill CLI command blocks in lockstep.
+- README Documentation Index — verified, no change needed (no new doc file).
 
 ## Questions
 
@@ -132,3 +208,23 @@ The requirement's secondary ask — restructure `SKILL.md` "Branch Discipline" o
 - 2026-07-08T03:42:06Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): curated single-ticket command blocks + pointer line + structural drift-guard test (skill-usage-sync) asserting block-name-set equality and subset-of-printUsage; drift enumerated (12 omissions, no stale entries); T1332 restructure already landed so out of scope. Estimate 2 (basis T20260707T1329Z).
 
 - 2026-07-08T03:42:54Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (docs + test hygiene)
+
+- 2026-07-08T03:42:54Z: Ensured git branch local-board/T20260707T1336Z-skills-dedupe-cli-command-blocks-across-skill-texts (created).
+
+- 2026-07-08T03:48:07Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): curated blocks + pointer + skill-usage-sync drift guard with a verified failure probe; 383 pass + 1 gated-skip.
+
+- 2026-07-08T03:49:13Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (docs + test hygiene)
+
+- 2026-07-08T04:27:33Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
+
+- 2026-07-08T04:27:34Z: Ensured git branch local-board/T20260707T1336Z-skills-dedupe-cli-command-blocks-across-skill-texts (already-current).
+
+- 2026-07-08T04:30:38Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework: re-synced begin-step line (--harness) across both blocks; anchored extraction + normalizeEol byte-identical assertion; 384 pass + 1 skip
+
+- 2026-07-08T04:31:33Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (skill Markdown + test only)
+
+- 2026-07-08T04:31:33Z: Completed review via codex-task:read-only: changes_requested (P2: name-set-only comparison, blocks had drifted) on 8109d1e; addressed in rework commit (byte-identical assertion + re-sync); recorded post-move per evidence-invalidation ordering
+
+- 2026-07-08T04:35:43Z: Completed test via claude-subagent:local-board-tester@sonnet: 384 pass + 1 skip; mutation probes a/b/c all caught by the sync tests; anchoring verified; blocks byte-identical with 27 unique commands
+
+- 2026-07-08T04:37:27Z: Completed document via codex-task:workspace-write: systemPatterns lockstep fact; CodexSupport maintenance sentence; README index verified unchanged
