@@ -13,7 +13,7 @@ estimateBasis: B20260707T1330Z
 workStartedAt: 2026-07-08T20:13:56Z
 workCompletedAt: null
 created: 2026-07-08T04:59:37Z
-updated: 2026-07-08T20:18:15Z
+updated: 2026-07-08T20:27:25Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -214,6 +214,16 @@ Run: `node --test test/install.test.js` (or the project's `npm test`).
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) on the implement commit (worktree).
+
+- [P2] `src/install.js:477` — `unpatchSettings` calls `JSON.parse` directly, so an unparsable settings.json throws instead of no-op-with-no-write. Design requires malformed JSON to be a silent no-op like the missing-file case. Add a try/catch no-op and a test.
+- [P3] `memory-bank/systemPatterns.md:187`, `memory-bank/techContext.md:43` — Memory Bank still states uninstall does not remove the rule and points at this ticket. Memory Bank is authoritative current-state context (AGENTS.md); update in the rework rather than deferring to the docs stage.
+- [P3, test gap] No test for malformed JSON, and none asserting no-write semantics when settings.json exists but the rule is absent (mtime/content unchanged).
+
+Checked and passing: CLAUDE_ALLOW_RULE shared by install and uninstall (src/install.js:25,200,338); exact-duplicate filter; pruning limited to empty allow then only-empty permissions (481-490); only the claude target has non-null settingsPath (30-93); docs/Install.md gap callout removed and exact-match caveat documented (153-202); the five new tests cover their claimed cases.
+
+Verdict: changes_requested
+
 ## Test Evidence
 
 ## Documentation Updates
@@ -231,3 +241,11 @@ Run: `node --test test/install.test.js` (or the project's `npm test`).
 - 2026-07-08T20:18:14Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (permission-state file management, not auth/credential code; exact-match safety covered by tests+review)
 
 - 2026-07-08T20:18:15Z: Ensured git branch local-board/B20260708T0459Z-install-uninstall-leaves-the-bash-local-board-allow-rule-in-settings-json (already-current).
+
+- 2026-07-08T20:23:13Z: Completed implement via claude-subagent:local-board-implementer@sonnet: CLAUDE_ALLOW_RULE hoisted; unpatchSettings exact-match + prune + atomic write wired into performUninstall; 5 new tests; 389 pass + 1 skip; memory-bank deltas deferred to docs stage
+
+- 2026-07-08T20:24:36Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (installer settings management)
+
+- 2026-07-08T20:27:25Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
+
+- 2026-07-08T20:27:25Z: Ensured git branch local-board/B20260708T0459Z-install-uninstall-leaves-the-bash-local-board-allow-rule-in-settings-json (already-current).

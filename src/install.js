@@ -463,20 +463,26 @@ function patchSettings(settingsPath, allowRule) {
 }
 
 // Symmetric counterpart to patchSettings: removes exactly the managed allow
-// rule from permissions.allow. No-op when the file is absent, when
-// permissions/allow are missing or non-arrays, or when the rule is not
-// present. Matches by exact string equality against the managed constant, so
-// a user-edited rule (e.g. "Bash(local-board move *)") is left untouched.
-// Preserves every other allow entry and does not touch permissions.deny,
-// hooks, or any other key. Prunes an emptied allow array and an emptied
-// permissions object, matching patchHooks's prune-when-empty behavior.
+// rule from permissions.allow. No-op when the file is absent, when it is not
+// parsable/well-formed JSON, when permissions/allow are missing or
+// non-arrays, or when the rule is not present. Matches by exact string
+// equality against the managed constant, so a user-edited rule (e.g.
+// "Bash(local-board move *)") is left untouched. Preserves every other allow
+// entry and does not touch permissions.deny, hooks, or any other key. Prunes
+// an emptied allow array and an emptied permissions object, matching
+// patchHooks's prune-when-empty behavior.
 function unpatchSettings(settingsPath, allowRule) {
   if (!existsSync(settingsPath)) {
     return;
   }
-  const settings = JSON.parse(readFileSync(settingsPath, "utf8"));
+  let settings;
+  try {
+    settings = JSON.parse(readFileSync(settingsPath, "utf8"));
+  } catch {
+    return;
+  }
   if (typeof settings !== "object" || settings === null) {
-    throw new Error(`${settingsPath} is not a JSON object`);
+    return;
   }
   const allow = settings.permissions?.allow;
   if (!Array.isArray(allow) || !allow.includes(allowRule)) {
@@ -562,9 +568,23 @@ function isManagedHookCommand(command, scriptPath) {
 function patchHooks(settingsPath, installDir, { remove = false } = {}) {
   let settings = {};
   if (existsSync(settingsPath)) {
-    settings = JSON.parse(readFileSync(settingsPath, "utf8"));
+    try {
+      settings = JSON.parse(readFileSync(settingsPath, "utf8"));
+    } catch (error) {
+      // On the remove path (uninstall), an unparsable settings.json is left
+      // untouched -- symmetric with unpatchSettings's no-op behavior. On the
+      // add path (install --hooks), a malformed settings file is a real
+      // problem the user must fix, so it still throws.
+      if (remove) {
+        return;
+      }
+      throw error;
+    }
   }
   if (typeof settings !== "object" || settings === null) {
+    if (remove) {
+      return;
+    }
     throw new Error(`${settingsPath} is not a JSON object`);
   }
 

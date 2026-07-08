@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
-import { chmodSync, cpSync, existsSync, mkdtempSync, writeFileSync } from "node:fs";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -410,6 +410,43 @@ test("install --uninstall with no settings.json is a no-op: no file is created",
     const { stdout } = await runInstallCli(home, ["--target=claude", "--uninstall"]);
     assert.doesNotMatch(stdout, /removed Claude allow rule/);
     assert.equal(existsSync(settingsPath), false);
+  });
+});
+
+test("install --uninstall with malformed settings.json is a no-op: file is left untouched byte-for-byte", async () => {
+  await withHome(async (home) => {
+    const settingsPath = path.join(home, ".claude", "settings.json");
+    mkdirSync(path.dirname(settingsPath), { recursive: true });
+    const malformed = "{ this is not valid JSON ";
+    await writeFile(settingsPath, malformed, "utf8");
+    const before = await stat(settingsPath);
+
+    const { stdout } = await runInstallCli(home, ["--target=claude", "--uninstall"]);
+    assert.doesNotMatch(stdout, /removed Claude allow rule/);
+
+    const afterContent = await readFile(settingsPath, "utf8");
+    assert.equal(afterContent, malformed);
+    const after = await stat(settingsPath);
+    assert.equal(after.mtimeMs, before.mtimeMs);
+  });
+});
+
+test("install --uninstall with settings.json containing unrelated rules but not ours performs no write", async () => {
+  await withHome(async (home) => {
+    const settingsPath = path.join(home, ".claude", "settings.json");
+    mkdirSync(path.dirname(settingsPath), { recursive: true });
+    const untouched = { permissions: { allow: ["Bash(git status)"] } };
+    const untouchedContent = `${JSON.stringify(untouched, null, 2)}\n`;
+    await writeFile(settingsPath, untouchedContent, "utf8");
+    const before = await stat(settingsPath);
+
+    const { stdout } = await runInstallCli(home, ["--target=claude", "--uninstall"]);
+    assert.doesNotMatch(stdout, /removed Claude allow rule/);
+
+    const afterContent = await readFile(settingsPath, "utf8");
+    assert.equal(afterContent, untouchedContent);
+    const after = await stat(settingsPath);
+    assert.equal(after.mtimeMs, before.mtimeMs);
   });
 });
 

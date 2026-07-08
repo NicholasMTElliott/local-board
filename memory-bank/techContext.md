@@ -41,8 +41,8 @@ SKILL.md              installable orchestration skill template
 - `local-board install` has six targets: `claude` default-on,
   `codex`/`opencode`/`cline`/`cursor` detect-only, and `agents` explicit-only.
 - Claude target adds consent-sensitive `Bash(local-board *)` to
-  `~/.claude/settings.json`; hooks are opt-in with `--hooks`; uninstall currently
-  leaves that allow rule in place (`B20260708T0459Z`).
+  `~/.claude/settings.json`; hooks are opt-in with `--hooks`; uninstall removes
+  that exact allow rule, leaving user-modified rules in place.
 - `worktrees.location` controls ticket worktree placement: sibling default, inside `.worktrees`, or explicit non-`plans/` path.
 - `package.json` `files` allowlist defines the npm package surface.
 

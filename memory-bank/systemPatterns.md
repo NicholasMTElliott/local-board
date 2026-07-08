@@ -185,8 +185,8 @@ Subagent frontmatter cannot carry Bash command-pattern permissions (only the `to
 
 Risk: that grant is coarse — it pre-approves every local-board subcommand, including mutating ones (`move`, `complete-step`, `create`), for any Bash-capable subagent. The decomposer is propose-only (it returns child proposals; it never calls `create`, `move`, or `complete-step` itself), so the coarse-grant risk rests on the orchestrator and other Bash-capable agents that do mutate state. A prompt-injected ticket could still try to steer a return-only agent (reviewer/tester/gatecheck/decomposer) into invoking mutating commands directly via Bash, since settings are session-wide and cannot be scoped per-agent, so narrowing is impractical. Mitigations: the orchestrator owns all transitions and re-runs `validate`/strict routing (a stray `complete-step` still needs matching config + approval to pass), ticket content is treated as untrusted input, and opt-in PreToolUse hooks (`local-board install --hooks`) now gate routing/evidence/inline approval for Claude Code sessions that enable them, tightening the coarse grant further.
 Uninstall removes the runtime, installed skills, managed hooks, and Claude agents,
-but does not yet remove `Bash(local-board *)`; follow-up `B20260708T0459Z`
-tracks making uninstall remove the allow rule.
+and removes the exact-match `Bash(local-board *)` allow rule; a user-modified
+rule (e.g. a narrowed pattern) is left in place.
 
 ## Safety Pattern
 LLMs write designs, code, reviews, tests, docs, and questions. Deterministic tooling validates ticket schema, dependency eligibility, status transitions, branch names, and commits.
