@@ -1,7 +1,7 @@
 ---
 id: T20260707T1335Z
 type: task
-status: ready_for_review
+status: ready_for_implementation
 priority: P3
 parent: null
 children: []
@@ -13,8 +13,8 @@ estimateBasis: T20260707T1329Z
 workStartedAt: 2026-07-08T03:26:07Z
 workCompletedAt: null
 created: 2026-07-07T13:35:55Z
-updated: 2026-07-08T03:38:02Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-08T04:10:49Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # cli: begin-step --harness codex returns the translated dispatch
@@ -298,7 +298,11 @@ Deviations / judgment calls (flagging for reviewer):
 2. For unknown/unrecognized routes (`known: false`), the design only specified `promptPath: null` and a `note`; I additionally compute `model`/`evidenceExecutor` the same way as the known case (rather than nulling them out), since those two fields don't depend on role knowledge. Not explicitly tested by the design's Test Strategy, so flagging as a judgment call.
 3. Chose the illustrative table row as `claude-subagent:local-board-designer` in all three docs (SKILL.md, CodexSupport.md, local-team SKILL.md) for consistency with each other and with pre-existing `install.test.js` assertions, rather than `implementer` (this ticket's own action).
 
+Rework (2026-07-08): Fixed the review finding — `skills/codex/local-team/SKILL.md:36-38` wave-barrier checklist now runs `begin-step <id> --root <worktreePath> --harness codex --json` and dispatches from the returned `codexDispatch` block (`agentType`, `promptPath`, `model`, `evidenceExecutor`) instead of the removed manual route translation table, matching the pointer at line ~66. Verified: `npm run check` clean, `npm test` 380/381 pass (1 pre-existing unrelated skip), `npm run validate` -> "Ticket validation OK".
+
 ## Review Findings
+
+- 2026-07-08T04:09:04Z: Review (codex): P2 — the local-team wave-barrier checklist (skills/codex/local-team/SKILL.md:36-38) still dispatches via the removed manual table; update it to begin-step --harness codex and dispatch from codexDispatch, matching the later pointer. Translation semantics, worker agentType, denylist sanitization, deviations, ledger isolation, and the test matrix all verified.
 
 ## Test Evidence
 
@@ -317,3 +321,7 @@ Deviations / judgment calls (flagging for reviewer):
 - 2026-07-08T03:36:46Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): codex-dispatch module + --harness flag + table shrinkage; 380 pass + 1 gated-skip; live check produced the expected codexDispatch block; three judgment calls flagged for review.
 
 - 2026-07-08T03:38:02Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (CLI orchestration)
+
+- 2026-07-08T04:09:04Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) changes_requested: one stale local-team checklist step; everything else verified including the worker agentType contract.
+
+- 2026-07-08T04:09:04Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku, review:codex-task:read-only].
