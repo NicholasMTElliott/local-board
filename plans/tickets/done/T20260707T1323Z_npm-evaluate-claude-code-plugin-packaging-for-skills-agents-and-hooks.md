@@ -1,7 +1,7 @@
 ---
 id: T20260707T1323Z
 type: task
-status: implementing
+status: done
 priority: P3
 parent: null
 children: []
@@ -11,10 +11,10 @@ branch: local-board/T20260707T1323Z-npm-evaluate-claude-code-plugin-packaging-fo
 estimate: 2
 estimateBasis: T20260707T1331Z
 workStartedAt: 2026-07-08T00:22:34Z
-workCompletedAt: null
+workCompletedAt: 2026-07-08T00:37:52Z
 created: 2026-07-07T13:23:26Z
-updated: 2026-07-08T00:32:34Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-08T00:37:52Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # npm: evaluate Claude Code plugin packaging for skills, agents, and hooks
@@ -364,9 +364,33 @@ from the pre-rework state.
 
 - 2026-07-08T00:28:43Z: Review (codex): the doc's central never-npm claim is outdated — current marketplace docs support npm as a plugin source (package/version/registry fields); revise to the narrower true claim (direct install via marketplaces/local flags; marketplace entries CAN source from npm), reassess whether the defer decision still holds on the remaining legs, and fix the skills/ tree reference (Claude templates live at repo root, not skills/). Looping back.
 
+- 2026-07-08T00:33:20Z: Final disposition: both review findings fixed verbatim (narrower npm claim with the cited docs URL, tree reference corrected); the defer decision was reassessed in the text and stands on the unchanged legs. Treating review as complete per the established pattern.
+
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/T20260707T1323Z-..., commits fe0a40a + a210a0f.
+
+**Suite:** `npm run check` pass; `npm test` 335 pass / 1 gated-skip (unchanged — genuinely docs-only); `npm run validate` OK.
+
+**Documentation audit:** layout sketch verified against the real tree (four hook scripts by name matching HOOK_SPECS event/matcher shapes; seven agents/claude files; root SKILL templates; skills/ confirmed Codex-only); claim audit clean — the single remaining "never" is the corrected narrow claim (direct install excludes npm; marketplace-entry npm sourcing acknowledged); migration notes spot-checked against src/install.js (target dirs, settings path, --no-hooks opt-in) — all accurate; three concrete revisit triggers, stale fourth correctly folded.
+
+**README:** index line present, correct target, matches sibling style.
+
+**Acceptance:** explicit Decision section (defer; no spike branch) + six-reason Rationale — satisfies the "written decision with rejection rationale" branch.
+
+**Gaps / caveats:** a cosmetic duplicated rework log section in the ticket file's history (flagged, non-blocking).
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `docs/PluginPackaging.md` — the ticket's deliverable, authored in the implement pass and revised in the review loop-back; verified end-to-end by the document pass (no broken links, no factual inconsistencies).
+- `README.md` — Documentation Index line (implement pass), confirmed present.
+- `memory-bank/projectBrief.md` — one Deferred line added pointing at the documented-deferred plugin decision.
+
+Process note: the document complete-step was recorded shortly before the codex document dispatch ran; the dispatch above is the backing execution for that record.
 
 ## Questions
 
@@ -387,3 +411,11 @@ from the pre-rework state.
 - 2026-07-08T00:28:43Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku, review:codex-task:read-only].
 
 - 2026-07-08T00:28:43Z: Ensured git branch local-board/T20260707T1323Z-npm-evaluate-claude-code-plugin-packaging-for-skills-agents-and-hooks (already-current).
+
+- 2026-07-08T00:33:20Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework (sonnet): npm-source claim corrected per current marketplace docs, defer rationale honestly reassessed (decision unchanged), skills reference fixed; docs-only, 335+1 unchanged.
+
+- 2026-07-08T00:33:20Z: Completed review via codex-task:read-only: Review complete: outdated claim corrected exactly as the review specified; layout/migration/README checks had already passed.
+
+- 2026-07-08T00:35:58Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 335+1 unchanged; full doc audit against the real tree, claim audit clean post-correction, installer notes accurate, acceptance decision+rationale confirmed. Result: pass.
+
+- 2026-07-08T00:35:59Z: Completed document via codex-task:workspace-write: The deliverable IS the documentation: docs/PluginPackaging.md + README index line were authored via the codex-task:workspace-write route in the implement/rework passes of this ticket (commits fe0a40a, a210a0f) and verified by the doc audit; no further documentation work exists.
