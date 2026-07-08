@@ -1,7 +1,7 @@
 ---
 id: T20260707T1340Z
 type: task
-status: implementing
+status: ready_for_docs
 priority: P4
 parent: null
 children: []
@@ -13,8 +13,8 @@ estimateBasis: T20260707T1338Z
 workStartedAt: 2026-07-08T11:53:31Z
 workCompletedAt: null
 created: 2026-07-07T13:40:06Z
-updated: 2026-07-08T11:53:31Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-08T12:02:11Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # docs: document the orchestrator-authored evidence limitation in SECURITY.md and systemPatterns
@@ -89,9 +89,29 @@ This *is* the documentation change. No README Documentation Index update is need
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5). No findings. Both documents explicitly state the return-only evidence limitation; wording verified against the actual ledger (src/active-steps.js) and hook behavior — ledger proves dispatch, not content fidelity. Placement, cross-references, tone, and Memory Bank rules all correct. Verdict: pass
+
 ## Test Evidence
 
+Verified by claude-subagent:local-board-tester (sonnet).
+
+| Check | Result |
+|---|---|
+| `npm run check` | PASS |
+| `npm test` | PASS — 385 tests, 384 pass, 0 fail, 1 skipped |
+| `npm run validate` | PASS — Ticket validation OK |
+
+- `SECURITY.md:32-34` — `### Orchestrator-authored evidence` inside `## Security Model`; all required substance present (return-only workers, section --file persistence, undetectable substitution, ledger/hooks prove dispatch not content fidelity, inherent to architecture, mitigation = review ticket diffs like a PR).
+- `memory-bank/systemPatterns.md:200` — one paragraph at the end of `## Safety Pattern`; same substance; cross-referenced headings (`## Delegation and Subagent Tools`, `## Subagent CLI Permission`) exist verbatim (lines 142, 183); no ticket IDs or history language.
+- Accuracy spot-check: no hook in hooks/ compares persisted section content against a worker return — `evidence-gate.js:152-159` matches ledger entries on ticketId + subagent_type + session_id only. The "proves dispatch, not content fidelity" claim holds.
+
+No gaps or flakes.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5). Closing audit: docs/EnforcementHooks.md softened (hooks verify observed dispatch matching, not evidence authenticity) with a pointer to SECURITY.md's Orchestrator-authored evidence limitation. No other doc overclaims; primary additions (SECURITY.md, systemPatterns) shipped at implement.
 
 ## Questions
 
@@ -102,3 +122,13 @@ This *is* the documentation change. No README Documentation Index update is need
 - 2026-07-08T11:53:30Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (docs-only; documenting a limitation, not changing auth code)
 
 - 2026-07-08T11:53:31Z: Ensured git branch local-board/T20260707T1340Z-docs-document-the-orchestrator-authored-evidence-limitation-in-security-md-and-systempatterns (created).
+
+- 2026-07-08T11:55:25Z: Completed implement via claude-subagent:local-board-implementer@sonnet: SECURITY.md Security Model subsection + systemPatterns Safety Pattern paragraph; ledger-narrows-not-closes + human diff review; 384 pass + 1 skip
+
+- 2026-07-08T11:56:16Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (Markdown-only)
+
+- 2026-07-08T11:58:06Z: Completed review via codex-task:read-only: pass, no findings; recorded post-move per evidence-invalidation ordering
+
+- 2026-07-08T12:00:10Z: Completed test via claude-subagent:local-board-tester@sonnet: 384 pass + 1 skip; both docs state limitation with required substance; hook spot-check confirms ledger proves dispatch not content
+
+- 2026-07-08T12:02:11Z: Completed document via codex-task:workspace-write: EnforcementHooks.md overclaim softened + SECURITY.md pointer; other docs clean
