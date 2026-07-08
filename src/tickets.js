@@ -1804,7 +1804,7 @@ export async function createTicket(root, ticketType, title, options = {}) {
   const slug = slugify(title);
   const folder = path.resolve(root, "plans", "tickets", STATUS_FOLDERS.get(status));
   const ticketPath = path.join(folder, `${ticketId}_${slug}.md`);
-  const created = formatIsoSeconds(timestamp);
+  const created = formatIsoSeconds(now);
 
   await mkdir(folder, { recursive: true });
   await writeFile(ticketPath, renderTicket(ticketId, ticketType, status, priority, parent, created, title), {
@@ -1813,7 +1813,7 @@ export async function createTicket(root, ticketType, title, options = {}) {
   });
 
   if (parent !== null) {
-    await linkParent(root, ticketId, parent, { now: timestamp });
+    await linkParent(root, ticketId, parent, { now });
   }
 
   return ticketPath;

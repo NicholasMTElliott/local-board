@@ -96,6 +96,58 @@ test("create advances timestamp to keep ticket ids unique", async () => {
   });
 });
 
+test("collision-bumped id keeps a truthful created/updated stamp, not the bumped minute", async () => {
+  await withBoard(async (root) => {
+    const now = new Date("2026-05-14T20:56:00Z");
+    await createTicket(root, "story", "First story", { now });
+    const secondPath = await createTicket(root, "story", "Second story", { now });
+    const secondId = path.basename(secondPath).split("_", 1)[0];
+
+    // The id bumps a minute past `now` to stay unique...
+    assert.equal(path.basename(secondPath), "S20260514T2057Z_second-story.md");
+
+    // ...but created/updated must stay bound to the real `now`, not the bumped minute.
+    const { ticket: second } = await findTicket(root, secondId);
+    assert.equal(second.frontMatter.created, "2026-05-14T20:56:00Z");
+    assert.equal(second.frontMatter.updated, "2026-05-14T20:56:00Z");
+    assert.ok(
+      new Date(second.frontMatter.updated).getTime() >= new Date(second.frontMatter.created).getTime(),
+      "updated must never be earlier than created",
+    );
+  });
+});
+
+test("create with parent propagates truthful now through linkParent on collision-bumped ids", async () => {
+  await withBoard(async (root) => {
+    const now = new Date("2026-05-14T20:56:00Z");
+    // Parent and child share a type (same id prefix) so the child's mint
+    // collides with the parent's minute and must bump.
+    const parentPath = await createTicket(root, "story", "Parent story", {
+      status: "ready_for_decomposition",
+      now,
+    });
+    const parentId = path.basename(parentPath).split("_", 1)[0];
+
+    const childPath = await createTicket(root, "story", "Child story", {
+      status: "ready_for_decomposition",
+      parent: parentId,
+      now,
+    });
+    const childId = path.basename(childPath).split("_", 1)[0];
+
+    assert.notEqual(childId.slice(1), parentId.slice(1), "child id minute must have bumped past the parent's");
+
+    const { ticket: child } = await findTicket(root, childId);
+    assert.equal(child.frontMatter.created, "2026-05-14T20:56:00Z");
+    assert.equal(child.frontMatter.updated, "2026-05-14T20:56:00Z");
+    assert.ok(new Date(child.frontMatter.updated).getTime() >= new Date(child.frontMatter.created).getTime());
+
+    const { ticket: parent } = await findTicket(root, parentId);
+    assert.equal(parent.frontMatter.updated, "2026-05-14T20:56:00Z");
+    assert.ok(new Date(parent.frontMatter.updated).getTime() >= new Date(parent.frontMatter.created).getTime());
+  });
+});
+
 test("create with parent updates reciprocal parent and child fields", async () => {
   await withBoard(async (root) => {
     const parent = await createTicket(root, "epic", "Parent epic", {

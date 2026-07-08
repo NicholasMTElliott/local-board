@@ -1,20 +1,20 @@
 ---
 id: B20260707T1330Z
 type: bug
-status: ready_for_implementation
+status: done
 priority: P3
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/B20260707T1330Z-create-stamps-created-from-the-collision-bumped-id-minute-producing-future-created-and-updated-earlier-than-created
 estimate: 2
 estimateBasis: B20260707T1326Z
-workStartedAt: null
-workCompletedAt: null
+workStartedAt: 2026-07-08T02:30:59Z
+workCompletedAt: 2026-07-08T02:44:05Z
 created: 2026-07-07T13:30:06Z
-updated: 2026-07-08T02:30:59Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-08T02:44:05Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # create stamps created from the collision-bumped ID minute, producing future created and updated earlier than created
@@ -122,11 +122,60 @@ None blocking. Proceeding on: primary decouple fix only; no clamp; no migration;
 
 ## Implementation Notes
 
+Implemented the two-line decouple exactly per the Technical Design: no deviations.
+
+- `src/tickets.js` `createTicket`: `created` now binds to `formatIsoSeconds(now)` instead of `formatIsoSeconds(timestamp)` (line ~1807). The ID (`ticketId`, built from `timestamp`) is untouched and keeps the worktree-offset/collision-bumped minute.
+- `src/tickets.js` `createTicket`: `linkParent(root, ticketId, parent, { now: timestamp })` changed to `{ now }` (line ~1816), so the reciprocal parent `updated` stamp is also truthful wall-clock time, not the bumped minute.
+- No clamp, no migration, no new validation invariant added, per the design's explicit rejection of those alternatives.
+
+Tests added to `test/tickets.test.js` (after the existing "create advances timestamp to keep ticket ids unique" test):
+- "collision-bumped id keeps a truthful created/updated stamp, not the bumped minute" — two same-`now` sequential creates; asserts the second id bumps a minute (`S...2057Z`) while `created`/`updated` both equal the injected `now` (`2026-05-14T20:56:00Z`), and `updated >= created`.
+- "create with parent propagates truthful now through linkParent on collision-bumped ids" — parent and child both typed `story` (same id prefix) so the child's mint collides with the parent's minute and bumps; asserts child `created == updated == now`, parent `updated == now`, and `updated >= created` on both sides.
+
+Existing test at test/tickets.test.js:84 ("create advances timestamp...") required no changes — it only asserted filenames/IDs, which are unaffected by this fix (uniqueness logic is untouched).
+
+Verification:
+- `npm run check`: clean (all `node --check` syntax checks pass).
+- `npm test`: 365 tests, 364 pass, 0 fail, 1 skipped (pre-existing "smoke (slow)" skip, unrelated).
+- `npm run validate`: "Ticket validation OK".
+- Live check on a throwaway `--root` board (init, create twice in immediate succession): first ticket `S20260708T0234Z` with `created`/`updated` = `2026-07-08T02:34:40Z`; second ticket `S20260708T0235Z` (id minute bumped to `35`) with `created`/`updated` = `2026-07-08T02:34:41Z` — id minute (35) != created minute (34), and created is truthful wall-clock time, not a fabricated future minute. Throwaway board removed after the check.
+
+Risks: none beyond what the design already flagged (hot path, two-line change, pinned by two new regression tests covering both the uniqueness half and the timestamp-truthfulness half independently).
+
 ## Review Findings
+
+Reviewed by codex-task:read-only (gpt-5.5) against commit 67d7de7.
+
+No blocking findings.
+
+- Trace verified: the bumped timestamp survives only in the ID mint and filename (src/tickets.js:1802-1806); created/updated stamp from real now (:1807, :1850-1851); linkParent stamps child and parent updated from the threaded now (:1153, :1158); no other post-fix consumer needs switching.
+- Injected-now collision semantics correct: ids bump, stamps stay equal to the injected now — matches existing and new tests.
+- Regression tests assert the right things (bumped id minute, truthful child stamps, truthful parent updated).
+- Non-collision fast path byte-identical (timestamp == now there).
+
+Verdict: pass
 
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/B20260707T1330Z-..., commit 67d7de7.
+
+**Suite:** `npm run check` pass; `npm test` 364 pass / 1 gated-skip of 365 (both new regression tests green); `npm run validate` OK.
+
+**Live probes (throwaway board):**
+- Two same-minute creates: second id minute bumped (40->41) while BOTH tickets stamp created/updated at the real wall clock (02:40:24Z) — truthful, not future.
+- Parent + child under collision: parent updated stamped truthfully by the threaded now (>= its created); child id minute leads real time without leaking into stamps.
+- The original symptom path: a comment after create yields updated (02:40:58) >= created (02:40:38); pre-fix this exact sequence produced updated < created.
+
+**Gaps / caveats:** none; diff verified to be exactly the two-line decouple.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `memory-bank/systemPatterns.md` — Ticket ID Convention notes that offset/collision bumps apply only to the ID timestamp; Safety Pattern wording no longer implies created/updated shift with the per-worktree bump.
+- (The document complete-step record preceded this dispatch; this run is its backing execution.)
 
 ## Questions
 
@@ -135,3 +184,15 @@ None blocking. Proceeding on: primary decouple fix only; no clamp; no migration;
 - 2026-07-08T02:30:10Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): two-line decouple — ID keeps the bumped/offset minute, created/updated bind to real now (linkParent threaded); clamp rejected as masking; no migration (legacy artifacts self-heal as the clock passes); injected-now determinism preserved. Estimate 2 (basis B20260707T1326Z).
 
 - 2026-07-08T02:30:58Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (timestamp hygiene)
+
+- 2026-07-08T02:30:59Z: Ensured git branch local-board/B20260707T1330Z-create-stamps-created-from-the-collision-bumped-id-minute-producing-future-created-and-updated-earlier-than-created (created).
+
+- 2026-07-08T02:35:41Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): two-line decouple + 2 regression tests; live check showed a bumped id minute with truthful created; 364 pass + 1 gated-skip.
+
+- 2026-07-08T02:36:23Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (timestamp hygiene)
+
+- 2026-07-08T02:38:19Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict pass: full trace of the timestamp variable, injected-now semantics, and both regression tests verified; fast path unchanged.
+
+- 2026-07-08T02:41:54Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 364+1 gated; live probes verified truthful stamps under collision, truthful parent updated, and the original updated<created symptom eliminated. Result: pass.
+
+- 2026-07-08T02:41:55Z: Completed document via codex-task:workspace-write: PENDING codex dispatch below
