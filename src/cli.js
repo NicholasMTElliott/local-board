@@ -758,17 +758,21 @@ async function moveAndMaybeMerge(root, ticketId, status, options = {}) {
 }
 
 async function commandComment(root, args, allowMainRoot) {
+  const markerFlags = takeAllOptions(args, "--marker");
   const section = takeOption(args, "--section") ?? "Run Log";
   const ticketId = args.shift();
   const text = args.join(" ").trim();
 
   if (ticketId === undefined || text === "") {
-    throw new Error("comment requires: <ticket-id> <text> [--section <section>] [--allow-main-root]");
+    throw new Error(
+      "comment requires: <ticket-id> <text> [--marker key=value ...] [--section <section>] [--allow-main-root]",
+    );
   }
 
   await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
-  const ticketPath = await appendTicketComment(root, ticketId, section, text);
+  const markers = parseMarkerFlags(markerFlags);
+  const ticketPath = await appendTicketComment(root, ticketId, section, text, { markers });
   console.log(ticketPath);
   return 0;
 }
@@ -1207,6 +1211,60 @@ function takeOption(args, name) {
   return value;
 }
 
+// Collect every occurrence of a repeatable option, in left-to-right order,
+// splicing each name+value pair out of args. Mirrors takeOption's value
+// guards but accumulates rather than returning after the first match.
+function takeAllOptions(args, name) {
+  const values = [];
+  let index = args.indexOf(name);
+  while (index !== -1) {
+    if (index === args.length - 1) {
+      throw new Error(`${name} requires a value`);
+    }
+    const value = args[index + 1];
+    if (value.startsWith("--")) {
+      throw new Error(`option ${name} requires a value but got ${value}`);
+    }
+    args.splice(index, 2);
+    values.push(value);
+    index = args.indexOf(name);
+  }
+  return values;
+}
+
+const MARKER_KEY_RE = /^[A-Za-z0-9_.-]+$/;
+const MARKER_VALUE_RE = /^[A-Za-z0-9_./-]+$/;
+
+// Validate + remap CLI key=value flags into ordered on-disk pairs. Throws an
+// Error with a clear CLI message on: missing '=', empty key/value, key/value
+// charset violation, or duplicate key.
+function parseMarkerFlags(rawFlags) {
+  const markers = [];
+  const seenKeys = new Set();
+
+  for (const raw of rawFlags) {
+    const eqIndex = raw.indexOf("=");
+    if (eqIndex === -1) {
+      throw new Error(`--marker ${raw} must be in key=value form`);
+    }
+    const key = raw.slice(0, eqIndex);
+    const value = raw.slice(eqIndex + 1);
+    if (!MARKER_KEY_RE.test(key)) {
+      throw new Error(`--marker key ${JSON.stringify(key)} must match ${MARKER_KEY_RE}`);
+    }
+    if (!MARKER_VALUE_RE.test(value)) {
+      throw new Error(`--marker value ${JSON.stringify(value)} for key ${key} must match ${MARKER_VALUE_RE}`);
+    }
+    if (seenKeys.has(key)) {
+      throw new Error(`--marker key ${key} was repeated; each marker key must be unique`);
+    }
+    seenKeys.add(key);
+    markers.push({ key, value });
+  }
+
+  return markers;
+}
+
 function parseLimit(value) {
   if (value === undefined) {
     return undefined;
@@ -1249,7 +1307,7 @@ const USAGE_TEXT = `Usage:
   local-board [--root <path>] check-dispatch --agent <subagent-type> [--model <model>] [--ticket <ticket-id>] [--json]
   local-board [--root <path>] move <ticket-id> <status> [--override] [--reason <text>] [--allow-main-root] [--json]
   local-board [--root <path>] set <ticket-id> <field> <value> [--override] [--reason <text>] [--allow-main-root]
-  local-board [--root <path>] comment <ticket-id> <text> [--section <section>] [--allow-main-root]
+  local-board [--root <path>] comment <ticket-id> <text> [--marker key=value ...] [--section <section>] [--allow-main-root]
   local-board [--root <path>] section <ticket-id> <text> --section <section> [--allow-main-root]
   local-board [--root <path>] section <ticket-id> --file <path> --section <section> [--allow-main-root]
   local-board [--root <path>] link-parent <child-ticket-id> <parent-ticket-id> [--allow-main-root]
