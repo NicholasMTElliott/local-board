@@ -1,7 +1,7 @@
 ---
 id: T20260707T1335Z
 type: task
-status: ready_for_docs
+status: done
 priority: P3
 parent: null
 children: []
@@ -11,10 +11,10 @@ branch: local-board/T20260707T1335Z-cli-begin-step-harness-codex-returns-the-tra
 estimate: 2
 estimateBasis: T20260707T1329Z
 workStartedAt: 2026-07-08T03:26:07Z
-workCompletedAt: null
+workCompletedAt: 2026-07-08T04:21:30Z
 created: 2026-07-07T13:35:55Z
-updated: 2026-07-08T04:21:08Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
+updated: 2026-07-08T04:21:30Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write, review:codex-task:read-only]
 routingApprovals: []
 ---
 # cli: begin-step --harness codex returns the translated dispatch
@@ -399,3 +399,7 @@ Result: pass
 - 2026-07-08T04:18:09Z: Completed test via claude-subagent:local-board-tester@sonnet: 380 pass + 1 skip; live probes A-D pass (codexDispatch shape, ledger neutrality, bogus harness exit 2, codex-default loop closure); rework verified
 
 - 2026-07-08T04:21:08Z: Completed document via codex-task:workspace-write: README begin-step line, Workflow.md pointer sentence, CodexSupport.md full codexDispatch contract, systemPatterns fact tightened
+
+- 2026-07-08T04:21:30Z: Completed review via codex-task:read-only: changes_requested (P2: local-team wave-barrier checklist) on 17e8ddd; addressed in cf64a14; fix verified by tester. Re-recorded post-move (token stripped by forward move into ready_for_review)
+
+- 2026-07-08T04:21:30Z: Review token was recorded before the forward move into ready_for_review and stripped by evidence invalidation; re-recorded at docs stage with the same disposition. Ordering noted for audit.
