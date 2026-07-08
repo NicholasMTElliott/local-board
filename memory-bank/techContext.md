@@ -42,8 +42,10 @@ SKILL.md              installable orchestration skill template
 - `package.json` `files` allowlist defines the npm package surface.
 
 ## Open Decisions
-- Whether advisory transition guidance should become a hard transition validator.
 - Agent routing refinements after real orchestration runs.
+- Whether to flip `routing.enforceTransitions` on in this repo's own
+  `plans/local-board.config.jsonc` (the hard validator exists and is scaffold-on
+  for new repos; this board's config has not opted in).
 - Per-step orchestrator (`docs/PerStepOrchestration.md`) is implemented and
   validated by an end-to-end real run (2 tickets × design/implement/test with
   per-step models, loop-back, and rebase backstop). `maxInFlight` reuses

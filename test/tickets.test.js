@@ -20,6 +20,7 @@ import {
   gateStageForForwardMove,
   getSectionText,
   invalidateDownstreamEvidence,
+  isTransitionAllowed,
   linkParent,
   moveTicket,
   nextTicket,
@@ -41,7 +42,7 @@ import {
   writeTicketFile,
 } from "../src/tickets.js";
 import { initProject } from "../src/scaffold.js";
-import { loadConfig } from "../src/config.js";
+import { defaultConfigJsonc, loadConfig } from "../src/config.js";
 import { readActiveSteps } from "../src/active-steps.js";
 import { removeFixtureDir } from "./helpers/fixtures.js";
 
@@ -2785,6 +2786,302 @@ test("moveTicket loop-back invalidation: switch off (default and explicit false)
     const { ticket: onAfter } = await findTicket(root, onId);
     assert.deepEqual(onAfter.frontMatter.completedSteps, []);
     assert.match(onAfter.body, /Invalidated downstream evidence on loop-back to ready_for_implementation/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// enforceTransitions (T20260707T1329Z): promote workflow.transitions to a
+// hard validator, with a fixed structural allow-set for administrative moves
+// and an --override escape.
+// ---------------------------------------------------------------------------
+
+test("isTransitionAllowed: map targets, the full structural allow-set, and self-transition", () => {
+  const config = { workflow: { transitions: { ready_for_implementation: [
+    { status: "ready_for_review" },
+    { status: "ready_for_design" },
+    { status: "questions" },
+    { status: "blocked" },
+  ] } } };
+
+  // Map-governed pipeline ordering.
+  assert.equal(isTransitionAllowed(config, "ready_for_implementation", "ready_for_review"), true);
+  assert.equal(isTransitionAllowed(config, "ready_for_implementation", "ready_for_design"), true);
+  // Not in the map and not structural: the headline refusal case.
+  assert.equal(isTransitionAllowed(config, "ready_for_implementation", "ready_for_test"), false);
+
+  // Structural rule 1: self-transition.
+  assert.equal(isTransitionAllowed(config, "ready_for_implementation", "ready_for_implementation"), true);
+  // Structural rule 2: backlog -> any trigger status.
+  assert.equal(isTransitionAllowed(config, "backlog", "ready_for_design"), true);
+  assert.equal(isTransitionAllowed(config, "backlog", "done"), false);
+  // Structural rule 3: ready_* -> its paired active status.
+  assert.equal(isTransitionAllowed(config, "ready_for_implementation", "implementing"), true);
+  assert.equal(isTransitionAllowed(config, "ready_for_design", "designing"), true);
+  // Structural rule 4: active -> its own ready_* (revert).
+  assert.equal(isTransitionAllowed(config, "implementing", "ready_for_implementation"), true);
+  // Wrong pairing is not structurally allowed.
+  assert.equal(isTransitionAllowed(config, "ready_for_implementation", "designing"), false);
+  // Structural rule 5: questions/blocked -> any trigger status (resume).
+  assert.equal(isTransitionAllowed(config, "questions", "ready_for_test"), true);
+  assert.equal(isTransitionAllowed(config, "blocked", "ready_for_implementation"), true);
+  // Structural rule 6: any -> archived.
+  assert.equal(isTransitionAllowed(config, "done", "archived"), true);
+  assert.equal(isTransitionAllowed(config, "ready_for_design", "archived"), true);
+  // Structural rule 7: any -> questions/blocked.
+  assert.equal(isTransitionAllowed(config, "designing", "questions"), true);
+  assert.equal(isTransitionAllowed(config, "backlog", "blocked"), true);
+});
+
+test("moveTicket refuses an illegal transition with an actionable allowed-targets error and zero side effects (switch on)", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { enforceTransitions: true } }));
+    const ticketPath = await createTicket(root, "task", "Skip review", { status: "ready_for_implementation" });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    const before = await readFile(ticketPath, "utf8");
+
+    await assert.rejects(
+      moveTicket(root, ticketId, "ready_for_test"),
+      /move refused: transition ready_for_implementation -> ready_for_test is not allowed\. Allowed targets: .*--override --reason/s,
+    );
+
+    const after = await readFile(ticketPath, "utf8");
+    assert.equal(after, before, "a refused move must leave the ticket file byte-unchanged");
+    const { ticket } = await findTicket(root, ticketId);
+    assert.equal(ticket.status, "ready_for_implementation");
+  });
+});
+
+test("moveTicket refusal error names the allowed targets (map union structural)", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { enforceTransitions: true } }));
+    const ticketPath = await createTicket(root, "task", "Allowed targets", { status: "ready_for_implementation" });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await assert.rejects(moveTicket(root, ticketId, "ready_for_test"), (error) => {
+      assert.match(error.message, /Allowed targets:/);
+      for (const target of ["ready_for_review", "ready_for_design", "questions", "blocked", "implementing", "archived"]) {
+        assert.match(error.message, new RegExp(`\\b${target}\\b`), `expected allowed targets to list ${target}`);
+      }
+      return true;
+    });
+  });
+});
+
+test("moveTicket allows a legal pipeline forward move unchanged (switch on)", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { enforceTransitions: true } }));
+    const ticketPath = await createTicket(root, "task", "Review to test", { status: "ready_for_review" });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const moved = await moveTicket(root, ticketId, "ready_for_test");
+    assert.match(await readFile(moved, "utf8"), /^status: ready_for_test$/m);
+  });
+});
+
+test("moveTicket allows every structural allow-set category under enforcement (switch on)", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { enforceTransitions: true } }));
+
+    // 1. Same-status re-save.
+    const same = await createTicket(root, "task", "Re-save", { status: "ready_for_implementation" });
+    const sameId = path.basename(same).split("_", 1)[0];
+    await moveTicket(root, sameId, "ready_for_implementation");
+
+    // 2. backlog -> ready_* (promote out of backlog).
+    const backlog = await createTicket(root, "task", "Promote from backlog", { status: "backlog" });
+    const backlogId = path.basename(backlog).split("_", 1)[0];
+    await moveTicket(root, backlogId, "ready_for_design");
+
+    // 3. ready_* -> paired active (start-work).
+    const startWork = await createTicket(root, "task", "Start work", { status: "ready_for_implementation" });
+    const startWorkId = path.basename(startWork).split("_", 1)[0];
+    await moveTicket(root, startWorkId, "implementing");
+
+    // 4. active -> its own ready_* (revert).
+    const revert = await createTicket(root, "task", "Revert active", { status: "implementing" });
+    const revertId = path.basename(revert).split("_", 1)[0];
+    await moveTicket(root, revertId, "ready_for_implementation");
+
+    // 5. questions/blocked -> ready_* (resume).
+    const questions = await createTicket(root, "task", "Resume from questions", { status: "questions" });
+    const questionsId = path.basename(questions).split("_", 1)[0];
+    await moveTicket(root, questionsId, "ready_for_implementation");
+
+    const blocked = await createTicket(root, "task", "Resume from blocked", { status: "blocked" });
+    const blockedId = path.basename(blocked).split("_", 1)[0];
+    await moveTicket(root, blockedId, "ready_for_test");
+
+    // 6. any -> archived (supersede).
+    const supersede = await createTicket(root, "task", "Supersede", { status: "ready_for_design" });
+    const supersedeId = path.basename(supersede).split("_", 1)[0];
+    await moveTicket(root, supersedeId, "archived");
+
+    // 6. any -> archived (retention, via archiveDoneTickets -> moveTicket).
+    const retire = await createTicket(root, "task", "Retention", {
+      status: "done",
+      now: new Date("2026-03-01T12:00:00Z"),
+    });
+    const retireId = path.basename(retire).split("_", 1)[0];
+    const archived = await archiveDoneTickets(root, { archiveDoneAfterDays: 30, now: new Date("2026-06-01T12:00:00Z") });
+    assert.deepEqual(archived.map((record) => record.ticket), [retireId]);
+
+    // 7. any -> questions/blocked (escape hatch), from a status the map does
+    // not cover (designing has no map entry other than its own three exits;
+    // backlog has none at all).
+    const backlogQuestions = await createTicket(root, "task", "Backlog to questions", { status: "backlog" });
+    const backlogQuestionsId = path.basename(backlogQuestions).split("_", 1)[0];
+    await moveTicket(root, backlogQuestionsId, "questions");
+
+    for (const id of [sameId, backlogId, startWorkId, revertId, questionsId, blockedId, supersedeId, backlogQuestionsId]) {
+      const { ticket } = await findTicket(root, id);
+      assert.notEqual(ticket, undefined, `${id} must still resolve after its structural move`);
+    }
+  });
+});
+
+test("moveTicket --override forces a refused move and records exactly one Transition override line; a no-reason override omits the suffix; overriding an already-allowed move writes no line", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { enforceTransitions: true } }));
+
+    const withReason = await createTicket(root, "task", "Override with reason", { status: "ready_for_implementation" });
+    const withReasonId = path.basename(withReason).split("_", 1)[0];
+    const moved = await moveTicket(root, withReasonId, "ready_for_test", {
+      overrideTransition: { reason: "Emergency hotfix, review waived by lead." },
+      now: new Date("2026-06-01T12:00:00Z"),
+    });
+    const movedText = await readFile(moved, "utf8");
+    assert.match(movedText, /^status: ready_for_test$/m);
+    const overrideLines = [...movedText.matchAll(/Transition override: .*$/gm)];
+    assert.equal(overrideLines.length, 1);
+    assert.match(
+      overrideLines[0][0],
+      /^Transition override: ready_for_implementation -> ready_for_test: Emergency hotfix, review waived by lead\.$/,
+    );
+
+    const noReason = await createTicket(root, "task", "Override without reason", { status: "ready_for_implementation" });
+    const noReasonId = path.basename(noReason).split("_", 1)[0];
+    const movedNoReason = await moveTicket(root, noReasonId, "ready_for_test", {
+      overrideTransition: {},
+      now: new Date("2026-06-01T12:00:00Z"),
+    });
+    const movedNoReasonText = await readFile(movedNoReason, "utf8");
+    const noReasonLines = [...movedNoReasonText.matchAll(/Transition override: .*$/gm)];
+    assert.equal(noReasonLines.length, 1);
+    assert.equal(noReasonLines[0][0], "Transition override: ready_for_implementation -> ready_for_test");
+
+    // Overriding an already-allowed move is a silent no-op: no misleading
+    // Run Log line, because isTransitionAllowed never reaches the override
+    // branch for an allowed move.
+    const alreadyAllowed = await createTicket(root, "task", "Already allowed", { status: "ready_for_review" });
+    const alreadyAllowedId = path.basename(alreadyAllowed).split("_", 1)[0];
+    const movedAllowed = await moveTicket(root, alreadyAllowedId, "ready_for_test", {
+      overrideTransition: { reason: "Should not be recorded." },
+    });
+    const movedAllowedText = await readFile(movedAllowed, "utf8");
+    assert.doesNotMatch(movedAllowedText, /Transition override:/);
+  });
+});
+
+test("moveTicket ordering: an allowed/overridden loop-back still runs invalidation; a refused loop-back strips nothing", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { enforceTransitions: true, invalidateOnLoopBack: true } }));
+
+    // ready_for_test -> ready_for_implementation is map-governed (allowed),
+    // so invalidation still runs on this ordinary loop-back.
+    const ticketPath = await createTicket(root, "task", "Allowed loop-back", { status: "ready_for_test" });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer@sonnet", "Impl.");
+    await completeStep(root, ticketId, "review", "codex-task:read-only", "Review.");
+    await moveTicket(root, ticketId, "ready_for_implementation");
+    const { ticket: after } = await findTicket(root, ticketId);
+    assert.deepEqual(after.frontMatter.completedSteps, []);
+    assert.match(after.body, /Invalidated downstream evidence on loop-back to ready_for_implementation/);
+
+    // A move refused by the transition validator must run no other logic:
+    // no invalidation, no evidence stripped.
+    const refusedPath = await createTicket(root, "task", "Refused loop-back", { status: "ready_for_docs" });
+    const refusedId = path.basename(refusedPath).split("_", 1)[0];
+    await completeStep(root, refusedId, "implement", "claude-subagent:local-board-implementer@sonnet", "Impl.");
+    await completeStep(root, refusedId, "review", "codex-task:read-only", "Review.");
+    await completeStep(root, refusedId, "test", "claude-subagent:local-board-tester@sonnet", "Test.");
+    // ready_for_docs -> ready_for_test is neither a map entry (ready_for_docs
+    // only exits to done/ready_for_implementation/ready_for_design/questions/
+    // blocked) nor structural, so it is refused.
+    await assert.rejects(moveTicket(root, refusedId, "ready_for_test"), /move refused/);
+    const { ticket: refusedAfter } = await findTicket(root, refusedId);
+    assert.deepEqual(refusedAfter.frontMatter.completedSteps, [
+      "implement:claude-subagent:local-board-implementer@sonnet",
+      "review:codex-task:read-only",
+      "test:claude-subagent:local-board-tester@sonnet",
+    ]);
+    assert.doesNotMatch(refusedAfter.body, /Invalidated downstream evidence/);
+  });
+});
+
+test("set <id> status inherits transition refusal and honors --override parity with move", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { enforceTransitions: true } }));
+    const ticketPath = await createTicket(root, "task", "Set status parity", { status: "ready_for_implementation" });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await assert.rejects(setTicketField(root, ticketId, "status", "ready_for_test"), /move refused/);
+
+    await setTicketField(root, ticketId, "status", "ready_for_test", {
+      overrideTransition: { reason: "Parity override via set." },
+    });
+    assert.match(await readFile(ticketPath, "utf8"), /^status: ready_for_test$/m);
+    assert.match(await readFile(ticketPath, "utf8"), /Transition override: ready_for_implementation -> ready_for_test: Parity override via set\./);
+  });
+});
+
+test("moveTicket enforceTransitions is off by default and via explicit false (advisory mode, back-compat)", async () => {
+  await withBoard(async (root) => {
+    // No config file at all: DEFAULT_CONFIG fallback keeps it off.
+    const noConfig = await createTicket(root, "task", "No config advisory", { status: "ready_for_implementation" });
+    const noConfigId = path.basename(noConfig).split("_", 1)[0];
+    const movedNoConfig = await moveTicket(root, noConfigId, "ready_for_test");
+    assert.match(await readFile(movedNoConfig, "utf8"), /^status: ready_for_test$/m);
+
+    // Explicit false behaves the same.
+    await writeConfig(root, JSON.stringify({ routing: { enforceTransitions: false } }));
+    const explicitOff = await createTicket(root, "task", "Explicit advisory", { status: "ready_for_implementation" });
+    const explicitOffId = path.basename(explicitOff).split("_", 1)[0];
+    const movedExplicitOff = await moveTicket(root, explicitOffId, "ready_for_test");
+    assert.match(await readFile(movedExplicitOff, "utf8"), /^status: ready_for_test$/m);
+  });
+});
+
+test("moveTicket enforceTransitions on (scaffold config) permits the full task/bug happy-path pipeline and every structural move used by start-work/gate-check flows", async () => {
+  await withBoard(async (root) => {
+    await mkdir(path.join(root, "plans"), { recursive: true });
+    await writeFile(path.join(root, "plans", "local-board.config.jsonc"), defaultConfigJsonc(), "utf8");
+
+    const ticketPath = await createTicket(root, "task", "Full pipeline under scaffold", { status: "ready_for_design" });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    // The scaffold also enables estimation; complete-step design refuses a
+    // task/bug with a null estimate, unrelated to this ticket's concern.
+    await setTicketField(root, ticketId, "estimate", "4");
+
+    await moveTicket(root, ticketId, "designing");
+    await moveTicket(root, ticketId, "ready_for_design");
+    await recordGateSkippedEmptyCatalog(root, ticketId, "design");
+    await moveTicket(root, ticketId, "ready_for_implementation");
+    await moveTicket(root, ticketId, "implementing");
+    await moveTicket(root, ticketId, "ready_for_implementation");
+    await recordGateSkippedEmptyCatalog(root, ticketId, "implement");
+    await moveTicket(root, ticketId, "ready_for_review");
+    await moveTicket(root, ticketId, "ready_for_test");
+    await recordGateSkippedEmptyCatalog(root, ticketId, "test");
+    await moveTicket(root, ticketId, "ready_for_docs");
+
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Design evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer@sonnet", "Implementation evidence.");
+    await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
+    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester@sonnet", "Test evidence.");
+    await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
+
+    const done = await moveTicket(root, ticketId, "done");
+    assert.match(await readFile(done, "utf8"), /^status: done$/m);
   });
 });
 

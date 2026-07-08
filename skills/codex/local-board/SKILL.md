@@ -59,6 +59,8 @@ For each returned ticket:
 9. Choose `done` only when all required evidence is recorded.
 10. Run `validate` again before reporting completion.
 
+When `routing.enforceTransitions` is `true` (the `init` scaffold default), `move`/`set <id> status` refuse a target status outside `workflow.transitions[fromStatus]` and a fixed structural allow-set (start-work, resume from `questions`/`blocked`, backlog promote, archive/retention); the refusal error names the allowed targets. Only pass `--override --reason "<text>"` when a legitimate move is genuinely outside that set — it forces the move and records `Transition override: <from> -> <to>: <reason>` in the Run Log. Prefer a legal transition over `--override` whenever one exists.
+
 ## Route Translation Contract
 
 Strict routing validates the configured logical route, not the physical Codex worker. Preserve the configured route when recording completion. When the route matches and the action's profile pins a model, `complete-step` also requires the executor's `@model` suffix to match `configuredModel`, or `@codex-default` (always accepted — see below), or an approved deviation via `approve-inline --executor <route>@<model>`.
@@ -181,8 +183,8 @@ local-board gate-complete <ticket-id> --stage <stage> --executor <executor> [--e
 local-board specialty-run <ticket-id> <step-name> [--json]
 local-board calibration suggest <ticket-id> [--json]
 local-board estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]
-local-board move <ticket-id> <status> [--json]
-local-board set <ticket-id> <field> <value>
+local-board move <ticket-id> <status> [--override] [--reason "<text>"] [--json]
+local-board set <ticket-id> <field> <value> [--override] [--reason "<text>"]
 local-board section <ticket-id> "<text>" --section "<section>"
 local-board section <ticket-id> --file <path> --section "<section>"
 local-board comment <ticket-id> "<text>" [--section "<section>"]

@@ -67,7 +67,19 @@ test("CLI command surface supports init, create, query, mutate, relate, report, 
     assert.equal((await runCli(["--root", root, "comment", childId, "CLI touched this.", "--section", "Run Log"])).code, 0);
     assert.equal((await runCli(["--root", root, "set", childId, "priority", "P2"])).code, 0);
     assert.equal((await runCli(["--root", root, "update-field", childId, "estimate", "2"])).code, 0);
-    assert.equal((await runCli(["--root", root, "move", childId, "ready_for_design"])).code, 0);
+    // enforceTransitions is scaffold-on by default; ready_for_decomposition ->
+    // ready_for_design is not a pipeline map entry or a structural allow-set
+    // move (decomposition and design are separate decision points), so this
+    // smoke-test move needs an explicit override.
+    assert.equal(
+      (
+        await runCli([
+          "--root", root, "move", childId, "ready_for_design",
+          "--override", "--reason", "CLI smoke test moves directly into design",
+        ])
+      ).code,
+      0,
+    );
     assert.equal((await runCli(["--root", root, "block", childId, parentId])).code, 0);
     assert.equal((await runCli(["--root", root, "unblock", childId, parentId])).code, 0);
     assert.equal((await runCli(["--root", root, "unlink-parent", childId, parentId])).code, 0);
@@ -934,6 +946,58 @@ test("CLI move gating is disabled when routing.requireGateConsultation is set to
 
     const moved = await runCli(["--root", root, "move", ticketId, "ready_for_implementation"]);
     assert.equal(moved.code, 0, moved.stderr);
+  });
+});
+
+test("CLI move refuses an illegal transition, names the allowed targets, then --override --reason forces it and records a Run Log line (scaffold enforceTransitions:true)", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    const create = await runCli([
+      "--root", root, "create", "task", "Skip review via CLI",
+      "--status", "ready_for_implementation", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const refused = await runCli(["--root", root, "move", ticketId, "ready_for_test"]);
+    assert.equal(refused.code, 2);
+    assert.match(refused.stderr, /move refused: transition ready_for_implementation -> ready_for_test is not allowed/);
+    assert.match(refused.stderr, /Allowed targets:/);
+    assert.match(refused.stderr, /--override --reason/);
+
+    const overridden = await runCli([
+      "--root", root, "move", ticketId, "ready_for_test",
+      "--override", "--reason", "CLI override test",
+    ]);
+    assert.equal(overridden.code, 0, overridden.stderr);
+    const text = await readFile(overridden.stdout.trim(), "utf8");
+    assert.match(text, /^status: ready_for_test$/m);
+    assert.match(text, /Transition override: ready_for_implementation -> ready_for_test: CLI override test/);
+  });
+});
+
+test("CLI set <id> status has --override parity with move", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    const create = await runCli([
+      "--root", root, "create", "task", "Set status override parity",
+      "--status", "ready_for_implementation", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const refused = await runCli(["--root", root, "set", ticketId, "status", "ready_for_test"]);
+    assert.equal(refused.code, 2);
+    assert.match(refused.stderr, /move refused/);
+
+    const overridden = await runCli([
+      "--root", root, "set", ticketId, "status", "ready_for_test",
+      "--override", "--reason", "set parity override",
+    ]);
+    assert.equal(overridden.code, 0, overridden.stderr);
+    const text = await readFile(overridden.stdout.trim(), "utf8");
+    assert.match(text, /^status: ready_for_test$/m);
+    assert.match(text, /Transition override: ready_for_implementation -> ready_for_test: set parity override/);
   });
 });
 

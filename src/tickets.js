@@ -142,6 +142,107 @@ const ACTIVE_STATUS_TO_READY = {
   testing: "ready_for_test",
 };
 
+// Fixed structural allow-set for the hard transition validator
+// (routing.enforceTransitions). These are administrative/escape moves that
+// are not pipeline decisions, so they are never surfaced as advisory
+// `transitions` guidance (see transitionsForStatus) and are always permitted
+// when enforcement is on, independent of config.workflow.transitions:
+//   1. fromStatus === toStatus (idempotent re-save).
+//   2. backlog -> any trigger (ready_*) status (promote out of backlog).
+//   3. ready_* -> its paired active status, the inverse of
+//      ACTIVE_STATUS_TO_READY (start-work).
+//   4. an active status -> its own ready_* (revert/back-out), i.e.
+//      ACTIVE_STATUS_TO_READY direct.
+//   5. questions/blocked -> any trigger status (resume; origin is not
+//      tracked, so any ready_* is allowed).
+//   6. any status -> archived (supersede + retention done -> archived).
+//   7. any status -> questions and any status -> blocked (escape hatches from
+//      any state).
+function isStructurallyAllowed(fromStatus, toStatus) {
+  if (fromStatus === toStatus) {
+    return true;
+  }
+  if (fromStatus === "backlog" && TRIGGER_STATUSES.has(toStatus)) {
+    return true;
+  }
+  if (ACTIVE_STATUS_TO_READY[toStatus] === fromStatus) {
+    return true;
+  }
+  if (ACTIVE_STATUS_TO_READY[fromStatus] === toStatus) {
+    return true;
+  }
+  if ((fromStatus === "questions" || fromStatus === "blocked") && TRIGGER_STATUSES.has(toStatus)) {
+    return true;
+  }
+  if (toStatus === "archived" || toStatus === "questions" || toStatus === "blocked") {
+    return true;
+  }
+  return false;
+}
+
+// The hard validator predicate for routing.enforceTransitions: true when the
+// move is either in the fixed structural allow-set above, or toStatus is one
+// of the `.status` values configured for fromStatus in
+// config.workflow.transitions (the pipeline-ordering authority).
+export function isTransitionAllowed(config, fromStatus, toStatus) {
+  if (isStructurallyAllowed(fromStatus, toStatus)) {
+    return true;
+  }
+  const mapEntries = config.workflow?.transitions?.[fromStatus];
+  if (!Array.isArray(mapEntries)) {
+    return false;
+  }
+  return mapEntries.some((entry) => entry.status === toStatus);
+}
+
+// Computes the allowed-targets list for a refusal error message: map targets
+// for fromStatus (in map order) followed by any applicable structural targets
+// not already listed, de-duplicated. The self-transition (fromStatus itself)
+// is intentionally omitted — it is allowed but not a useful "did you mean"
+// suggestion.
+function allowedTargetsFor(config, fromStatus) {
+  const targets = [];
+  const seen = new Set();
+  const add = (candidate) => {
+    if (!seen.has(candidate)) {
+      seen.add(candidate);
+      targets.push(candidate);
+    }
+  };
+
+  const mapEntries = config.workflow?.transitions?.[fromStatus];
+  if (Array.isArray(mapEntries)) {
+    for (const entry of mapEntries) {
+      add(entry.status);
+    }
+  }
+
+  if (fromStatus === "backlog") {
+    for (const status of TRIGGER_STATUSES) {
+      add(status);
+    }
+  }
+  const pairedActive = Object.keys(ACTIVE_STATUS_TO_READY).find(
+    (active) => ACTIVE_STATUS_TO_READY[active] === fromStatus,
+  );
+  if (pairedActive !== undefined) {
+    add(pairedActive);
+  }
+  if (ACTIVE_STATUS_TO_READY[fromStatus] !== undefined) {
+    add(ACTIVE_STATUS_TO_READY[fromStatus]);
+  }
+  if (fromStatus === "questions" || fromStatus === "blocked") {
+    for (const status of TRIGGER_STATUSES) {
+      add(status);
+    }
+  }
+  add("archived");
+  add("questions");
+  add("blocked");
+
+  return targets;
+}
+
 // Rank of a raw status string within config.workflow.pipelineOrder, or null
 // when the status is not in the pipeline (e.g. questions/blocked/done/active
 // statuses). Lower rank = closer to done. Distinct from the ticket-based
@@ -545,15 +646,40 @@ export async function moveTicket(root, ticketId, status, options = {}) {
         await options.__afterRead();
       }
 
-      // Load config once for whichever move-time check(s) apply: the gate
-      // precondition (only for the three forward gated pairs) and/or the
-      // done-time routing re-validation (only when moving to done). Neither
-      // check applies to the vast majority of moves (backward/lateral/active
-      // in-stage), so config stays unloaded for those.
-      const gateStage = gateStageForForwardMove(ticket.status, status);
-      const needsConfig = gateStage !== null || status === "done" || TRIGGER_STATUSES.has(status);
-      const config = needsConfig ? await loadConfig(board.root) : null;
+      // Config is needed on nearly every call now that the hard transition
+      // validator (routing.enforceTransitions, checked first below) runs
+      // unconditionally; load it once up front instead of the old
+      // needsConfig gate (it was already loaded for gated/done/trigger moves).
+      const config = await loadConfig(board.root);
+      let body = ticket.body;
 
+      // Hard transition validator: the FIRST gate, before the gate-consultation
+      // precondition and before loop-back invalidation, so a refused move has
+      // zero side effects (nothing written, nothing stripped, no folder
+      // created — moveTicket performs no fs mutation until the mkdir/rename
+      // block near the end). isTransitionAllowed treats a same-status move as
+      // always allowed (idempotent re-save).
+      if (config.routing?.enforceTransitions === true && !isTransitionAllowed(config, ticket.status, status)) {
+        if (options.overrideTransition) {
+          const reason = options.overrideTransition.reason;
+          const suffix = reason ? `: ${reason}` : "";
+          body = appendToSection(
+            body,
+            "Run Log",
+            `- ${formatIsoSeconds(now)}: Transition override: ${ticket.status} -> ${status}${suffix}`,
+          );
+        } else {
+          const allowed = allowedTargetsFor(config, ticket.status);
+          throw new Error(
+            `${ticket.path}: move refused: transition ${ticket.status} -> ${status} is not allowed. ` +
+              `Allowed targets: ${allowed.join(", ")}. Re-run with --override --reason <text> to force this ` +
+              `transition (it will be recorded in the Run Log), or set routing.enforceTransitions to false for ` +
+              `advisory-only mode.`,
+          );
+        }
+      }
+
+      const gateStage = gateStageForForwardMove(ticket.status, status);
       if (gateStage !== null && config.routing?.requireGateConsultation === true) {
         const consulted = gateConsultationRecords(ticket).some((record) => record.stage === gateStage);
         if (!consulted) {
@@ -574,8 +700,7 @@ export async function moveTicket(root, ticketId, status, options = {}) {
       // downstream of the target has recorded evidence yet (ordinary forward
       // moves stay byte-identical).
       let nextFrontMatter = { ...ticket.frontMatter, status };
-      let body = ticket.body;
-      if (config?.routing?.invalidateOnLoopBack === true && TRIGGER_STATUSES.has(status)) {
+      if (config.routing?.invalidateOnLoopBack === true && TRIGGER_STATUSES.has(status)) {
         const invalidation = invalidateDownstreamEvidence(ticket.frontMatter, config, status);
         if (invalidation.removed.completedSteps.length > 0 || invalidation.removed.routingApprovals.length > 0) {
           nextFrontMatter = {

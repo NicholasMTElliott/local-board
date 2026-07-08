@@ -641,35 +641,41 @@ async function commandInstall(root, args) {
 
 async function commandMove(root, args, allowMainRoot) {
   const asJson = takeFlag(args, "--json");
+  const override = takeFlag(args, "--override");
+  const reason = takeOption(args, "--reason");
   const ticketId = args.shift();
   const status = args.shift();
   ensureNoArgs(args);
 
   if (ticketId === undefined || status === undefined) {
-    throw new Error("move requires: <ticket-id> <status> [--allow-main-root]");
+    throw new Error("move requires: <ticket-id> <status> [--override] [--reason <text>] [--allow-main-root]");
   }
 
   await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
-  await moveAndMaybeMerge(root, ticketId, status, { asJson });
+  const overrideTransition = override ? { reason } : undefined;
+  await moveAndMaybeMerge(root, ticketId, status, { asJson, overrideTransition });
   return 0;
 }
 
 async function commandSet(root, args, allowMainRoot) {
+  const override = takeFlag(args, "--override");
+  const reason = takeOption(args, "--reason");
   const ticketId = args.shift();
   const field = args.shift();
   const rawValue = args.shift();
   ensureNoArgs(args);
 
   if (ticketId === undefined || field === undefined || rawValue === undefined) {
-    throw new Error("set requires: <ticket-id> <field> <value> [--allow-main-root]");
+    throw new Error("set requires: <ticket-id> <field> <value> [--override] [--reason <text>] [--allow-main-root]");
   }
 
   await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
   const value = parseScalar(rawValue);
   if (field === "status") {
-    await moveAndMaybeMerge(root, ticketId, String(value), { asJson: false });
+    const overrideTransition = override ? { reason } : undefined;
+    await moveAndMaybeMerge(root, ticketId, String(value), { asJson: false, overrideTransition });
     return 0;
   }
 
@@ -686,7 +692,7 @@ async function moveAndMaybeMerge(root, ticketId, status, options = {}) {
     await assertAutoMergeReady(root, ticketId, { defaultBranch: config.git.defaultBranch });
   }
 
-  const ticketPath = await moveTicket(root, ticketId, status);
+  const ticketPath = await moveTicket(root, ticketId, status, { overrideTransition: options.overrideTransition });
   const archived = shouldArchiveDone
     ? await archiveDoneTickets(root, {
         archiveDoneAfterDays: config.retention.archiveDoneAfterDays,
@@ -1191,8 +1197,8 @@ function printUsage() {
   local-board [--root <path>] complete-step <ticket-id> <action> --executor <executor> --evidence <text> [--allow-main-root] [--json]
   local-board [--root <path>] approve-inline <ticket-id> <action> --reason <text> [--executor <executor>] [--allow-main-root] [--json]
   local-board [--root <path>] check-dispatch --agent <subagent-type> [--model <model>] [--ticket <ticket-id>] [--json]
-  local-board [--root <path>] move <ticket-id> <status> [--allow-main-root] [--json]
-  local-board [--root <path>] set <ticket-id> <field> <value> [--allow-main-root]
+  local-board [--root <path>] move <ticket-id> <status> [--override] [--reason <text>] [--allow-main-root] [--json]
+  local-board [--root <path>] set <ticket-id> <field> <value> [--override] [--reason <text>] [--allow-main-root]
   local-board [--root <path>] comment <ticket-id> <text> [--section <section>] [--allow-main-root]
   local-board [--root <path>] section <ticket-id> <text> --section <section> [--allow-main-root]
   local-board [--root <path>] section <ticket-id> --file <path> --section <section> [--allow-main-root]
