@@ -8,6 +8,7 @@ import {
   archiveDoneTickets,
   beginStep,
   blockTicket,
+  collectComments,
   completeStep,
   composeExecutor,
   createTicket,
@@ -134,6 +135,9 @@ export async function main(argv) {
     }
     if (command === "comment") {
       return await commandComment(root, args, allowMainRoot);
+    }
+    if (command === "comments") {
+      return await commandComments(root, args);
     }
     if (command === "section" || command === "set-section") {
       return await commandSection(root, args, allowMainRoot);
@@ -777,6 +781,64 @@ async function commandComment(root, args, allowMainRoot) {
   return 0;
 }
 
+// Read-only counterpart to `comment`: lists and filters the parsed Run
+// Log-style comments on one ticket. No `assertInvocationRootForTicket` call
+// (that guard is only for mutations) and no lock/write of any kind, matching
+// `query-ticket`/`state-report`.
+async function commandComments(root, args) {
+  const asJson = takeFlag(args, "--json");
+  const markerFlags = takeAllOptions(args, "--marker");
+  const section = takeOption(args, "--section") ?? null;
+  const ticketId = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined) {
+    throw new Error("comments requires: <ticket-id> [--section <name>] [--marker key=value ...] [--json]");
+  }
+
+  const markers = parseMarkerFlags(markerFlags);
+  const { ticket } = await findTicket(root, ticketId);
+  const records = collectComments(ticket, { section, markers });
+
+  if (asJson) {
+    console.log(JSON.stringify(records, null, 2));
+  } else {
+    printCommentsHuman(records);
+  }
+  return 0;
+}
+
+// Groups already-filtered records by section (in document order, using each
+// section's first appearance in the filtered set to fix its group position)
+// and prints them as `<Section>\n- <ts> [markers] <body>`, one blank line
+// between groups. A section with no matching records is never printed;
+// nothing is printed at all when records is empty (still exit 0).
+function printCommentsHuman(records) {
+  const bySection = new Map();
+  for (const record of records) {
+    if (!bySection.has(record.section)) {
+      bySection.set(record.section, []);
+    }
+    bySection.get(record.section).push(record);
+  }
+
+  let first = true;
+  for (const [sectionName, sectionRecords] of bySection) {
+    if (!first) {
+      console.log("");
+    }
+    first = false;
+    console.log(sectionName);
+    for (const record of sectionRecords) {
+      const markerSegment =
+        record.markers.length === 0
+          ? ""
+          : `[${record.markers.map((marker) => `${marker.key}:${marker.value}`).join(" ")}] `;
+      console.log(`- ${record.timestamp} ${markerSegment}${record.body}`);
+    }
+  }
+}
+
 async function commandSection(root, args, allowMainRoot) {
   const section = takeOption(args, "--section");
   const file = takeOption(args, "--file");
@@ -1308,6 +1370,7 @@ const USAGE_TEXT = `Usage:
   local-board [--root <path>] move <ticket-id> <status> [--override] [--reason <text>] [--allow-main-root] [--json]
   local-board [--root <path>] set <ticket-id> <field> <value> [--override] [--reason <text>] [--allow-main-root]
   local-board [--root <path>] comment <ticket-id> <text> [--marker key=value ...] [--section <section>] [--allow-main-root]
+  local-board [--root <path>] comments <ticket-id> [--section <name>] [--marker key=value ...] [--json]
   local-board [--root <path>] section <ticket-id> <text> --section <section> [--allow-main-root]
   local-board [--root <path>] section <ticket-id> --file <path> --section <section> [--allow-main-root]
   local-board [--root <path>] link-parent <child-ticket-id> <parent-ticket-id> [--allow-main-root]
