@@ -38,6 +38,11 @@ SKILL.md              installable orchestration skill template
 - Avoid external services for core workflow.
 - Preserve portability across Windows/macOS/Linux.
 - Installer requires `local-board` to resolve on PATH before rendering skills/agents.
+- `local-board install` has six targets: `claude` default-on,
+  `codex`/`opencode`/`cline`/`cursor` detect-only, and `agents` explicit-only.
+- Claude target adds consent-sensitive `Bash(local-board *)` to
+  `~/.claude/settings.json`; hooks are opt-in with `--hooks`; uninstall currently
+  leaves that allow rule in place (`B20260708T0459Z`).
 - `worktrees.location` controls ticket worktree placement: sibling default, inside `.worktrees`, or explicit non-`plans/` path.
 - `package.json` `files` allowlist defines the npm package surface.
 
