@@ -1,20 +1,20 @@
 ---
 id: B20260707T1325Z
 type: bug
-status: ready_for_implementation
+status: done
 priority: P3
 parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/B20260707T1325Z-front-matter-list-serialization-does-not-round-trip-values-containing-commas-or-quotes
 estimate: 2
 estimateBasis: B20260707T2245Z
-workStartedAt: null
-workCompletedAt: null
+workStartedAt: 2026-07-08T01:04:05Z
+workCompletedAt: 2026-07-08T01:17:44Z
 created: 2026-07-07T13:25:08Z
-updated: 2026-07-08T01:04:05Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-08T01:17:44Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # Front matter list serialization does not round-trip values containing commas or quotes
@@ -128,11 +128,56 @@ None blocking. One judgement call for the implementer: whether to also record th
 
 ## Implementation Notes
 
+Implemented exactly per the Technical Design: added a round-trip guard to `formatListItem` in `src/tickets.js` (was a one-line passthrough to `formatString`). Bare-charset items (`/^[A-Za-z0-9_./:+-]+$/`) still pass through unquoted. Non-bare items are rejected with a thrown `Error` naming the offending value (via `JSON.stringify`) when they contain a comma or when `JSON.stringify` would introduce an escape sequence the parser's `slice(1,-1)` unwrap can't reverse (quote, backslash, control char); otherwise they're quoted as before. No other production code changed — `parseScalar`/`parseListItem` (read path) untouched, per design.
+
+Files changed:
+- `src/tickets.js` — `formatListItem` (was line 2021) now guards before quoting.
+- `test/tickets.test.js` — added `parseFrontMatter`/`serializeFrontMatter` to imports (both already exported); added 4 new tests plus small helpers (`roundTripList`, `makeLcg`, `randomLegalItem`, `LEGAL_LIST_CHARSET`) at end of file:
+  1. Seeded-LCG property test, 1000 trials, random 0-4 item lists over the legal charset — asserts round-trip equality.
+  2. Explicit rejection cases: comma, double quote, backslash — `assert.throws` with message regex naming the value.
+  3. Regression test: real `@`-tokens (`design:...@opus`, `gate:design:skipped-empty-catalog`, `...@codex-default`) — asserts the exact serialized string (byte-identical to pre-fix output) and round-trip.
+  4. Boundary cases: empty list, single item, multi-item list — exact serialized string plus round-trip.
+
+Verification (all green):
+- `npm run check` — no output, exit 0.
+- `npm test` — 342 tests, 341 pass, 1 skipped (pre-existing `smoke (slow)` test, unrelated), 0 fail.
+- `npm run validate` — "Ticket validation OK" against this repo's own board, which has quoted `@`-tokens in `completedSteps` throughout (proves no regression on real data).
+
+No deviations from the design. No memory-bank update made (design left it as optional/non-required).
+
 ## Review Findings
+
+Reviewed by codex-task:read-only (gpt-5.5) against commit e39055d.
+
+No blocking findings.
+
+- Guard matches the parser's actual corrupting cases: rejects commas and any value whose JSON.stringify would introduce escapes; benign quoted values (leading/trailing whitespace, single quotes) still round-trip and pass. Double-quote-wrapped values correctly rejected (escape corruption).
+- Chokepoint verified: renderMarkdownTicket/serializeFrontMatter covers all rewrites (dependency lists, completedSteps, routingApprovals); createTicket's template bypass writes no list items, and post-create linkage routes through the guarded path.
+- Property test uses the current token grammar (narrower than full parser tolerance — acceptable for the domain), paired with the byte-identical @-token regression; control characters guarded but not directly asserted (non-blocking gap).
+- Error names the offending value via JSON.stringify; field-name threading judged not worth the churn.
+
+Verdict: pass
 
 ## Test Evidence
 
+Tested by claude-subagent:local-board-tester (sonnet) on branch local-board/B20260707T1325Z-..., commit e39055d.
+
+**Suite:** `npm run check` pass; `npm test` 341 pass / 1 gated-skip of 342 (all four new tests green); `npm run validate` OK on this real board full of quoted @-tokens.
+
+**Live probes (throwaway board):**
+- complete-step --executor with comma/quote/tab is intercepted UPSTREAM by the executor-format regex (pre-existing) — the guard is defense-in-depth on that path, as the design noted.
+- The genuinely reachable path: `set <id> blockedBy` with comma/quote/backslash/tab items — all rejected by the NEW guard with the value-naming error, exit 2, file verified unchanged each time (throws before writeTicketFile). The tab case closes the reviewer's control-char assertion gap live.
+- Positive: @-suffixed executor records byte-identically (`["design:...@opus"]`), file stays parseable, board validates.
+
+**Gaps / caveats:** the --executor probe path never reaches the guard (upstream validator) — flagged so the two layers aren't confused; mixed legal/illegal multi-item ordering untested (low risk, not in acceptance).
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5).
+
+- `memory-bank/systemPatterns.md` — Canonical State now states the front-matter list-item charset invariant is write-enforced (non-round-tripping items rejected at serialization).
 
 ## Questions
 
@@ -141,3 +186,15 @@ None blocking. One judgement call for the implementer: whether to also record th
 - 2026-07-08T01:03:15Z: Completed design via claude-subagent:local-board-designer@opus: Designer (opus): round-trip guard at the formatListItem chokepoint (reject commas / non-round-tripping quotes), preserving existing quoted @-token behavior byte-identically; CSV tokenizer deferred. Estimate 2 (basis B20260707T2245Z).
 
 - 2026-07-08T01:04:05Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (parser hygiene)
+
+- 2026-07-08T01:04:05Z: Ensured git branch local-board/B20260707T1325Z-front-matter-list-serialization-does-not-round-trip-values-containing-commas-or-quotes (created).
+
+- 2026-07-08T01:08:01Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Implementer (sonnet): round-trip guard at formatListItem, 4 new tests incl. seeded property test and byte-identical @-token regression; 341 pass + 1 gated-skip; live board validates.
+
+- 2026-07-08T01:08:52Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (parser hygiene)
+
+- 2026-07-08T01:11:33Z: Completed review via codex-task:read-only: Codex (gpt-5.5, read-only) verdict pass: guard matches the parser's real failure modes, chokepoint verified, benign quoting preserved; one non-blocking control-char assertion gap.
+
+- 2026-07-08T01:16:01Z: Completed test via claude-subagent:local-board-tester@sonnet: Tester (sonnet): 341+1 gated; guard live-verified on the reachable set-field path incl. control chars with files unchanged on every rejection; @-token byte-identity confirmed on real data. Result: pass.
+
+- 2026-07-08T01:17:44Z: Completed document via codex-task:workspace-write: Codex (workspace-write): Canonical State invariant sentence added.

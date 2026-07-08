@@ -53,6 +53,7 @@ Example: `T20260514T1234Z_implement-leaderboard-feature.md`.
 
 ## Canonical State
 Front matter is canonical. Folder is secondary.
+List item charset is write-enforced: values with commas, quotes, backslashes, or control characters are rejected at serialization because they cannot round-trip.
 
 Required fields:
 - `id`
