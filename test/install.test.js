@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
-import { chmodSync, cpSync, existsSync, mkdtempSync, writeFileSync } from "node:fs";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -370,6 +370,112 @@ test("settings.json allow-rule patch is idempotent, uses the constant local-boar
     const secondRun = JSON.parse(await readFile(settingsPath, "utf8"));
     assert.deepEqual(secondRun.permissions.allow, ["Bash(local-board *)"]);
     assert.deepEqual(secondRun.permissions.allow, firstRun.permissions.allow);
+  });
+});
+
+test("install --uninstall removes the allow rule and prunes settings.json back to an empty object", async () => {
+  await withHome(async (home) => {
+    const settingsPath = path.join(home, ".claude", "settings.json");
+    await runInstallCli(home, ["--target=claude"]);
+
+    const afterInstall = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.deepEqual(afterInstall.permissions.allow, ["Bash(local-board *)"]);
+
+    await runInstallCli(home, ["--target=claude", "--uninstall"]);
+    const afterUninstall = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.equal(afterUninstall.permissions, undefined);
+  });
+});
+
+test("install --uninstall leaves a hand-narrowed allow rule untouched", async () => {
+  await withHome(async (home) => {
+    const settingsPath = path.join(home, ".claude", "settings.json");
+    await runInstallCli(home, ["--target=claude"]);
+
+    const before = JSON.parse(await readFile(settingsPath, "utf8"));
+    before.permissions.allow = ["Bash(local-board move *)"];
+    await writeFile(settingsPath, `${JSON.stringify(before, null, 2)}\n`, "utf8");
+
+    await runInstallCli(home, ["--target=claude", "--uninstall"]);
+    const after = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.deepEqual(after.permissions.allow, ["Bash(local-board move *)"]);
+  });
+});
+
+test("install --uninstall with no settings.json is a no-op: no file is created", async () => {
+  await withHome(async (home) => {
+    const settingsPath = path.join(home, ".claude", "settings.json");
+    assert.equal(existsSync(settingsPath), false);
+
+    const { stdout } = await runInstallCli(home, ["--target=claude", "--uninstall"]);
+    assert.doesNotMatch(stdout, /removed Claude allow rule/);
+    assert.equal(existsSync(settingsPath), false);
+  });
+});
+
+test("install --uninstall with malformed settings.json is a no-op: file is left untouched byte-for-byte", async () => {
+  await withHome(async (home) => {
+    const settingsPath = path.join(home, ".claude", "settings.json");
+    mkdirSync(path.dirname(settingsPath), { recursive: true });
+    const malformed = "{ this is not valid JSON ";
+    await writeFile(settingsPath, malformed, "utf8");
+    const before = await stat(settingsPath);
+
+    const { stdout } = await runInstallCli(home, ["--target=claude", "--uninstall"]);
+    assert.doesNotMatch(stdout, /removed Claude allow rule/);
+
+    const afterContent = await readFile(settingsPath, "utf8");
+    assert.equal(afterContent, malformed);
+    const after = await stat(settingsPath);
+    assert.equal(after.mtimeMs, before.mtimeMs);
+  });
+});
+
+test("install --uninstall with settings.json containing unrelated rules but not ours performs no write", async () => {
+  await withHome(async (home) => {
+    const settingsPath = path.join(home, ".claude", "settings.json");
+    mkdirSync(path.dirname(settingsPath), { recursive: true });
+    const untouched = { permissions: { allow: ["Bash(git status)"] } };
+    const untouchedContent = `${JSON.stringify(untouched, null, 2)}\n`;
+    await writeFile(settingsPath, untouchedContent, "utf8");
+    const before = await stat(settingsPath);
+
+    const { stdout } = await runInstallCli(home, ["--target=claude", "--uninstall"]);
+    assert.doesNotMatch(stdout, /removed Claude allow rule/);
+
+    const afterContent = await readFile(settingsPath, "utf8");
+    assert.equal(afterContent, untouchedContent);
+    const after = await stat(settingsPath);
+    assert.equal(after.mtimeMs, before.mtimeMs);
+  });
+});
+
+test("install --uninstall preserves unrelated allow entries and unrelated top-level settings keys", async () => {
+  await withHome(async (home) => {
+    const settingsPath = path.join(home, ".claude", "settings.json");
+    await runInstallCli(home, ["--target=claude"]);
+
+    const before = JSON.parse(await readFile(settingsPath, "utf8"));
+    before.permissions.allow.push("Bash(git status)");
+    before.someUserSetting = { keep: true };
+    await writeFile(settingsPath, `${JSON.stringify(before, null, 2)}\n`, "utf8");
+
+    await runInstallCli(home, ["--target=claude", "--uninstall"]);
+    const after = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.deepEqual(after.permissions.allow, ["Bash(git status)"]);
+    assert.deepEqual(after.someUserSetting, { keep: true });
+  });
+});
+
+test("install --uninstall removes both the allow rule and wired hook entries in one pass", async () => {
+  await withHome(async (home) => {
+    const settingsPath = path.join(home, ".claude", "settings.json");
+    await runInstallCli(home, ["--target=claude", "--hooks"]);
+
+    await runInstallCli(home, ["--target=claude", "--uninstall"]);
+    const after = JSON.parse(await readFile(settingsPath, "utf8"));
+    assert.equal(after.hooks, undefined);
+    assert.equal(after.permissions, undefined);
   });
 });
 

@@ -130,7 +130,7 @@ The test suite includes function-level ticket kernel coverage and CLI command-su
 - [docs/Workflow.md](docs/Workflow.md) — lifecycle from epic/story decomposition through implementation, review, test, docs, and closeout.
 - [docs/EnforcementHooks.md](docs/EnforcementHooks.md) — Claude Code hook enforcement for dispatch routing, evidence gating, and inline-fallback consent.
 - [docs/CodexSupport.md](docs/CodexSupport.md) — installing and using local-board directly in Codex, including route translation and parallel team mode.
-- [docs/Install.md](docs/Install.md) — installer targets, paths written per harness, the settings.json permission side effect, opt-in hooks, and uninstall/manual removal.
+- [docs/Install.md](docs/Install.md) — installer targets, paths written per harness, the settings.json permission side effect, opt-in hooks, and uninstall cleanup.
 - [docs/specialty-steps.md](docs/specialty-steps.md) — optional security, UI, and UX specialty review steps and how the gate-check classifier dispatches them.
 - [docs/PerStepOrchestration.md](docs/PerStepOrchestration.md) — current-state parallel orchestration: a single top-level orchestrator dispatches each pipeline step to a model-specialized executor, enabling full per-step model/prompt/route variety. Operational contract in `SKILL_TEAM.md`.
 - [docs/TeamMode.md](docs/TeamMode.md) — superseded historical context for the original agent-teams "one teammate per ticket" parallel mode.
