@@ -24,7 +24,7 @@ It defines:
 - `workflow.actionPrompts`
 - `workflow.transitions`
 - `agents`
-- `routing.strict`, `routing.doneRequires`, `routing.requireGateConsultation`, `routing.invalidateOnLoopBack`, and `routing.enforceTransitions`
+- `routing.strict`, `routing.doneRequires`, `routing.requireGateConsultation`, `routing.invalidateOnLoopBack`, `routing.enforceTransitions`, and `routing.guardPrematureEvidence`
 - retention policy: `archiveDoneAfterDays`, `archiveOnMoveDone`
 - git policy: `defaultBranch`, `commitPlanningChanges`, `autoMerge`
 - `optionalSteps`: per-stage specialty review catalogs (`design`/`implement`/`test`)
@@ -35,10 +35,11 @@ V1 specialty prompts ship at `plans/prompts/optional-steps/{design,impl}/`.
 In `src/config.js`, `DEFAULT_CONFIG` = ENOENT fallback + deep-merge base
 (`estimation.enabled: false`, `optionalSteps` empty, `routing.requireGateConsultation:
 false`, `routing.invalidateOnLoopBack: false`, `worktrees.guardWrongRoot: false`,
-`routing.enforceTransitions: false`, all five intentional for backward
-compat); `defaultConfigJsonc()` = the `init` scaffold (estimation on, catalogs
-populated, gate consultation required, loop-back invalidation on, transitions
-enforcement on).
+`routing.enforceTransitions: false`, `routing.guardPrematureEvidence: false`, all
+six intentional for backward compat); `defaultConfigJsonc()` = the `init`
+scaffold (estimation on, catalogs populated, gate consultation required,
+loop-back invalidation on, transitions enforcement on, premature-evidence
+guard on).
 A guard test (`test/config.test.js`) keeps the rest of the two defaults in sync.
 
 ## Ticket Types

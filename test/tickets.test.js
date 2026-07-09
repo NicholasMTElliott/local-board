@@ -2883,6 +2883,150 @@ test("moveTicket loop-back invalidation: switch off (default and explicit false)
 });
 
 // ---------------------------------------------------------------------------
+// guardPrematureEvidence (T20260708T2210Z): refuse completeStep when the
+// recorded evidence would be silently stripped by a still-pending forward
+// move (the same relation invalidateDownstreamEvidence uses), instead of
+// surfacing much later as a "move done" failure.
+// ---------------------------------------------------------------------------
+
+test("completeStep guardPrematureEvidence refuses review recorded upstream of ready_for_review (ready_for_implementation and implementing), naming the earliest safe status; zero side effects", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { guardPrematureEvidence: true } }));
+
+    for (const status of ["ready_for_implementation", "implementing"]) {
+      const ticketPath = await createTicket(root, "task", `Premature review at ${status}`, { status });
+      const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+      const { ticket: before } = await findTicket(root, ticketId);
+
+      await assert.rejects(
+        completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence."),
+        /complete-step review refused:.*would be stripped by the forward move into ready_for_review.*routing\.invalidateOnLoopBack/s,
+      );
+
+      const { ticket: after } = await findTicket(root, ticketId);
+      assert.deepEqual(after.frontMatter.completedSteps, before.frontMatter.completedSteps);
+      assert.equal(after.body, before.body);
+    }
+  });
+});
+
+test("completeStep guardPrematureEvidence generalizes to test recorded at ready_for_review and to an optional specialty step recorded upstream of its stage", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      routing: { guardPrematureEvidence: true },
+      optionalSteps: OPTIONAL_STEPS_FOR_INVALIDATION_TESTS,
+    }));
+
+    const testTicketPath = await createTicket(root, "task", "Premature test", { status: "ready_for_review" });
+    const testTicketId = path.basename(testTicketPath).split("_", 1)[0];
+    await assert.rejects(
+      completeStep(root, testTicketId, "test", "claude-subagent:local-board-tester@sonnet", "Test evidence."),
+      /complete-step test refused:.*would be stripped by the forward move into ready_for_test/s,
+    );
+
+    // security_audit is an implement-stage specialty (producing status
+    // ready_for_implementation); recording it at ready_for_design (upstream)
+    // is refused the same way.
+    const specialtyTicketPath = await createTicket(root, "task", "Premature specialty", { status: "ready_for_design" });
+    const specialtyTicketId = path.basename(specialtyTicketPath).split("_", 1)[0];
+    await assert.rejects(
+      completeStep(root, specialtyTicketId, "security_audit", "inline", "PASS: no findings"),
+      /complete-step security_audit refused:.*would be stripped by the forward move into ready_for_implementation/s,
+    );
+  });
+});
+
+test("completeStep guardPrematureEvidence: --override records the token and appends both the Completed and Premature-evidence override Run Log lines", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { guardPrematureEvidence: true } }));
+
+    const ticketPath = await createTicket(root, "task", "Override premature review", { status: "ready_for_implementation" });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const result = await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.", {
+      override: true,
+      overrideReason: "Recording early per orchestrator instruction",
+    });
+    assert.equal(result.action, "review");
+
+    const { ticket } = await findTicket(root, ticketId);
+    assert.deepEqual(ticket.frontMatter.completedSteps, ["review:codex-task:read-only"]);
+    assert.match(ticket.body, /Completed review via codex-task:read-only: Review evidence\./);
+    assert.match(
+      ticket.body,
+      /Premature-evidence override: recorded review at ready_for_implementation ahead of its producing status ready_for_review: Recording early per orchestrator instruction/,
+    );
+  });
+});
+
+test("completeStep guardPrematureEvidence: legal orderings are unaffected (review at ready_for_review/reviewing/ready_for_test; implement at ready_for_implementation)", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { guardPrematureEvidence: true } }));
+
+    for (const status of ["ready_for_review", "reviewing", "ready_for_test"]) {
+      const ticketPath = await createTicket(root, "task", `Legal review at ${status}`, { status });
+      const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+      const result = await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
+      assert.equal(result.action, "review");
+
+      const { ticket } = await findTicket(root, ticketId);
+      assert.deepEqual(ticket.frontMatter.completedSteps, ["review:codex-task:read-only"]);
+      assert.doesNotMatch(ticket.body, /Premature-evidence override/);
+    }
+
+    const implTicketPath = await createTicket(root, "task", "Legal implement", { status: "ready_for_implementation" });
+    const implTicketId = path.basename(implTicketPath).split("_", 1)[0];
+    const implResult = await completeStep(
+      root,
+      implTicketId,
+      "implement",
+      "claude-subagent:local-board-implementer@sonnet",
+      "Implementation evidence.",
+    );
+    assert.equal(implResult.action, "implement");
+  });
+});
+
+test("completeStep guardPrematureEvidence: switch off (default and explicit false) preserves old behavior — the refusal case from the guard test now records normally", async () => {
+  await withBoard(async (root) => {
+    // No config file at all: DEFAULT_CONFIG fallback keeps the guard off.
+    const noConfigPath = await createTicket(root, "task", "Guard off default", { status: "ready_for_implementation" });
+    const noConfigId = path.basename(noConfigPath).split("_", 1)[0];
+    const noConfigResult = await completeStep(root, noConfigId, "review", "codex-task:read-only", "Review evidence.");
+    assert.equal(noConfigResult.action, "review");
+
+    // Explicit false behaves the same.
+    await writeConfig(root, JSON.stringify({ routing: { guardPrematureEvidence: false } }));
+    const explicitOffPath = await createTicket(root, "task", "Guard off explicit", { status: "ready_for_implementation" });
+    const explicitOffId = path.basename(explicitOffPath).split("_", 1)[0];
+    const explicitOffResult = await completeStep(root, explicitOffId, "review", "codex-task:read-only", "Review evidence.");
+    assert.equal(explicitOffResult.action, "review");
+  });
+});
+
+test("completeStep guardPrematureEvidence: a refusal leaves the active-step ledger untouched (no clearActiveStep on throw)", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { guardPrematureEvidence: true } }));
+
+    const ticketPath = await createTicket(root, "task", "Guard refusal preserves active step", {
+      status: "ready_for_implementation",
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await beginStep(root, ticketId, "review");
+    const before = await readActiveSteps(root);
+    assert.equal(before[ticketId].action, "review");
+
+    await assert.rejects(completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence."));
+
+    const after = await readActiveSteps(root);
+    assert.deepEqual(after[ticketId], before[ticketId]);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // enforceTransitions (T20260707T1329Z): promote workflow.transitions to a
 // hard validator, with a fixed structural allow-set for administrative moves
 // and an --override escape.

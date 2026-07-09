@@ -42,6 +42,11 @@ const MANDATORY_ACTION_NAMES = new Set([
 //     pre-existing config that omits the key does not silently start
 //     refusing moves whose target status is outside workflow.transitions +
 //     the structural allow-set (see isTransitionAllowed in src/tickets.js).
+//   - routing.guardPrematureEvidence: false here (vs true in the scaffold) so
+//     a pre-existing config that omits the key does not silently start
+//     refusing complete-step calls whose evidence a still-pending forward
+//     move would strip (see evidenceStrippedByPendingForwardMove in
+//     src/tickets.js).
 // These differences are pinned by tests in test/config.test.js (search
 // "backward-compat disabled" and "empty optionalSteps catalog"). Do NOT
 // converge them to match the scaffold — see the guard test
@@ -287,6 +292,7 @@ export const DEFAULT_CONFIG = {
     requireGateConsultation: false,
     invalidateOnLoopBack: false,
     enforceTransitions: false,
+    guardPrematureEvidence: false,
   },
   retention: {
     archiveDoneAfterDays: 30,
@@ -886,7 +892,22 @@ export function defaultConfigJsonc() {
     // targets. Set to false for advisory-only mode (nothing is ever refused;
     // pre-existing boards that omit this key keep that behavior via
     // DEFAULT_CONFIG's fallback).
-    "enforceTransitions": true
+    "enforceTransitions": true,
+    // guardPrematureEvidence: true refuses "complete-step" when recording a
+    // mandatory-action or specialty-step token now would be stripped by a
+    // still-pending forward move (the same relation invalidateOnLoopBack's
+    // stripper uses: the token's producing ready_* status ranks upstream of
+    // the ticket's current pipeline position). For example, recording
+    // "review" evidence while the ticket sits at ready_for_implementation
+    // (e.g. after a changes_requested loop-back) is refused, because the
+    // later forward move into ready_for_review would strip it, only
+    // surfacing at "move done" as a missing-evidence failure. The refusal
+    // names the earliest status where the evidence survives. Gate-consultation
+    // tokens (gate-complete) are out of scope. Re-run with --override
+    // --reason <text> to record anyway (appended to the Run Log), or set to
+    // false to disable (pre-existing boards that omit this key keep that
+    // behavior via DEFAULT_CONFIG's fallback).
+    "guardPrematureEvidence": true
   },
 
   // Done tickets are recent closeout history. Older done tickets are retained

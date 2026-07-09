@@ -367,6 +367,16 @@ A refusal happens before any other move-time check (gate consultation, loop-back
 
 `enforceTransitions` defaults to `false` for a config file that predates this key (or omits it) and to `true` in the `init` scaffold for new repos. `set <id> status` routes through `move` and inherits both the validator and the `--override --reason` flags.
 
+### Premature-evidence guard
+
+When `routing.guardPrematureEvidence` is `true`, `complete-step` refuses to record a mandatory-action or optional-specialty token when the ticket's current pipeline position is strictly upstream of that token's producing `ready_*` status — i.e. when a still-pending forward move would immediately strip it via `invalidateOnLoopBack`'s stripper. The classic trap: recording `complete-step <id> review` while the ticket sits at `ready_for_implementation`/`implementing` (typically right after a `changes_requested` loop-back) silently arms the loss, because the later forward move into `ready_for_review` strips the `review` token; the failure would otherwise only surface much later as `move done` refusing with "missing completedSteps entry for review". The guard reuses the exact same producing-status + `workflow.pipelineOrder` rank relation the loop-back stripper uses, so the two cannot drift.
+
+The refusal names the action, the current status, and the earliest status where the evidence survives (the token's producing status), and advertises the escape hatch. Re-run with `--override --reason <text>` to record anyway; the reason is appended to the Run Log as a second line (`Premature-evidence override: recorded <action> at <status> ahead of its producing status <producingStatus>: <reason>`), after the normal `Completed ...` line. `--override` requires a non-empty `--reason`.
+
+Gate-consultation tokens (`gate:<stage>:<executor>`, recorded via `gate-complete`) are out of scope: that command path is separate from `complete-step`, and the forward move that consumes a gate token is already independently protected by `routing.requireGateConsultation`.
+
+`guardPrematureEvidence` defaults to `false` for a config file that predates this key (or omits it) and to `true` in the `init` scaffold for new repos.
+
 ### Specialty-run
 
 Resolve one requested optional step with:
