@@ -410,20 +410,25 @@ test("runInstall({ home: undefined, ... }) (key present, value undefined) throws
 
 test("--home \"\" and --home \"   \" are rejected before any install path is touched (fail closed, not a silent cwd install)", async () => {
   await withHome(async (envHome) => {
-    for (const blankHome of ["", "   "]) {
-      await assert.rejects(
-        runInstallCli(envHome, ["--home", blankHome, "--target=claude"]),
-        (error) => {
-          const output = errorOutput(error);
-          assert.match(output, /--home requires a non-empty value/);
-          return true;
-        },
-      );
+    const scratchCwd = await mkdtemp(path.join(os.tmpdir(), "local-board-blankhome-cwd-"));
+    try {
+      for (const blankHome of ["", "   "]) {
+        await assert.rejects(
+          runInstallCli(envHome, ["--home", blankHome, "--target=claude"], {}, scratchCwd),
+          (error) => {
+            const output = errorOutput(error);
+            assert.match(output, /--home requires a non-empty value/);
+            return true;
+          },
+        );
+      }
+      // Confirms the flag never fell through to resolving against the
+      // installer's cwd (the exact bug this guards against).
+      assert.equal(existsSync(path.join(scratchCwd, ".local-board")), false);
+      assert.equal(existsSync(path.join(scratchCwd, ".claude", "skills", "local-board")), false);
+    } finally {
+      await removeFixtureDir(scratchCwd);
     }
-    // Confirms the flag never fell through to resolving against the
-    // installer's cwd (the exact bug this guards against).
-    assert.equal(existsSync(path.join(path.resolve("."), ".local-board")), false);
-    assert.equal(existsSync(path.join(path.resolve("."), ".claude", "skills", "local-board")), false);
   });
 });
 

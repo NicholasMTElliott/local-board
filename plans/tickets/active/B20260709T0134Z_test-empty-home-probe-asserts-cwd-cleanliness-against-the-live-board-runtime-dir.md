@@ -1,7 +1,7 @@
 ---
 id: B20260709T0134Z
 type: bug
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: null
 children: []
@@ -10,7 +10,7 @@ blocks: []
 branch: local-board/B20260709T0134Z-test-empty-home-probe-asserts-cwd-cleanliness-against-the-live-board-runtime-dir
 estimate: 1
 estimateBasis: B20260708T0459Z
-workStartedAt: null
+workStartedAt: 2026-07-09T01:38:13Z
 workCompletedAt: null
 created: 2026-07-09T01:34:33Z
 updated: 2026-07-09T01:38:13Z
@@ -80,3 +80,5 @@ None. Test-internal fix; no docs or memory-bank changes.
 - 2026-07-09T01:37:23Z: Completed design via claude-subagent:local-board-designer@opus: Scratch cwd via mkdtemp + runInstallCli 4th arg (mirrors sibling relative-home test); drop developer-checkout assertions; regression proof = install tests green on this dogfooded checkout; estimate 1 basis B0459
 
 - 2026-07-09T01:38:12Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (test-only)
+
+- 2026-07-09T01:38:13Z: Ensured git branch local-board/B20260709T0134Z-test-empty-home-probe-asserts-cwd-cleanliness-against-the-live-board-runtime-dir (already-current).
