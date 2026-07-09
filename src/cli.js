@@ -587,20 +587,29 @@ async function commandCompleteStep(root, args, allowMainRoot) {
   const executor = takeOption(args, "--executor");
   const model = takeOption(args, "--model");
   const evidence = takeOption(args, "--evidence");
+  const override = takeFlag(args, "--override");
+  const reason = takeOption(args, "--reason");
   const ticketId = args.shift();
   const action = args.shift();
   ensureNoArgs(args);
 
   if (ticketId === undefined || action === undefined || executor === undefined || evidence === undefined) {
     throw new Error(
-      "complete-step requires: <ticket-id> <action> --executor <executor> [--model <model>] --evidence <text> [--allow-main-root]",
+      "complete-step requires: <ticket-id> <action> --executor <executor> [--model <model>] --evidence <text> " +
+        "[--override --reason <text>] [--allow-main-root]",
     );
+  }
+  if (override && (reason === undefined || reason.trim() === "")) {
+    throw new Error("complete-step --override requires --reason <text>");
   }
 
   await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
   const composedExecutor = composeExecutor(executor, model);
-  const result = await completeStep(root, ticketId, action, composedExecutor, evidence);
+  const result = await completeStep(root, ticketId, action, composedExecutor, evidence, {
+    override,
+    overrideReason: reason,
+  });
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));
   } else {
@@ -1364,7 +1373,7 @@ const USAGE_TEXT = `Usage:
   local-board [--root <path>] fast-forward [--json]
   local-board team-config [--json]
   local-board [--root <path>] begin-step <ticket-id> [--action <action>] [--harness claude|codex] [--json]
-  local-board [--root <path>] complete-step <ticket-id> <action> --executor <executor> [--model <model>] --evidence <text> [--allow-main-root] [--json]
+  local-board [--root <path>] complete-step <ticket-id> <action> --executor <executor> [--model <model>] --evidence <text> [--override --reason <text>] [--allow-main-root] [--json]
   local-board [--root <path>] approve-inline <ticket-id> <action> --reason <text> [--executor <executor>] [--allow-main-root] [--json]
   local-board [--root <path>] check-dispatch --agent <subagent-type> [--model <model>] [--ticket <ticket-id>] [--json]
   local-board [--root <path>] move <ticket-id> <status> [--override] [--reason <text>] [--allow-main-root] [--json]

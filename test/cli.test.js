@@ -1236,6 +1236,42 @@ test("CLI complete-step: --model with --executor inline throws the specific inli
   });
 });
 
+test("CLI complete-step --override --reason plumbs through and records; --override without --reason errors with the usage message (scaffold guardPrematureEvidence:true)", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    const create = await runCli([
+      "--root", root, "create", "task", "Premature review via CLI",
+      "--status", "ready_for_implementation", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const id = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const refused = await runCli([
+      "--root", root, "complete-step", id, "review",
+      "--executor", "codex-task:read-only", "--evidence", "Review evidence.",
+    ]);
+    assert.notEqual(refused.code, 0);
+    assert.match(refused.stderr, /would be stripped by the forward move into ready_for_review/);
+
+    const missingReason = await runCli([
+      "--root", root, "complete-step", id, "review",
+      "--executor", "codex-task:read-only", "--evidence", "Review evidence.", "--override",
+    ]);
+    assert.notEqual(missingReason.code, 0);
+    assert.match(missingReason.stderr, /complete-step --override requires --reason/);
+
+    const overridden = await runCli([
+      "--root", root, "complete-step", id, "review",
+      "--executor", "codex-task:read-only", "--evidence", "Review evidence.",
+      "--override", "--reason", "CLI override test",
+    ]);
+    assert.equal(overridden.code, 0, overridden.stderr);
+    const text = await readFile(create.stdout.trim(), "utf8");
+    assert.match(text, /^completedSteps: \[review:codex-task:read-only\]$/m);
+    assert.match(text, /Premature-evidence override: recorded review at ready_for_implementation ahead of its producing status ready_for_review: CLI override test/);
+  });
+});
+
 test("CLI complete-step: --model codex-default composes route@codex-default and satisfies the pinned-model check", async () => {
   await withBoard(async (root) => {
     assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);

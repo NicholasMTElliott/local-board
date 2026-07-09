@@ -24,7 +24,7 @@ It defines:
 - `workflow.actionPrompts`
 - `workflow.transitions`
 - `agents`
-- `routing.strict`, `routing.doneRequires`, `routing.requireGateConsultation`, `routing.invalidateOnLoopBack`, and `routing.enforceTransitions`
+- `routing.strict`, `routing.doneRequires`, `routing.requireGateConsultation`, `routing.invalidateOnLoopBack`, `routing.enforceTransitions`, and `routing.guardPrematureEvidence`
 - retention policy: `archiveDoneAfterDays`, `archiveOnMoveDone`
 - git policy: `defaultBranch`, `commitPlanningChanges`, `autoMerge`
 - `optionalSteps`: per-stage specialty review catalogs (`design`/`implement`/`test`)
@@ -36,10 +36,11 @@ The scaffolded `security_audit` trigger is consequence-surface based: auth/sessi
 In `src/config.js`, `DEFAULT_CONFIG` = ENOENT fallback + deep-merge base
 (`estimation.enabled: false`, `optionalSteps` empty, `routing.requireGateConsultation:
 false`, `routing.invalidateOnLoopBack: false`, `worktrees.guardWrongRoot: false`,
-`routing.enforceTransitions: false`, all five intentional for backward
-compat); `defaultConfigJsonc()` = the `init` scaffold (estimation on, catalogs
-populated, gate consultation required, loop-back invalidation on, transitions
-enforcement on).
+`routing.enforceTransitions: false`, `routing.guardPrematureEvidence: false`, all
+six intentional for backward compat); `defaultConfigJsonc()` = the `init`
+scaffold (estimation on, catalogs populated, gate consultation required,
+loop-back invalidation on, transitions enforcement on, premature-evidence
+guard on).
 A guard test (`test/config.test.js`) keeps the rest of the two defaults in sync.
 
 ## Ticket Types
@@ -132,6 +133,8 @@ For design/implement/test stages with a non-empty specialty catalog, the orchest
 `gate-check` records that the consultation happened: on an empty stage catalog it auto-stamps `gate:<stage>:skipped-empty-catalog` in `completedSteps` (idempotent, no dispatch; JSON `skip: true`, `recorded: <token>`); on a non-empty catalog it stays a pure read (`skip: false`, `recorded: null`) and the orchestrator calls `gate-complete <ticket-id> --stage <stage> --executor <route> [--model <model>] [--evidence <text>]` after the gate agent answers; `--executor <route>@<model>` remains accepted. `gate:` tokens are excluded from routing evidence (`completedStepRecords`/`validateStepRouting`/`doneRequires`) via a dedicated parser (`gateConsultationRecords`) so they never trip done-time "unknown action" validation. When `routing.requireGateConsultation` is true, `moveTicket` refuses the three forward transitions out of a gated stage (`ready_for_design`/`designing`→`ready_for_implementation`, `ready_for_implementation`/`implementing`→`ready_for_review`, `ready_for_test`/`testing`→`ready_for_docs`) unless the matching `gate:` token is present; backward, lateral, and archive/done moves are never gated.
 
 When `routing.invalidateOnLoopBack` is true, `moveTicket` strips stale evidence on a loop-back: moving to any of the six `ready_*` pipeline statuses removes `completedSteps` (action/`gate:`/specialty) and `routingApprovals` tokens whose producing stage ranks at or downstream of the target in `workflow.pipelineOrder` (target-inclusive), and appends one Run Log line enumerating what was removed. `questions`/`blocked`/`done`/`archived`/active-status targets are never affected; a forward move with no downstream evidence yet is a no-op. Pure core: `invalidateDownstreamEvidence(frontMatter, config, targetStatus)` in `src/tickets.js`.
+
+When `routing.guardPrematureEvidence` is true, `complete-step` refuses mandatory/specialty evidence recorded upstream of the token's producing `ready_*` status; `--override --reason <text>` records anyway and appends a Run Log override note. Gate-complete tokens stay outside this guard.
 
 When `routing.enforceTransitions` is true, `moveTicket` refuses a target status not listed in `workflow.transitions[fromStatus]` unless the move is in a fixed structural allow-set (`isTransitionAllowed`/`isStructurallyAllowed`, `src/tickets.js`): same-status re-save, `backlog` -> any trigger status, `ready_*` -> its paired active status (and back), `questions`/`blocked` -> any trigger status, and any status -> `archived`/`questions`/`blocked`. This is the map-vs-structural split: `workflow.transitions` stays the sole authority for `ready_*`/active -> `ready_*` pipeline ordering (forward and backward), while the structural set covers administrative/escape moves that are deliberately never surfaced as advisory `transitions` guidance. The check runs first in `moveTicket` — before the gate-consultation precondition and loop-back invalidation — so a refusal has zero side effects. `--override --reason <text>` (CLI `move`/`set <id> status`, or `options.overrideTransition` on the library call) forces an otherwise-refused move and appends one Run Log line `Transition override: <from> -> <to>: <reason>` (suffix omitted with no reason); using `--override` on an already-allowed move is a silent no-op. The refusal error names the allowed targets (map union structural, per `fromStatus`).
 Installer targets are six: `claude` default-on, `codex`/`opencode`/`cline`/`cursor`

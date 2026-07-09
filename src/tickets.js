@@ -344,6 +344,34 @@ export function invalidateDownstreamEvidence(frontMatter, config, targetStatus) 
   };
 }
 
+// True when recording `token` at the ticket's current status would be stripped
+// by a forward move the ticket still has to make. Reuses the SAME relation
+// invalidateDownstreamEvidence uses (producing status + pipeline rank) so the
+// guard and the stripper cannot drift. The concrete threat is the forward move
+// INTO the token's own producing status: the stripper removes any token whose
+// producing rank <= target rank, and a move into producingStatus has
+// target rank == producing rank, so it always strips. That move is still
+// pending exactly when the ticket's current pipeline position is STRICTLY
+// upstream of the producing status (higher rank = further from done).
+export function evidenceStrippedByPendingForwardMove(ticket, config, token) {
+  const producingStatus = producingStatusForToken(token, config, invertStatusActions(config));
+  if (producingStatus === null) return { stripped: false };
+  const producingRank = pipelineRankOfStatus(producingStatus, config);
+  if (producingRank === null) return { stripped: false };
+  const currentReady = ACTIVE_STATUS_TO_READY[ticket.status] ?? ticket.status;
+  const currentRank = pipelineRankOfStatus(currentReady, config);
+  if (currentRank === null) {
+    // No pipeline rank means backlog/questions/blocked (rankless, non-terminal:
+    // structural transitions still allow a move from any of these straight into
+    // a ready_* status — see isStructurallyAllowed) or done/archived (rankless,
+    // terminal: out of normal flow, no forward move is ever pending). Treat the
+    // non-terminal ones as upstream of every pipeline status so recording here
+    // always refuses (still overridable); done/archived are unaffected.
+    return { stripped: !isClosedStatus(currentReady), producingStatus };
+  }
+  return { stripped: currentRank > producingRank, producingStatus };
+}
+
 // Formats the single Run Log line enumerating exactly what a loop-back move
 // stripped (the firm audit-trail requirement for the strip-vs-timestamp
 // design decision). Only called when at least one list is non-empty.
@@ -1204,6 +1232,12 @@ export async function completeStep(root, ticketId, action, executor, evidence, o
   if (evidence.trim() === "") {
     throw new Error("complete-step requires non-empty evidence");
   }
+  if (options.override === true && (options.overrideReason ?? "").trim() === "") {
+    // Enforced here (not just in the CLI) so any API caller that sets
+    // override is held to the same accountability requirement: the reason is
+    // what makes an override auditable in the Run Log.
+    throw new Error("complete-step --override requires a non-empty overrideReason");
+  }
 
   const config = await loadConfig(root);
   assertAction(config, action);
@@ -1239,6 +1273,32 @@ export async function completeStep(root, ticketId, action, executor, evidence, o
         );
       }
 
+      // Premature-evidence guard: recording `token` now would be silently
+      // stripped by a forward move the ticket still has to make (see
+      // evidenceStrippedByPendingForwardMove). Refuse before any write, unless
+      // the caller passed --override --reason. Gate tokens never reach this
+      // path (recorded via gate-complete, not completeStep), so this is
+      // deliberately scoped to mandatory-action and specialty tokens.
+      let overrideNote = null;
+      if (config.routing?.guardPrematureEvidence === true) {
+        const check = evidenceStrippedByPendingForwardMove(ticket, config, token);
+        if (check.stripped) {
+          if (options.override === true) {
+            overrideNote = check.producingStatus
+              ? ` ahead of its producing status ${check.producingStatus}`
+              : "";
+          } else {
+            throw new Error(
+              `complete-step ${action} refused: recording it now at status ${ticket.status} would ` +
+                `be stripped by the forward move into ${check.producingStatus} (routing.invalidateOnLoopBack). ` +
+                `Record ${action} evidence at ${check.producingStatus} or later (the earliest status where ` +
+                `it survives). Re-run with --override --reason <text> to record anyway (the reason ` +
+                `is appended to the Run Log), or set routing.guardPrematureEvidence to false to disable this guard.`,
+            );
+          }
+        }
+      }
+
       const now = options.now ?? new Date();
       const frontMatter = withUpdated(
         {
@@ -1247,11 +1307,19 @@ export async function completeStep(root, ticketId, action, executor, evidence, o
         },
         now,
       );
-      const body = appendToSection(
+      let body = appendToSection(
         ticket.body,
         "Run Log",
         `- ${formatIsoSeconds(now)}: Completed ${action} via ${executor}: ${evidence.trim()}`,
       );
+      if (options.override === true && overrideNote !== null) {
+        body = appendToSection(
+          body,
+          "Run Log",
+          `- ${formatIsoSeconds(now)}: Premature-evidence override: recorded ${action} at ${ticket.status}` +
+            `${overrideNote}: ${(options.overrideReason ?? "").trim()}`,
+        );
+      }
       await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
       return { ticket: ticket.id, action, executor, path: ticket.path };
     },
