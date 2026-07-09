@@ -63,7 +63,7 @@ local-board worktree-remove <ticket-id> --root <project-root>
 
 ## Route Translation
 
-Use the same translation the Codex `local-board` skill uses: run `begin-step <ticket-id> --harness codex --json` per ticket and dispatch straight from the returned `codexDispatch` block (`agentType`, `promptPath`, `model`, `evidenceExecutor`). Ask before an inline fallback when `codexDispatch.known` is `false`; otherwise move the ticket to `questions`.
+Use the same translation the Codex `local-board` skill uses: run `begin-step <ticket-id> --harness codex --json` per ticket and dispatch straight from the returned `codexDispatch` block (`agentType`, `promptPath`, `model`, `evidenceExecutor`). Ask before an inline fallback when `codexDispatch.known` is `false`; otherwise move the ticket to `questions`. `codex-task` dispatches are serial-by-design: never background one with a shell `&` (concurrent `CODEX_HOME` use corrupts session state) — use the harness's own background/spawn dispatch when you need concurrency.
 
 Preserve the configured logical route in `complete-step --executor <route>`; `codexDispatch.evidenceExecutor` is already the exact value to pass (it carries `@codex-default` when a Claude route was physically handled by Codex with no valid Codex model id, matching the combined `@codex-default` suffix). Do not pass Claude model aliases (`opus`, `sonnet`, `haiku`) as Codex model overrides.
 
@@ -77,7 +77,7 @@ You own:
 - gate-check and specialty dispatch;
 - conflict decisions and closeout.
 
-Executors do not change ticket status. Return-only executors do not edit files. Worker executors may edit their assigned worktree scope only and must not revert edits made by others.
+Executors do not change ticket status. Return-only executors do not edit files. Worker executors may edit their assigned worktree scope only and must not revert edits made by others. Every dispatched executor works in a ticket worktree that may hold uncommitted, orchestrator-owned ticket state: instruct it to revert probe edits by targeted path only (`git checkout -- <file>` / `git restore <file>`) and to never run tree-wide or branch/history-mutating git inside the worktree — no tree-wide reverts, cleans, stashes, resets, merges, rebases, or branch switches.
 
 ## Conflict Gate
 

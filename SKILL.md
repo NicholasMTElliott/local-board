@@ -279,7 +279,7 @@ Each entry is a route string or a `{ route, model?, prompt? }` profile. `begin-s
 
 - `inline`: do the work in the current agent, on the orchestrator's model. `inline` cannot carry a per-step model.
 - `claude-subagent:<agent-name>`: dispatch the named Claude subagent. When `configuredModel` is set, pin the subagent's model to it at dispatch — this is how per-step models (haiku gate-check, opus design, sonnet implement, etc.) take effect.
-- `codex-task:<mode>`: use codex-task in the configured mode, such as `codex-task:read-only` or `codex-task:workspace-write`.
+- `codex-task:<mode>`: use codex-task in the configured mode, such as `codex-task:read-only` or `codex-task:workspace-write`. `codex-task` dispatches are serial-by-design: never background one with a shell `&` (concurrent `CODEX_HOME` use corrupts session state) — use the harness's own background/spawn dispatch when you need concurrency.
 
 Bundled Claude subagent names:
 
@@ -307,6 +307,8 @@ The `local-board-designer`, `local-board-implementer`, and `local-board-document
 Whenever a CLI command needs a file argument (such as `section --file`), create that file with the Write tool. Never build it with `echo`, heredoc, `Set-Content`, or `Out-File`.
 
 The orchestrator remains responsible for canonical ticket state unless a delegated worker was explicitly assigned write scope.
+
+Every dispatched executor works in a ticket worktree that may hold uncommitted, orchestrator-owned ticket state: instruct it to revert probe edits by targeted path only (`git checkout -- <file>` / `git restore <file>`) and to never run tree-wide or branch/history-mutating git inside the worktree — no tree-wide reverts, cleans, stashes, resets, merges, rebases, or branch switches.
 
 When recording completion evidence, pass `--executor <configuredAgent> --model <configuredModel>` verbatim from `begin-step` (omit `--model` when `configuredModel` is null); `complete-step`/`gate-complete` compose the `<route>@<model>` token server-side — for example `claude-subagent:local-board-designer` + `--model opus` records `claude-subagent:local-board-designer@opus`. The combined `--executor <route>@<model>` form remains equivalent and accepted for back-compat. Strict routing matches the route, and when the route matches and a model is pinned, also requires the recorded model to match (or `codex-default`, or an approved deviation — see below).
 

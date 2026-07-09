@@ -59,7 +59,7 @@ Dispatch the step accordingly:
 
 - `inline`: do it yourself, on your own model. `inline` cannot carry a per-step model.
 - `claude-subagent:<name>`: dispatch that subagent. When `configuredModel` is non-null, pin the subagent's model to it. Run it in the background so other tickets progress concurrently. **Every dispatch prompt must begin with a first line of the exact form `Ticket: <id>`** — the machine-readable anchor the optional dispatch-ledger/routing-validator hooks (`local-board install --hooks`) parse to verify the dispatch happened.
-- `codex-task:<mode>`: shell out to codex in that mode (a Bash call, so it works without the Task tool).
+- `codex-task:<mode>`: shell out to codex in that mode (a Bash call, so it works without the Task tool). `codex-task` dispatches are serial-by-design: never background one with a shell `&` (concurrent `CODEX_HOME` use corrupts session state) — use the harness's own background/spawn dispatch when you need concurrency.
 
 Whole steps can be delegated to an external agent purely by routing the action to
 `codex-task:*` in config — no special handling here.
@@ -185,7 +185,12 @@ survives compaction cheaply.
 - **Executors:** do the actual design/implement/review/test/docs work in the
   worktree and return a terse, structured result. The designer/implementer/
   documenter write their own sections/files; return-only executors return content
-  for you to persist.
+  for you to persist. Every dispatched executor works in a ticket worktree that
+  may hold uncommitted, orchestrator-owned ticket state: instruct it to revert
+  probe edits by targeted path only (`git checkout -- <file>` / `git restore
+  <file>`) and to never run tree-wide or branch/history-mutating git inside the
+  worktree — no tree-wide reverts, cleans, stashes, resets, merges, rebases,
+  or branch switches.
 
 ## What this mode does NOT do
 
