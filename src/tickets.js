@@ -360,7 +360,15 @@ export function evidenceStrippedByPendingForwardMove(ticket, config, token) {
   if (producingRank === null) return { stripped: false };
   const currentReady = ACTIVE_STATUS_TO_READY[ticket.status] ?? ticket.status;
   const currentRank = pipelineRankOfStatus(currentReady, config);
-  if (currentRank === null) return { stripped: false }; // backlog/questions/blocked/done/archived: no pipeline rank
+  if (currentRank === null) {
+    // No pipeline rank means backlog/questions/blocked (rankless, non-terminal:
+    // structural transitions still allow a move from any of these straight into
+    // a ready_* status — see isStructurallyAllowed) or done/archived (rankless,
+    // terminal: out of normal flow, no forward move is ever pending). Treat the
+    // non-terminal ones as upstream of every pipeline status so recording here
+    // always refuses (still overridable); done/archived are unaffected.
+    return { stripped: !isClosedStatus(currentReady), producingStatus };
+  }
   return { stripped: currentRank > producingRank, producingStatus };
 }
 
@@ -1223,6 +1231,12 @@ export async function approveInline(root, ticketId, action, reason, options = {}
 export async function completeStep(root, ticketId, action, executor, evidence, options = {}) {
   if (evidence.trim() === "") {
     throw new Error("complete-step requires non-empty evidence");
+  }
+  if (options.override === true && (options.overrideReason ?? "").trim() === "") {
+    // Enforced here (not just in the CLI) so any API caller that sets
+    // override is held to the same accountability requirement: the reason is
+    // what makes an override auditable in the Run Log.
+    throw new Error("complete-step --override requires a non-empty overrideReason");
   }
 
   const config = await loadConfig(root);

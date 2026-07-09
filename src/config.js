@@ -873,8 +873,13 @@ export function defaultConfigJsonc() {
     // status already exists (a loop-back, e.g. ready_for_test back to
     // ready_for_implementation after a test failure). Forces the re-run
     // steps to re-record their evidence before the ticket can reach done.
-    // Forward, questions/blocked, and done/archived/active-status moves are
-    // never affected. One Run Log line enumerates exactly what was removed.
+    // Ordinary forward moves strip nothing themselves: at that point downstream
+    // evidence simply does not exist yet. Evidence recorded PREMATURELY (e.g.
+    // while sitting at questions/blocked/backlog, ahead of its producing
+    // ready_* status) is exactly what a later forward move strips — which is
+    // why routing.guardPrematureEvidence exists, to refuse that recording up
+    // front instead of silently losing it here. One Run Log line enumerates
+    // exactly what was removed.
     // Set to false to opt out (pre-existing boards must opt in explicitly:
     // this key predates DEFAULT_CONFIG's fallback, so an omitted key keeps
     // old behavior). Migration note: invalidation only applies to *future*

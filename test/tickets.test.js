@@ -3026,6 +3026,75 @@ test("completeStep guardPrematureEvidence: a refusal leaves the active-step ledg
   });
 });
 
+test("completeStep guardPrematureEvidence refuses review recorded at the rankless non-terminal statuses questions and backlog (both are upstream of every pipeline status); --override still records it", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { guardPrematureEvidence: true } }));
+
+    for (const status of ["questions", "backlog"]) {
+      const ticketPath = await createTicket(root, "task", `Premature review at ${status}`, { status });
+      const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+      const { ticket: before } = await findTicket(root, ticketId);
+      await assert.rejects(
+        completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence."),
+        /complete-step review refused:.*would be stripped by the forward move into ready_for_review.*routing\.invalidateOnLoopBack/s,
+      );
+      const { ticket: afterRefusal } = await findTicket(root, ticketId);
+      assert.deepEqual(afterRefusal.frontMatter.completedSteps, before.frontMatter.completedSteps);
+      assert.equal(afterRefusal.body, before.body);
+
+      const result = await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.", {
+        override: true,
+        overrideReason: `Recording early while ${status}`,
+      });
+      assert.equal(result.action, "review");
+      const { ticket: afterOverride } = await findTicket(root, ticketId);
+      assert.deepEqual(afterOverride.frontMatter.completedSteps, ["review:codex-task:read-only"]);
+    }
+  });
+});
+
+test("completeStep guardPrematureEvidence at done/archived is unaffected (rankless terminal statuses; out of normal flow): records normally, no refusal", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { guardPrematureEvidence: true } }));
+
+    for (const status of ["done", "archived"]) {
+      const ticketPath = await createTicket(root, "task", `Review at ${status}`, { status });
+      const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+      const result = await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
+      assert.equal(result.action, "review");
+      const { ticket } = await findTicket(root, ticketId);
+      assert.deepEqual(ticket.frontMatter.completedSteps, ["review:codex-task:read-only"]);
+      assert.doesNotMatch(ticket.body, /Premature-evidence override/);
+    }
+  });
+});
+
+test("completeStep --override with an empty or missing overrideReason throws even when called directly (not just via the CLI)", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { guardPrematureEvidence: true } }));
+
+    const ticketPath = await createTicket(root, "task", "Override missing reason", { status: "ready_for_implementation" });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await assert.rejects(
+      completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.", { override: true }),
+      /complete-step --override requires a non-empty overrideReason/,
+    );
+    await assert.rejects(
+      completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.", {
+        override: true,
+        overrideReason: "   ",
+      }),
+      /complete-step --override requires a non-empty overrideReason/,
+    );
+
+    const { ticket } = await findTicket(root, ticketId);
+    assert.deepEqual(ticket.frontMatter.completedSteps, []);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // enforceTransitions (T20260707T1329Z): promote workflow.transitions to a
 // hard validator, with a fixed structural allow-set for administrative moves

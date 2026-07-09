@@ -13,7 +13,7 @@ estimateBasis: T20260708T2016Z
 workStartedAt: 2026-07-09T00:44:52Z
 workCompletedAt: null
 created: 2026-07-08T22:10:44Z
-updated: 2026-07-09T00:53:31Z
+updated: 2026-07-09T01:12:44Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -304,6 +304,16 @@ Full suite must stay green.
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) on the implement commit (worktree).
+
+- [P2] `src/tickets.js:361-363` — `evidenceStrippedByPendingForwardMove` returns `{ stripped: false }` when the current status has no pipeline rank, but `moveTicket` runs `invalidateDownstreamEvidence` for any `ready_*` target (`src/tickets.js:724-725`) and structural transitions allow `backlog`/`questions`/`blocked` → ready statuses. So `review` recorded at `questions`/`blocked`/`backlog` slips past the guard and is stripped by the later forward move — the exact trap the guard exists to close. Treat rankless non-terminal statuses as upstream-of-everything (or derive the answer from the same relation moveTicket uses).
+- [P3] `src/tickets.js:1272-1306` — the exported `completeStep` accepts `{ override: true }` without a reason, producing a Run Log override line with an empty reason; the CLI enforces `--override` + `--reason` but the mutation layer should hold the same invariant (throw when override is set and the reason is empty).
+- [P3] `src/config.js:876-877` — scaffold comment still says forward moves are never affected by invalidation, contradicting this feature's motivating case. Reword to distinguish ordinary forward moves (no downstream evidence) from premature evidence that a forward move strips.
+
+Checked and passing: active statuses handled via ACTIVE_STATUS_TO_READY; ranked ready statuses line up; config plumbing matches the requireGateConsultation pattern; tests cover the production trap for ranked statuses.
+
+Verdict: changes_requested
+
 ## Test Evidence
 
 ## Documentation Updates
@@ -319,3 +329,11 @@ Full suite must stay green.
 - 2026-07-09T00:53:30Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (internal workflow guard)
 
 - 2026-07-09T00:53:31Z: Ensured git branch local-board/T20260708T2210Z-cli-warn-or-refuse-complete-step-review-recorded-before-ready-for-review (already-current).
+
+- 2026-07-09T01:06:18Z: Completed implement via claude-subagent:local-board-implementer@sonnet: evidenceStrippedByPendingForwardMove helper reusing stripper internals; guard + override/reason + Run Log note; config flag fallback-false/scaffold-true; 8 tests; 423 pass + 1 skip
+
+- 2026-07-09T01:08:25Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (internal workflow machinery)
+
+- 2026-07-09T01:12:44Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
+
+- 2026-07-09T01:12:44Z: Ensured git branch local-board/T20260708T2210Z-cli-warn-or-refuse-complete-step-review-recorded-before-ready-for-review (already-current).
