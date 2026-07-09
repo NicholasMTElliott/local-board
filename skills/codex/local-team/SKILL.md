@@ -31,7 +31,13 @@ You are the top-level orchestrator. Keep up to `maxInFlight` tickets active, dis
 
 Use wave-barrier mode first:
 
-1. For each ready ticket up to `maxInFlight`, run `worktree-add <ticket-id> --json` from the project root and store `worktreePath`.
+1. Ticket authoring ends committed: with `git.commitPlanningOnTransition` on
+   (scaffold default) this is automatic per command, so just verify `git
+   status` is clean first; on flag-off boards run `git add plans && git
+   commit` yourself — `worktree-add` branches from HEAD and refuses an
+   untracked or dirty ticket file. For each ready ticket up to `maxInFlight`,
+   run `worktree-add <ticket-id> --json` from the project root and store
+   `worktreePath`.
 2. For each in-flight ticket without an outstanding executor:
    - run `begin-step <id> --root <worktreePath> --harness codex --json`;
    - run `start-work --root <worktreePath> --json` before implement/review/test/document;

@@ -98,9 +98,13 @@ a `branchReady` map (`ticketId -> changed files` once a ticket reaches
 final summary). The ticket files are the source of truth; this state is just a
 scheduling cache and is cheap to rebuild after a compaction.
 
-1. **Seed.** For up to `maxInFlight` ready tickets: `worktree-add` (this creates
-   and records the ticket branch). Add to the in-flight map. Do not run
-   `start-work` yet — see Dispatch.
+1. **Seed.** Ticket authoring ends committed: with `git.commitPlanningOnTransition`
+   on (scaffold default) this is automatic per command, so just verify `git
+   status` is clean first; on flag-off boards run `git add plans && git commit`
+   yourself — `worktree-add` branches from HEAD and refuses an untracked or
+   dirty ticket file. For up to `maxInFlight` ready tickets: `worktree-add`
+   (this creates and records the ticket branch). Add to the in-flight map. Do
+   not run `start-work` yet — see Dispatch.
 2. **Dispatch.** For each in-flight ticket with no outstanding executor and not
    gated on a peer-merge:
    - `begin-step --root <worktreePath> --json` to resolve the action + profile
@@ -118,7 +122,10 @@ scheduling cache and is cheap to rebuild after a compaction.
      `complete-step <action> --executor <route>[@<model>] --root <worktreePath> --evidence "..."`.
    - Decompose result → the decomposer returns a child-ticket proposal (never
      creates); the orchestrator runs `create`, `link-parent`/`link-child`, and
-     `block` for each accepted child, then records `complete-step`.
+     `block` for each accepted child, then records `complete-step`. Child
+     authoring ends committed too, before any child is seeded into a worktree —
+     automatic with `git.commitPlanningOnTransition` on, otherwise commit
+     `plans/` yourself first.
    - Self-writing result (designer, implementer, documenter) → the executor
      already wrote its section/files in the worktree; just record
      `complete-step <action> --executor <route>[@<model>] --root <worktreePath> --evidence "..."`.

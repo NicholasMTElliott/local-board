@@ -110,6 +110,13 @@ the ticket's branch from the orchestrator's checkout and prevents the
 branch-stacking hazard (see Fallback below). Do not call `git worktree`
 directly.
 
+Ticket authoring ends committed. With `git.commitPlanningOnTransition` on
+(scaffold default), `create`/`section`/`link`/`block` each auto-commit
+`plans/`, so just verify `git status` is clean before `worktree-add` or
+dispatch. On flag-off boards, run `git add plans && git commit` yourself
+first — `worktree-add` branches from HEAD and refuses an untracked or dirty
+ticket file.
+
 Before the ticket's first step, create the worktree from the project root and
 capture `worktreePath`:
 
