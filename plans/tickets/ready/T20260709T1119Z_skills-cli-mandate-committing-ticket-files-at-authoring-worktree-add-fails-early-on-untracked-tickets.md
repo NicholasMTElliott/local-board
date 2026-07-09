@@ -13,7 +13,7 @@ estimateBasis: T20260708T2213Z
 workStartedAt: 2026-07-09T12:18:17Z
 workCompletedAt: null
 created: 2026-07-09T11:17:38Z
-updated: 2026-07-09T12:42:39Z
+updated: 2026-07-09T12:49:18Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only]
 routingApprovals: []
 ---
@@ -228,6 +228,30 @@ branch."
 Reviewed by codex-task:read-only (gpt-5.5). One finding: [P3] skills/codex/local-board/SKILL.md:38,92 — the Creating Tickets and decomposition child-creation flows still omit the authoring-ends-committed rule; the sentence added at :113 is only a worktree precondition, so a create-only codex run on a flag-off board can end with uncommitted plans/. Add the flag-aware sentence to both flows (outside the curated block). Passing: preflight correctness (separator normalization :45, porcelain scope before mkdir/.gitignore :46, rename/quoted-path XY classification), placement (no side effects before refusal), refusal tests assert no-debris, repair path unaffected. Verdict: changes_requested
 
 ## Test Evidence
+
+Verified by claude-subagent:local-board-tester (sonnet), in the ticket worktree.
+
+| Command | Result |
+|---|---|
+| `npm run check` | PASS |
+| `npm test` | PASS — 446 tests, 445 pass, 0 fail, 1 skipped (3 new preflight tests confirmed present) |
+| `npm run validate` | PASS — Ticket validation OK |
+| `node --test test/skill-usage-sync.test.js` | PASS — 4/4 |
+
+### Live probes (throwaway git board in scratchpad, config removed to get flag-off authoring; cleaned up)
+
+- (a) Untracked ticket → worktree-add exit 2 with the "not committed (untracked at HEAD)... Commit plans/ first" message; no worktree dir, no branch. PASS.
+- (b) Dirty ticket (committed then appended) → exit 2 with the "has uncommitted changes (not yet in HEAD)" message; no debris. PASS.
+- (c) Clean ticket → worktree-add succeeds, ticket file present in the worktree (legacy midway-break impossible); worktree-remove cleans up. PASS.
+- Probe subtlety recorded: `git rm --cached` yields a `D ` line before `??`, so the first-line classifier reports the dirty message for that mixed case — correct behavior for real single-status cases; probe rebuilt with a genuinely new file.
+
+### Skill text coverage
+
+Flag-aware authoring rule present in all four skill files; codex local-board SKILL.md carries it in BOTH the Creating Tickets flow (~:43) and the decompose/child-creation flow (~:98), plus the worktree precondition; curated blocks byte-identical.
+
+No gaps.
+
+Result: pass
 
 ## Documentation Updates
 
