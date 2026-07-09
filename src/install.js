@@ -11,7 +11,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Package root (directory holding package.json, bin/, src/, agents/, skills/,
@@ -110,11 +110,14 @@ export function buildTargets(home) {
  * mutating the real process PATH.
  */
 export function runInstall(argv, options = {}) {
-  const home = options.home ?? homedir();
+  // ids are home-independent (only path fields vary by home), so target ids
+  // can be enumerated before home is resolved.
+  const knownIds = new Set(buildTargets(".").map((target) => target.id));
+  const args = parseArgs(argv, knownIds);
+  const home = resolveHome(args, options);
   const installDir = join(home, ".local-board");
   const targets = buildTargets(home);
-  const knownIds = new Set(targets.map((target) => target.id));
-  const args = parseArgs(argv, knownIds);
+  const homeOverridden = args.home !== null || Object.hasOwn(options, "home");
 
   if (args.help) {
     printHelp();
@@ -128,11 +131,51 @@ export function runInstall(argv, options = {}) {
     performUninstall(targets, home, installDir);
     return 0;
   }
-  performInstall(args, targets, home, installDir, options);
+  performInstall(args, targets, home, installDir, options, homeOverridden);
   return 0;
 }
 
-function performInstall(args, targets, home, installDir, options = {}) {
+// Resolution order: explicit `options.home === undefined` (fail closed) >
+// `--home`/`args.home` (CLI flag) > `options.home` (programmatic override) >
+// guard-refusal (LOCAL_BOARD_INSTALL_REQUIRE_HOME=1, no override) >
+// os.homedir() (default). See the ticket's Technical Design (D2/D3) for the
+// rationale behind this order and the guard env choice.
+function resolveHome(args, options) {
+  // 1. Explicit programmatic undefined is always a bug -> fail closed.
+  if (Object.hasOwn(options, "home") && options.home === undefined) {
+    throw new Error(
+      "runInstall: options.home was provided but is undefined; pass a directory or omit the key",
+    );
+  }
+  // 2. CLI/argv flag wins. Validated non-empty (same rule as options.home)
+  // and resolved to an absolute path so a relative value resolves against
+  // the invoker's cwd rather than silently mutating whatever directory the
+  // process happens to be running in.
+  if (args.home !== null) {
+    if (args.home.trim() === "") {
+      throw new Error("--home requires a non-empty value");
+    }
+    return resolve(args.home);
+  }
+  // 3. Programmatic override (defined; validated non-empty string).
+  if (Object.hasOwn(options, "home")) {
+    if (typeof options.home !== "string" || options.home.trim() === "") {
+      throw new Error("runInstall: options.home must be a non-empty string");
+    }
+    return options.home;
+  }
+  // 4. No override. Under the guard, refuse to touch the real home.
+  if (process.env.LOCAL_BOARD_INSTALL_REQUIRE_HOME === "1") {
+    throw new Error(
+      "refusing to run against the real home directory: " +
+        "LOCAL_BOARD_INSTALL_REQUIRE_HOME=1 is set and no --home/options.home override was supplied",
+    );
+  }
+  // 5. Default: the real home.
+  return homedir();
+}
+
+function performInstall(args, targets, home, installDir, options = {}, homeOverridden = false) {
   const nodeVersion = getVersion("node");
   if (nodeVersion === null) {
     throw new Error("node not found on PATH");
@@ -145,7 +188,7 @@ function performInstall(args, targets, home, installDir, options = {}) {
   }
   const hooksEnabled = args.hooks === true;
 
-  const checkResolvesOnPath = options.resolvesOnPath ?? resolvesOnPath;
+  const checkResolvesOnPath = options.resolvesOnPath ?? (homeOverridden ? () => true : resolvesOnPath);
   const fromClone = existsSync(join(SCRIPT_DIR, ".git"));
   if (!checkResolvesOnPath("local-board")) {
     throw new Error(
@@ -373,16 +416,25 @@ function parseArgs(argv, knownIds) {
     listTargets: false,
     uninstall: false,
     hooks: undefined,
+    home: null,
   };
 
-  for (const arg of argv) {
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
     if (arg === "--all") parsed.all = true;
     else if (arg === "--help" || arg === "-h") parsed.help = true;
     else if (arg === "--list-targets") parsed.listTargets = true;
     else if (arg === "--uninstall") parsed.uninstall = true;
     else if (arg === "--hooks") parsed.hooks = true;
     else if (arg === "--no-hooks") parsed.hooks = false;
-    else if (arg.startsWith("--target=")) {
+    else if (arg === "--home") {
+      const value = argv[i + 1];
+      if (value === undefined || value.startsWith("--")) {
+        throw new Error("--home requires a value");
+      }
+      parsed.home = value;
+      i += 1;
+    } else if (arg.startsWith("--target=")) {
       parsed.explicit = new Set(arg.slice("--target=".length).split(",").filter(Boolean));
       for (const id of parsed.explicit) {
         if (!knownIds.has(id)) {
@@ -436,10 +488,17 @@ Usage:
   node install.mjs --no-hooks
   node install.mjs --list-targets
   node install.mjs --uninstall
+  node install.mjs --home <dir>
 
 --hooks installs Claude Code dispatch-enforcement hooks (dispatch ledger,
 routing validator, evidence gate, approve-inline consent) into the Claude
-target's settings.json. Off by default; --no-hooks removes them.`);
+target's settings.json. Off by default; --no-hooks removes them.
+
+--home <dir> installs (or uninstalls) under <dir> instead of the real home
+directory (os.homedir()). This is the supported sandbox/testing seam; it also
+skips the on-PATH precheck, since a relocated home has no PATH expectation.
+<dir> must be non-empty; a relative <dir> is resolved against the current
+directory, not against the installer's own location.`);
 }
 
 function patchSettings(settingsPath, allowRule) {

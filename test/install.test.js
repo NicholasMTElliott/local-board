@@ -85,7 +85,7 @@ function findPathKey(env) {
   return Object.keys(env).find((key) => key.toLowerCase() === "path") ?? "PATH";
 }
 
-function installEnv(home, { includeLocalBoardStub = true, sanitizePath = false } = {}) {
+function installEnv(home, { includeLocalBoardStub = true, sanitizePath = false, requireHome = false } = {}) {
   const env = {
     ...process.env,
     HOME: home,
@@ -100,6 +100,11 @@ function installEnv(home, { includeLocalBoardStub = true, sanitizePath = false }
   if (includeLocalBoardStub) {
     env[pathKey] = `${STUB_BIN_DIR}${path.delimiter}${env[pathKey] ?? ""}`;
   }
+  if (requireHome) {
+    env.LOCAL_BOARD_INSTALL_REQUIRE_HOME = "1";
+  } else {
+    delete env.LOCAL_BOARD_INSTALL_REQUIRE_HOME;
+  }
   return env;
 }
 
@@ -111,9 +116,9 @@ async function runInstall(home, args, envOptions = {}) {
   });
 }
 
-async function runInstallCli(home, args, envOptions = {}) {
+async function runInstallCli(home, args, envOptions = {}, cwd = path.resolve(".")) {
   return execFileAsync(process.execPath, [CLI, "install", ...args], {
-    cwd: path.resolve("."),
+    cwd,
     encoding: "utf8",
     env: installEnv(home, envOptions),
   });
@@ -298,35 +303,145 @@ test("renderSkill no longer replaces <<INSTALL_PATH>>; the token survives verbat
   });
 });
 
-test("CLI install subcommand installs the same tree as install.mjs", async () => {
+test("CLI install subcommand installs the same tree as install.mjs, driven by --home (not env HOME); --home also skips the PATH precheck", async () => {
+  await withHome(async (envHome) => {
+    await withHome(async (altHome) => {
+      // includeLocalBoardStub: false + sanitizePath: true would normally
+      // trip the "local-board is not on PATH" failure path (see the
+      // PATH-verification tests below); this migrated probe proves --home
+      // skips that precheck entirely (D4), so it still succeeds.
+      const { stdout } = await runInstallCli(envHome, ["--home", altHome, "--target=codex"], {
+        includeLocalBoardStub: false,
+        sanitizePath: true,
+      });
+      assert.match(stdout, /installed skill for Codex/);
+      assert.match(stdout, /installed team skill for Codex/);
+
+      const skillDir = path.join(altHome, ".codex", "skills", "local-board");
+      const teamSkillDir = path.join(altHome, ".codex", "skills", "local-team");
+      const skillPath = path.join(skillDir, "SKILL.md");
+      const teamSkillPath = path.join(teamSkillDir, "SKILL.md");
+
+      assert.equal(existsSync(skillPath), true);
+      assert.equal(existsSync(path.join(skillDir, "agents", "openai.yaml")), true);
+      assert.equal(existsSync(teamSkillPath), true);
+      assert.equal(existsSync(path.join(teamSkillDir, "agents", "openai.yaml")), true);
+      assert.equal(existsSync(path.join(altHome, ".local-board", "agents", "codex", "local-board-reviewer.md")), true);
+      assert.equal(existsSync(path.join(altHome, ".local-board", "bin", "local-board.js")), true);
+      assert.equal(existsSync(path.join(altHome, ".local-board", "prompts")), true);
+      assert.equal(existsSync(path.join(altHome, ".local-board", "templates")), true);
+      assert.equal(existsSync(path.join(altHome, ".local-board", "install-info.json")), true);
+
+      // --home, not the env-redirected HOME, selects the install location.
+      assert.equal(existsSync(path.join(envHome, ".codex")), false);
+      assert.equal(existsSync(path.join(envHome, ".local-board")), false);
+
+      const skill = await readFile(skillPath, "utf8");
+      const teamSkill = await readFile(teamSkillPath, "utf8");
+      assert.doesNotMatch(skill, /<<SCRIPT_PATH>>|<<INSTALL_PATH>>/);
+      assert.doesNotMatch(teamSkill, /<<SCRIPT_PATH>>|<<INSTALL_PATH>>/);
+      assert.doesNotMatch(skill, /Runtime directory:/);
+      assert.doesNotMatch(teamSkill, /Runtime directory:/);
+      assert.doesNotMatch(skill, /node\s+\S*local-board\.js/i);
+      assert.doesNotMatch(teamSkill, /node\s+\S*local-board\.js/i);
+    });
+  });
+});
+
+test("install --home <dir> (CLI) drives full install and uninstall symmetrically, distinct from env HOME", async () => {
+  await withHome(async (envHome) => {
+    await withHome(async (altHome) => {
+      await runInstallCli(envHome, ["--home", altHome, "--target=claude"]);
+
+      const skillDir = path.join(altHome, ".claude", "skills", "local-board");
+      assert.equal(existsSync(skillDir), true);
+      assert.equal(existsSync(path.join(altHome, ".local-board")), true);
+      assert.equal(existsSync(path.join(envHome, ".claude")), false);
+      assert.equal(existsSync(path.join(envHome, ".local-board")), false);
+
+      await runInstallCli(envHome, ["--home", altHome, "--target=claude", "--uninstall"]);
+      assert.equal(existsSync(skillDir), false);
+      assert.equal(existsSync(path.join(altHome, ".local-board")), false);
+    });
+  });
+});
+
+test("LOCAL_BOARD_INSTALL_REQUIRE_HOME=1 refuses to touch the real home without --home (install and uninstall); proceeds when --home is supplied", async () => {
   await withHome(async (home) => {
-    const { stdout } = await runInstallCli(home, ["--target=codex"]);
-    assert.match(stdout, /installed skill for Codex/);
-    assert.match(stdout, /installed team skill for Codex/);
+    await assert.rejects(
+      runInstallCli(home, ["--target=claude"], { requireHome: true }),
+      (error) => {
+        const output = errorOutput(error);
+        assert.match(output, /LOCAL_BOARD_INSTALL_REQUIRE_HOME/);
+        return true;
+      },
+    );
 
-    const skillDir = path.join(home, ".codex", "skills", "local-board");
-    const teamSkillDir = path.join(home, ".codex", "skills", "local-team");
-    const skillPath = path.join(skillDir, "SKILL.md");
-    const teamSkillPath = path.join(teamSkillDir, "SKILL.md");
+    await assert.rejects(
+      runInstallCli(home, ["--target=claude", "--uninstall"], { requireHome: true }),
+      (error) => {
+        const output = errorOutput(error);
+        assert.match(output, /LOCAL_BOARD_INSTALL_REQUIRE_HOME/);
+        return true;
+      },
+    );
 
-    assert.equal(existsSync(skillPath), true);
-    assert.equal(existsSync(path.join(skillDir, "agents", "openai.yaml")), true);
-    assert.equal(existsSync(teamSkillPath), true);
-    assert.equal(existsSync(path.join(teamSkillDir, "agents", "openai.yaml")), true);
-    assert.equal(existsSync(path.join(home, ".local-board", "agents", "codex", "local-board-reviewer.md")), true);
-    assert.equal(existsSync(path.join(home, ".local-board", "bin", "local-board.js")), true);
-    assert.equal(existsSync(path.join(home, ".local-board", "prompts")), true);
-    assert.equal(existsSync(path.join(home, ".local-board", "templates")), true);
-    assert.equal(existsSync(path.join(home, ".local-board", "install-info.json")), true);
+    await withHome(async (altHome) => {
+      const { stdout } = await runInstallCli(home, ["--home", altHome, "--target=claude"], { requireHome: true });
+      assert.match(stdout, /installed skill for Claude Code/);
+      assert.equal(existsSync(path.join(altHome, ".claude", "skills", "local-board")), true);
+    });
+  });
+});
 
-    const skill = await readFile(skillPath, "utf8");
-    const teamSkill = await readFile(teamSkillPath, "utf8");
-    assert.doesNotMatch(skill, /<<SCRIPT_PATH>>|<<INSTALL_PATH>>/);
-    assert.doesNotMatch(teamSkill, /<<SCRIPT_PATH>>|<<INSTALL_PATH>>/);
-    assert.doesNotMatch(skill, /Runtime directory:/);
-    assert.doesNotMatch(teamSkill, /Runtime directory:/);
-    assert.doesNotMatch(skill, /node\s+\S*local-board\.js/i);
-    assert.doesNotMatch(teamSkill, /node\s+\S*local-board\.js/i);
+test("runInstall({ home: undefined, ... }) (key present, value undefined) throws instead of falling back to os.homedir(); a defined home still succeeds", async () => {
+  await withHome(async (home) => {
+    assert.throws(
+      () => runInstallInProcess(["--target=codex"], { home: undefined, resolvesOnPath: () => true }),
+      /options\.home was provided but is undefined/,
+    );
+
+    // Complementary: only the undefined *value* trips it, not the key itself.
+    const code = runInstallInProcess(["--target=codex"], { home, resolvesOnPath: () => true });
+    assert.equal(code, 0);
+    assert.equal(existsSync(path.join(home, ".codex", "skills", "local-board")), true);
+  });
+});
+
+test("--home \"\" and --home \"   \" are rejected before any install path is touched (fail closed, not a silent cwd install)", async () => {
+  await withHome(async (envHome) => {
+    for (const blankHome of ["", "   "]) {
+      await assert.rejects(
+        runInstallCli(envHome, ["--home", blankHome, "--target=claude"]),
+        (error) => {
+          const output = errorOutput(error);
+          assert.match(output, /--home requires a non-empty value/);
+          return true;
+        },
+      );
+    }
+    // Confirms the flag never fell through to resolving against the
+    // installer's cwd (the exact bug this guards against).
+    assert.equal(existsSync(path.join(path.resolve("."), ".local-board")), false);
+    assert.equal(existsSync(path.join(path.resolve("."), ".claude", "skills", "local-board")), false);
+  });
+});
+
+test("relative --home resolves against the invoker's current directory, not the installer's own location", async () => {
+  await withHome(async (envHome) => {
+    const scratchCwd = await mkdtemp(path.join(os.tmpdir(), "local-board-relhome-cwd-"));
+    try {
+      await runInstallCli(envHome, ["--home", "./sandbox-home", "--target=claude"], {}, scratchCwd);
+
+      const resolvedHome = path.join(scratchCwd, "sandbox-home");
+      assert.equal(existsSync(path.join(resolvedHome, ".claude", "skills", "local-board")), true);
+      assert.equal(existsSync(path.join(resolvedHome, ".local-board")), true);
+      // Never wrote under the repo's own install.mjs directory or envHome.
+      assert.equal(existsSync(path.join(path.resolve("."), "sandbox-home")), false);
+      assert.equal(existsSync(path.join(envHome, ".claude")), false);
+    } finally {
+      await removeFixtureDir(scratchCwd);
+    }
   });
 });
 

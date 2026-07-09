@@ -38,6 +38,9 @@ SKILL.md              installable orchestration skill template
 - Avoid external services for core workflow.
 - Preserve portability across Windows/macOS/Linux.
 - Installer requires `local-board` to resolve on PATH before rendering skills/agents.
+- Installer sandbox seam: `--home <dir>` redirects install/uninstall roots; explicit
+  undefined home fails closed, and `LOCAL_BOARD_INSTALL_REQUIRE_HOME=1` requires
+  an override.
 - `local-board install` has six targets: `claude` default-on,
   `codex`/`opencode`/`cline`/`cursor` detect-only, and `agents` explicit-only.
 - Claude target adds consent-sensitive `Bash(local-board *)` to
