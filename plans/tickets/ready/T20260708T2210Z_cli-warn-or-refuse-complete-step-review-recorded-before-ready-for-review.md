@@ -7,13 +7,13 @@ parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260708T2210Z-cli-warn-or-refuse-complete-step-review-recorded-before-ready-for-review
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-08T22:10:44Z
-updated: 2026-07-09T00:44:34Z
+updated: 2026-07-09T00:44:35Z
 completedSteps: []
 routingApprovals: []
 ---
