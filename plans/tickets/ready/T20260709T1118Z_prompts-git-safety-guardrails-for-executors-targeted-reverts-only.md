@@ -1,7 +1,7 @@
 ---
 id: T20260709T1118Z
 type: task
-status: implementing
+status: ready_for_docs
 priority: P3
 parent: null
 children: []
@@ -13,8 +13,8 @@ estimateBasis: T20260708T2213Z
 workStartedAt: 2026-07-09T11:21:29Z
 workCompletedAt: null
 created: 2026-07-09T11:17:38Z
-updated: 2026-07-09T11:49:47Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-09T11:59:03Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # prompts: git-safety guardrails for executors (targeted reverts only)
@@ -131,7 +131,32 @@ Reviewed by codex-task:read-only (gpt-5.5). One finding: [P3] the banned-command
 
 ## Test Evidence
 
+Verified by claude-subagent:local-board-tester (sonnet), in the ticket worktree.
+
+| Command | Result |
+|---|---|
+| `npm run check` | PASS |
+| `npm test` | PASS — 432 tests, 431 pass, 0 fail, 1 skipped |
+| `npm run validate` | PASS — Ticket validation OK |
+| `node --test test/resources-sync.test.js` | PASS — 4/4 |
+| `node --test test/skill-usage-sync.test.js` | PASS — 4/4 |
+
+### Content checks
+
+- Both routed prompts (plans/ + resources/ mirrors) name every banned command — checkout -- . / restore . / stash / reset --hard / clean -fd / clean -fdx / rebase / rebase --abort / merge / merge --abort / branch switches — plus the targeted-revert allowed example and the stop-and-report fallback.
+- plans/ vs resources/ byte-identical per git hash-object (test.md 4251f00a…, code_reviewer.md 7385b36e…).
+- All four skill texts carry the summarized executor sentence; all four (broader than required) carry the no-shell-& codex rule with the CODEX_HOME rationale.
+- Curated CLI Commands blocks untouched vs mainline (diff shows prose-only additions; skill-usage-sync green).
+- Reach: config maps review→code_reviewer.md and test→test.md (the two mutating-executor prompts); decompose/document/gate-check/design/estimate prompts spot-checked read-only.
+- Render sanity: headings well-formed; inline backtick counts even in both files; no fences introduced.
+
+No gaps.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5). Deliverable (prompt sections + skill sentences) shipped at implement/rework. Closing audit: memory-bank/systemPatterns.md gained one terse Safety Pattern fact (targeted-revert-only executor rule + serial codex dispatch); README/docs verified needing nothing (executor-facing content).
 
 ## Questions
 
@@ -152,3 +177,13 @@ Reviewed by codex-task:read-only (gpt-5.5). One finding: [P3] the banned-command
 - 2026-07-09T11:49:47Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
 
 - 2026-07-09T11:49:47Z: Ensured git branch local-board/T20260709T1118Z-prompts-git-safety-guardrails-for-executors-targeted-reverts-only (already-current).
+
+- 2026-07-09T11:52:41Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework: git clean -fd/-fdx + git rebase/--abort added to both prompt lists; skill sentences summarize (cleans, rebases); resources re-synced; 431 pass + 1 skip; both sync tests 4/4
+
+- 2026-07-09T11:54:12Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (prose rework)
+
+- 2026-07-09T11:54:12Z: Completed review via codex-task:read-only: changes_requested (P3: banned list missing git clean/rebase) on impl commit; addressed in rework; recorded post-move per evidence-invalidation ordering
+
+- 2026-07-09T11:57:38Z: Completed test via claude-subagent:local-board-tester@sonnet: 431 pass + 1 skip; full banned-command grep matrix in both prompt copies; byte-identical mirrors; skill sentences + codex rule present; curated blocks untouched; reach + render sanity verified
+
+- 2026-07-09T11:59:03Z: Completed document via codex-task:workspace-write: systemPatterns fact; user docs verified unaffected
