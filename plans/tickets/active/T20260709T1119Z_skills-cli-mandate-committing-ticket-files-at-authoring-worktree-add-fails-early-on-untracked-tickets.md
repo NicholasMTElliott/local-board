@@ -13,8 +13,8 @@ estimateBasis: T20260708T2213Z
 workStartedAt: 2026-07-09T12:18:17Z
 workCompletedAt: null
 created: 2026-07-09T11:17:38Z
-updated: 2026-07-09T12:37:55Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-09T12:41:19Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet"]
 routingApprovals: []
 ---
 # skills+cli: mandate committing ticket files at authoring; worktree-add fails early on untracked tickets
@@ -250,3 +250,5 @@ Reviewed by codex-task:read-only (gpt-5.5). One finding: [P3] skills/codex/local
 - 2026-07-09T12:37:55Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
 
 - 2026-07-09T12:37:55Z: Ensured git branch local-board/T20260709T1119Z-skills-cli-mandate-committing-ticket-files-at-authoring-worktree-add-fails-early-on-untracked-tickets (already-current).
+
+- 2026-07-09T12:41:19Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework: flag-aware authoring-commit sentence added to codex Creating Tickets + decompose flows (outside curated block); 445 pass + 1 skip; skill-sync 4/4
