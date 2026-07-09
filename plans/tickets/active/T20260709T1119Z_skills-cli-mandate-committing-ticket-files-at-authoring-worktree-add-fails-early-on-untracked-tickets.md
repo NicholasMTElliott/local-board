@@ -13,8 +13,8 @@ estimateBasis: T20260708T2213Z
 workStartedAt: 2026-07-09T12:18:17Z
 workCompletedAt: null
 created: 2026-07-09T11:17:38Z
-updated: 2026-07-09T12:25:55Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-09T12:33:38Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet"]
 routingApprovals: []
 ---
 # skills+cli: mandate committing ticket files at authoring; worktree-add fails early on untracked tickets
@@ -240,3 +240,5 @@ branch."
 - 2026-07-09T12:25:55Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (git plumbing + docs)
 
 - 2026-07-09T12:25:55Z: Ensured git branch local-board/T20260709T1119Z-skills-cli-mandate-committing-ticket-files-at-authoring-worktree-add-fails-early-on-untracked-tickets (already-current).
+
+- 2026-07-09T12:33:38Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Preflight after repair-path return; untracked/dirty refusals naming the fix; flag-aware sentence in all four skills; 3 tests; 445 pass + 1 skip; skill-sync 4/4
