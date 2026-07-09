@@ -1,7 +1,7 @@
 ---
 id: T20260709T1117Z
 type: task
-status: implementing
+status: ready_for_docs
 priority: P2
 parent: null
 children: []
@@ -13,8 +13,8 @@ estimateBasis: T20260708T2213Z
 workStartedAt: 2026-07-09T11:21:29Z
 workCompletedAt: null
 created: 2026-07-09T11:17:37Z
-updated: 2026-07-09T11:55:30Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-09T12:16:39Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # cli: commit planning changes at stage transitions (durable ticket state)
@@ -310,7 +310,35 @@ Verdict: changes_requested
 
 ## Test Evidence
 
+Verified by claude-subagent:local-board-tester (sonnet), in the ticket worktree.
+
+| Command | Result |
+|---|---|
+| `npm run check` | PASS |
+| `npm test` | PASS — 443 tests, 442 pass, 0 fail, 1 skipped |
+| `npm run validate` | PASS — Ticket validation OK |
+
+### Live probes (throwaway git-init boards in scratchpad, removed after)
+
+- (a) Field-report replay #1: create/comment/move/begin-step/complete-step each produced its own `<id>: <command> <detail>` commit; working tree already clean, so `git checkout -- .` was a no-op — evidence confirmed present before and after. PASS.
+- (b) Scope safety: pre-staged non-planning file; after a mutation, `git show --name-only` on the transition commit lists only plans/** paths and the file remains `A ` staged-uncommitted. PASS.
+- (c) Flag off (DEFAULT_CONFIG fallback): mutation makes NO commit; ticket file left uncommitted (legacy behavior). PASS.
+- (d) Non-git board: mutation succeeds, empty stderr (no warning spam). PASS.
+- (e) Field-report replay #2 (aborted merge): conflicting merge → `git merge --abort` — both branches' committed evidence intact; the abort discarded only in-progress merge state. PASS.
+
+### Code read
+
+Only the rev-parse probe precedes the try in commitPlanningTransition (git.js:270-300); dirty check/add/gate/commit all inside the warning path; `-- plans` pathspec on both gate and commit; maybeCommitPlanning wired into all mutating handlers incl. the worktree-add repair path (cli.js:497 with the no-double-commit comment); DEFAULT false (config.js:309) / scaffold true (:946), live-verified in the scaffolded board config.
+
+### Caveats
+
+Tester role constraints: used `comment --section` in place of the `section` command for live probes (identical maybeCommitPlanning wiring, verified by code read) and `cp` instead of content-authoring for the staged non-planning file. No flakes.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5). Workflow.md Durable Planning State subsection tightened to the final rework semantics (-- plans pathspec preserving pre-staged non-planning files, warning-only failures, worktree-add repair commit); systemPatterns fact updated to match; README verified needing nothing (no git config key listing).
 
 ## Questions
 
@@ -331,3 +359,13 @@ Verdict: changes_requested
 - 2026-07-09T11:55:30Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
 
 - 2026-07-09T11:55:30Z: Ensured git branch local-board/T20260709T1117Z-cli-commit-planning-changes-at-stage-transitions-durable-ticket-state (already-current).
+
+- 2026-07-09T12:05:45Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework: commit -- plans pathspec (pre-staged non-planning survives staged-uncommitted, empirically verified); dirty check inside warning path; worktree-add repair path commits; 4 new tests; 442 pass + 1 skip
+
+- 2026-07-09T12:06:52Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (git plumbing rework)
+
+- 2026-07-09T12:06:53Z: Completed review via codex-task:read-only: changes_requested (P1 index sweep, P2 dirty-check placement, P2 worktree-add repair gap); all addressed in rework; recorded post-move per evidence-invalidation ordering
+
+- 2026-07-09T12:14:08Z: Completed test via claude-subagent:local-board-tester@sonnet: 442 pass + 1 skip; live replays of both field-report incidents (checkout--., merge --abort) with evidence surviving; scope-safety, flag-off, non-git probes all pass
+
+- 2026-07-09T12:16:39Z: Completed document via codex-task:workspace-write: Workflow + systemPatterns tightened to final semantics; README verified
