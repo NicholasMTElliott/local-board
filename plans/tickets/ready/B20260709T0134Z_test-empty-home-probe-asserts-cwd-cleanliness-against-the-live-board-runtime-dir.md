@@ -7,13 +7,13 @@ parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/B20260709T0134Z-test-empty-home-probe-asserts-cwd-cleanliness-against-the-live-board-runtime-dir
 estimate: 1
 estimateBasis: B20260708T0459Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-09T01:34:33Z
-updated: 2026-07-09T01:38:12Z
+updated: 2026-07-09T01:38:13Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
