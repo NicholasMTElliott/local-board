@@ -49,14 +49,14 @@ For whole-project work, run `query-next --json`. For a specific ticket, run `que
 For each returned ticket:
 
 1. Read the returned ticket `path`, returned `prompt`, `branch`, `transitions`, and relevant project context.
-2. Run `begin-step <ticket-id> --harness codex --json` to resolve `action`, `configuredAgent`, `configuredModel`, `configuredPrompt`, and the translated `codexDispatch` block, and record the in-flight step for dispatch verification.
-3. Default: run `worktree-add` first, then pass `--root <worktreePath>` on per-ticket calls — see `## Worktrees`.
-4. Before `implement`, `review`, `test`, or `document`, run `start-work <ticket-id> --json`.
+2. Default: run `worktree-add <ticket-id> --json` first and capture `worktreePath` — see `## Worktrees`.
+3. Run `begin-step <ticket-id> --root <worktreePath> --harness codex --json` to resolve `action`, `configuredAgent`, `configuredModel`, `configuredPrompt`, and the translated `codexDispatch` block, and record the in-flight step for dispatch verification.
+4. Before `implement`, `review`, `test`, or `document`, run `start-work <ticket-id> --root <worktreePath> --json`.
 5. Dispatch the returned action through the route translation contract below.
 6. Persist return-only output with `section --file`; self-writing workers write their own scoped changes.
-7. Run `complete-step <ticket-id> <action> --executor <logical-route> [--model <codex-model-or-codex-default>] --evidence "<evidence>"`. `complete-step` composes the `<route>@<model>` token server-side; the combined `--executor <route>@<model>` form still works.
+7. Run `complete-step <ticket-id> <action> --root <worktreePath> --executor <logical-route> [--model <codex-model-or-codex-default>] --evidence "<evidence>"`. `complete-step` composes the `<route>@<model>` token server-side; the combined `--executor <route>@<model>` form still works.
 8. For `design`, `implement`, and `test`, run the gate-check/specialty flow before `move`.
-9. Choose the next status from the returned `transitions` list and run `move <ticket-id> <status> --json`.
+9. Choose the next status from the returned `transitions` list and run `move <ticket-id> <status> --root <worktreePath> --json`.
 10. Choose `done` only when all required evidence is recorded.
 11. Run `validate` again before reporting completion.
 
@@ -72,7 +72,7 @@ Do not hand-translate the route. Run `begin-step <ticket-id> --harness codex --j
 |---|---|---|
 | `claude-subagent:local-board-designer` | `spawn_agent` with `agent_type: worker` | `agents/codex/local-board-designer.md` |
 
-For unknown `claude-subagent:*` routes (`codexDispatch.known` is `false`), ask the user before falling back to inline. If approved, run `approve-inline <ticket-id> <action> --reason "<reason>"`, then record `complete-step` with `--executor inline`. If not approved, move the ticket to `questions` and record the blocker.
+For unknown `claude-subagent:*` routes (`codexDispatch.known` is `false`), ask the user before falling back to inline. If approved, run `approve-inline <ticket-id> <action> --root <worktreePath> --reason "<reason>"`, then record `complete-step` with `--root <worktreePath> --executor inline`. If not approved, move the ticket to `questions` and record the blocker.
 
 Do not pass Claude model aliases (`opus`, `sonnet`, `haiku`) as Codex model overrides; `begin-step --harness codex` performs this sanitization for you (`codexDispatch.model` is already `null` when no valid Codex model id exists, and `codexDispatch.evidenceExecutor` already carries `@codex-default`).
 
@@ -154,7 +154,9 @@ default, then retry (same as the parallel skill's closeout).
 
 For environments where worktrees are unavailable, you may instead work on the
 main checkout, switching branches with `start-work` (see Branch Discipline)
-and passing no `--root` override.
+and passing no `--root` override. Omitting `--root` is the fallback-mode
+form of every per-ticket command below; the default worktree flow always
+passes `--root <worktreePath>`.
 
 **Hazard (branch stacking):** on the main checkout, after a ticket's commits
 are on its branch, running `start-work` for the *next* ticket branches off the

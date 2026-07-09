@@ -13,7 +13,7 @@ estimateBasis: T20260708T2016Z
 workStartedAt: 2026-07-09T01:19:30Z
 workCompletedAt: null
 created: 2026-07-08T22:10:45Z
-updated: 2026-07-09T01:29:26Z
+updated: 2026-07-09T01:39:29Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -235,6 +235,15 @@ Follow-up notes (out of scope for this doc ticket; do not expand here):
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) on the implement commit (worktree).
+
+- [P2] `skills/codex/local-board/SKILL.md:51-54` — the codex single-ticket loop runs `begin-step` (step 2) before the step that says to run `worktree-add` first (step 3), contradicting the new Worktrees section (:111-127) and the parallel codex lifecycle. Move the worktree-add/default-root instruction before begin-step and show `begin-step <ticket-id> --root <worktreePath> --harness codex --json`.
+- [P2] Default-flow examples omit `--root <worktreePath>` after worktree creation: root `SKILL.md:37-41` (begin-step/complete-step/move) despite :36 saying to pass it; codex skill :54-59 (start-work/complete-step/move) and the inline-approval example at :75. Conflicts with the Worktrees sections and can fail under worktrees.guardWrongRoot. Add --root to the default-loop examples or mark no-root examples fallback-only.
+
+Verified passing: curated blocks byte-identical; the three added command signatures match src/cli.js:459-518 + usage :1361-1364; branch-stacking warning technically accurate vs src/git.js:138-164; fallback framed as fallback; no orphaned step numbers.
+
+Verdict: changes_requested
+
 ## Test Evidence
 
 ## Documentation Updates
@@ -250,3 +259,11 @@ Follow-up notes (out of scope for this doc ticket; do not expand here):
 - 2026-07-09T01:29:26Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (docs-only skill edits)
 
 - 2026-07-09T01:29:26Z: Ensured git branch local-board/T20260708T2213Z-skill-make-worktrees-the-default-for-single-ticket-mode (already-current).
+
+- 2026-07-09T01:34:54Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Worktrees section + fallback/stacking hazard in both skill files; 3 commands added to curated blocks byte-identically; 415 pass + 1 skip; skill-sync 4/4
+
+- 2026-07-09T01:36:16Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (Markdown-only skill edits)
+
+- 2026-07-09T01:39:29Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
+
+- 2026-07-09T01:39:29Z: Ensured git branch local-board/T20260708T2213Z-skill-make-worktrees-the-default-for-single-ticket-mode (already-current).

@@ -34,11 +34,11 @@ Version-skew check (advisory): this skill was installed from local-board `v<<VER
 6. For a specific ticket, run `local-board query-ticket <id> --json`.
 7. Read the returned ticket `path`, returned `prompt`, `branch`, `transitions`, and relevant project context.
 8. For `implement`/`review`/`test`/`document`, the default is to create a per-ticket worktree first (`worktree-add`) and pass `--root <worktreePath>` on subsequent per-ticket calls — see `## Worktrees`.
-9. Run `local-board begin-step <ticket-id> --json`. It returns `configuredAgent` (the route), `configuredModel` (the per-step model, or null), and `configuredPrompt`, and records the in-flight step for dispatch verification.
+9. Run `local-board begin-step <ticket-id> --root <worktreePath> --json`. It returns `configuredAgent` (the route), `configuredModel` (the per-step model, or null), and `configuredPrompt`, and records the in-flight step for dispatch verification.
 10. Execute the returned `action` through the configured route. For `claude-subagent:<agent-name>`, dispatch the named Claude subagent after the colon and, when `configuredModel` is non-null, pin that subagent's model to `configuredModel` at dispatch. For `codex-task:<mode>`, shell out to codex in that mode. For `inline`, do the work yourself on your own model. Per-step models only take effect on subagent/codex routes — `inline` always runs on the orchestrator's model. **Every Claude subagent dispatch prompt must begin with a first line of the exact form `Ticket: <id>`** — this is the machine-readable anchor the optional dispatch-ledger/routing-validator hooks (`local-board install --hooks`) parse to verify the dispatch actually happened.
-11. Run `local-board complete-step <ticket-id> <action> --executor <configuredAgent> --model <configuredModel> --evidence "<evidence>"`, passing `--executor` and `--model` verbatim from `begin-step` output; omit `--model` when `configuredModel` is null. `complete-step` composes the `<route>@<model>` evidence token server-side — do not hand-splice `@<model>` yourself. (The combined `--executor <route>@<model>` form is still accepted for back-compat and is equivalent.) Under strict routing, when the route matches the configured route and a model is pinned, `complete-step` requires the recorded model to match `configuredModel` (or `codex-default` for a Codex-translated run, or an `approve-inline --executor <route>@<model>` approval) — otherwise it is rejected.
+11. Run `local-board complete-step <ticket-id> <action> --root <worktreePath> --executor <configuredAgent> --model <configuredModel> --evidence "<evidence>"`, passing `--executor` and `--model` verbatim from `begin-step` output; omit `--model` when `configuredModel` is null. `complete-step` composes the `<route>@<model>` evidence token server-side — do not hand-splice `@<model>` yourself. (The combined `--executor <route>@<model>` form is still accepted for back-compat and is equivalent.) Under strict routing, when the route matches the configured route and a model is pinned, `complete-step` requires the recorded model to match `configuredModel` (or `codex-default` for a Codex-translated run, or an `approve-inline --executor <route>@<model>` approval) — otherwise it is rejected.
 12. Mutate ticket state only through CLI commands.
-13. After the action, choose the next status from the returned `transitions` list and run `local-board move <ticket-id> <status> --json`.
+13. After the action, choose the next status from the returned `transitions` list and run `local-board move <ticket-id> <status> --root <worktreePath> --json`.
 14. Choose `done` only when all required stages are complete.
 15. Run `validate` again before reporting completion.
 
@@ -165,7 +165,9 @@ default, then retry (same as the parallel skill's closeout).
 
 For environments where worktrees are unavailable, you may instead work on the
 main checkout, switching branches with `start-work` (see Branch Discipline)
-and passing no `--root` override.
+and passing no `--root` override. Omitting `--root` is the fallback-mode
+form of every per-ticket command below; the default worktree flow always
+passes `--root <worktreePath>`.
 
 **Hazard (branch stacking):** on the main checkout, after a ticket's commits
 are on its branch, running `start-work` for the *next* ticket branches off the
