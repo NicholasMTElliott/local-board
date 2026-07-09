@@ -1,7 +1,7 @@
 ---
 id: B20260709T0134Z
 type: bug
-status: ready_for_docs
+status: done
 priority: P2
 parent: null
 children: []
@@ -11,9 +11,9 @@ branch: local-board/B20260709T0134Z-test-empty-home-probe-asserts-cwd-cleanlines
 estimate: 1
 estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-09T01:38:13Z
-workCompletedAt: null
+workCompletedAt: 2026-07-09T01:51:10Z
 created: 2026-07-09T01:34:33Z
-updated: 2026-07-09T01:51:09Z
+updated: 2026-07-09T01:51:10Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
