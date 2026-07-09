@@ -60,8 +60,11 @@ Concrete examples mapping work types to recommended specialties:
 - New multi-step wizard or onboarding flow: gate recommends `ux_interaction_review` at design.
 - External API integration with credentials: gate recommends `security_threat_model` at design and `security_audit` at implement.
 - Pure backend refactor with no user-facing or security surface: gate returns an empty array.
+- Change that mutates `~/.claude/settings.json` permission grants, allow rules, or hooks entries: gate recommends `security_audit` at implement.
 
 The classifier prompt at [`plans/prompts/steps/gate-check.md`](../plans/prompts/steps/gate-check.md) defines the decision contract. The `triggers` text in each `optionalSteps` entry is the human-readable rule the classifier pattern-matches against.
+
+**Write triggers as consequence surfaces, not technique keywords.** A `triggers` string should name *what a change can grant, leak, or execute* — concrete nouns a classifier can match — not the coding technique involved. "Input validation" is a technique and over-fires on harmless internal parsing; "settings files that gate tool execution" and "validation of untrusted cross-trust-boundary input" are consequence surfaces that fire only when something can actually be granted or leaked. When a trigger both over-fires and misses (as `security_audit` did on internal flag parsing vs. `settings.json` permission grants), rewrite it around the surface and add an explicit negative carve-out for the benign look-alike.
 
 ## Adding a new specialty step
 

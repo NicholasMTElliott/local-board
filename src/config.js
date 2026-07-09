@@ -935,7 +935,7 @@ export function defaultConfigJsonc() {
       {
         "name": "security_audit",
         "prompt": "plans/prompts/optional-steps/impl/security_audit.md",
-        "triggers": "Changes to auth code, input validation, external API calls, credential handling."
+        "triggers": "Changes to authentication/authorization code; permission grants, consent state, or settings files that gate tool execution (e.g. Claude settings.json allow rules, hooks entries, approved-command lists); credential, token, or secret handling; external API calls; validation of untrusted input crossing a trust boundary (network payloads, uploaded files, third-party responses) - not internal CLI flag or argument parsing."
       },
       {
         "name": "ui_visual_review",
