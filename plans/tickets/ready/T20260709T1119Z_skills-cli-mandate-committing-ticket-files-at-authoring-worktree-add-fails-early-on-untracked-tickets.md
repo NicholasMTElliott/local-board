@@ -13,8 +13,8 @@ estimateBasis: T20260708T2213Z
 workStartedAt: 2026-07-09T12:18:17Z
 workCompletedAt: null
 created: 2026-07-09T11:17:38Z
-updated: 2026-07-09T12:50:40Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+updated: 2026-07-09T12:50:41Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # skills+cli: mandate committing ticket files at authoring; worktree-add fails early on untracked tickets
@@ -284,3 +284,5 @@ Documented by codex-task:workspace-write (gpt-5.5). Closing audit: memory-bank/s
 - 2026-07-09T12:42:39Z: Completed review via codex-task:read-only: changes_requested (P3: codex authoring flows missing the rule) on impl commit; addressed in rework; recorded post-move per evidence-invalidation ordering
 
 - 2026-07-09T12:49:18Z: Completed test via claude-subagent:local-board-tester@sonnet: 445 pass + 1 skip; live untracked/dirty refusals with no debris, clean path + worktree content verified; skill rule in all four files incl. both codex flows
+
+- 2026-07-09T12:50:41Z: Completed document via codex-task:workspace-write: systemPatterns fact + Workflow sentence
