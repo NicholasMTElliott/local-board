@@ -10,10 +10,10 @@ blocks: []
 branch: local-board/T20260709T1119Z-skills-cli-mandate-committing-ticket-files-at-authoring-worktree-add-fails-early-on-untracked-tickets
 estimate: null
 estimateBasis: null
-workStartedAt: null
+workStartedAt: 2026-07-09T12:18:17Z
 workCompletedAt: null
 created: 2026-07-09T11:17:38Z
-updated: 2026-07-09T12:18:16Z
+updated: 2026-07-09T12:18:17Z
 completedSteps: []
 routingApprovals: []
 ---
@@ -51,3 +51,5 @@ Fix, two layers:
 ## Questions
 
 ## Run Log
+
+- 2026-07-09T12:18:17Z: Ensured git branch local-board/T20260709T1119Z-skills-cli-mandate-committing-ticket-files-at-authoring-worktree-add-fails-early-on-untracked-tickets (already-current).
