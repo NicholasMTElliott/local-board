@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -232,6 +232,72 @@ test("worktree-add rejects a non-worktree directory at the target path", { skip:
     const result = await runCli(["--root", root, "worktree-add", ticketId]);
     assert.equal(result.code, 2);
     assert.match(result.stderr, /exists but is not a registered git worktree/);
+  });
+});
+
+test("worktree-add refuses an untracked ticket file, creating no worktree, branch, or directory", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, _baseBranch, worktreesRoot) => {
+    const ticketPath = await createTicket(root, "task", "Untracked ticket", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-22T14:07:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    const branch = `local-board/${ticketId}-untracked-ticket`;
+    const worktreePath = path.join(worktreesRoot, ticketId);
+
+    // Deliberately do not commit the ticket: it is untracked relative to HEAD.
+    const result = await runCli(["--root", root, "worktree-add", ticketId]);
+    assert.equal(result.code, 2);
+    assert.match(result.stderr, /not committed \(untracked at HEAD\)/);
+    assert.match(result.stderr, /[Cc]ommit plans\//);
+
+    assert.deepEqual(JSON.parse((await runCli(["--root", root, "worktree-list", "--json"])).stdout), []);
+    assert.equal(await gitOutput(root, ["branch", "--list", branch]), "");
+    assert.equal(await pathExists(worktreePath), false, "no worktree directory should be created on refusal");
+  });
+});
+
+test("worktree-add refuses a dirty (tracked-but-modified) ticket file, creating no worktree, branch, or directory", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, _baseBranch, worktreesRoot) => {
+    const ticketPath = await createTicket(root, "task", "Dirty ticket", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-22T14:08:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    const branch = `local-board/${ticketId}-dirty-ticket`;
+    const worktreePath = path.join(worktreesRoot, ticketId);
+
+    // Committed once, then edited without a follow-up commit: tracked but dirty.
+    await setTicketField(root, ticketId, "priority", "P1", { now: new Date("2026-05-22T14:09:00Z") });
+
+    const result = await runCli(["--root", root, "worktree-add", ticketId]);
+    assert.equal(result.code, 2);
+    assert.match(result.stderr, /has uncommitted changes/);
+    assert.match(result.stderr, /[Cc]ommit plans\//);
+
+    assert.deepEqual(JSON.parse((await runCli(["--root", root, "worktree-list", "--json"])).stdout), []);
+    assert.equal(await gitOutput(root, ["branch", "--list", branch]), "");
+    assert.equal(await pathExists(worktreePath), false, "no worktree directory should be created on refusal");
+  });
+});
+
+test("worktree-add on a committed ticket is unaffected by the commit preflight (clean happy path)", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, _baseBranch, worktreesRoot) => {
+    const ticketPath = await createTicket(root, "task", "Clean committed ticket", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-22T14:10:30Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const result = await runCli(["--root", root, "worktree-add", ticketId, "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.created, true);
+    assert.equal(await currentBranch(path.join(worktreesRoot, ticketId)), out.branch);
   });
 });
 
@@ -936,6 +1002,15 @@ test("worktree-add rejects an explicit worktrees.location resolving inside plans
     assert.match(result.stderr, /resolves inside plans\//);
   });
 });
+
+async function pathExists(targetPath) {
+  try {
+    await access(targetPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function hasGit() {
   try {

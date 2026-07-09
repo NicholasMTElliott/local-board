@@ -84,7 +84,7 @@ Priorities: `P0`, `P1`, `P2`, `P3`, `P4`.
 
 ## Actions
 
-- `decompose`: propose child tickets and dependency ordering; the orchestrator creates them, links them with `link-parent` or `link-child`, and for each child persists the decomposer's proposed `## Requirement` body (with acceptance criteria) via `section <child-id> --file <temp-path> --section "Requirement"`.
+- `decompose`: propose child tickets and dependency ordering; the orchestrator creates them, links them with `link-parent` or `link-child`, and for each child persists the decomposer's proposed `## Requirement` body (with acceptance criteria) via `section <child-id> --file <temp-path> --section "Requirement"`. Child authoring ends committed too — with `git.commitPlanningOnTransition` on this happens automatically per command; on flag-off boards commit `plans/` before seeding a worktree for the child.
 - `design`: write or update `## Technical Design`; move to the next configured status only when the design is complete.
 - `implement`: make scoped code changes, test them, and record notes/evidence.
 - `review`: inspect changes and write `## Review Findings`.
@@ -118,6 +118,13 @@ lifecycle `local-team` uses, at N=1 — because a worktree structurally isolates
 the ticket's branch from the orchestrator's checkout and prevents the
 branch-stacking hazard (see Fallback below). Do not call `git worktree`
 directly.
+
+Ticket authoring ends committed. With `git.commitPlanningOnTransition` on
+(scaffold default), `create`/`section`/`link`/`block` each auto-commit
+`plans/`, so just verify `git status` is clean before `worktree-add` or
+dispatch. On flag-off boards, run `git add plans && git commit` yourself
+first — `worktree-add` branches from HEAD and refuses an untracked or dirty
+ticket file.
 
 Before the ticket's first step, create the worktree from the project root and
 capture `worktreePath`:

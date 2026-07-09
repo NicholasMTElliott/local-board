@@ -42,6 +42,18 @@ export async function addTicketWorktree(root, ticketId) {
     throw new Error(`${displayPath(worktreePath)} exists but is not a registered git worktree`);
   }
 
+  const relPath = path.relative(repoRoot, ticket.path).split(path.sep).join("/");
+  const status = await gitRawOutput(repoRoot, ["status", "--porcelain", "--", relPath]);
+  const firstLine = status.split(/\r?\n/).find((line) => line !== "") ?? "";
+  if (firstLine !== "") {
+    const untracked = firstLine.startsWith("??");
+    throw new Error(
+      untracked
+        ? `ticket ${ticketId} file ${relPath} is not committed (untracked at HEAD); worktree-add branches from HEAD, so an uncommitted ticket file would be absent in the new worktree. Commit plans/ first — run any board command with git.commitPlanningOnTransition on, or \`git add plans && git commit\` — then retry.`
+        : `ticket ${ticketId} file ${relPath} has uncommitted changes (not yet in HEAD); worktree-add branches from HEAD, so those changes would be absent in the new worktree. Commit plans/ first — run any board command with git.commitPlanningOnTransition on, or \`git add plans && git commit\` — then retry.`,
+    );
+  }
+
   await mkdir(path.dirname(worktreePath), { recursive: true });
   if (isChildPath(repoRoot, worktreesRoot)) {
     await ensureWorktreeIgnore(repoRoot, worktreesRoot);
