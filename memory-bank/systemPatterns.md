@@ -31,6 +31,7 @@ It defines:
 - `estimation`: relative-sized story points config (`enabled`, `scale`, `bootstrapDefault`, `splitThreshold`)
 
 V1 specialty prompts ship at `plans/prompts/optional-steps/{design,impl}/`.
+The scaffolded `security_audit` trigger is consequence-surface based: auth/session flows, cross-trust-boundary validation, external services/secrets, and permission/consent state that gates tool execution.
 
 In `src/config.js`, `DEFAULT_CONFIG` = ENOENT fallback + deep-merge base
 (`estimation.enabled: false`, `optionalSteps` empty, `routing.requireGateConsultation:
