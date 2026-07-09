@@ -26,7 +26,7 @@ It defines:
 - `agents`
 - `routing.strict`, `routing.doneRequires`, `routing.requireGateConsultation`, `routing.invalidateOnLoopBack`, `routing.enforceTransitions`, and `routing.guardPrematureEvidence`
 - retention policy: `archiveDoneAfterDays`, `archiveOnMoveDone`
-- git policy: `defaultBranch`, `commitPlanningChanges`, `autoMerge`
+- git policy: `defaultBranch`, `commitPlanningChanges`, `autoMerge`, `commitPlanningOnTransition`
 - `optionalSteps`: per-stage specialty review catalogs (`design`/`implement`/`test`)
 - `estimation`: relative-sized story points config (`enabled`, `scale`, `bootstrapDefault`, `splitThreshold`)
 
@@ -203,6 +203,7 @@ When `retention.archiveOnMoveDone` is true, `move ... done` archives other done 
 When estimation is enabled, `complete-step design` refuses tasks and bugs without an estimate.
 `create` derives a per-worktree minute offset when invoked from inside a registered ticket worktree (sorted-index position among ticket worktrees under the configured root) and applies the bump to the ID timestamp only; `created`/`updated` stay wall-clock. Peer worktree workers therefore mint distinct child IDs without coordinating. Test-mode invocations that pass `now` skip the ID offset to keep timestamps deterministic.
 When `worktrees.guardWrongRoot` is true (scaffold default for new boards; false for older configs that omit the key), per-ticket mutation commands and `gate-check` refuse when the ticket has a registered worktree and `--root` is neither that worktree nor overridden with `--allow-main-root`; no-op when the ticket has no worktree, fail-open on git errors. `worktree-remove` always resolves the repo's main root via `resolveMainRoot`, so it works given either the main root or the ticket's worktree root.
+When `git.commitPlanningOnTransition` is true (scaffold default for new boards; false for older configs that omit the key), every mutating per-ticket CLI command commits the planning-only working-tree subset (`plans/**`, via the shared `isPlanningPath`/`commitPlanningTransition` in `src/git.js`) right after it succeeds — durability for ticket state between stages, since executors run with Bash access and sometimes issue destructive git ops (aborted merge, `git checkout -- .`) against an otherwise-uncommitted worktree. No-op on a clean tree or a non-git root; a commit failure (e.g. a concurrent `index.lock`) degrades to a stderr warning, never rolling back the mutation. Skipped on `move done` when `git.autoMerge` also runs (that path's own planning commit is the sole committer).
 
 Return-only evidence (Review Findings, Test Evidence; see "Return-only subagents" under `## Delegation and Subagent Tools`) is orchestrator-persisted via `section --file`, so the orchestrator can alter a subagent's returned content before writing it, undetectably. The dispatch ledger (`.local-board/active-steps.json`, `check-dispatch`, opt-in hooks) proves a dispatch happened; it does not prove the written content matches the return. This sits alongside the coarse Bash grant risk under `## Subagent CLI Permission` as a second facet of the same trust model. Mitigation: human review of ticket diffs.
 

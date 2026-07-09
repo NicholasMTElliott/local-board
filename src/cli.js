@@ -35,7 +35,7 @@ import {
   unlinkParent,
   validate,
 } from "./tickets.js";
-import { assertAutoMergeReady, autoMergeTicketBranch, startTicketWork } from "./git.js";
+import { assertAutoMergeReady, autoMergeTicketBranch, commitPlanningTransition, startTicketWork } from "./git.js";
 import { checkDispatch } from "./active-steps.js";
 import { translateCodexDispatch } from "./codex-dispatch.js";
 import { loadConfig, OPTIONAL_STEP_STAGES } from "./config.js";
@@ -417,6 +417,23 @@ async function commandSchema(root, args) {
   return 0;
 }
 
+// Thin CLI-side wrapper around git.js's commitPlanningTransition: loads
+// config and gates on the opt-in `git.commitPlanningOnTransition` flag before
+// delegating. One wrapper, one call per mutating handler (each handler alone
+// knows the accurate `command`/`detail` pairing for its own Run Log-style
+// message) -- a central dispatch-level hook was considered and rejected (see
+// the ticket's Technical Design, section 4): ticketId and detail are parsed
+// inside each handler, and several handlers have bespoke control flow
+// (auto-merge, empty-catalog gate, two-ticket links) that a generic wrapper
+// cannot supply an accurate message for.
+async function maybeCommitPlanning(root, { ticketId, command, detail }) {
+  const config = await loadConfig(root);
+  if (config.git.commitPlanningOnTransition !== true) {
+    return;
+  }
+  await commitPlanningTransition(root, { ticketId, command, detail });
+}
+
 async function commandCreate(root, args) {
   const status = takeOption(args, "--status") ?? "backlog";
   const priority = takeOption(args, "--priority") ?? "P2";
@@ -430,6 +447,8 @@ async function commandCreate(root, args) {
   }
 
   const ticketPath = await createTicket(root, ticketType, title, { status, priority, parent });
+  const createdId = path.basename(ticketPath, ".md").split("_")[0];
+  await maybeCommitPlanning(root, { ticketId: createdId, command: "create", detail: ticketType });
   console.log(ticketPath);
   return 0;
 }
@@ -448,6 +467,7 @@ async function commandStartWork(root, args, allowMainRoot) {
   await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
   const result = await startTicketWork(root, ticketId, { branch, allowDirty });
+  await maybeCommitPlanning(root, { ticketId: result.ticket, command: "start-work", detail: result.status });
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));
   } else {
@@ -553,6 +573,7 @@ async function commandBeginStep(root, args) {
   }
 
   const result = await beginStep(root, ticketId, action);
+  await maybeCommitPlanning(root, { ticketId: result.ticket, command: "begin-step", detail: result.action });
 
   // `--harness codex` splices an additive `codexDispatch` block onto the
   // already-computed result as CLI post-processing; beginStep's return shape
@@ -610,6 +631,7 @@ async function commandCompleteStep(root, args, allowMainRoot) {
     override,
     overrideReason: reason,
   });
+  await maybeCommitPlanning(root, { ticketId: result.ticket, command: "complete-step", detail: result.action });
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));
   } else {
@@ -633,6 +655,7 @@ async function commandApproveInline(root, args, allowMainRoot) {
   await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
   const result = await approveInline(root, ticketId, action, reason, { executor });
+  await maybeCommitPlanning(root, { ticketId: result.ticket, command: "approve-inline", detail: result.action });
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));
   } else {
@@ -704,7 +727,7 @@ async function commandMove(root, args, allowMainRoot) {
   await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
   const overrideTransition = override ? { reason } : undefined;
-  await moveAndMaybeMerge(root, ticketId, status, { asJson, overrideTransition });
+  await moveAndMaybeMerge(root, ticketId, status, { asJson, overrideTransition, command: "move" });
   return 0;
 }
 
@@ -725,11 +748,12 @@ async function commandSet(root, args, allowMainRoot) {
   const value = parseScalar(rawValue);
   if (field === "status") {
     const overrideTransition = override ? { reason } : undefined;
-    await moveAndMaybeMerge(root, ticketId, String(value), { asJson: false, overrideTransition });
+    await moveAndMaybeMerge(root, ticketId, String(value), { asJson: false, overrideTransition, command: "set" });
     return 0;
   }
 
   const ticketPath = await setTicketField(root, ticketId, field, value);
+  await maybeCommitPlanning(root, { ticketId, command: "set", detail: field });
   console.log(ticketPath);
   return 0;
 }
@@ -756,6 +780,14 @@ async function moveAndMaybeMerge(root, ticketId, status, options = {}) {
         pruneMergedBranches: config.git.pruneMergedBranches,
       })
     : null;
+
+  // Auto-merge already commits planning (autoMergeTicketBranch ->
+  // commitPlanningChanges) as the sole committer for "move done" with
+  // git.autoMerge on; guarding on !shouldAutoMerge here avoids a redundant
+  // second commit and any perturbation of the delicate merge/switch sequence.
+  if (!shouldAutoMerge) {
+    await maybeCommitPlanning(root, { ticketId, command: options.command ?? "move", detail: status });
+  }
 
   if (options.asJson) {
     console.log(JSON.stringify({ path: ticketPath, archived, autoMerge: merge }, null, 2));
@@ -786,6 +818,7 @@ async function commandComment(root, args, allowMainRoot) {
 
   const markers = parseMarkerFlags(markerFlags);
   const ticketPath = await appendTicketComment(root, ticketId, section, text, { markers });
+  await maybeCommitPlanning(root, { ticketId, command: "comment", detail: section });
   console.log(ticketPath);
   return 0;
 }
@@ -869,6 +902,7 @@ async function commandSection(root, args, allowMainRoot) {
   }
 
   const ticketPath = await setTicketSection(root, ticketId, section, text);
+  await maybeCommitPlanning(root, { ticketId, command: "section", detail: section });
   console.log(ticketPath);
   return 0;
 }
@@ -886,6 +920,7 @@ async function commandLinkParent(root, args, allowMainRoot) {
   await assertInvocationRootForTicket(root, parentId, { allowMainRoot });
 
   const result = await linkParent(root, childId, parentId);
+  await maybeCommitPlanning(root, { ticketId: childId, command: "link-parent", detail: parentId });
   console.log(`${result.childPath}\n${result.parentPath}`);
   return 0;
 }
@@ -903,6 +938,7 @@ async function commandLinkChild(root, args, allowMainRoot) {
   await assertInvocationRootForTicket(root, childId, { allowMainRoot });
 
   const result = await linkParent(root, childId, parentId);
+  await maybeCommitPlanning(root, { ticketId: parentId, command: "link-child", detail: childId });
   console.log(`${result.parentPath}\n${result.childPath}`);
   return 0;
 }
@@ -920,6 +956,7 @@ async function commandUnlinkParent(root, args, allowMainRoot) {
   await assertInvocationRootForTicket(root, parentId, { allowMainRoot });
 
   const result = await unlinkParent(root, childId, parentId);
+  await maybeCommitPlanning(root, { ticketId: childId, command: "unlink-parent", detail: parentId });
   console.log(`${result.childPath}\n${result.parentPath}`);
   return 0;
 }
@@ -937,6 +974,7 @@ async function commandBlock(root, args, allowMainRoot) {
   await assertInvocationRootForTicket(root, dependencyId, { allowMainRoot });
 
   const result = await blockTicket(root, ticketId, dependencyId);
+  await maybeCommitPlanning(root, { ticketId, command: "block", detail: dependencyId });
   console.log(`${result.ticketPath}\n${result.dependencyPath}`);
   return 0;
 }
@@ -954,6 +992,7 @@ async function commandUnblock(root, args, allowMainRoot) {
   await assertInvocationRootForTicket(root, dependencyId, { allowMainRoot });
 
   const result = await unblockTicket(root, ticketId, dependencyId);
+  await maybeCommitPlanning(root, { ticketId, command: "unblock", detail: dependencyId });
   console.log(`${result.ticketPath}\n${result.dependencyPath}`);
   return 0;
 }
@@ -1005,6 +1044,7 @@ async function commandEstimate(root, args, allowMainRoot) {
 
   await setTicketField(root, ticketId, "estimate", pointsValue);
   const ticketPath = await setTicketField(root, ticketId, "estimateBasis", effectiveBasis);
+  await maybeCommitPlanning(root, { ticketId, command: "estimate", detail: pointsValue });
 
   if (asJson) {
     console.log(JSON.stringify({ path: ticketPath, estimate: parsedPoints, estimateBasis: effectiveBasis }, null, 2));
@@ -1084,6 +1124,7 @@ async function commandGateCheck(root, args, allowMainRoot) {
     // value so it cannot drift from what was actually written.
     const skipResult = await recordGateSkippedEmptyCatalog(root, ticket.id, stage);
     recorded = skipResult.token;
+    await maybeCommitPlanning(root, { ticketId: ticket.id, command: "gate-check", detail: stage });
   }
 
   const baseRecord = ticketRecord(root, ticket);
@@ -1152,6 +1193,7 @@ async function commandGateComplete(root, args, allowMainRoot) {
 
   const composedExecutor = composeExecutor(executor, model);
   const result = await recordGateConsultation(root, ticketId, stage, composedExecutor, evidence);
+  await maybeCommitPlanning(root, { ticketId: result.ticket, command: "gate-complete", detail: result.stage });
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));
   } else {

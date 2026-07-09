@@ -244,6 +244,49 @@ async function assertTicketBranchUpToDate(root, branch, defaultBranch) {
   }
 }
 
+// Commits the planning-only subset of the working tree (plans/**, per
+// isPlanningPath) immediately after a successful mutating CLI command, so
+// ticket state survives destructive git operations (an aborted merge, a
+// `git checkout -- .` probe) that would otherwise destroy uncommitted
+// evidence between stage transitions. Dirty-check-first makes a clean
+// worktree a true no-op; non-git roots are a legitimate config, not an
+// error. Never throws: any git failure downgrades to a stderr warning so a
+// planning-commit failure can never roll back — or block — the mutation
+// that already completed before this helper runs. The `git add plans` scope
+// here is kept in lockstep with isPlanningPath's `plans/` prefix test — both
+// must change together if the planning root ever moves.
+export async function commitPlanningTransition(root, { ticketId, command, detail }) {
+  let isGitRoot = false;
+  try {
+    await gitOutput(root, ["rev-parse", "--is-inside-work-tree"]);
+    isGitRoot = true;
+  } catch {
+    isGitRoot = false;
+  }
+  if (!isGitRoot) {
+    return { committed: false, reason: "non-git" };
+  }
+
+  const entries = await workingTreeEntries(root);
+  const hasPlanningChanges = entries.some((entry) => entry.paths.some(isPlanningPath));
+  if (!hasPlanningChanges) {
+    return { committed: false, reason: "clean" };
+  }
+
+  try {
+    await gitRun(root, ["add", "plans"]);
+    const stagedIsClean = await gitOk(root, ["diff", "--cached", "--quiet"]);
+    if (stagedIsClean) {
+      return { committed: false, reason: "clean" };
+    }
+    await gitRun(root, ["commit", "-m", `${ticketId}: ${command} ${detail}`]);
+    return { committed: true };
+  } catch (error) {
+    console.error(`warning: planning commit skipped: ${error.message}`);
+    return { committed: false, reason: "error", error };
+  }
+}
+
 async function commitPlanningChanges(root, ticketId, options) {
   const entries = await workingTreeEntries(root);
   const hasPlanningChanges = entries.some((entry) => entry.paths.some(isPlanningPath));
@@ -287,7 +330,12 @@ function unquoteGitPath(value) {
   return value;
 }
 
-function isPlanningPath(changedPath) {
+// Shared "planning path" classifier: the one source of truth for what
+// counts as planning state (currently `plans/**`), reused by
+// assertNoNonPlanningChanges, commitPlanningChanges, and
+// commitPlanningTransition so all three resolve planning-vs-non-planning
+// identically. Visibility-only export; behavior is unchanged.
+export function isPlanningPath(changedPath) {
   return changedPath.replace(/\\/g, "/").startsWith("plans/");
 }
 
