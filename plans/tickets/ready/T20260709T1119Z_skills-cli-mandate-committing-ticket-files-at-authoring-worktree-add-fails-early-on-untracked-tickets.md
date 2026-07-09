@@ -13,8 +13,8 @@ estimateBasis: T20260708T2213Z
 workStartedAt: 2026-07-09T12:18:17Z
 workCompletedAt: null
 created: 2026-07-09T11:17:38Z
-updated: 2026-07-09T12:24:49Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-09T12:25:55Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # skills+cli: mandate committing ticket files at authoring; worktree-add fails early on untracked tickets
@@ -236,3 +236,5 @@ branch."
 - 2026-07-09T12:18:17Z: Ensured git branch local-board/T20260709T1119Z-skills-cli-mandate-committing-ticket-files-at-authoring-worktree-add-fails-early-on-untracked-tickets (already-current).
 
 - 2026-07-09T12:24:49Z: Completed design via claude-subagent:local-board-designer@opus: Preflight git status --porcelain -- <ticket> after the repair-path return (untracked/dirty/clean in one call, HEAD-relative); two refusal messages naming the fix; flag-aware skill sentence x4; estimate 2 basis T2213
+
+- 2026-07-09T12:25:55Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (git plumbing + docs)
