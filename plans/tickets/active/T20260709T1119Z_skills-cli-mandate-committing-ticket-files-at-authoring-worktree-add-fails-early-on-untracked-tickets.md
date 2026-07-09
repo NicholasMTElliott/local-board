@@ -1,7 +1,7 @@
 ---
 id: T20260709T1119Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P3
 parent: null
 children: []
@@ -248,3 +248,5 @@ Reviewed by codex-task:read-only (gpt-5.5). One finding: [P3] skills/codex/local
 - 2026-07-09T12:35:43Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (git plumbing + docs)
 
 - 2026-07-09T12:37:55Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
+
+- 2026-07-09T12:37:55Z: Ensured git branch local-board/T20260709T1119Z-skills-cli-mandate-committing-ticket-files-at-authoring-worktree-add-fails-early-on-untracked-tickets (already-current).
