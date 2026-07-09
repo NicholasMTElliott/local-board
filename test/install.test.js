@@ -116,9 +116,9 @@ async function runInstall(home, args, envOptions = {}) {
   });
 }
 
-async function runInstallCli(home, args, envOptions = {}) {
+async function runInstallCli(home, args, envOptions = {}, cwd = path.resolve(".")) {
   return execFileAsync(process.execPath, [CLI, "install", ...args], {
-    cwd: path.resolve("."),
+    cwd,
     encoding: "utf8",
     env: installEnv(home, envOptions),
   });
@@ -405,6 +405,43 @@ test("runInstall({ home: undefined, ... }) (key present, value undefined) throws
     const code = runInstallInProcess(["--target=codex"], { home, resolvesOnPath: () => true });
     assert.equal(code, 0);
     assert.equal(existsSync(path.join(home, ".codex", "skills", "local-board")), true);
+  });
+});
+
+test("--home \"\" and --home \"   \" are rejected before any install path is touched (fail closed, not a silent cwd install)", async () => {
+  await withHome(async (envHome) => {
+    for (const blankHome of ["", "   "]) {
+      await assert.rejects(
+        runInstallCli(envHome, ["--home", blankHome, "--target=claude"]),
+        (error) => {
+          const output = errorOutput(error);
+          assert.match(output, /--home requires a non-empty value/);
+          return true;
+        },
+      );
+    }
+    // Confirms the flag never fell through to resolving against the
+    // installer's cwd (the exact bug this guards against).
+    assert.equal(existsSync(path.join(path.resolve("."), ".local-board")), false);
+    assert.equal(existsSync(path.join(path.resolve("."), ".claude", "skills", "local-board")), false);
+  });
+});
+
+test("relative --home resolves against the invoker's current directory, not the installer's own location", async () => {
+  await withHome(async (envHome) => {
+    const scratchCwd = await mkdtemp(path.join(os.tmpdir(), "local-board-relhome-cwd-"));
+    try {
+      await runInstallCli(envHome, ["--home", "./sandbox-home", "--target=claude"], {}, scratchCwd);
+
+      const resolvedHome = path.join(scratchCwd, "sandbox-home");
+      assert.equal(existsSync(path.join(resolvedHome, ".claude", "skills", "local-board")), true);
+      assert.equal(existsSync(path.join(resolvedHome, ".local-board")), true);
+      // Never wrote under the repo's own install.mjs directory or envHome.
+      assert.equal(existsSync(path.join(path.resolve("."), "sandbox-home")), false);
+      assert.equal(existsSync(path.join(envHome, ".claude")), false);
+    } finally {
+      await removeFixtureDir(scratchCwd);
+    }
   });
 });
 

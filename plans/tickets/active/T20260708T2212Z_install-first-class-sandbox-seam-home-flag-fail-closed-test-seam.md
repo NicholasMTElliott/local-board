@@ -13,7 +13,7 @@ estimateBasis: T20260708T2016Z
 workStartedAt: 2026-07-09T00:44:53Z
 workCompletedAt: null
 created: 2026-07-08T22:10:45Z
-updated: 2026-07-09T00:54:39Z
+updated: 2026-07-09T01:15:26Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -301,6 +301,14 @@ ceremony the ticket set out to remove.)
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) on the implement commit (worktree).
+
+- [P2] `src/install.js:151,422` — `--home` bypasses the non-empty-string gate applied to `options.home`: `parseArgs` accepts any non-flag token and `resolveHome` returns `args.home` unchecked, so `--home ""` (or blank) marks `homeOverridden`, skips the PATH precheck, and `join(home, ".local-board")`/`buildTargets(home)` resolve relative to the CURRENT WORKING DIRECTORY — a sandbox flag that can mutate the repo/worktree (`.local-board/`, `.claude/settings.json`). Validate `args.home` with the same trimmed non-empty rule, normalize with `resolve()`, and add a regression test for `--home ""`; document the relative-path policy explicitly if intentional.
+
+Passing: incident replay covered — `{ home: undefined, resolvesOnPath: () => true }` throws before `homedir()` (src/install.js:145) with a test asserting that exact shape (test/install.test.js:397); guard centralized ahead of install/uninstall branching so all entry points route through it; PATH-skip precedence honors an explicit resolvesOnPath; guard env parsed as exact `=1` with a refusal naming the env var and the fix; docs accurate and consistent with the consent callout.
+
+Verdict: changes_requested
+
 ## Test Evidence
 
 ## Documentation Updates
@@ -316,3 +324,11 @@ ceremony the ticket set out to remove.)
 - 2026-07-09T00:54:39Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (hardening seam, no new trust surface)
 
 - 2026-07-09T00:54:39Z: Ensured git branch local-board/T20260708T2212Z-install-first-class-sandbox-seam-home-flag-fail-closed-test-seam (already-current).
+
+- 2026-07-09T01:06:18Z: Completed implement via claude-subagent:local-board-implementer@sonnet: resolveHome gate (flag > options.home > guard > homedir, explicit-undefined throws); LOCAL_BOARD_INSTALL_REQUIRE_HOME guard; PATH-check skip on override; 4 tests; 418 pass + 1 skip; skill-sync 4/4
+
+- 2026-07-09T01:08:25Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (hardening seam, defensive validation only)
+
+- 2026-07-09T01:15:25Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
+
+- 2026-07-09T01:15:26Z: Ensured git branch local-board/T20260708T2212Z-install-first-class-sandbox-seam-home-flag-fail-closed-test-seam (already-current).

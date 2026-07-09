@@ -11,7 +11,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Package root (directory holding package.json, bin/, src/, agents/, skills/,
@@ -147,8 +147,16 @@ function resolveHome(args, options) {
       "runInstall: options.home was provided but is undefined; pass a directory or omit the key",
     );
   }
-  // 2. CLI/argv flag wins.
-  if (args.home !== null) return args.home;
+  // 2. CLI/argv flag wins. Validated non-empty (same rule as options.home)
+  // and resolved to an absolute path so a relative value resolves against
+  // the invoker's cwd rather than silently mutating whatever directory the
+  // process happens to be running in.
+  if (args.home !== null) {
+    if (args.home.trim() === "") {
+      throw new Error("--home requires a non-empty value");
+    }
+    return resolve(args.home);
+  }
   // 3. Programmatic override (defined; validated non-empty string).
   if (Object.hasOwn(options, "home")) {
     if (typeof options.home !== "string" || options.home.trim() === "") {
@@ -488,7 +496,9 @@ target's settings.json. Off by default; --no-hooks removes them.
 
 --home <dir> installs (or uninstalls) under <dir> instead of the real home
 directory (os.homedir()). This is the supported sandbox/testing seam; it also
-skips the on-PATH precheck, since a relocated home has no PATH expectation.`);
+skips the on-PATH precheck, since a relocated home has no PATH expectation.
+<dir> must be non-empty; a relative <dir> is resolved against the current
+directory, not against the installer's own location.`);
 }
 
 function patchSettings(settingsPath, allowRule) {

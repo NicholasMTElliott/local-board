@@ -187,6 +187,9 @@ install`, the deprecated `node install.mjs` shim, and the in-process
 `runInstall(argv, { home })` seam), since all three route through the same
 home-resolution code. An overridden home also skips the on-PATH precheck (a
 sandboxed home has no PATH expectation, so probes need not also stub PATH).
+`--home <dir>` rejects empty/blank values (nothing is written); a relative
+`<dir>` is resolved against the current directory, not against the
+installer's own location.
 
 For test harnesses that must never risk touching the real home directory, set
 `LOCAL_BOARD_INSTALL_REQUIRE_HOME=1` in the environment: with the guard set,
