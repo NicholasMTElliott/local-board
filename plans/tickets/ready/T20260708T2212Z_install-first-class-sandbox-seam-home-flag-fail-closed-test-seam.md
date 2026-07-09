@@ -1,7 +1,7 @@
 ---
 id: T20260708T2212Z
 type: task
-status: implementing
+status: ready_for_docs
 priority: P3
 parent: null
 children: []
@@ -13,8 +13,8 @@ estimateBasis: T20260708T2016Z
 workStartedAt: 2026-07-09T00:44:53Z
 workCompletedAt: null
 created: 2026-07-08T22:10:45Z
-updated: 2026-07-09T01:15:26Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-09T01:31:38Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # install: first-class sandbox seam (--home flag, fail-closed test seam)
@@ -311,7 +311,39 @@ Verdict: changes_requested
 
 ## Test Evidence
 
+Verified by claude-subagent:local-board-tester (sonnet), in the ticket worktree. All live probes used --home inside the session scratchpad; real HOME never targeted.
+
+### Static checks
+
+| Command | Result |
+|---|---|
+| `npm run check` | PASS |
+| `npm test` | PASS — 421 tests, 420 pass, 0 fail, 1 skipped |
+| `npm run validate` | PASS — Ticket validation OK |
+| `node --test test/skill-usage-sync.test.js` | PASS — 4/4 |
+
+### Live CLI probes
+
+- Full round trip (`--home <scratch>/probe-home --target=claude`): complete tree installed (runtime, both skills, 7 agents, settings.json with exactly the allow rule); `--uninstall --home <same>` removed runtime/skills/agents AND the allow rule — post-uninstall settings.json is `{}` (B0459's removal composes with --home). PASS.
+- `--home ""` and `--home "  "`: `--home requires a non-empty value`, exit 2; git status identical before/after; nothing created in cwd; the worktree's own tracked .claude/settings.json untouched. PASS.
+- Relative `--home ./rel-home` from a scratch cwd: landed under `<scratch>/rel-cwd/rel-home/` — resolved against invoker cwd, not the script location. PASS.
+- `LOCAL_BOARD_INSTALL_REQUIRE_HOME=1` without --home: refusal naming the env var and the fix, exit 2, nothing created; with --home: proceeds fully. PASS.
+- API incident replay: `runInstall(["--target=claude"], { home: undefined, resolvesOnPath: () => true })` throws synchronously ("options.home was provided but is undefined; pass a directory or omit the key") before homedir() or any write — the exact 2026-07-08 incident shape; real-home timestamps confirmed untouched. PASS.
+
+### Docs
+
+docs/Install.md documents the flag (usage line 50; Testing/sandboxing section 181-204: non-empty rule, cwd-relative resolution, PATH-precheck skip, guard env + incident motivation, fail-closed undefined rule) and uninstall symmetry (212-213). All claims matched observed behavior.
+
+### Caveats
+
+- Other targets (codex/opencode/cline/cursor/agents) and --hooks composition with --home not live-probed (covered by unit tests; acceptance names --target=claude).
+- Probe dirs removed; worktree clean of tester changes.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5). Primary docs (Install.md testing/sandboxing + uninstall symmetry) shipped at implement/rework. Closing audit: techContext + systemPatterns gained terse current-state sandbox-seam facts (--home flag, fail-closed undefined, guard env); SECURITY.md gained one consent-focused sentence on sandboxed installs; Install.md vs README pointer verified consistent.
 
 ## Questions
 
@@ -332,3 +364,13 @@ Verdict: changes_requested
 - 2026-07-09T01:15:25Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
 
 - 2026-07-09T01:15:26Z: Ensured git branch local-board/T20260708T2212Z-install-first-class-sandbox-seam-home-flag-fail-closed-test-seam (already-current).
+
+- 2026-07-09T01:19:29Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework: --home validated (trimmed non-empty) + path.resolve normalization; 2 regression tests (empty/blank rejected fail-closed, relative resolves against cwd); 420 pass + 1 skip
+
+- 2026-07-09T01:20:54Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (new trigger text correctly carved out internal CLI flag validation)
+
+- 2026-07-09T01:20:55Z: Completed review via codex-task:read-only: changes_requested (P2 empty --home cwd-mutation risk) on impl commit; addressed in rework (validate + resolve); recorded post-move per evidence-invalidation ordering
+
+- 2026-07-09T01:27:07Z: Completed test via claude-subagent:local-board-tester@sonnet: 420 pass + 1 skip; round trip incl. B0459 composition, empty/relative/guard/incident-replay probes all pass; docs match behavior
+
+- 2026-07-09T01:31:38Z: Completed document via codex-task:workspace-write: memory-bank facts + SECURITY sentence; pointers consistent

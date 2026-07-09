@@ -136,6 +136,9 @@ When `routing.enforceTransitions` is true, `moveTicket` refuses a target status 
 Installer targets are six: `claude` default-on, `codex`/`opencode`/`cline`/`cursor`
 detect-only, and `agents` explicit-only. Every install refreshes `~/.local-board`
 for hooks + provenance; selected targets get `local-board`/`local-team` skill dirs.
+`--home <dir>` is the installer sandbox seam; home resolution rejects explicit
+`undefined`, and `LOCAL_BOARD_INSTALL_REQUIRE_HOME=1` refuses real-home
+install/uninstall runs without an override.
 Bundled Claude agents live in `agents/claude/` and are installed to `~/.claude/agents/`.
 Codex skill templates live in `skills/codex/` and install to `~/.codex/skills/local-board` and `~/.codex/skills/local-team`. Codex executor prompts resolve from `local-board where --json` `agentsDir`.
 

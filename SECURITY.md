@@ -25,7 +25,8 @@ The risk surface is delegation, not the CLI itself:
 
 - The installable skills (`SKILL.md`, `SKILL_TEAM.md`) instruct an AI coding agent to design, implement, review, test, and document tickets, and to run git operations. That agent executes code and commands on your machine.
 - Routing entries of the form `codex-task:*` shell out to an external executor; `claude-subagent:*` routes delegate to Claude Code subagents. Both run AI-generated work locally.
-- `node install.mjs` writes skill and agent files into your home-directory agent config and patches the Claude Code settings allow-list.
+- `local-board install` (and the deprecated `node install.mjs` shim) writes skill and agent files into your home-directory agent config and patches the Claude Code settings allow-list.
+- For tests or sandboxed audits, run installs with `--home <dir>` and optionally `LOCAL_BOARD_INSTALL_REQUIRE_HOME=1` so consent-sensitive writes cannot fall through to your real home directory.
 
 Use local-board only against repositories and workflows you control and review. Treat agent-proposed changes as untrusted until reviewed, the same as any pull request.
 
