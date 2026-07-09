@@ -212,8 +212,7 @@ closeout), executors only do the work and return. Concurrency cap comes from
 `maxInFlight`; the real limiter is the orchestrator's context budget, so a low cap
 (≈3) plus `/compact` at wave boundaries is sensible. Conflicts: best-effort
 pre-merge of `branchReady` peers before an overlapping `implement`, with the
-`move … done` rebase-onto-default precondition as the mandatory backstop. This
-unifies single-ticket and parallel mode as the N=1 and N>1 cases of one orchestrator.
+`move … done` rebase-onto-default precondition as the mandatory backstop. Single-ticket orchestration is the N=1 case and defaults to the same per-ticket worktree lifecycle; main-checkout work is fallback-only.
 See `SKILL_TEAM.md`, `skills/codex/local-team/SKILL.md`, and `docs/PerStepOrchestration.md`. The old agent-teams teammate
 flow and its `local-board-teammate` agent have been removed; `docs/TeamMode.md` is
 retained only as historical context.

@@ -1,7 +1,7 @@
 ---
 id: T20260708T2213Z
 type: task
-status: implementing
+status: ready_for_docs
 priority: P4
 parent: null
 children: []
@@ -13,8 +13,8 @@ estimateBasis: T20260708T2016Z
 workStartedAt: 2026-07-09T01:19:30Z
 workCompletedAt: null
 created: 2026-07-08T22:10:45Z
-updated: 2026-07-09T01:39:29Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-09T01:54:22Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # skill: make worktrees the default for single-ticket mode
@@ -246,7 +246,34 @@ Verdict: changes_requested
 
 ## Test Evidence
 
+Verified by claude-subagent:local-board-tester (sonnet), in the ticket worktree.
+
+| Command | Result |
+|---|---|
+| `npm run check` | PASS |
+| `npm test` | PASS — 416 tests, 415 pass, 0 fail, 1 skipped |
+| `npm run validate` | PASS — Ticket validation OK |
+| `node --test test/skill-usage-sync.test.js` | PASS — 4/4 |
+| `node --test test/resources-sync.test.js` | PASS — 4/4 |
+
+### Structural audit (both skill files)
+
+- worktree-add precedes begin-step/start-work in both default loops (root Core Loop 8→9; codex Single-Ticket Loop 2→3); begin-step examples carry `--root <worktreePath>` (codex also `--harness codex`).
+- No default-flow per-ticket example lacks `--root`; the no-root examples sit inside the reframed fallback Branch Discipline sections or the generic CLI Commands block (which omits `[--root <path>]` by the same convention as every existing line).
+- Curated blocks byte-identical (programmatic check); the three new lines match usage text exactly.
+- No dangling step references; numbering contiguous (root 1–15, codex 1–11).
+- Fallback subsections present in both, framed as fallback, with the stacking hazard symptom and fast-forward mitigation.
+- CLI reality check: `query-ticket --root .` works from the worktree root as documented.
+
+### Observations (not defects)
+
+- Pre-existing Specialty/Gate-Check example blocks lack `--root` (untouched by this ticket's scoped edits; candidate for a future consistency pass).
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5). Primary docs (both skill files) shipped at implement/rework. Closing audit: systemPatterns gained the worktree-first single-ticket fact; Workflow.md Branch Handling gained a terse worktree-default pointer; README verified consistent.
 
 ## Questions
 
@@ -267,3 +294,13 @@ Verdict: changes_requested
 - 2026-07-09T01:39:29Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
 
 - 2026-07-09T01:39:29Z: Ensured git branch local-board/T20260708T2213Z-skill-make-worktrees-the-default-for-single-ticket-mode (already-current).
+
+- 2026-07-09T01:44:21Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework: codex loop reordered (worktree-add before begin-step), --root added to all default-flow examples in both files, fallback-form sentence added; 415 pass + 1 skip; skill-sync 4/4
+
+- 2026-07-09T01:45:14Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (Markdown rework)
+
+- 2026-07-09T01:45:15Z: Completed review via codex-task:read-only: changes_requested (2x P2: loop ordering, missing --root in default examples) on impl commit; addressed in rework; recorded post-move per evidence-invalidation ordering
+
+- 2026-07-09T01:52:31Z: Completed test via claude-subagent:local-board-tester@sonnet: 415 pass + 1 skip; structural audit clean (ordering, --root coverage, byte-identical blocks, numbering); fallback framing verified; pre-existing specialty-section --root gap noted as future candidate
+
+- 2026-07-09T01:54:22Z: Completed document via codex-task:workspace-write: systemPatterns fact + Workflow pointer; README verified
