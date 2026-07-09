@@ -1,7 +1,7 @@
 ---
 id: T20260709T1119Z
 type: task
-status: ready_for_docs
+status: done
 priority: P3
 parent: null
 children: []
@@ -11,7 +11,7 @@ branch: local-board/T20260709T1119Z-skills-cli-mandate-committing-ticket-files-a
 estimate: 2
 estimateBasis: T20260708T2213Z
 workStartedAt: 2026-07-09T12:18:17Z
-workCompletedAt: null
+workCompletedAt: 2026-07-09T12:50:41Z
 created: 2026-07-09T11:17:38Z
 updated: 2026-07-09T12:50:41Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
