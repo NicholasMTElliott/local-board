@@ -13,7 +13,7 @@ estimateBasis: T20260708T2213Z
 workStartedAt: 2026-07-09T12:18:17Z
 workCompletedAt: null
 created: 2026-07-09T11:17:38Z
-updated: 2026-07-09T12:49:19Z
+updated: 2026-07-09T12:50:40Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -254,6 +254,8 @@ No gaps.
 Result: pass
 
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5). Closing audit: memory-bank/systemPatterns.md gained the worktree-add refusal + committed-authoring fact; docs/Workflow.md gained one sentence noting the refusal where worktree-add was mentioned. Skill texts shipped at implement/rework.
 
 ## Questions
 
