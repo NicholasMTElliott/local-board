@@ -1,7 +1,7 @@
 ---
 id: T20260709T1119Z
 type: task
-status: reviewing
+status: ready_for_implementation
 priority: P3
 parent: null
 children: []
@@ -14,7 +14,7 @@ workStartedAt: 2026-07-09T12:18:17Z
 workCompletedAt: null
 created: 2026-07-09T11:17:38Z
 updated: 2026-07-09T12:37:55Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # skills+cli: mandate committing ticket files at authoring; worktree-add fails early on untracked tickets
@@ -246,3 +246,5 @@ Reviewed by codex-task:read-only (gpt-5.5). One finding: [P3] skills/codex/local
 - 2026-07-09T12:33:38Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Preflight after repair-path return; untracked/dirty refusals naming the fix; flag-aware sentence in all four skills; 3 tests; 445 pass + 1 skip; skill-sync 4/4
 
 - 2026-07-09T12:35:43Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (git plumbing + docs)
+
+- 2026-07-09T12:37:55Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
