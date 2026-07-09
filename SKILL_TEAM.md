@@ -189,8 +189,8 @@ survives compaction cheaply.
   may hold uncommitted, orchestrator-owned ticket state: instruct it to revert
   probe edits by targeted path only (`git checkout -- <file>` / `git restore
   <file>`) and to never run tree-wide or branch/history-mutating git inside the
-  worktree — no `git checkout -- .`, `git restore .`, `git stash`,
-  `git reset --hard`, `git merge`/`git merge --abort`, or branch switches.
+  worktree — no tree-wide reverts, cleans, stashes, resets, merges, rebases,
+  or branch switches.
 
 ## What this mode does NOT do
 

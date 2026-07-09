@@ -77,7 +77,7 @@ You own:
 - gate-check and specialty dispatch;
 - conflict decisions and closeout.
 
-Executors do not change ticket status. Return-only executors do not edit files. Worker executors may edit their assigned worktree scope only and must not revert edits made by others. Every dispatched executor works in a ticket worktree that may hold uncommitted, orchestrator-owned ticket state: instruct it to revert probe edits by targeted path only (`git checkout -- <file>` / `git restore <file>`) and to never run tree-wide or branch/history-mutating git inside the worktree — no `git checkout -- .`, `git restore .`, `git stash`, `git reset --hard`, `git merge`/`git merge --abort`, or branch switches.
+Executors do not change ticket status. Return-only executors do not edit files. Worker executors may edit their assigned worktree scope only and must not revert edits made by others. Every dispatched executor works in a ticket worktree that may hold uncommitted, orchestrator-owned ticket state: instruct it to revert probe edits by targeted path only (`git checkout -- <file>` / `git restore <file>`) and to never run tree-wide or branch/history-mutating git inside the worktree — no tree-wide reverts, cleans, stashes, resets, merges, rebases, or branch switches.
 
 ## Conflict Gate
 

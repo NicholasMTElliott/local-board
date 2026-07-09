@@ -13,7 +13,7 @@ estimateBasis: T20260708T2213Z
 workStartedAt: 2026-07-09T11:21:29Z
 workCompletedAt: null
 created: 2026-07-09T11:17:38Z
-updated: 2026-07-09T11:30:01Z
+updated: 2026-07-09T11:49:47Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -127,6 +127,8 @@ None beyond the skill/prompt text itself. No `docs/` narrative or README index c
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5). One finding: [P3] the banned-command examples omit git clean -fd/-fdx and git rebase/--abort — plausible executor cleanup/update commands that destroy uncommitted or untracked state; add to the lists in both routed prompts and all four skill texts, re-sync resources (plans/prompts/steps/test.md:21, plans/prompts/roles/code_reviewer.md:21, SKILL.md:311, SKILL_TEAM.md:190, skills/codex/local-board/SKILL.md:101, skills/codex/local-team/SKILL.md:80). Passing: targeted-revert examples + stop-and-report fallback present; routing confirms the two prompts cover the mutating executors; security_audit prompt read-only; plans/resources byte-identical; curated blocks untouched; no CodexSupport contradiction. Verdict: changes_requested
+
 ## Test Evidence
 
 ## Documentation Updates
@@ -142,3 +144,11 @@ None beyond the skill/prompt text itself. No `docs/` narrative or README index c
 - 2026-07-09T11:30:00Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (prompt/skill prose)
 
 - 2026-07-09T11:30:01Z: Ensured git branch local-board/T20260709T1118Z-prompts-git-safety-guardrails-for-executors-targeted-reverts-only (already-current).
+
+- 2026-07-09T11:39:47Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Worktree git safety section in test.md + code_reviewer.md (plans + synced resources); executor rule + codex serial rule in all four skill texts; 431 pass + 1 skip; both sync tests 4/4
+
+- 2026-07-09T11:41:48Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (Markdown prose)
+
+- 2026-07-09T11:49:47Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
+
+- 2026-07-09T11:49:47Z: Ensured git branch local-board/T20260709T1118Z-prompts-git-safety-guardrails-for-executors-targeted-reverts-only (already-current).

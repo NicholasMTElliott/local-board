@@ -98,7 +98,7 @@ Self-writing routes:
 - `local-board-implementer`
 - `local-board-documenter`
 
-Workers may edit their assigned worktree scope only. Tell workers they are not alone in the codebase, must preserve unrelated changes, and must not revert edits made by others. The orchestrator owns all ticket status transitions and completion evidence. Every dispatched executor works in a ticket worktree that may hold uncommitted, orchestrator-owned ticket state: instruct it to revert probe edits by targeted path only (`git checkout -- <file>` / `git restore <file>`) and to never run tree-wide or branch/history-mutating git inside the worktree — no `git checkout -- .`, `git restore .`, `git stash`, `git reset --hard`, `git merge`/`git merge --abort`, or branch switches.
+Workers may edit their assigned worktree scope only. Tell workers they are not alone in the codebase, must preserve unrelated changes, and must not revert edits made by others. The orchestrator owns all ticket status transitions and completion evidence. Every dispatched executor works in a ticket worktree that may hold uncommitted, orchestrator-owned ticket state: instruct it to revert probe edits by targeted path only (`git checkout -- <file>` / `git restore <file>`) and to never run tree-wide or branch/history-mutating git inside the worktree — no tree-wide reverts, cleans, stashes, resets, merges, rebases, or branch switches.
 
 `codex-task` dispatches are serial-by-design: never background one with a shell `&` (concurrent `CODEX_HOME` use corrupts session state) — use the harness's own background/spawn dispatch when you need concurrency.
 

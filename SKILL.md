@@ -308,7 +308,7 @@ Whenever a CLI command needs a file argument (such as `section --file`), create 
 
 The orchestrator remains responsible for canonical ticket state unless a delegated worker was explicitly assigned write scope.
 
-Every dispatched executor works in a ticket worktree that may hold uncommitted, orchestrator-owned ticket state: instruct it to revert probe edits by targeted path only (`git checkout -- <file>` / `git restore <file>`) and to never run tree-wide or branch/history-mutating git inside the worktree — no `git checkout -- .`, `git restore .`, `git stash`, `git reset --hard`, `git merge`/`git merge --abort`, or branch switches.
+Every dispatched executor works in a ticket worktree that may hold uncommitted, orchestrator-owned ticket state: instruct it to revert probe edits by targeted path only (`git checkout -- <file>` / `git restore <file>`) and to never run tree-wide or branch/history-mutating git inside the worktree — no tree-wide reverts, cleans, stashes, resets, merges, rebases, or branch switches.
 
 When recording completion evidence, pass `--executor <configuredAgent> --model <configuredModel>` verbatim from `begin-step` (omit `--model` when `configuredModel` is null); `complete-step`/`gate-complete` compose the `<route>@<model>` token server-side — for example `claude-subagent:local-board-designer` + `--model opus` records `claude-subagent:local-board-designer@opus`. The combined `--executor <route>@<model>` form remains equivalent and accepted for back-compat. Strict routing matches the route, and when the route matches and a model is pinned, also requires the recorded model to match (or `codex-default`, or an approved deviation — see below).
 
