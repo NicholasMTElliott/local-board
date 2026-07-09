@@ -252,9 +252,21 @@ async function assertTicketBranchUpToDate(root, branch, defaultBranch) {
 // worktree a true no-op; non-git roots are a legitimate config, not an
 // error. Never throws: any git failure downgrades to a stderr warning so a
 // planning-commit failure can never roll back — or block — the mutation
-// that already completed before this helper runs. The `git add plans` scope
-// here is kept in lockstep with isPlanningPath's `plans/` prefix test — both
-// must change together if the planning root ever moves.
+// that already completed before this helper runs. Only the is-a-git-root
+// probe runs ahead of the try block; every other git call (the dirty check,
+// add, gate, commit) lives inside it, so a failure anywhere in that
+// sequence degrades to the same warning instead of failing the CLI command
+// after the mutation it's reporting on has already succeeded.
+// The `-- plans` pathspec on the staged-diff gate and the commit itself is
+// what keeps this scoped to planning state even when the working tree also
+// has unrelated staged content (a user's own `git add` of a non-planning
+// file, left staged before the CLI ran): `git add plans` only ever stages
+// plans/**, but `git commit` with no pathspec commits the *entire* index,
+// so the commit must be pathspec-limited too. `git commit -m <msg> --
+// plans` commits only the plans/** paths' current working-tree content and
+// leaves any other already-staged paths staged and uncommitted afterward.
+// This scope is kept in lockstep with isPlanningPath's `plans/` prefix
+// test — both must change together if the planning root ever moves.
 export async function commitPlanningTransition(root, { ticketId, command, detail }) {
   let isGitRoot = false;
   try {
@@ -267,19 +279,19 @@ export async function commitPlanningTransition(root, { ticketId, command, detail
     return { committed: false, reason: "non-git" };
   }
 
-  const entries = await workingTreeEntries(root);
-  const hasPlanningChanges = entries.some((entry) => entry.paths.some(isPlanningPath));
-  if (!hasPlanningChanges) {
-    return { committed: false, reason: "clean" };
-  }
-
   try {
+    const entries = await workingTreeEntries(root);
+    const hasPlanningChanges = entries.some((entry) => entry.paths.some(isPlanningPath));
+    if (!hasPlanningChanges) {
+      return { committed: false, reason: "clean" };
+    }
+
     await gitRun(root, ["add", "plans"]);
-    const stagedIsClean = await gitOk(root, ["diff", "--cached", "--quiet"]);
+    const stagedIsClean = await gitOk(root, ["diff", "--cached", "--quiet", "--", "plans"]);
     if (stagedIsClean) {
       return { committed: false, reason: "clean" };
     }
-    await gitRun(root, ["commit", "-m", `${ticketId}: ${command} ${detail}`]);
+    await gitRun(root, ["commit", "-m", `${ticketId}: ${command} ${detail}`, "--", "plans"]);
     return { committed: true };
   } catch (error) {
     console.error(`warning: planning commit skipped: ${error.message}`);

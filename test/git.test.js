@@ -679,6 +679,42 @@ test(
 );
 
 test(
+  "commitPlanningTransition pathspec-limits the commit to plans/** even when a non-planning file is already staged",
+  { skip: !GIT_AVAILABLE },
+  async () => {
+    await withRepo(async (root) => {
+      const created = await runCli(["--root", root, "create", "task", "Pathspec scope"]);
+      assert.equal(created.code, 0, created.stderr);
+      const ticketId = path.basename(created.stdout.trim()).split("_", 1)[0];
+      await assertPlansClean(root);
+
+      // Simulate a user who already `git add`ed a non-planning file of their
+      // own before running the CLI, then dirty a planning field via a
+      // mutating command that triggers the transition commit.
+      await writeFile(path.join(root, "staged.txt"), "user work\n", "utf8");
+      await git(root, ["add", "staged.txt"]);
+
+      const commented = await runCli(["--root", root, "comment", ticketId, "pathspec regression"]);
+      assert.equal(commented.code, 0, commented.stderr);
+
+      // The transition commit must contain only plans/** paths -- never the
+      // user's pre-staged non-planning file.
+      const committedFiles = (await gitOutput(root, ["show", "--name-only", "--pretty=format:", "HEAD"]))
+        .split(/\r?\n/)
+        .filter((line) => line !== "");
+      assert.ok(committedFiles.length > 0, "transition commit must touch at least one file");
+      for (const file of committedFiles) {
+        assert.equal(file.startsWith("plans/"), true, `unexpected non-planning path in transition commit: ${file}`);
+      }
+
+      // The user's pre-staged non-planning file must remain staged and
+      // uncommitted after the transition commit.
+      assert.equal(await gitOutput(root, ["status", "--porcelain", "--", "staged.txt"]), "A  staged.txt");
+    });
+  },
+);
+
+test(
   "commitPlanningTransition: a second call after a commit is a true no-op (dirty-check-first, back-to-back calls stay cheap)",
   { skip: !GIT_AVAILABLE },
   async () => {

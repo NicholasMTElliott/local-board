@@ -486,6 +486,20 @@ async function commandWorktreeAdd(root, args) {
   }
 
   const result = await addTicketWorktree(root, ticketId);
+  if (!result.created) {
+    // The repair path (existing registered worktree, ticket branch field
+    // out of sync) may rewrite the ticket's branch field in the *linked*
+    // worktree via setTicketField -- commit that at result.worktreePath,
+    // not the invocation root, since that's where the mutation landed. The
+    // new-worktree path is unaffected: it already durably commits its own
+    // branch stamp via commitBranchStamp, so committing here too would
+    // double-commit.
+    await maybeCommitPlanning(result.worktreePath, {
+      ticketId: result.ticketId,
+      command: "worktree-add",
+      detail: result.branch,
+    });
+  }
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));
   } else {

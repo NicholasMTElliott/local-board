@@ -13,7 +13,7 @@ estimateBasis: T20260708T2213Z
 workStartedAt: 2026-07-09T11:21:29Z
 workCompletedAt: null
 created: 2026-07-09T11:17:37Z
-updated: 2026-07-09T11:30:01Z
+updated: 2026-07-09T11:55:30Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -298,6 +298,16 @@ mutation. In the parallel orchestrator each ticket runs in its own worktree
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5) on the implement commit (worktree).
+
+- [P1] `src/git.js:277,282` — `git add plans` then `git commit -m ...` with NO pathspec commits the entire existing index: a user's pre-staged non-planning file (e.g. src/foo.js) gets swept into the transition commit, violating the core scope-safety acceptance criterion. Fix: pathspec-limit the commit (`git commit -m ... -- plans` with `git diff --cached --quiet -- plans` as the dirty gate) or preserve/restore pre-existing index state. Add a regression test with a pre-staged non-planning file + dirty planning change.
+- [P2] `src/git.js:270` + `src/cli.js:434` — the dirty check runs before the try block, so a failing `git status --porcelain` fails the whole command after the mutation succeeded, contradicting warning-not-failure. Move the dirty check inside the nonfatal path (only the non-git probe may precede it).
+- [P2] `src/worktrees.js:35-37` + `src/cli.js:479-496` — worktree-add's existing-worktree REPAIR path mutates the ticket (branch field) with no durability commit (commitBranchStamp only covers the new-worktree path; commandWorktreeAdd never calls maybeCommitPlanning). Close the gap.
+
+Verified passing: plans/local-board.config.jsonc consistently planning-scoped (classifier is plans/**); untracked plans/ files included by git add; `git -C <root>` makes pathspecs cwd-independent; worktree .git-file roots handled by the rev-parse probe; creation path has no double commit.
+
+Verdict: changes_requested
+
 ## Test Evidence
 
 ## Documentation Updates
@@ -313,3 +323,11 @@ mutation. In the parallel orchestrator each ticket runs in its own worktree
 - 2026-07-09T11:30:00Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (internal git durability)
 
 - 2026-07-09T11:30:01Z: Ensured git branch local-board/T20260709T1117Z-cli-commit-planning-changes-at-stage-transitions-durable-ticket-state (already-current).
+
+- 2026-07-09T11:49:48Z: Completed implement via claude-subagent:local-board-implementer@sonnet: commitPlanningTransition helper (shared classifier, dirty-check-first, warning-not-failure) wired into all mutating handlers; flag fallback-false/scaffold-true; 8 tests incl. checkout--. regression and index.lock warning path; 439 pass + 1 skip
+
+- 2026-07-09T11:51:13Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (internal git durability)
+
+- 2026-07-09T11:55:30Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
+
+- 2026-07-09T11:55:30Z: Ensured git branch local-board/T20260709T1117Z-cli-commit-planning-changes-at-stage-transitions-durable-ticket-state (already-current).
