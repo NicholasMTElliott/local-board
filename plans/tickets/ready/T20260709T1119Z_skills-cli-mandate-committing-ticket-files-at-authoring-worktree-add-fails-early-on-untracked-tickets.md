@@ -7,13 +7,13 @@ parent: null
 children: []
 blockedBy: [T20260709T1117Z]
 blocks: []
-branch: null
+branch: local-board/T20260709T1119Z-skills-cli-mandate-committing-ticket-files-at-authoring-worktree-add-fails-early-on-untracked-tickets
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-09T11:17:38Z
-updated: 2026-07-09T11:21:14Z
+updated: 2026-07-09T12:18:16Z
 completedSteps: []
 routingApprovals: []
 ---
