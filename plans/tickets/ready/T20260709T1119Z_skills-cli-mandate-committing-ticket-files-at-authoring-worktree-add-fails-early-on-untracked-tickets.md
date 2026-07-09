@@ -14,7 +14,7 @@ workStartedAt: 2026-07-09T12:18:17Z
 workCompletedAt: null
 created: 2026-07-09T11:17:38Z
 updated: 2026-07-09T12:49:18Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet"]
 routingApprovals: []
 ---
 # skills+cli: mandate committing ticket files at authoring; worktree-add fails early on untracked tickets
@@ -280,3 +280,5 @@ Result: pass
 - 2026-07-09T12:42:38Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (prose rework)
 
 - 2026-07-09T12:42:39Z: Completed review via codex-task:read-only: changes_requested (P3: codex authoring flows missing the rule) on impl commit; addressed in rework; recorded post-move per evidence-invalidation ordering
+
+- 2026-07-09T12:49:18Z: Completed test via claude-subagent:local-board-tester@sonnet: 445 pass + 1 skip; live untracked/dirty refusals with no debris, clean path + worktree content verified; skill rule in all four files incl. both codex flows
