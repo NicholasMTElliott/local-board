@@ -252,6 +252,9 @@
     // Loop-back moves to an earlier ready_* status strip downstream
     // completedSteps evidence and matching approvals (Run Log records it).
     "invalidateOnLoopBack": true,
+    // Refuse complete-step evidence recorded ahead of its producing status
+    // (a pending forward move would strip it); --override --reason escapes.
+    "guardPrematureEvidence": true,
     "doneRequires": {
       "epic": ["decompose"],
       "story": ["decompose"],
