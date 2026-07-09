@@ -7,13 +7,13 @@ parent: null
 children: []
 blockedBy: []
 blocks: [T20260709T1119Z]
-branch: null
+branch: local-board/T20260709T1117Z-cli-commit-planning-changes-at-stage-transitions-durable-ticket-state
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-09T11:17:37Z
-updated: 2026-07-09T11:21:14Z
+updated: 2026-07-09T11:21:27Z
 completedSteps: []
 routingApprovals: []
 ---
