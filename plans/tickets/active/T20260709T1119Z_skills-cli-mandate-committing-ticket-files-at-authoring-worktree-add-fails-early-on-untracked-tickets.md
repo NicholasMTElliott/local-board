@@ -1,7 +1,7 @@
 ---
 id: T20260709T1119Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P3
 parent: null
 children: []
@@ -238,3 +238,5 @@ branch."
 - 2026-07-09T12:24:49Z: Completed design via claude-subagent:local-board-designer@opus: Preflight git status --porcelain -- <ticket> after the repair-path return (untracked/dirty/clean in one call, HEAD-relative); two refusal messages naming the fix; flag-aware skill sentence x4; estimate 2 basis T2213
 
 - 2026-07-09T12:25:55Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (git plumbing + docs)
+
+- 2026-07-09T12:25:55Z: Ensured git branch local-board/T20260709T1119Z-skills-cli-mandate-committing-ticket-files-at-authoring-worktree-add-fails-early-on-untracked-tickets (already-current).
