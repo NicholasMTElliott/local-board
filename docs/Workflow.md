@@ -144,6 +144,7 @@ Use `block` and `unblock` for ticket dependencies. Do not move dependency-blocke
 ## Branch Handling
 
 Use `start-work` before implementation and before review/test/docs work that must inspect or edit ticket changes.
+Installed orchestration skills default to a per-ticket worktree before this branch flow; main-checkout work is fallback-only.
 
 `start-work`:
 

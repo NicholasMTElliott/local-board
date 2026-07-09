@@ -49,15 +49,16 @@ For whole-project work, run `query-next --json`. For a specific ticket, run `que
 For each returned ticket:
 
 1. Read the returned ticket `path`, returned `prompt`, `branch`, `transitions`, and relevant project context.
-2. Run `begin-step <ticket-id> --harness codex --json` to resolve `action`, `configuredAgent`, `configuredModel`, `configuredPrompt`, and the translated `codexDispatch` block, and record the in-flight step for dispatch verification.
-3. Before `implement`, `review`, `test`, or `document`, run `start-work <ticket-id> --json`.
-4. Dispatch the returned action through the route translation contract below.
-5. Persist return-only output with `section --file`; self-writing workers write their own scoped changes.
-6. Run `complete-step <ticket-id> <action> --executor <logical-route> [--model <codex-model-or-codex-default>] --evidence "<evidence>"`. `complete-step` composes the `<route>@<model>` token server-side; the combined `--executor <route>@<model>` form still works.
-7. For `design`, `implement`, and `test`, run the gate-check/specialty flow before `move`.
-8. Choose the next status from the returned `transitions` list and run `move <ticket-id> <status> --json`.
-9. Choose `done` only when all required evidence is recorded.
-10. Run `validate` again before reporting completion.
+2. Default: run `worktree-add <ticket-id> --json` first and capture `worktreePath` — see `## Worktrees`.
+3. Run `begin-step <ticket-id> --root <worktreePath> --harness codex --json` to resolve `action`, `configuredAgent`, `configuredModel`, `configuredPrompt`, and the translated `codexDispatch` block, and record the in-flight step for dispatch verification.
+4. Before `implement`, `review`, `test`, or `document`, run `start-work <ticket-id> --root <worktreePath> --json`.
+5. Dispatch the returned action through the route translation contract below.
+6. Persist return-only output with `section --file`; self-writing workers write their own scoped changes.
+7. Run `complete-step <ticket-id> <action> --root <worktreePath> --executor <logical-route> [--model <codex-model-or-codex-default>] --evidence "<evidence>"`. `complete-step` composes the `<route>@<model>` token server-side; the combined `--executor <route>@<model>` form still works.
+8. For `design`, `implement`, and `test`, run the gate-check/specialty flow before `move`.
+9. Choose the next status from the returned `transitions` list and run `move <ticket-id> <status> --root <worktreePath> --json`.
+10. Choose `done` only when all required evidence is recorded.
+11. Run `validate` again before reporting completion.
 
 When `routing.enforceTransitions` is `true` (the `init` scaffold default), `move`/`set <id> status` refuse a target status outside `workflow.transitions[fromStatus]` and a fixed structural allow-set (same-status re-save, backlog promote, ready->active start-work, active->own-ready revert, questions/blocked resume, any->archived/questions/blocked); the refusal error names the allowed targets. Only pass `--override --reason "<text>"` when a legitimate move is genuinely outside that set — it forces the move and records `Transition override: <from> -> <to>: <reason>` in the Run Log. Prefer a legal transition over `--override` whenever one exists.
 
@@ -71,7 +72,7 @@ Do not hand-translate the route. Run `begin-step <ticket-id> --harness codex --j
 |---|---|---|
 | `claude-subagent:local-board-designer` | `spawn_agent` with `agent_type: worker` | `agents/codex/local-board-designer.md` |
 
-For unknown `claude-subagent:*` routes (`codexDispatch.known` is `false`), ask the user before falling back to inline. If approved, run `approve-inline <ticket-id> <action> --reason "<reason>"`, then record `complete-step` with `--executor inline`. If not approved, move the ticket to `questions` and record the blocker.
+For unknown `claude-subagent:*` routes (`codexDispatch.known` is `false`), ask the user before falling back to inline. If approved, run `approve-inline <ticket-id> <action> --root <worktreePath> --reason "<reason>"`, then record `complete-step` with `--root <worktreePath> --executor inline`. If not approved, move the ticket to `questions` and record the blocker.
 
 Do not pass Claude model aliases (`opus`, `sonnet`, `haiku`) as Codex model overrides; `begin-step --harness codex` performs this sanitization for you (`codexDispatch.model` is already `null` when no valid Codex model id exists, and `codexDispatch.evidenceExecutor` already carries `@codex-default`).
 
@@ -99,7 +100,82 @@ Self-writing routes:
 
 Workers may edit their assigned worktree scope only. Tell workers they are not alone in the codebase, must preserve unrelated changes, and must not revert edits made by others. The orchestrator owns all ticket status transitions and completion evidence.
 
+## Worktrees
+
+Single-ticket work runs in a per-ticket git worktree by default — the same
+lifecycle `local-team` uses, at N=1 — because a worktree structurally isolates
+the ticket's branch from the orchestrator's checkout and prevents the
+branch-stacking hazard (see Fallback below). Do not call `git worktree`
+directly.
+
+Before the ticket's first step, create the worktree from the project root and
+capture `worktreePath`:
+
+```sh
+local-board worktree-add <ticket-id> --json
+```
+
+`worktree-add` also creates and records the ticket branch (it commits the
+branch stamp), so a separate branch-creating `start-work` is not needed first.
+
+Pass `--root <worktreePath>` on **every** later per-ticket call: `begin-step`,
+`start-work`, `complete-step`, `gate-check`, `gate-complete`, `specialty-run`,
+`section`, `comment`, and `move`. If you dispatch a step executor, give it the
+`worktreePath` and instruct it to `cd` there and use `--root <worktreePath>`.
+
+Recommended ordering: `worktree-add` (once, up front) ->
+`begin-step --root <worktreePath>` -> `start-work --root <worktreePath>`
+(still moves `ready_for_implementation` -> `implementing`; inside the worktree
+it is already on the ticket branch and the tree is clean, so no
+`--allow-dirty` is needed) -> dispatch -> `complete-step --root <worktreePath>`.
+
+Closeout: run `move <ticket-id> done --root <worktreePath> --json` (auto-merge
+runs in the worktree, which is on the ticket branch). Then reconcile the main
+checkout:
+
+```sh
+local-board fast-forward --json
+```
+
+(run from the project root), then remove the worktree:
+
+```sh
+local-board worktree-remove <ticket-id> --json
+```
+
+`worktree-remove` resolves the repo's main root itself, so it works from
+either the project root or `--root <worktreePath>`.
+
+If `move ... done` refuses because the branch lacks the latest default, commit
+planning-only ticket edits in the worktree, rebase the ticket branch onto the
+default, then retry (same as the parallel skill's closeout).
+
+### Fallback: main-checkout mode
+
+For environments where worktrees are unavailable, you may instead work on the
+main checkout, switching branches with `start-work` (see Branch Discipline)
+and passing no `--root` override. Omitting `--root` is the fallback-mode
+form of every per-ticket command below; the default worktree flow always
+passes `--root <worktreePath>`.
+
+**Hazard (branch stacking):** on the main checkout, after a ticket's commits
+are on its branch, running `start-work` for the *next* ticket branches off the
+**previous ticket's branch** instead of the default branch. Symptom: divergent
+board state and stacked branches that require manual reconciliation merges
+(exactly what happened in the 2026-07 run, T20260707T1335Z / T20260707T1336Z).
+Worktrees avoid this structurally.
+
+**Mitigation:** before `start-work` on each new ticket, return to the default
+branch with a clean tree and run `local-board fast-forward --json`, so the new
+branch forks from the up-to-date default rather than from the prior ticket's
+tip. This mitigates but does not eliminate the hazard; the worktree default is
+preferred.
+
 ## Branch Discipline
+
+In the default worktree mode, `start-work` runs inside the worktree with
+`--root <worktreePath>` (see Worktrees). The main-checkout use of `start-work`
+below is the fallback path.
 
 `begin-step` resolves the action whether the ticket is still `ready_for_implementation` or already `implementing`, so it may run before or after `start-work`.
 
@@ -167,6 +243,9 @@ local-board state-report --json
 local-board schema --json
 local-board create <epic|story|task|bug> "<title>" --status <status> --priority <priority> [--parent <id>]
 local-board start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--json]
+local-board worktree-add <ticket-id> [--json]
+local-board worktree-remove <ticket-id> [--force] [--json]
+local-board fast-forward [--json]
 local-board begin-step <ticket-id> [--action <action>] [--harness claude|codex] [--json]
 local-board check-dispatch --agent <subagent-type> [--model <model>] [--ticket <ticket-id>] [--json]
 local-board complete-step <ticket-id> <action> --executor <executor> [--model <model>] --evidence "<evidence>" [--json]
@@ -189,4 +268,4 @@ local-board block <ticket-id> <dependency-id>
 local-board unblock <ticket-id> <dependency-id>
 ```
 
-This block is the single-ticket command surface, not the full CLI. Run `local-board` with no arguments for complete usage, `schema --json` for accepted enums, and `where --json` for asset paths. Worktree, `fast-forward`, `team-config`, and `list` live in the parallel (`local-team`) skill. Do not inspect source to discover commands.
+This block is the single-ticket command surface, not the full CLI. Run `local-board` with no arguments for complete usage, `schema --json` for accepted enums, and `where --json` for asset paths. `worktree-list`, `team-config`, and `list` live in the parallel (`local-team`) skill. Do not inspect source to discover commands.
