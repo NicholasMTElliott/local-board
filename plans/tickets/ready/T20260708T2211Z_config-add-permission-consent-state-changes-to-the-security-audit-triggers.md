@@ -1,7 +1,7 @@
 ---
 id: T20260708T2211Z
 type: task
-status: implementing
+status: ready_for_docs
 priority: P3
 parent: null
 children: []
@@ -13,8 +13,8 @@ estimateBasis: T20260708T2016Z
 workStartedAt: 2026-07-09T00:44:52Z
 workCompletedAt: null
 created: 2026-07-08T22:10:44Z
-updated: 2026-07-09T00:53:31Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-09T01:18:22Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # config: add permission/consent state changes to the security_audit triggers
@@ -200,9 +200,31 @@ touch the prompt body under this ticket unless the orchestrator widens scope.
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5). No findings. Verified: both trigger copies byte-identical (420 UTF-8 bytes, parsed strings equal, JSONC parses); classifier-fit confirmed for both calibration cases (B0459 matches via permission grants / settings files / allow rules / hooks entries; T2015 excluded via the trust-boundary narrowing + explicit CLI flag-parsing carve-out); consent state bracketed by tool-execution context, not an over-match risk; docs additions accurate without overclaiming catalog-wide rewrite. Verdict: pass
+
 ## Test Evidence
 
+Verified by claude-subagent:local-board-tester (sonnet), in the ticket worktree.
+
+| Command | Result |
+|---|---|
+| `npm run check` | PASS |
+| `npm test` | PASS — 416 tests, 415 pass, 0 fail, 1 skipped |
+| `npm run validate` | PASS — Ticket validation OK |
+
+- Byte-identity: `security_audit.triggers` extracted programmatically from `defaultConfigJsonc()` and from the parsed `plans/local-board.config.jsonc` — EQUAL: true.
+- Scaffold propagation: fresh `init` on a throwaway scratchpad board carries the new trigger text verbatim (generated config line 352); cleaned up.
+- Gate-check plumbing: `gate-check --stage implement --json` returns the new consequence-surface text in `catalog[0].triggers`.
+- Docs: philosophy paragraph (specialty-steps.md:67) and settings.json example bullet (line 63) present; scoped as guidance + the one fixed entry, no catalog-wide overclaim.
+- Calibration sanity: settings.json permission-grant mutation matches unambiguously ("permission grants, consent state, or settings files that gate tool execution (e.g. Claude settings.json allow rules, hooks entries, approved-command lists)"); internal CLI flag parsing is explicitly carved out ("- not internal CLI flag or argument parsing"). Both read cleanly for a small classifier.
+
+No gaps.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5). Primary doc (specialty-steps.md philosophy + example) shipped at implement. Closing audit: memory-bank/systemPatterns.md gained one terse current-state line for the consequence-surface security_audit trigger; grep confirmed no doc or README quotes the old trigger text.
 
 ## Questions
 
@@ -217,3 +239,13 @@ touch the prompt body under this ticket unless the orchestrator widens scope.
 - 2026-07-09T00:53:30Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (config/docs text)
 
 - 2026-07-09T00:53:31Z: Ensured git branch local-board/T20260708T2211Z-config-add-permission-consent-state-changes-to-the-security-audit-triggers (already-current).
+
+- 2026-07-09T00:57:25Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Trigger reworded verbatim in plans config + defaultConfigJsonc; consequence-surface bullet + philosophy paragraph in specialty-steps doc; 415 pass + 1 skip
+
+- 2026-07-09T00:58:42Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (text-only)
+
+- 2026-07-09T01:06:18Z: Completed review via codex-task:read-only: pass, no findings; recorded post-move per evidence-invalidation ordering
+
+- 2026-07-09T01:10:38Z: Completed test via claude-subagent:local-board-tester@sonnet: 415 pass + 1 skip; byte-identity EQUAL; scaffold init carries new text; gate-check payload verbatim; calibration both cases unambiguous
+
+- 2026-07-09T01:18:22Z: Completed document via codex-task:workspace-write: systemPatterns line added; no stale trigger quotes in docs/README
