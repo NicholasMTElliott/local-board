@@ -7,13 +7,13 @@ parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260708T2211Z-config-add-permission-consent-state-changes-to-the-security-audit-triggers
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-08T22:10:44Z
-updated: 2026-07-09T00:44:34Z
+updated: 2026-07-09T00:44:36Z
 completedSteps: []
 routingApprovals: []
 ---
