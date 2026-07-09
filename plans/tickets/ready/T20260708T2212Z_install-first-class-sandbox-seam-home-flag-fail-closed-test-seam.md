@@ -1,7 +1,7 @@
 ---
 id: T20260708T2212Z
 type: task
-status: backlog
+status: ready_for_design
 priority: P3
 parent: null
 children: []
@@ -13,7 +13,7 @@ estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-08T22:10:45Z
-updated: 2026-07-08T22:11:52Z
+updated: 2026-07-09T00:44:34Z
 completedSteps: []
 routingApprovals: []
 ---
