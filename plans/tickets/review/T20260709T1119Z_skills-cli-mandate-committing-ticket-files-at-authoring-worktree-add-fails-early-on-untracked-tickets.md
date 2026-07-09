@@ -13,7 +13,7 @@ estimateBasis: T20260708T2213Z
 workStartedAt: 2026-07-09T12:18:17Z
 workCompletedAt: null
 created: 2026-07-09T11:17:38Z
-updated: 2026-07-09T12:35:43Z
+updated: 2026-07-09T12:37:55Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -224,6 +224,8 @@ branch."
 ## Implementation Notes
 
 ## Review Findings
+
+Reviewed by codex-task:read-only (gpt-5.5). One finding: [P3] skills/codex/local-board/SKILL.md:38,92 — the Creating Tickets and decomposition child-creation flows still omit the authoring-ends-committed rule; the sentence added at :113 is only a worktree precondition, so a create-only codex run on a flag-off board can end with uncommitted plans/. Add the flag-aware sentence to both flows (outside the curated block). Passing: preflight correctness (separator normalization :45, porcelain scope before mkdir/.gitignore :46, rename/quoted-path XY classification), placement (no side effects before refusal), refusal tests assert no-debris, repair path unaffected. Verdict: changes_requested
 
 ## Test Evidence
 
