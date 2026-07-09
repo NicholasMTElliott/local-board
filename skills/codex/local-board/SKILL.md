@@ -40,6 +40,12 @@ For ticket creation requests:
 4. Use `section`, `comment`, `link-parent`, `link-child`, `block`, and `unblock` for details and relationships.
 5. Run `validate` before reporting completion.
 
+Ticket authoring ends committed. With `git.commitPlanningOnTransition` on
+(scaffold default), `create`/`section`/`link`/`block` each auto-commit
+`plans/`, so just verify `git status` is clean once done. On flag-off boards,
+run `git add plans && git commit` yourself before dispatching further work or
+running `worktree-add`.
+
 Use `section --file <path>` for generated or multi-line Markdown. Create the file with Codex file-editing tools, not shell redirection.
 
 ## Single-Ticket Loop
@@ -89,7 +95,7 @@ Return-only routes:
 - `local-board-gatecheck`
 
 Return-only agents do not edit files, do not create temp files, and do not run `section`, `complete-step`, or `move`. The orchestrator persists their returned content.
-For decomposition, the Codex decomposer returns a child-ticket proposal; the orchestrator runs `create`, `link-parent`, `link-child`, and dependency commands.
+For decomposition, the Codex decomposer returns a child-ticket proposal; the orchestrator runs `create`, `link-parent`, `link-child`, and dependency commands. Child authoring ends committed too — with `git.commitPlanningOnTransition` on this happens automatically per command; on flag-off boards commit `plans/` before seeding a worktree for the child.
 
 Self-writing routes:
 
