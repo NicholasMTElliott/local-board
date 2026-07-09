@@ -7,13 +7,13 @@ parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260709T1118Z-prompts-git-safety-guardrails-for-executors-targeted-reverts-only
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-09T11:17:38Z
-updated: 2026-07-09T11:21:14Z
+updated: 2026-07-09T11:21:28Z
 completedSteps: []
 routingApprovals: []
 ---
