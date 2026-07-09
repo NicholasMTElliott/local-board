@@ -76,7 +76,7 @@ node ./bin/local-board.js worktree-list --json
 node ./bin/local-board.js worktree-remove T20260514T1234Z --json
 node ./bin/local-board.js fast-forward --json
 node ./bin/local-board.js begin-step T20260514T1234Z [--harness <claude|codex>] --json
-node ./bin/local-board.js complete-step T20260514T1234Z review --executor codex-task:read-only [--model <model>] --evidence "Review notes added."
+node ./bin/local-board.js complete-step T20260514T1234Z review --executor codex-task:read-only [--model <model>] [--override --reason <text>] --evidence "Review notes added."
 node ./bin/local-board.js approve-inline T20260514T1234Z review --reason "User approved fallback."
 node ./bin/local-board.js move T20260514T1234Z implementing
 node ./bin/local-board.js move T20260514T1234Z done --json

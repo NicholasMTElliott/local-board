@@ -1,7 +1,7 @@
 ---
 id: T20260708T2210Z
 type: task
-status: implementing
+status: ready_for_docs
 priority: P3
 parent: null
 children: []
@@ -13,8 +13,8 @@ estimateBasis: T20260708T2016Z
 workStartedAt: 2026-07-09T00:44:52Z
 workCompletedAt: null
 created: 2026-07-08T22:10:44Z
-updated: 2026-07-09T01:12:44Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-09T01:42:32Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # cli: warn or refuse complete-step review recorded before ready_for_review
@@ -316,7 +316,41 @@ Verdict: changes_requested
 
 ## Test Evidence
 
+Verified by claude-subagent:local-board-tester (sonnet), in the ticket worktree.
+
+### Automated checks
+
+| Command | Result |
+|---|---|
+| `npm run check` | PASS |
+| `npm test` | PASS — 427 tests, 426 pass, 0 fail, 1 skipped; all 12 new guard tests present |
+| `npm run validate` | PASS — Ticket validation OK |
+
+### Live probes (throwaway scaffolded board in scratchpad; generated config confirmed `guardPrematureEvidence: true`)
+
+- (a) Production trap: `complete-step review` at ready_for_implementation → refused exit 2 with a message naming the stripping move, the earliest safe status (ready_for_review), the override, and the config switch. `--override --reason "test"` → recorded + Run Log override line naming action, status, producing status, and reason. PASS.
+- (b) Current-stage evidence (`complete-step implement` at ready_for_implementation) → no refusal. PASS.
+- (c) Rankless: review at `questions` → refused. PASS.
+- (d) Config-off: exercised the DEFAULT_CONFIG fallback (guardPrematureEvidence false) → same premature recording proceeds silently. PASS.
+- (e) `--override` without `--reason` → exit 2, clear message. PASS.
+
+### Guard vs stripper shared logic
+
+`evidenceStrippedByPendingForwardMove` (tickets.js:356) and `invalidateDownstreamEvidence` (:299) both resolve through the same `producingStatusForToken` (:272) + `pipelineRankOfStatus` (:250) helpers — no parallel relation logic. One intentional, commented asymmetry: the guard treats rankless non-terminal statuses as always-upstream (refuses) while the stripper no-ops on moves INTO rankless statuses; consistent with tests on both sides.
+
+### Docs
+
+docs/Workflow.md "Premature-evidence guard" (370-378) matches live message formats byte-for-byte; memory-bank/systemPatterns.md correctly states the DEFAULT_CONFIG(false)/scaffold(true) split.
+
+### Caveats
+
+Probe (d) used the config ENOENT-fallback path rather than hand-editing JSONC (tester has no Write tool); same code path and value. Throwaway board deleted; worktree clean of tester changes.
+
+Result: pass
+
 ## Documentation Updates
+
+Documented by codex-task:workspace-write (gpt-5.5). Primary docs (Workflow.md guard subsection, systemPatterns facts) shipped at implement. Closing audit: Workflow.md stale evidence-ordering language tightened (silent stripping described as the pre-guard failure mode); README complete-step line gained [--override --reason <text>] matching existing granularity; systemPatterns guard fact verified terse.
 
 ## Questions
 
@@ -337,3 +371,13 @@ Verdict: changes_requested
 - 2026-07-09T01:12:44Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
 
 - 2026-07-09T01:12:44Z: Ensured git branch local-board/T20260708T2210Z-cli-warn-or-refuse-complete-step-review-recorded-before-ready-for-review (already-current).
+
+- 2026-07-09T01:19:12Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Rework: backlog/questions/blocked treated upstream-of-everything via CLOSED_STATUSES distinction; completeStep throws on override without reason; scaffold comment reworded; 4 new tests; 426 pass + 1 skip
+
+- 2026-07-09T01:20:54Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (internal machinery rework)
+
+- 2026-07-09T01:20:55Z: Completed review via codex-task:read-only: changes_requested (3 findings: rankless false-negative, API reason invariant, scaffold comment) on impl commit; addressed in rework; recorded post-move per evidence-invalidation ordering
+
+- 2026-07-09T01:29:26Z: Completed test via claude-subagent:local-board-tester@sonnet: 426 pass + 1 skip; 5 live probes (trap refusal+override, current-stage legal, rankless refusal, config-off legacy, CLI reason error) all pass; guard/stripper share helpers
+
+- 2026-07-09T01:42:32Z: Completed document via codex-task:workspace-write: Workflow tightened, README flag added, systemPatterns fact verified

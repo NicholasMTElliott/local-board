@@ -90,7 +90,7 @@ Generated child tickets should link back to the parent and should be committed a
 4. Create or switch to the ticket branch with `start-work`.
 5. Run `begin-step` for the current action.
 6. Execute the action through the configured agent route.
-7. Run `complete-step` with executor and evidence.
+7. Run `complete-step` with executor and evidence while the ticket is still at that step's ready/active status.
 8. Move to the next status using the returned transition guidance.
 9. Repeat the query/begin/execute/complete/move loop for review, test, and docs.
 10. Commit non-planning changes.
@@ -369,7 +369,7 @@ A refusal happens before any other move-time check (gate consultation, loop-back
 
 ### Premature-evidence guard
 
-When `routing.guardPrematureEvidence` is `true`, `complete-step` refuses to record a mandatory-action or optional-specialty token when the ticket's current pipeline position is strictly upstream of that token's producing `ready_*` status — i.e. when a still-pending forward move would immediately strip it via `invalidateOnLoopBack`'s stripper. The classic trap: recording `complete-step <id> review` while the ticket sits at `ready_for_implementation`/`implementing` (typically right after a `changes_requested` loop-back) silently arms the loss, because the later forward move into `ready_for_review` strips the `review` token; the failure would otherwise only surface much later as `move done` refusing with "missing completedSteps entry for review". The guard reuses the exact same producing-status + `workflow.pipelineOrder` rank relation the loop-back stripper uses, so the two cannot drift.
+When `routing.guardPrematureEvidence` is `true`, `complete-step` refuses to record a mandatory-action or optional-specialty token when the ticket's current pipeline position is strictly upstream of that token's producing `ready_*` status — i.e. when a still-pending forward move would immediately strip it via `invalidateOnLoopBack`'s stripper. Without that guard, the classic trap is recording `complete-step <id> review` while the ticket sits at `ready_for_implementation`/`implementing` (typically right after a `changes_requested` loop-back): the later forward move into `ready_for_review` strips the `review` token, and the failure would otherwise only surface much later as `move done` refusing with "missing completedSteps entry for review". The guard reuses the exact same producing-status + `workflow.pipelineOrder` rank relation the loop-back stripper uses, so the two cannot drift.
 
 The refusal names the action, the current status, and the earliest status where the evidence survives (the token's producing status), and advertises the escape hatch. Re-run with `--override --reason <text>` to record anyway; the reason is appended to the Run Log as a second line (`Premature-evidence override: recorded <action> at <status> ahead of its producing status <producingStatus>: <reason>`), after the normal `Completed ...` line. `--override` requires a non-empty `--reason`.
 
@@ -527,7 +527,7 @@ local-board calibration suggest T20260516T1546Z --json
 
 `routing.strict: true` makes configured routing mandatory.
 
-Before each action, use `begin-step` to read the configured executor. After the action, use `complete-step` to record `<action>:<executor>` evidence in front matter. A non-inline configured route cannot be completed as `inline` unless `approve-inline` has first recorded explicit user approval.
+Before each action, use `begin-step` to read the configured executor. After the action, use `complete-step` to record `<action>:<executor>` evidence in front matter while the ticket is at that action's ready/active status. A non-inline configured route cannot be completed as `inline` unless `approve-inline` has first recorded explicit user approval.
 
 `move <ticket-id> done` validates required completion evidence for new tickets that include `completedSteps`/`routingApprovals`.
 
