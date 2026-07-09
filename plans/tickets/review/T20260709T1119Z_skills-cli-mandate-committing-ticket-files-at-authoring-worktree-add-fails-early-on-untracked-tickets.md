@@ -1,7 +1,7 @@
 ---
 id: T20260709T1119Z
 type: task
-status: ready_for_review
+status: reviewing
 priority: P3
 parent: null
 children: []
