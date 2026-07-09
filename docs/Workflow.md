@@ -572,6 +572,7 @@ the planning dirty check, staging, diff gate, and commit all run inside the
 warning-not-failure path: a git failure (e.g. a concurrent process holding
 `index.lock`) degrades to a `warning: planning commit skipped: ...` line on
 stderr; the CLI mutation itself never fails or rolls back because of it.
+`worktree-add` refuses to proceed when ticket files are untracked or dirty, with guidance to commit those files first or disable `git.commitPlanningOnTransition` intentionally.
 
 ## Done Retention
 
