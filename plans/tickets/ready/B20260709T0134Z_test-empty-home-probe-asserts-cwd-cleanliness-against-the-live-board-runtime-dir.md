@@ -1,7 +1,7 @@
 ---
 id: B20260709T0134Z
 type: bug
-status: implementing
+status: ready_for_docs
 priority: P2
 parent: null
 children: []
@@ -13,8 +13,8 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-09T01:38:13Z
 workCompletedAt: null
 created: 2026-07-09T01:34:33Z
-updated: 2026-07-09T01:38:13Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-09T01:51:09Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # test: empty --home probe asserts cwd cleanliness against the live board runtime dir
@@ -69,9 +69,15 @@ None. Test-internal fix; no docs or memory-bank changes.
 
 ## Review Findings
 
+Reviewed by codex-task:read-only (gpt-5.5). No findings. Verified: scratchCwd is forwarded as the child execFile cwd (test/install.test.js:119,121) so the fail-closed property is still proven (a regressed silent-cwd install would land under scratchCwd and trip :427-428); finally cleanup runs on assertion failure; grep confirms no other test asserts invoking-checkout cleanliness for the runtime dirs. Reviewer sandbox could not spawn node --test (EPERM); verification by source inspection. Verdict: pass
+
 ## Test Evidence
 
+Verified by claude-subagent:local-board-tester (sonnet). npm run check / npm test (420 pass, 1 skip) / npm run validate all green. Regression proof: with an untracked dummy .local-board/ at the worktree root, node --test test/install.test.js is 39/39 green (and green again after removal) — the dogfooded-checkout condition that broke mainline no longer affects the probe. Fail-closed property confirmed by inspection: runInstallCli passes the scratch cwd as the child process's actual cwd (execFileAsync, :121), so a regressed silent-cwd install would trip the scratch-cwd absence assertions. Worktree clean of tester changes. Result: pass
+
 ## Documentation Updates
+
+Test-only hotfix; no documentation surfaces affected. docs/Install.md's --home documentation (T20260708T2212Z) describes CLI behavior, which is unchanged. Verified no doc references the removed developer-checkout assertions.
 
 ## Questions
 
@@ -82,3 +88,13 @@ None. Test-internal fix; no docs or memory-bank changes.
 - 2026-07-09T01:38:12Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (test-only)
 
 - 2026-07-09T01:38:13Z: Ensured git branch local-board/B20260709T0134Z-test-empty-home-probe-asserts-cwd-cleanliness-against-the-live-board-runtime-dir (already-current).
+
+- 2026-07-09T01:40:51Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Scratch-cwd repoint + finally cleanup; regression-proven with dummy .local-board at root (39/39 both ways); 420 pass + 1 skip
+
+- 2026-07-09T01:42:32Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: [] (test-only)
+
+- 2026-07-09T01:46:36Z: Completed review via codex-task:read-only: pass, no findings; recorded post-move per evidence-invalidation ordering
+
+- 2026-07-09T01:49:40Z: Completed test via claude-subagent:local-board-tester@sonnet: 420 pass + 1 skip; regression-proven with dummy runtime dir both ways; fail-closed plumbing confirmed
+
+- 2026-07-09T01:51:09Z: Completed document via codex-task:workspace-write: Doc audit (ran read-only; no writes needed): no doc/README/memory-bank references the old invoking-checkout assertion; Install.md --home docs unaffected
