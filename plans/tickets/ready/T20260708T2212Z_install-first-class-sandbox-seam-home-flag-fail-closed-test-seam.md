@@ -7,13 +7,13 @@ parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260708T2212Z-install-first-class-sandbox-seam-home-flag-fail-closed-test-seam
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-08T22:10:45Z
-updated: 2026-07-09T00:44:34Z
+updated: 2026-07-09T00:44:37Z
 completedSteps: []
 routingApprovals: []
 ---
