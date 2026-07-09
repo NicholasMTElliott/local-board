@@ -1,7 +1,7 @@
 ---
 id: T20260708T2212Z
 type: task
-status: ready_for_docs
+status: done
 priority: P3
 parent: null
 children: []
@@ -11,7 +11,7 @@ branch: local-board/T20260708T2212Z-install-first-class-sandbox-seam-home-flag-f
 estimate: 2
 estimateBasis: T20260708T2016Z
 workStartedAt: 2026-07-09T00:44:53Z
-workCompletedAt: null
+workCompletedAt: 2026-07-09T01:31:38Z
 created: 2026-07-08T22:10:45Z
 updated: 2026-07-09T01:31:38Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
