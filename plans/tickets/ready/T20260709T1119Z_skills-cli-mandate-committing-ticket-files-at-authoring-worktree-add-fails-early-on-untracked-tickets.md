@@ -13,8 +13,8 @@ estimateBasis: T20260708T2213Z
 workStartedAt: 2026-07-09T12:18:17Z
 workCompletedAt: null
 created: 2026-07-09T11:17:38Z
-updated: 2026-07-09T12:24:20Z
-completedSteps: []
+updated: 2026-07-09T12:24:49Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
 # skills+cli: mandate committing ticket files at authoring; worktree-add fails early on untracked tickets
@@ -234,3 +234,5 @@ branch."
 ## Run Log
 
 - 2026-07-09T12:18:17Z: Ensured git branch local-board/T20260709T1119Z-skills-cli-mandate-committing-ticket-files-at-authoring-worktree-add-fails-early-on-untracked-tickets (already-current).
+
+- 2026-07-09T12:24:49Z: Completed design via claude-subagent:local-board-designer@opus: Preflight git status --porcelain -- <ticket> after the repair-path return (untracked/dirty/clean in one call, HEAD-relative); two refusal messages naming the fix; flag-aware skill sentence x4; estimate 2 basis T2213
