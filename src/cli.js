@@ -1355,7 +1355,7 @@ const USAGE_TEXT = `Usage:
   local-board [--root <path>] state-report [--json]
   local-board [--root <path>] schema [--json]
   local-board [--root <path>] init [--overwrite] [--json]
-  local-board install [--target=<ids>] [--all] [--no-<id>] [--list-targets] [--uninstall] (acts on user HOME; ignores --root)
+  local-board install [--target=<ids>] [--all] [--no-<id>] [--list-targets] [--uninstall] [--home <dir>] (acts on user HOME; ignores --root)
   local-board [--root <path>] create <type> <title> [--status <status>] [--priority <priority>] [--parent <id>]
   local-board [--root <path>] start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--allow-main-root] [--json]
   local-board [--root <path>] worktree-add <ticket-id> [--json]

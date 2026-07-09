@@ -47,6 +47,7 @@ local-board install --no-opencode      # install defaults except one target
 local-board install --hooks            # opt in to Claude Code hooks (below)
 local-board install --no-hooks         # remove the hooks entries
 local-board install --uninstall        # remove everything installable
+local-board install --home <dir>       # install under <dir> instead of the real home (see Testing / sandboxing)
 ```
 
 ## Targets and what is written
@@ -177,11 +178,36 @@ are left untouched.
 See [docs/EnforcementHooks.md](EnforcementHooks.md) for what each hook does
 and why they fail open on errors.
 
+## Testing / sandboxing
+
+`local-board install --home <dir>` is the supported, first-class way to run a
+real install (or uninstall) against a throwaway directory instead of the real
+`os.homedir()`. It applies to every install/uninstall entrypoint (`local-board
+install`, the deprecated `node install.mjs` shim, and the in-process
+`runInstall(argv, { home })` seam), since all three route through the same
+home-resolution code. An overridden home also skips the on-PATH precheck (a
+sandboxed home has no PATH expectation, so probes need not also stub PATH).
+
+For test harnesses that must never risk touching the real home directory, set
+`LOCAL_BOARD_INSTALL_REQUIRE_HOME=1` in the environment: with the guard set,
+`install`/`uninstall` refuse to run against the real home unless `--home` (or
+programmatic `options.home`) is supplied, and exit non-zero naming the guard.
+This is a fail-closed backstop for automated harnesses, motivated by a
+2026-07-08 incident in which a test probe's home fell through to the real
+`os.homedir()` and mutated the real `~/.claude/settings.json`. The guard is
+opt-in (unset by default) so it never surprises an interactive user; passing
+`options.home` as an explicit `undefined` (key present, value `undefined`) is
+always an error too, independent of the guard, so a caller's own
+mis-configured seam cannot silently fall back to the real home either.
+
 ## Uninstall
 
 ```sh
 local-board install --uninstall
 ```
+
+`--home <dir>` applies symmetrically here: `local-board install --home <dir>
+--uninstall` removes everything under `<dir>` instead of the real home.
 
 Removes:
 
