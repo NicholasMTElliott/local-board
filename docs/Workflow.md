@@ -542,6 +542,37 @@ Before each action, use `begin-step` to read the configured executor. After the 
 
 Auto-merge only runs after `move ... done` passes strict routing validation. It must be run from the ticket's recorded branch. It refuses uncommitted non-planning changes, because implementation work should already be committed before closeout.
 
+## Durable Planning State (commit at each transition)
+
+`git.commitPlanningOnTransition`: when `true` (the scaffold default for new
+repos; `false` for pre-existing boards that omit the key), every mutating
+per-ticket CLI command (`create`, `move`/`set`, `comment`, `section`,
+`estimate`, `complete-step`, `approve-inline`, `gate-check`, `gate-complete`,
+`begin-step`, `link-parent`/`link-child`/`unlink-parent`, `block`/`unblock`,
+`start-work`) commits the planning-only subset of the working tree (`plans/**`)
+immediately after it succeeds, when the root is a git checkout. The
+`worktree-add` existing-worktree repair path is covered too; it commits from the
+linked worktree where the repaired branch field was written. A clean planning
+tree is a true no-op, so back-to-back CLI calls stay cheap.
+
+Motivation: executors run with full Bash access and sometimes issue
+destructive git operations (an aborted merge, a `git checkout -- .` probe)
+against a worktree whose only uncommitted state is the ticket's own stage
+transitions. Committing at each transition makes that state recoverable
+instead of living only as uncommitted worktree edits between stages.
+
+The commit message is `<ticket-id>: <command> <detail>` (e.g.
+`T20260709T1117Z: move ready_for_review`), distinct from auto-merge's
+`Complete <ticketId>` message. On `move done` with `git.autoMerge` on, the
+existing auto-merge planning commit remains the sole committer for that
+transition (no double commit). Staging and committing are both pathspec-limited
+to `-- plans`, so an already-staged non-planning file is never swept into these
+transition commits and remains staged afterward. After the non-git-root probe,
+the planning dirty check, staging, diff gate, and commit all run inside the
+warning-not-failure path: a git failure (e.g. a concurrent process holding
+`index.lock`) degrades to a `warning: planning commit skipped: ...` line on
+stderr; the CLI mutation itself never fails or rolls back because of it.
+
 ## Done Retention
 
 `done` is the recent closeout lane. `archived` is retained closed history.

@@ -77,6 +77,125 @@ test("worktree-add creates a sibling worktree, stamps a new branch, and is idemp
   });
 });
 
+test(
+  "worktree-add's repair path (branch field re-stamp on an already-registered worktree) commits durably inside the worktree",
+  { skip: !GIT_AVAILABLE },
+  async () => {
+    await withRepo(async (root, _baseBranch, worktreesRoot) => {
+      const ticketPath = await createTicket(root, "task", "Repair path commit", {
+        status: "ready_for_implementation",
+        now: new Date("2026-05-22T14:20:00Z"),
+      });
+      await git(root, ["add", "plans"]);
+      await git(root, ["commit", "-m", "Add ticket"]);
+      const ticketId = path.basename(ticketPath).split("_", 1)[0];
+      const worktreePath = path.join(worktreesRoot, ticketId);
+
+      const first = await runCli(["--root", root, "worktree-add", ticketId, "--json"]);
+      assert.equal(first.code, 0, first.stderr);
+      const branch = JSON.parse(first.stdout).branch;
+      const worktreeTicketPath = path.join(worktreePath, "plans", "tickets", "ready", path.basename(ticketPath));
+      const worktreeTipAfterFirst = await gitOutput(worktreePath, ["rev-parse", "HEAD"]);
+      const rootTipBeforeSecond = await gitOutput(root, ["rev-parse", "HEAD"]);
+
+      // The repair path re-writes the branch field into the worktree's copy
+      // via setTicketField, which always bumps `updated` to the real current
+      // time -- but that only produces a textual (and therefore committable)
+      // diff if `updated` actually changes. Back-date the worktree's own
+      // `updated` field first so the repair write is guaranteed to differ,
+      // independent of the two CLI calls landing in the same wall-clock
+      // second (formatIsoSeconds truncates to whole seconds).
+      await writeFile(
+        worktreeTicketPath,
+        (await readFile(worktreeTicketPath, "utf8")).replace(/^updated: .*$/m, "updated: 2020-01-01T00:00:00Z"),
+        "utf8",
+      );
+      await git(worktreePath, ["add", "plans"]);
+      await git(worktreePath, ["commit", "-m", "Back-date updated for repair-path test"]);
+
+      // The main checkout's own ticket copy never learns the branch field
+      // (addTicketWorktree only stamps it inside the newly created worktree),
+      // so a second worktree-add call always takes the repair path: it
+      // re-writes the branch field into the worktree's copy, which must now
+      // be committed durably inside that worktree.
+      const second = await runCli(["--root", root, "worktree-add", ticketId, "--json"]);
+      assert.equal(second.code, 0, second.stderr);
+      assert.equal(JSON.parse(second.stdout).created, false);
+
+      assert.equal(
+        await gitOutput(worktreePath, ["status", "--porcelain", "--", "plans"]),
+        "",
+        "the repair path's branch re-stamp must be committed, leaving the worktree's plans/ clean",
+      );
+      const worktreeTipAfterSecond = await gitOutput(worktreePath, ["rev-parse", "HEAD"]);
+      assert.notEqual(worktreeTipAfterSecond, worktreeTipAfterFirst, "the repair path must land a new commit");
+      assert.equal(
+        await gitOutput(worktreePath, ["log", "-1", "--pretty=%s"]),
+        `${ticketId}: worktree-add ${branch}`,
+      );
+
+      // The main checkout is untouched by the repair commit -- it landed in
+      // the worktree's own git history, not the main root's.
+      assert.equal(await gitOutput(root, ["rev-parse", "HEAD"]), rootTipBeforeSecond);
+    });
+  },
+);
+
+test(
+  "worktree-add's repair path leaves the branch re-stamp uncommitted when commitPlanningOnTransition is false",
+  { skip: !GIT_AVAILABLE },
+  async () => {
+    await withRepo(async (root, _baseBranch, worktreesRoot) => {
+      await writeFile(
+        path.join(root, "plans", "local-board.config.jsonc"),
+        defaultConfigJsonc().replace('"commitPlanningOnTransition": true', '"commitPlanningOnTransition": false'),
+        "utf8",
+      );
+      await git(root, ["add", "plans"]);
+      await git(root, ["commit", "-m", "Disable commitPlanningOnTransition"]);
+
+      const ticketPath = await createTicket(root, "task", "Repair path no commit", {
+        status: "ready_for_implementation",
+        now: new Date("2026-05-22T14:21:00Z"),
+      });
+      await git(root, ["add", "plans"]);
+      await git(root, ["commit", "-m", "Add ticket"]);
+      const ticketId = path.basename(ticketPath).split("_", 1)[0];
+      const worktreePath = path.join(worktreesRoot, ticketId);
+
+      assert.equal((await runCli(["--root", root, "worktree-add", ticketId, "--json"])).code, 0);
+      const worktreeTicketPath = path.join(worktreePath, "plans", "tickets", "ready", path.basename(ticketPath));
+
+      // Back-date `updated` for the same reason as the sibling test above:
+      // guarantee the repair path's re-stamp produces a real diff, independent
+      // of the two CLI calls landing in the same wall-clock second.
+      await writeFile(
+        worktreeTicketPath,
+        (await readFile(worktreeTicketPath, "utf8")).replace(/^updated: .*$/m, "updated: 2020-01-01T00:00:00Z"),
+        "utf8",
+      );
+      await git(worktreePath, ["add", "plans"]);
+      await git(worktreePath, ["commit", "-m", "Back-date updated for repair-path test"]);
+      const worktreeTipAfterFirst = await gitOutput(worktreePath, ["rev-parse", "HEAD"]);
+
+      const second = await runCli(["--root", root, "worktree-add", ticketId, "--json"]);
+      assert.equal(second.code, 0, second.stderr);
+      assert.equal(JSON.parse(second.stdout).created, false);
+
+      assert.equal(
+        await gitOutput(worktreePath, ["rev-parse", "HEAD"]),
+        worktreeTipAfterFirst,
+        "no commit should be made when the flag is off",
+      );
+      assert.notEqual(
+        await gitOutput(worktreePath, ["status", "--porcelain", "--", "plans"]),
+        "",
+        "the branch re-stamp should remain uncommitted, exactly like current (pre-flag) behavior",
+      );
+    });
+  },
+);
+
 test("worktree-add uses an existing recorded branch", { skip: !GIT_AVAILABLE }, async () => {
   await withRepo(async (root, _baseBranch, worktreesRoot) => {
     const ticketPath = await createTicket(root, "task", "Existing branch worktree", {

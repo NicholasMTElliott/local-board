@@ -256,6 +256,10 @@ test("defaultConfigJsonc matches DEFAULT_CONFIG except for documented difference
   //   - routing.guardPrematureEvidence: DEFAULT_CONFIG keeps it off for
   //     backward compat with configs that omit the key; the scaffold enables
   //     it for new repos.
+  //   - git.commitPlanningOnTransition: DEFAULT_CONFIG keeps it off for
+  //     backward compat with boards that omit the key; the scaffold enables
+  //     it for new repos (commits planning-only changes after every mutating
+  //     command).
   // Any OTHER difference here means someone edited one copy's shared blocks
   // (workflow, agents, routing, retention, git, worktrees) without updating
   // the other. Fix by updating both DEFAULT_CONFIG and defaultConfigJsonc(),
@@ -268,10 +272,11 @@ test("defaultConfigJsonc matches DEFAULT_CONFIG except for documented difference
   expected.worktrees.guardWrongRoot = true;
   expected.routing.enforceTransitions = true;
   expected.routing.guardPrematureEvidence = true;
+  expected.git.commitPlanningOnTransition = true;
   assert.deepEqual(scaffolded, expected);
 
   // Guard against the allowlist above silently growing to mask unrelated
-  // drift: confirm these six paths are the *only* places DEFAULT_CONFIG and
+  // drift: confirm these eight paths are the *only* places DEFAULT_CONFIG and
   // the scaffold differ.
   const rawDiffs = leafDiffPaths(DEFAULT_CONFIG, parseJsonc(defaultConfigJsonc()));
   const collapsed = [...new Set(
@@ -279,6 +284,7 @@ test("defaultConfigJsonc matches DEFAULT_CONFIG except for documented difference
   )].sort();
   assert.deepEqual(collapsed, [
     "estimation.enabled",
+    "git.commitPlanningOnTransition",
     "optionalSteps",
     "routing.enforceTransitions",
     "routing.guardPrematureEvidence",
@@ -351,6 +357,28 @@ test("loadConfig defaults routing.guardPrematureEvidence to false when omitted (
     // The shipped scaffold enables it for new repos.
     await writeConfig(root, defaultConfigJsonc());
     assert.equal((await loadConfig(root)).routing.guardPrematureEvidence, true);
+  });
+});
+
+test("loadConfig defaults git.commitPlanningOnTransition to false when omitted (backward-compat disabled)", async () => {
+  await withRoot(async (root) => {
+    // No config file at all: DEFAULT_CONFIG fallback keeps it off.
+    assert.equal((await loadConfig(root)).git.commitPlanningOnTransition, false);
+
+    // Config file present but omits the key: deep-merge onto DEFAULT_CONFIG
+    // must not silently turn it on.
+    await writeConfig(root, `{ "version": 1 }`);
+    assert.equal((await loadConfig(root)).git.commitPlanningOnTransition, false);
+
+    // Explicit false stays off; explicit true turns it on.
+    await writeConfig(root, JSON.stringify({ git: { commitPlanningOnTransition: false } }));
+    assert.equal((await loadConfig(root)).git.commitPlanningOnTransition, false);
+    await writeConfig(root, JSON.stringify({ git: { commitPlanningOnTransition: true } }));
+    assert.equal((await loadConfig(root)).git.commitPlanningOnTransition, true);
+
+    // The shipped scaffold enables it for new repos.
+    await writeConfig(root, defaultConfigJsonc());
+    assert.equal((await loadConfig(root)).git.commitPlanningOnTransition, true);
   });
 });
 

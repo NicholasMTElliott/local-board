@@ -47,6 +47,9 @@ const MANDATORY_ACTION_NAMES = new Set([
 //     refusing complete-step calls whose evidence a still-pending forward
 //     move would strip (see evidenceStrippedByPendingForwardMove in
 //     src/tickets.js).
+//   - git.commitPlanningOnTransition: false here (vs true in the scaffold) so
+//     a pre-existing board that omits the key does not silently start
+//     committing planning-only changes after every mutating command.
 // These differences are pinned by tests in test/config.test.js (search
 // "backward-compat disabled" and "empty optionalSteps catalog"). Do NOT
 // converge them to match the scaffold — see the guard test
@@ -303,6 +306,7 @@ export const DEFAULT_CONFIG = {
     commitPlanningChanges: true,
     autoMerge: false,
     pruneMergedBranches: true,
+    commitPlanningOnTransition: false,
   },
   optionalSteps: {
     design: [],
@@ -926,11 +930,20 @@ export function defaultConfigJsonc() {
   // defaultBranch: null auto-detects origin/HEAD, main, then master.
   // autoMerge: true makes "move <ticket-id> done" commit planning-only ticket updates,
   // switch to the default branch, and merge the recorded ticket branch.
+  // commitPlanningOnTransition: true makes every mutating command (move, complete-step,
+  // gate-complete, section, etc.) commit planning-only changes (plans/**) immediately
+  // after a successful mutation, when the root is a git checkout. Field-reported
+  // motivation: executors run with full Bash access and sometimes issue destructive git
+  // operations (an aborted merge, a tester's 'git checkout -- .' probe) against a worktree
+  // whose only uncommitted state is the ticket's own stage transitions; committing at each
+  // transition makes that state recoverable. No-op when the working tree's planning paths
+  // are already clean, so back-to-back CLI calls stay cheap.
   "git": {
     "defaultBranch": null,
     "commitPlanningChanges": true,
     "autoMerge": false,
-    "pruneMergedBranches": true
+    "pruneMergedBranches": true,
+    "commitPlanningOnTransition": true
   },
 
   // Optional specialty review steps per stage. Each entry is shaped

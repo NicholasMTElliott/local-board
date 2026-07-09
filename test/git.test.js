@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -7,9 +7,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { main } from "../src/cli.js";
+import { defaultConfigJsonc } from "../src/config.js";
 import { initProject } from "../src/scaffold.js";
 import { beginStep, completeStep, createTicket, setTicketField } from "../src/tickets.js";
-import { startTicketWork } from "../src/git.js";
+import { commitPlanningTransition, startTicketWork } from "../src/git.js";
 import { removeFixtureDir } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
@@ -403,6 +404,342 @@ test("move done refuses auto-merge when non-planning changes are uncommitted", {
     assert.match(ticketText, /^status: implementing$/m);
   });
 });
+
+// --- git.commitPlanningOnTransition (durable planning state at each stage
+// transition, not just at move-done auto-merge) ---
+
+test(
+  "commitPlanningOnTransition (scaffold default: true) commits planning-only changes after each mutating command, leaving plans/ clean",
+  { skip: !GIT_AVAILABLE },
+  async () => {
+    await withRepo(async (root) => {
+      const created = await runCli(["--root", root, "create", "task", "Commit each transition"]);
+      assert.equal(created.code, 0, created.stderr);
+      const ticketId = path.basename(created.stdout.trim()).split("_", 1)[0];
+      await assertPlansClean(root);
+      assert.equal(await gitLastSubject(root), `${ticketId}: create task`);
+
+      const estimated = await runCli(["--root", root, "estimate", ticketId, "4"]);
+      assert.equal(estimated.code, 0, estimated.stderr);
+      await assertPlansClean(root);
+      assert.equal(await gitLastSubject(root), `${ticketId}: estimate 4`);
+
+      const commented = await runCli(["--root", root, "comment", ticketId, "hello there"]);
+      assert.equal(commented.code, 0, commented.stderr);
+      await assertPlansClean(root);
+      assert.equal(await gitLastSubject(root), `${ticketId}: comment Run Log`);
+
+      const sectioned = await runCli(["--root", root, "section", ticketId, "Some design notes.", "--section", "Implementation Notes"]);
+      assert.equal(sectioned.code, 0, sectioned.stderr);
+      await assertPlansClean(root);
+      assert.equal(await gitLastSubject(root), `${ticketId}: section Implementation Notes`);
+
+      const moved = await runCli(["--root", root, "move", ticketId, "ready_for_design", "--override", "--reason", "test setup"]);
+      assert.equal(moved.code, 0, moved.stderr);
+      await assertPlansClean(root);
+      assert.equal(await gitLastSubject(root), `${ticketId}: move ready_for_design`);
+
+      const gateChecked = await runCli(["--root", root, "gate-check", ticketId, "--stage", "test"]);
+      assert.equal(gateChecked.code, 0, gateChecked.stderr);
+      await assertPlansClean(root);
+      assert.equal(await gitLastSubject(root), `${ticketId}: gate-check test`);
+
+      const gateCompleted = await runCli([
+        "--root", root, "gate-complete", ticketId, "--stage", "design", "--executor", "inline", "--evidence", "consulted",
+      ]);
+      assert.equal(gateCompleted.code, 0, gateCompleted.stderr);
+      await assertPlansClean(root);
+      assert.equal(await gitLastSubject(root), `${ticketId}: gate-complete design`);
+
+      const completedStep = await runCli([
+        "--root", root, "complete-step", ticketId, "implement",
+        "--executor", "claude-subagent:local-board-implementer", "--model", "sonnet",
+        "--evidence", "Implementation done.", "--override", "--reason", "test setup",
+      ]);
+      assert.equal(completedStep.code, 0, completedStep.stderr);
+      await assertPlansClean(root);
+      assert.equal(await gitLastSubject(root), `${ticketId}: complete-step implement`);
+
+      const approved = await runCli(["--root", root, "approve-inline", ticketId, "review", "--reason", "trusted reviewer"]);
+      assert.equal(approved.code, 0, approved.stderr);
+      await assertPlansClean(root);
+      assert.equal(await gitLastSubject(root), `${ticketId}: approve-inline review`);
+
+      const setField = await runCli(["--root", root, "set", ticketId, "priority", "P1"]);
+      assert.equal(setField.code, 0, setField.stderr);
+      await assertPlansClean(root);
+      assert.equal(await gitLastSubject(root), `${ticketId}: set priority`);
+
+      const otherTicketPath = await createTicket(root, "task", "Dependency ticket", { now: new Date("2026-06-01T09:00:00Z") });
+      await git(root, ["add", "plans"]);
+      await git(root, ["commit", "-m", "Add dependency ticket"]);
+      const otherId = path.basename(otherTicketPath).split("_", 1)[0];
+
+      const linked = await runCli(["--root", root, "link-parent", ticketId, otherId]);
+      assert.equal(linked.code, 0, linked.stderr);
+      await assertPlansClean(root);
+      assert.equal(await gitLastSubject(root), `${ticketId}: link-parent ${otherId}`);
+
+      const unlinked = await runCli(["--root", root, "unlink-parent", ticketId, otherId]);
+      assert.equal(unlinked.code, 0, unlinked.stderr);
+      await assertPlansClean(root);
+      assert.equal(await gitLastSubject(root), `${ticketId}: unlink-parent ${otherId}`);
+
+      const blocked = await runCli(["--root", root, "block", ticketId, otherId]);
+      assert.equal(blocked.code, 0, blocked.stderr);
+      await assertPlansClean(root);
+      assert.equal(await gitLastSubject(root), `${ticketId}: block ${otherId}`);
+
+      const unblocked = await runCli(["--root", root, "unblock", ticketId, otherId]);
+      assert.equal(unblocked.code, 0, unblocked.stderr);
+      await assertPlansClean(root);
+      assert.equal(await gitLastSubject(root), `${ticketId}: unblock ${otherId}`);
+    });
+  },
+);
+
+test(
+  "commitPlanningOnTransition: false leaves current behavior byte-identical (no commits made)",
+  { skip: !GIT_AVAILABLE },
+  async () => {
+    await withRepo(async (root) => {
+      await writeFile(
+        path.join(root, "plans", "local-board.config.jsonc"),
+        defaultConfigJsonc().replace('"commitPlanningOnTransition": true', '"commitPlanningOnTransition": false'),
+        "utf8",
+      );
+      await git(root, ["add", "plans"]);
+      await git(root, ["commit", "-m", "Disable commitPlanningOnTransition"]);
+
+      const commitsBefore = await gitOutput(root, ["rev-list", "--count", "HEAD"]);
+
+      const created = await runCli(["--root", root, "create", "task", "No commit ticket"]);
+      assert.equal(created.code, 0, created.stderr);
+      const ticketId = path.basename(created.stdout.trim()).split("_", 1)[0];
+      assert.notEqual(await gitOutput(root, ["status", "--porcelain", "--", "plans"]), "");
+
+      const estimated = await runCli(["--root", root, "estimate", ticketId, "4"]);
+      assert.equal(estimated.code, 0, estimated.stderr);
+      const commented = await runCli(["--root", root, "comment", ticketId, "hi"]);
+      assert.equal(commented.code, 0, commented.stderr);
+      const sectioned = await runCli(["--root", root, "section", ticketId, "Notes text.", "--section", "Implementation Notes"]);
+      assert.equal(sectioned.code, 0, sectioned.stderr);
+      const moved = await runCli(["--root", root, "move", ticketId, "ready_for_design", "--override", "--reason", "test"]);
+      assert.equal(moved.code, 0, moved.stderr);
+
+      const commitsAfter = await gitOutput(root, ["rev-list", "--count", "HEAD"]);
+      assert.equal(commitsAfter, commitsBefore, "no new commits should be made when the flag is off");
+      assert.notEqual(
+        await gitOutput(root, ["status", "--porcelain", "--", "plans"]),
+        "",
+        "plans/ should remain dirty, exactly like current (pre-flag) behavior",
+      );
+    });
+  },
+);
+
+test(
+  "commitPlanningOnTransition survives a git checkout -- . destructive-op probe after a mutation (field-incident regression)",
+  { skip: !GIT_AVAILABLE },
+  async () => {
+    await withRepo(async (root) => {
+      const created = await runCli(["--root", root, "create", "task", "Survive checkout"]);
+      assert.equal(created.code, 0, created.stderr);
+      const ticketPath = created.stdout.trim();
+      const ticketId = path.basename(ticketPath).split("_", 1)[0];
+      await assertPlansClean(root);
+
+      const commented = await runCli(["--root", root, "comment", ticketId, "irreplaceable evidence"]);
+      assert.equal(commented.code, 0, commented.stderr);
+      await assertPlansClean(root);
+
+      // Simulate the field incident: a tester's destructive `git checkout -- .`
+      // probe run against the worktree after the CLI mutation already
+      // returned. Because the mutation was committed by the transition hook,
+      // there is nothing left in the working tree for this to discard.
+      //
+      // The ticket's other cited incident (an aborted merge) is not a second,
+      // independently meaningful variant to simulate here: `git merge --abort`
+      // resets to ORIG_HEAD (the state *before* the merge started) and never
+      // discards commits made prior to that merge, so it cannot destroy a
+      // transition commit made by this helper regardless of whether the
+      // helper exists. `git checkout -- .` (which only ever threatens
+      // *uncommitted* worktree edits) is the operation this feature actually
+      // defends against, and is exercised above.
+      await git(root, ["checkout", "--", "."]);
+
+      const ticketText = await readFile(ticketPath, "utf8");
+      assert.match(ticketText, /irreplaceable evidence/);
+      await assertPlansClean(root);
+    });
+  },
+);
+
+test(
+  "commitPlanningOnTransition is a silent no-op on a non-git root (mutation still succeeds, no warning)",
+  { skip: !GIT_AVAILABLE },
+  async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "local-board-nogit-"));
+    try {
+      await initProject(root);
+      const ticketPath = await createTicket(root, "task", "Non-git ticket", { now: new Date("2026-06-01T09:00:00Z") });
+      const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+      const result = await runCli(["--root", root, "comment", ticketId, "no git here"]);
+
+      assert.equal(result.code, 0, result.stderr);
+      assert.equal(result.stderr, "");
+      const ticketText = await readFile(ticketPath, "utf8");
+      assert.match(ticketText, /no git here/);
+    } finally {
+      await removeFixtureDir(root);
+    }
+  },
+);
+
+test(
+  "commitPlanningOnTransition degrades to a stderr warning on a commit failure, without losing the mutation",
+  { skip: !GIT_AVAILABLE },
+  async () => {
+    await withRepo(async (root) => {
+      const created = await runCli(["--root", root, "create", "task", "Warn on lock"]);
+      assert.equal(created.code, 0, created.stderr);
+      const ticketPath = created.stdout.trim();
+      const ticketId = path.basename(ticketPath).split("_", 1)[0];
+      await assertPlansClean(root);
+
+      // Simulate a colliding concurrent git process (e.g. a mid-merge state,
+      // or a second CLI invocation racing this one) holding the index lock.
+      await writeFile(path.join(root, ".git", "index.lock"), "", "utf8");
+      try {
+        const result = await runCli(["--root", root, "comment", ticketId, "still written despite lock"]);
+
+        assert.equal(result.code, 0, result.stderr);
+        assert.match(result.stderr, /warning: planning commit skipped/);
+
+        const ticketText = await readFile(ticketPath, "utf8");
+        assert.match(ticketText, /still written despite lock/);
+      } finally {
+        await unlink(path.join(root, ".git", "index.lock")).catch(() => {});
+      }
+    });
+  },
+);
+
+test(
+  "commitPlanningOnTransition does not double-commit when move done triggers auto-merge",
+  { skip: !GIT_AVAILABLE },
+  async () => {
+    await withRepo(async (root, baseBranch) => {
+      await writeFile(
+        path.join(root, "plans", "local-board.config.jsonc"),
+        `{
+  "git": {
+    "defaultBranch": "${baseBranch}",
+    "autoMerge": true,
+    "commitPlanningOnTransition": true
+  }
+}
+`,
+        "utf8",
+      );
+      await git(root, ["add", "plans/local-board.config.jsonc"]);
+      await git(root, ["commit", "-m", "Enable auto merge with commitPlanningOnTransition"]);
+
+      const ticketPath = await createTicket(root, "task", "No double commit", {
+        status: "ready_for_implementation",
+        now: new Date("2026-06-01T10:00:00Z"),
+      });
+      await git(root, ["add", "plans"]);
+      await git(root, ["commit", "-m", "Add ticket"]);
+      const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+      const work = await startTicketWork(root, ticketId, { now: new Date("2026-06-01T10:05:00Z") });
+      await writeFile(path.join(root, "feature.txt"), "implemented\n", "utf8");
+      await git(root, ["add", "feature.txt"]);
+      await git(root, ["commit", "-m", "Implement ticket"]);
+      await completeRequiredTaskSteps(root, ticketId);
+
+      const preMoveTip = await gitOutput(root, ["rev-parse", work.branch]);
+
+      const result = await runCli(["--root", root, "move", ticketId, "done", "--json"]);
+      assert.equal(result.code, 0, result.stderr);
+      const output = JSON.parse(result.stdout);
+      assert.equal(output.autoMerge.planningCommit, "committed");
+
+      // Exactly one commit landed on the ticket branch for this transition
+      // (autoMergeTicketBranch's own "Complete <ticketId>" commit) -- the
+      // commitPlanningOnTransition hook is skipped (guarded by
+      // !shouldAutoMerge) so no second, redundant commit is stacked on top.
+      const finalTip = await gitOutput(root, ["rev-parse", "HEAD^2"]);
+      assert.equal(await gitOutput(root, ["log", "-1", "--pretty=%s", finalTip]), `Complete ${ticketId}`);
+      assert.equal(await gitOutput(root, ["rev-list", "--count", `${preMoveTip}..${finalTip}`]), "1");
+    });
+  },
+);
+
+test(
+  "commitPlanningTransition pathspec-limits the commit to plans/** even when a non-planning file is already staged",
+  { skip: !GIT_AVAILABLE },
+  async () => {
+    await withRepo(async (root) => {
+      const created = await runCli(["--root", root, "create", "task", "Pathspec scope"]);
+      assert.equal(created.code, 0, created.stderr);
+      const ticketId = path.basename(created.stdout.trim()).split("_", 1)[0];
+      await assertPlansClean(root);
+
+      // Simulate a user who already `git add`ed a non-planning file of their
+      // own before running the CLI, then dirty a planning field via a
+      // mutating command that triggers the transition commit.
+      await writeFile(path.join(root, "staged.txt"), "user work\n", "utf8");
+      await git(root, ["add", "staged.txt"]);
+
+      const commented = await runCli(["--root", root, "comment", ticketId, "pathspec regression"]);
+      assert.equal(commented.code, 0, commented.stderr);
+
+      // The transition commit must contain only plans/** paths -- never the
+      // user's pre-staged non-planning file.
+      const committedFiles = (await gitOutput(root, ["show", "--name-only", "--pretty=format:", "HEAD"]))
+        .split(/\r?\n/)
+        .filter((line) => line !== "");
+      assert.ok(committedFiles.length > 0, "transition commit must touch at least one file");
+      for (const file of committedFiles) {
+        assert.equal(file.startsWith("plans/"), true, `unexpected non-planning path in transition commit: ${file}`);
+      }
+
+      // The user's pre-staged non-planning file must remain staged and
+      // uncommitted after the transition commit.
+      assert.equal(await gitOutput(root, ["status", "--porcelain", "--", "staged.txt"]), "A  staged.txt");
+    });
+  },
+);
+
+test(
+  "commitPlanningTransition: a second call after a commit is a true no-op (dirty-check-first, back-to-back calls stay cheap)",
+  { skip: !GIT_AVAILABLE },
+  async () => {
+    await withRepo(async (root) => {
+      const created = await runCli(["--root", root, "create", "task", "Clean run"]);
+      assert.equal(created.code, 0, created.stderr);
+      const ticketId = path.basename(created.stdout.trim()).split("_", 1)[0];
+      await assertPlansClean(root);
+
+      const headBefore = await gitOutput(root, ["rev-parse", "HEAD"]);
+      const result = await commitPlanningTransition(root, { ticketId, command: "create", detail: "task" });
+      assert.deepEqual(result, { committed: false, reason: "clean" });
+      const headAfter = await gitOutput(root, ["rev-parse", "HEAD"]);
+      assert.equal(headAfter, headBefore, "a clean planning tree must never create a new commit");
+    });
+  },
+);
+
+async function assertPlansClean(root) {
+  assert.equal(await gitOutput(root, ["status", "--porcelain", "--", "plans"]), "");
+}
+
+async function gitLastSubject(root) {
+  return gitOutput(root, ["log", "-1", "--pretty=%s"]);
+}
 
 async function hasGit() {
   try {
