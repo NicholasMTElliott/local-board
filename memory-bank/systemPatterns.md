@@ -30,6 +30,8 @@ It defines:
 - `optionalSteps`: per-stage specialty review catalogs (`design`/`implement`/`test`)
 - `estimation`: relative-sized story points config (`enabled`, `scale`, `bootstrapDefault`, `splitThreshold`)
 
+Optional-step `agent` values remain route strings or accept `{ route, model?, effort? }` profiles. `specialty-run` returns the resolved pins; specialty evidence enforces a pinned model (`codex-default` is a wildcard), while effort is dispatch-only and never enters evidence. Specialty names must not collide with effective `workflow.statusActions` values.
+
 V1 specialty prompts ship at `plans/prompts/optional-steps/{design,impl}/`.
 The scaffolded `security_audit` trigger is consequence-surface based: auth/session flows, cross-trust-boundary validation, external services/secrets, and permission/consent state that gates tool execution.
 
@@ -192,6 +194,9 @@ model must equal `configuredModel`, equal `codex-default`, or be covered by a
 `routingApprovals` entry for the full `route@model` token (`approve-inline
 --executor <route>@<model>`). Done-time re-validation (`validateRouting`) stays
 route-only for back-compat with evidence recorded before this rule.
+
+The same model/evidence rule applies to delegated optional specialties resolved by
+specialty-run; effort remains excluded from evidence.
 
 Dispatch verification uses `.local-board/active-steps.json` as the deterministic in-flight ledger, anchored at the main checkout's git common dir so linked worktrees share one record. `begin-step` stamps the ticket's resolved action/route/model there; configured effort is deliberately excluded from the ledger and all evidence tokens because it is a dispatch hint, not routed-work identity. `complete-step` and `approve-inline` clear the ticket's entry. `check-dispatch --agent [--model] [--ticket]` reads the ledger for hook use, always emits JSON on stdout, and exits 0 allow / 1 deny / 2 error while passing through non-local-board agents and unverifiable models. Claude Code enforcement hooks are opt-in via `local-board install --hooks`: routing-validator, dispatch-ledger, evidence-gate, and approve-inline-consent. Hooks fail open on errors/timeouts; CLI strict routing remains the backstop.
 

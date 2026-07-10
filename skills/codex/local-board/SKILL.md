@@ -230,11 +230,13 @@ For each requested step:
 local-board specialty-run <ticket-id> <step-name> --json
 ```
 
-Dispatch the returned prompt and agent route, then record:
+`specialty-run` also returns `model` and `effort` (both `null` when unset — a catalog entry's `agent` may be a bare route string or a `{ route, model?, effort? }` profile object). Dispatch the returned prompt and agent route, passing `--model <model>` / `--reasoning-effort <effort>` to the dispatch when non-null, then record:
 
 ```sh
-local-board complete-step <ticket-id> <step-name> --executor <logical-route> --evidence "<VERDICT>: <short summary>"
+local-board complete-step <ticket-id> <step-name> --executor <logical-route> --model <model> --evidence "<VERDICT>: <short summary>"
 ```
+
+Omit `--model` when `model` is null. A pinned specialty model is enforced on completion evidence the same way a pinned mandatory-action model is; effort is a dispatch hint only and never enters the evidence token.
 
 `gate-check` auto-records the consultation itself when the stage catalog is empty (`gate:<stage>:skipped-empty-catalog`, no dispatch). When the catalog is non-empty, record the consultation after the gate agent answers:
 

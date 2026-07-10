@@ -274,10 +274,14 @@ omitted stage never silently inherits built-in specialties.
 
 Each stage contains entries shaped `{ name, prompt, triggers, agent? }`.
 
-- `name`: required lowercase snake_case identifier, unique across all stages (routing resolves a specialty step by name across stages). It cannot reuse a mandatory action name such as `design`, `implement`, `review`, or `test`.
+- `name`: required lowercase snake_case identifier, unique across all stages (routing resolves a specialty step by name across stages). It cannot collide with any *effective* `workflow.statusActions` value after config merge — not just the built-in defaults (`decompose`, `design`, `implement`, `review`, `test`, `document`), but also a custom `statusActions` override, since `profileForAction` classifies an action name as mandatory-vs-specialty purely by `statusActions` membership. `loadConfig` rejects a colliding name at load time.
 - `prompt`: required repo-relative path to the specialty prompt, normally under `plans/prompts/optional-steps/<stage>/`. Fresh `init` scaffolds the packaged prompts, and `specialty-run` reports an actionable error if a configured prompt file is missing.
 - `triggers`: required human-readable guidance for deciding when the specialty applies.
-- `agent`: optional route override using the same conventions as mandatory action routing: `inline`, `claude-subagent:<agent-name>`, or `codex-task:<mode>`. Omitted entries run inline.
+- `agent`: optional route override, accepting either form:
+  - a bare route string using the same conventions as mandatory action routing: `inline`, `claude-subagent:<agent-name>`, or `codex-task:<mode>`;
+  - or a `{ route, model?, effort? }` profile object, using the same grammar as `agents.<action>` profiles (see "Agent routing" above) except `prompt` is rejected — the entry already owns a top-level `prompt` field, and an agent-profile `prompt` (including an explicit `null`) is an actionable load-time error pointing at the entry-level field instead.
+  - Omitted entries run inline. `route: "inline"` cannot carry a `model` or `effort`.
+  - Dispatch rule: pin the resolved `model` at dispatch (subagent model pin, or `codex-task`'s `--model`) and record it in completion evidence the same way mandatory steps do (`<route>@<model>`, `--model` on `complete-step`) so a pinned specialty model is enforced. `effort` is a dispatch hint only (`codex-task`'s `--reasoning-effort`, or frontmatter-static for `claude-subagent:`) and never appears in `completedSteps` evidence.
 
 ### Catalog
 
@@ -408,6 +412,8 @@ With `--json`, the command returns:
   "step": "security_audit",
   "prompt": "<absolute-path-to-specialty-prompt>",
   "agent": "inline",
+  "model": null,
+  "effort": null,
   "ticketPath": "plans/tickets/ready/<ticket-file>.md",
   "ticketContext": {
     "id": "<ticket-id>",
@@ -423,7 +429,7 @@ With `--json`, the command returns:
 }
 ```
 
-`agent` defaults to `inline` when the optional step entry has no override. The CLI is a read-only dispatcher: it does not invoke any agent. The orchestrator hands the returned `prompt`, `agent`, and `ticketContext` to the resolved execution route, then records completion with the normal step evidence flow. T20260516T1554Z (`orchestrator wiring`) will connect this resolver to the gate-check `requestedSteps` loop.
+`agent` defaults to `inline` when the optional step entry has no override; when the entry's `agent` is a `{ route, model?, effort? }` profile object, `agent` is the profile's `route` and `model`/`effort` carry the pinned values (both `null` when the entry is a bare route string, or a profile that omits them). The CLI is a read-only dispatcher: it does not invoke any agent. The orchestrator hands the returned `prompt`, `agent`, `model`, `effort`, and `ticketContext` to the resolved execution route — pinning `model` at dispatch (subagent model pin or `codex-task --model`) and recording it in completion evidence the same way mandatory steps do, so a pinned specialty model is enforced by the normal step-evidence model gate; `effort` is a dispatch hint only (`codex-task --reasoning-effort`, or static frontmatter for `claude-subagent:`) and is never recorded in evidence. T20260516T1554Z (`orchestrator wiring`) will connect this resolver to the gate-check `requestedSteps` loop.
 
 ## Estimation
 

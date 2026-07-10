@@ -4,14 +4,6 @@ import path from "node:path";
 export const CONFIG_PATH = path.join("plans", "local-board.config.jsonc");
 
 export const OPTIONAL_STEP_STAGES = ["design", "implement", "test"];
-const MANDATORY_ACTION_NAMES = new Set([
-  "decompose",
-  "design",
-  "implement",
-  "review",
-  "test",
-  "document",
-]);
 
 // DEFAULT_CONFIG plays two runtime roles — it is NOT the same thing as the
 // scaffolded config below it, minus some values:
@@ -374,28 +366,36 @@ function normalizeAgents(merged) {
   }
   const normalized = {};
   for (const [key, value] of Object.entries(merged.agents)) {
-    normalized[key] = normalizeAgentProfile(value, key);
+    normalized[key] = normalizeAgentProfile(value, `agents.${key}`);
   }
   merged.agents = normalized;
 }
 
-function normalizeAgentProfile(value, key) {
+// Single authority for agent-profile grammar, shared by agents.<action>
+// entries and optionalSteps[].agent object-form entries (see
+// normalizeOptionalStepAgent below). `label` is the caller-supplied prefix
+// used in every thrown message (e.g. "agents.design" or
+// `optionalSteps.implement entry "security_audit" agent`), so error text
+// stays actionable at either call site. `allowPrompt: false` rejects a
+// `prompt` field with a message pointing at the caller's own entry-level
+// field instead (optionalSteps entries already own a top-level `prompt`).
+function normalizeAgentProfile(value, label, { allowPrompt = true } = {}) {
   if (typeof value === "string") {
     if (!isValidAgentRoute(value)) {
-      throw new Error(`agents.${key} route "${value}" is not a valid route`);
+      throw new Error(`${label} route "${value}" is not a valid route`);
     }
     return { route: value };
   }
   if (!isObject(value)) {
     throw new Error(
-      `agents.${key} must be a route string or a { route, model?, effort?, prompt? } object`,
+      `${label} must be a route string or a { route, model?, effort?, prompt? } object`,
     );
   }
 
   const { route, model, effort, prompt } = value;
   if (typeof route !== "string" || !isValidAgentRoute(route)) {
     throw new Error(
-      `agents.${key} requires a valid route string; got ${JSON.stringify(route)}`,
+      `${label} requires a valid route string; got ${JSON.stringify(route)}`,
     );
   }
   const profile = { route };
@@ -403,12 +403,12 @@ function normalizeAgentProfile(value, key) {
   if (model !== undefined && model !== null) {
     if (typeof model !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(model)) {
       throw new Error(
-        `agents.${key} model must be a model alias or id; got ${JSON.stringify(model)}`,
+        `${label} model must be a model alias or id; got ${JSON.stringify(model)}`,
       );
     }
     if (route === "inline") {
       throw new Error(
-        `agents.${key} route "inline" cannot carry a model; route the step to a subagent to pin a model`,
+        `${label} route "inline" cannot carry a model; route the step to a subagent to pin a model`,
       );
     }
     profile.model = model;
@@ -417,25 +417,65 @@ function normalizeAgentProfile(value, key) {
   if (effort !== undefined && effort !== null) {
     if (typeof effort !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(effort)) {
       throw new Error(
-        `agents.${key} effort must be a non-empty reasoning-effort token; got ${JSON.stringify(effort)}`,
+        `${label} effort must be a non-empty reasoning-effort token; got ${JSON.stringify(effort)}`,
       );
     }
     if (route === "inline") {
       throw new Error(
-        `agents.${key} route "inline" cannot carry an effort; route the step to a subagent to pin reasoning effort`,
+        `${label} route "inline" cannot carry an effort; route the step to a subagent to pin reasoning effort`,
       );
     }
     profile.effort = effort;
   }
 
-  if (prompt !== undefined && prompt !== null) {
+  if (allowPrompt === false) {
+    if (Object.hasOwn(value, "prompt")) {
+      throw new Error(
+        `${label} cannot carry a prompt; set the entry-level "prompt" field instead`,
+      );
+    }
+  } else if (prompt !== undefined && prompt !== null) {
     if (typeof prompt !== "string" || prompt.trim() === "") {
-      throw new Error(`agents.${key} prompt must be a non-empty string path`);
+      throw new Error(`${label} prompt must be a non-empty string path`);
     }
     profile.prompt = prompt;
   }
 
   return profile;
+}
+
+// Validates an optionalSteps[].agent value. A bare route string is
+// back-compat sugar and is returned unchanged (byte-identical to today's
+// behavior — see the "preserves an optional agent override" test). An object
+// is validated via the shared normalizeAgentProfile authority with
+// allowPrompt: false, since the entry already owns a top-level `prompt`.
+function normalizeOptionalStepAgent(agent, stage, name) {
+  const label = `optionalSteps.${stage} entry "${name}" agent`;
+  if (typeof agent === "string") {
+    if (!isValidOptionalStepAgent(agent)) {
+      throw new Error(`optionalSteps.${stage} entry "${name}" has invalid agent "${agent}"`);
+    }
+    return agent;
+  }
+  if (!isObject(agent)) {
+    throw new Error(
+      `optionalSteps.${stage} entry "${name}" agent must be a route string or a { route, model?, effort? } object`,
+    );
+  }
+  return normalizeAgentProfile(agent, label, { allowPrompt: false });
+}
+
+// Resolves an optionalSteps[].agent value (string sugar, profile object, or
+// undefined/missing, which defaults to inline) to its full { route, model,
+// effort } shape. Shared by specialty-run (src/cli.js) and the specialty
+// branch of profileForAction (src/tickets.js) so both use one authority for
+// the string/object duality.
+export function resolveOptionalStepAgent(agentValue) {
+  const value = agentValue === undefined || agentValue === null ? "inline" : agentValue;
+  if (typeof value === "string") {
+    return { route: value, model: null, effort: null };
+  }
+  return { route: value.route, model: value.model ?? null, effort: value.effort ?? null };
 }
 
 // Pure config scan (no fs/PATH): returns a human label for every action
@@ -460,7 +500,11 @@ export function codexTaskRoutedActions(config) {
         continue;
       }
       for (const entry of entries) {
-        if (isObject(entry) && typeof entry.agent === "string" && entry.agent.startsWith("codex-task:")) {
+        if (!isObject(entry)) {
+          continue;
+        }
+        const route = typeof entry.agent === "string" ? entry.agent : entry.agent?.route;
+        if (typeof route === "string" && route.startsWith("codex-task:")) {
           actions.push(`${entry.name} (${stage})`);
         }
       }
@@ -477,6 +521,24 @@ export function isValidAgentRoute(value) {
   );
 }
 
+// Maps every effective (post-merge) workflow.statusActions value to the
+// status key that produces it, e.g. "implement" -> "ready_for_implementation".
+// Used to reject optionalSteps entries whose name collides with a status
+// action name — including a custom statusActions override, not just the
+// built-in defaults — so profileForAction's mandatory-vs-specialty
+// classification (src/tickets.js) can never be ambiguous.
+function effectiveStatusActionNames(merged) {
+  const map = new Map();
+  if (isObject(merged.workflow) && isObject(merged.workflow.statusActions)) {
+    for (const [status, action] of Object.entries(merged.workflow.statusActions)) {
+      if (typeof action === "string") {
+        map.set(action, status);
+      }
+    }
+  }
+  return map;
+}
+
 function normalizeOptionalSteps(merged, configPath) {
   if (!isObject(merged.optionalSteps)) {
     merged.optionalSteps = { design: [], implement: [], test: [] };
@@ -488,6 +550,14 @@ function normalizeOptionalSteps(merged, configPath) {
   // resolves a specialty step by name across stages and uses the first match,
   // so a cross-stage duplicate would route validation to the wrong entry.
   const seenNames = new Set();
+  // A specialty name that collides with an *effective* statusActions value
+  // (after config merge, so a custom statusActions override counts too) is
+  // rejected: profileForAction (src/tickets.js) classifies action names as
+  // mandatory-vs-specialty by checking membership in this exact set, and a
+  // collision would make it resolve the specialty's own profile via the
+  // mandatory branch (agents.default) instead, silently misrouting model
+  // enforcement. See statusActionNames() below.
+  const statusActionNames = effectiveStatusActionNames(merged);
   for (const stage of OPTIONAL_STEP_STAGES) {
     const value = merged.optionalSteps[stage];
     if (value === undefined || value === null) {
@@ -497,7 +567,9 @@ function normalizeOptionalSteps(merged, configPath) {
     if (!Array.isArray(value)) {
       throw new Error(`optionalSteps.${stage} must be an array`);
     }
-    normalized[stage] = value.map((entry) => validateOptionalStepEntry(entry, stage, seenNames));
+    normalized[stage] = value.map((entry) =>
+      validateOptionalStepEntry(entry, stage, seenNames, statusActionNames),
+    );
   }
 
   for (const key of Object.keys(merged.optionalSteps)) {
@@ -583,7 +655,7 @@ function normalizeWorktrees(merged) {
   merged.worktrees = { location, guardWrongRoot };
 }
 
-function validateOptionalStepEntry(entry, stage, seenNames) {
+function validateOptionalStepEntry(entry, stage, seenNames, statusActionNames) {
   if (!isObject(entry)) {
     throw new Error(`optionalSteps.${stage} entries must be objects`);
   }
@@ -600,9 +672,10 @@ function validateOptionalStepEntry(entry, stage, seenNames) {
   if (typeof triggers !== "string" || triggers.trim() === "") {
     throw new Error(`optionalSteps.${stage} entry "${name}" is missing a non-empty triggers`);
   }
-  if (MANDATORY_ACTION_NAMES.has(name)) {
+  const collidingStatus = statusActionNames.get(name);
+  if (collidingStatus !== undefined) {
     throw new Error(
-      `optionalSteps.${stage} entry name "${name}" collides with a mandatory action`,
+      `optionalSteps.${stage} entry name "${name}" collides with a mandatory action: workflow.statusActions.${collidingStatus} is "${name}"; rename the specialty entry or change that statusActions value`,
     );
   }
   if (seenNames.has(name)) {
@@ -614,12 +687,7 @@ function validateOptionalStepEntry(entry, stage, seenNames) {
 
   const normalized = { name, prompt, triggers };
   if (agent !== undefined) {
-    if (typeof agent !== "string" || !isValidOptionalStepAgent(agent)) {
-      throw new Error(
-        `optionalSteps.${stage} entry "${name}" has invalid agent "${String(agent)}"`,
-      );
-    }
-    normalized.agent = agent;
+    normalized.agent = normalizeOptionalStepAgent(agent, stage, name);
   }
   return normalized;
 }
@@ -998,8 +1066,15 @@ export function defaultConfigJsonc() {
   // { name, prompt, triggers, agent? }. The gate-check action picks zero or more
   // entries from the relevant stage catalog based on the work just completed.
   // Per-entry agent overrides the default routing for that specialty;
-  // when omitted the specialty runs inline. Setting a stage to an empty array
-  // wipes the default catalog for that stage; the loader's array merge is wholesale.
+  // when omitted the specialty runs inline. agent accepts a route string
+  // (sugar for inline vs. delegated) or a { route, model?, effort? } profile
+  // object to pin a model/reasoning-effort for that specialty, same grammar
+  // as agents.<action> above except the entry's own top-level "prompt" is
+  // used instead (an agent-profile prompt field is rejected). A pinned model
+  // is enforced on that specialty's completion evidence; effort is a dispatch
+  // hint only and never appears in completedSteps. Setting a stage to an
+  // empty array wipes the default catalog for that stage; the loader's array
+  // merge is wholesale.
   "optionalSteps": {
     "design": [
       {

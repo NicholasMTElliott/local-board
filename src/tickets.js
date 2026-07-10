@@ -2,7 +2,7 @@ import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/p
 import path from "node:path";
 
 import { clearActiveStep, stampActiveStep } from "./active-steps.js";
-import { loadConfig, OPTIONAL_STEP_STAGES } from "./config.js";
+import { loadConfig, OPTIONAL_STEP_STAGES, resolveOptionalStepAgent } from "./config.js";
 import { withOrderedTicketLocks, withTicketLock } from "./lock.js";
 import { ticketWorktreeMintOffsetMinutes } from "./worktrees.js";
 
@@ -2222,19 +2222,32 @@ function isKnownAction(config, action) {
 
 // The configured route for an action: mandatory actions use the agents map;
 // optional specialty steps use their catalog entry's `agent` (default inline).
+// Subsumed by profileForAction below; kept as a thin named wrapper for
+// call-site clarity.
 function configuredRouteForAction(config, action) {
-  const actions = new Set(Object.values(config.workflow.statusActions));
-  if (actions.has(action)) {
-    return agentForAction(config, action);
-  }
-  const entry = optionalStepEntry(config, action);
-  return entry ? entry.agent ?? "inline" : "inline";
+  return profileForAction(config, action).route;
 }
 
-// Resolve the full normalized profile { route, model?, prompt? } for an action.
+// Resolve the full normalized profile { route, model?, effort?, prompt? } for
+// an action. Mandatory actions (workflow.statusActions values) resolve
+// through the agents map with the agents.default fallback, unchanged from
+// before. Optional specialty steps resolve through their own catalog entry's
+// `agent` and must NOT fall back to agents.default: a specialty with no
+// `agent` is inline, not the default agent. This is the single seam that
+// makes route/model/effort/prompt resolution specialty-aware, so a pinned
+// specialty model is enforced by the same completeStep model gate that
+// enforces mandatory-action pins.
 function profileForAction(config, action) {
-  const entry = config.agents[action] ?? config.agents.default ?? { route: "inline" };
-  return typeof entry === "string" ? { route: entry } : entry;
+  const mandatory = new Set(Object.values(config.workflow.statusActions));
+  if (mandatory.has(action)) {
+    const entry = config.agents[action] ?? config.agents.default ?? { route: "inline" };
+    return typeof entry === "string" ? { route: entry } : entry;
+  }
+  const step = optionalStepEntry(config, action);
+  if (step && step.agent !== undefined) {
+    return resolveOptionalStepAgent(step.agent);
+  }
+  return { route: "inline" };
 }
 
 // agentForAction returns just the route string so all existing routing and

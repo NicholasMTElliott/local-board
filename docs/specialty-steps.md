@@ -18,7 +18,7 @@ mandatory action -> gate-check --stage <stage> -> for each requested name:
 1. The orchestrator completes the mandatory action (`design`, `implement`, or `test`) and records evidence with `complete-step`.
 2. The orchestrator runs `local-board gate-check <ticket-id> --stage <stage> --json`. If the catalog is empty, the command self-certifies the stage with a `gate:<stage>:skipped-empty-catalog` token, returns `skip: true` with `recorded` set to that token, and there is no agent dispatch.
 3. If the catalog is non-empty, the orchestrator dispatches the returned `prompt` through the configured gate agent, then records that consultation with `local-board gate-complete <ticket-id> --stage <stage> --executor <executor>`. The gate agent returns strict JSON: `{ "requestedSteps": ["security_audit", ...] }`. An empty array is the normal case.
-4. For each requested name, the orchestrator runs `local-board specialty-run <ticket-id> <name> --json`, dispatches the resolved `prompt` through the resolved `agent`, parses the specialty agent's `verdict` (`PASS` / `CONCERNS` / `FAIL`) plus `findings`, and records evidence with `local-board complete-step <ticket-id> <name> --executor <executor> --evidence "<VERDICT>: <summary>"`.
+4. For each requested name, the orchestrator runs `local-board specialty-run <ticket-id> <name> --json`, dispatches the resolved `prompt` through the resolved `agent` with the resolved `model`/`effort` pins, parses the specialty agent's `verdict` (`PASS` / `CONCERNS` / `FAIL`) plus `findings`, and records evidence with `local-board complete-step <ticket-id> <name> --executor <agent> --model <model> --evidence "<VERDICT>: <summary>"` (omit `--model` when null).
 5. After every requested specialty completes, the orchestrator advances the ticket using `move`.
 
 `gate-check` and `specialty-run` do not invoke agents. `gate-check` mutates only for the empty-catalog self-certification path; non-empty consultations are recorded by `gate-complete`, and specialty evidence is recorded by `complete-step`.
@@ -70,7 +70,7 @@ The classifier prompt at [`plans/prompts/steps/gate-check.md`](../plans/prompts/
 
 Two steps:
 
-1. Add an entry under the appropriate stage in `optionalSteps` in [`plans/local-board.config.jsonc`](../plans/local-board.config.jsonc). Required fields: `name` (lowercase snake_case, unique across all stages, never a mandatory action name), `prompt` (repo-relative path), `triggers` (human-readable rule). Optional: `agent` to override the default `inline` route with `claude-subagent:<agent-name>` or `codex-task:<mode>`.
+1. Add an entry under the appropriate stage in `optionalSteps` in [`plans/local-board.config.jsonc`](../plans/local-board.config.jsonc). Required fields: `name` (lowercase snake_case, unique across all stages, never a mandatory action name), `prompt` (repo-relative path), `triggers` (human-readable rule). Optional: `agent` to override the default `inline` route — either a bare route string (`claude-subagent:<agent-name>` or `codex-task:<mode>`) or a `{ route, model?, effort? }` profile object to also pin a per-step model and/or reasoning effort. The profile object uses the same grammar as `agents.<action>` (see [docs/CodexSupport.md](CodexSupport.md)) except it must NOT carry a `prompt` field — the entry's own top-level `prompt` above is used instead.
 2. Create the prompt file at the configured path. Follow the verdict + findings contract used by the v1 catalog: prompts end with a strict JSON output block shaped `{ "verdict": "PASS" | "CONCERNS" | "FAIL", "findings": [...] }`.
 
 The next gate-check run that targets the entry's stage will see the new entry in its catalog automatically. No source code changes are required.
@@ -97,13 +97,17 @@ The orchestrator parses `verdict` and produces a short evidence summary for `com
 
 ## Evidence recording
 
-`complete-step <ticket-id> <step-name> --executor <executor> --evidence "<text>"` writes a `<step-name>:<executor>` entry into the ticket's `completedSteps` front-matter list. Example:
+`complete-step <ticket-id> <step-name> --executor <executor> [--model <model>] --evidence "<text>"` writes a `<step-name>:<executor>` (or `<step-name>:<executor>@<model>` when `--model` is given) entry into the ticket's `completedSteps` front-matter list. Example:
 
 ```sh
 local-board complete-step T20260516T1554Z security_audit --executor inline --evidence "CONCERNS: 1 high-severity finding on cookie flags"
 ```
 
 The resulting `completedSteps` entry is `security_audit:inline`. Strict routing matches the `<step-name>:<executor>` pair against the resolved route from `specialty-run`. Use the `agent` value returned by `specialty-run` (or `inline` when no override applies) verbatim.
+
+When a specialty's `agent` is a `{ route, model }` profile, also pass `--model <model>` (the value `specialty-run` returned): `complete-step` composes `<step-name>:<route>@<model>` server-side and enforces the pin exactly like a mandatory action — `@codex-default` satisfies any pinned model (a Codex-translated run), a mismatched or missing model is refused with an actionable message, and an approved deviation via `approve-inline --executor <route>@<model>` is still honored. `effort` is a dispatch hint only; it is never part of the evidence token.
+
+`specialty-run`'s JSON payload names these fields `agent`/`model`/`effort` (not `configuredAgent`/`configuredModel`/`configuredEffort` like `begin-step`) — `specialty-run` is a pure resolver with no configured-vs-actual ledger duality, so the plain names are used, and the wire contract predates the profile form.
 
 ## Interaction with doneRequires
 
