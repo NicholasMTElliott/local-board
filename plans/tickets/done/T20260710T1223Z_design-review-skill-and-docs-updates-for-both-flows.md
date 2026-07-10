@@ -1,7 +1,7 @@
 ---
 id: T20260710T1223Z
 type: task
-status: ready_for_docs
+status: done
 priority: P2
 parent: S20260710T1206Z
 children: []
@@ -11,9 +11,9 @@ branch: local-board/T20260710T1223Z-design-review-skill-and-docs-updates-for-bot
 estimate: 2
 estimateBasis: T20260710T1222Z
 workStartedAt: 2026-07-10T14:16:04Z
-workCompletedAt: null
+workCompletedAt: 2026-07-10T14:51:30Z
 created: 2026-07-10T12:20:26Z
-updated: 2026-07-10T14:51:29Z
+updated: 2026-07-10T14:51:30Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
