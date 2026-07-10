@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T18:18:39Z
+updated: 2026-07-10T18:32:21Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -492,3 +492,5 @@ correction.
 - 2026-07-10T17:54:23Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none requested (workflow policy, no auth/UI/UX triggers)
 
 - 2026-07-10T18:14:48Z: Design review (sol@xhigh): FAIL. [High] Empty completedSteps+routingApprovals does not imply never-worked: beginStep may have stamped a kind:action ledger record; the moveTicket sweep clears only gate/specialty kinds, so a stale design-action record survives a lane correction (e.g. ready_for_design -> ready_for_decomposition) and checkDispatch would still authorize the designer. Fix: lane move must clear/abandon action-kind records (or lane requires no active-step record); add beginStep-then-correct test proving stale authorization cannot survive. Disposition: designer revision.
+
+- 2026-07-10T18:32:21Z: Design re-review (sol@xhigh): FAIL. [High] Lane clear not atomic: moveTicket publishes status before clearing and swallows clear failures; unlocked beginStep can re-stamp after the clear; sequential test misses all interleavings. Disposition: revision #2 - clear moves INSIDE moveTicket's locked span BEFORE publish, lane move fails closed (falls back to --override path) if the clear errors; the beginStep-no-shared-lock interleaving is pre-existing systemic (identical for the gate/specialty sweep) and will be documented as out of scope with a rationale. Round 3 = hard stop.
