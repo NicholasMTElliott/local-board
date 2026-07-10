@@ -1,7 +1,7 @@
 ---
 id: T20260710T1221Z
 type: task
-status: ready_for_design
+status: ready_for_implementation
 priority: P2
 parent: S20260710T1206Z
 children: []
