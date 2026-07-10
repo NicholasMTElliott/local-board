@@ -13,7 +13,7 @@ estimateBasis: T20260709T1119Z
 workStartedAt: 2026-07-10T01:05:09Z
 workCompletedAt: null
 created: 2026-07-10T00:35:52Z
-updated: 2026-07-10T01:34:52Z
+updated: 2026-07-10T01:40:38Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only]
 routingApprovals: []
 ---
@@ -300,6 +300,30 @@ Reviewed commit ba06bf3 (branch local-board/T20260710T0035Z-... vs mainline).
 Reviewer's other checks (all clean): stderr-only warning keeps --json stdout parseable; validate exit code remains ticket-driven; readCwdConfigForHint fails open on absent/unreadable/malformed config; src/ files allowlist already covers the new module; node --check passed on changed sources.
 
 ## Test Evidence
+
+Environment: Windows 11, node v24.14.0, worktree branch tip ba24556 (code commit ba06bf3). Notable machine state: codex shim colocated with node.exe in C:\nvm4w\nodejs and a real ~/.claude/skills/codex-task install — exactly the colocation case flagged in Review Findings #2. Tester: claude-subagent:local-board-tester (sonnet).
+
+Commands and results:
+
+- npm run check — exit 0.
+- node --test — 459 tests: 458 pass, 0 fail, 1 pre-existing unrelated skip.
+- validate on the worktree's own config (routes review/document to codex-task) with real machine state — silent, exit 0 (both prerequisites present: correct).
+
+Live probes (file-creation-free; env-only overrides and node -e against exported functions):
+
+| Criterion | Result |
+|---|---|
+| Zero codex-task routes silent (probe-throwing stub proves short-circuit) | PASS |
+| codex absent + skill absent: warning names actions (review, document) and both missing prerequisites; exit 0 | PASS — observed: WARNING: config routes review, document to codex-task, but `codex` CLI not found on PATH; codex-task skill not installed in any harness skills dir. Install the codex-task skill and run `codex login`, or reroute these actions to another agent. local-board detects codex-task; it does not install or manage it. |
+| Skill-only-missing omits the binary clause | PASS (control run with real PATH) |
+| Fail-open when probes throw | PASS (warning still returned, no crash) |
+| Malformed config cannot crash validate | PASS (readCwdConfigForHint try/catch verified live; validate-level parse errors degrade to message + exit 2 per src/cli.js:184-187, code-read) |
+
+Review-gap closure: probe 2b exercised the missing-binary clause the child-process tests cannot reach on this machine (Review Findings #2) — clause is real and correctly worded.
+
+Residual (non-blocking): no automated hermetic test exists for a malformed config file reaching readCwdConfigForHint via a real on-disk file (tester role cannot create files); candidate one-case addition to test/install.test.js.
+
+Recommendation: pass.
 
 ## Documentation Updates
 
