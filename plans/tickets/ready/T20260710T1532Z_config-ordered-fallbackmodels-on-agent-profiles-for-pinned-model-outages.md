@@ -8,12 +8,12 @@ children: []
 blockedBy: []
 blocks: []
 branch: local-board/T20260710T1532Z-config-ordered-fallbackmodels-on-agent-profiles-for-pinned-model-outages
-estimate: null
-estimateBasis: null
+estimate: 4
+estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T15:47:41Z
+updated: 2026-07-10T15:48:02Z
 completedSteps: []
 routingApprovals: []
 ---
