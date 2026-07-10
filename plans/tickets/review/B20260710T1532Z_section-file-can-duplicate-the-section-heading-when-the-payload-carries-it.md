@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T16:03:16Z
+updated: 2026-07-10T16:13:43Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -142,6 +142,12 @@ Test results: `npm run check` passes (all `node --check` syntax checks). `node -
 Commit: 192d9b9 on branch `local-board/B20260710T1532Z-section-file-can-duplicate-the-section-heading-when-the-payload-carries-it`, files: SKILL.md, SKILL_TEAM.md, skills/codex/local-board/SKILL.md, skills/codex/local-team/SKILL.md, src/tickets.js, test/tickets.test.js.
 
 ## Review Findings
+
+Verdict: changes_requested; target: implementation (codex-task:read-only, gpt-5.6-terra @ high, 2026-07-10, commit 192d9b9)
+
+1. test/tickets.test.js:732 — the idempotent re-write test does not implement the design's byte-identical-body assertion. It checks extracted section text, heading count, and validation result, so it could pass even if a repeated valid rewrite changed whitespace or another body region. Fix: capture the ticket body after the first write and assert it equals the body after the second write.
+
+Verified clean: reject guard fence-aware and H2-only with actionable message; duplicate-heading validation correctly in validateTicketShape, scoped to STANDARD_SECTIONS, fence-aware; rejection/fenced/H3/duplicate-validation test paths covered; skill notes outside CLI fences, single-ticket CLI blocks unchanged. Static review only (suite intentionally not run in review sandbox).
 
 ## Test Evidence
 
