@@ -7,13 +7,13 @@ parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/B20260710T1533Z-worktrees-tests-use-a-fixed-name-temp-dir-and-flake-on-stale-leftovers
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T15:32:40Z
+updated: 2026-07-10T17:07:08Z
 completedSteps: []
 routingApprovals: []
 ---
