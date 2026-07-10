@@ -10,10 +10,10 @@ blocks: [T20260710T1222Z]
 branch: local-board/T20260710T1220Z-design-review-routing-flag-move-precondition-and-evidence-recorder
 estimate: null
 estimateBasis: null
-workStartedAt: null
+workStartedAt: 2026-07-10T12:22:11Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T12:22:10Z
+updated: 2026-07-10T12:22:11Z
 completedSteps: []
 routingApprovals: []
 ---
@@ -63,3 +63,5 @@ No CLI commands (sibling CLI task). No prompt file (sibling prompt task). No ski
 ## Questions
 
 ## Run Log
+
+- 2026-07-10T12:22:11Z: Ensured git branch local-board/T20260710T1220Z-design-review-routing-flag-move-precondition-and-evidence-recorder (already-current).
