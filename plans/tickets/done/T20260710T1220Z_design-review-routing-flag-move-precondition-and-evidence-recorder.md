@@ -1,7 +1,7 @@
 ---
 id: T20260710T1220Z
 type: task
-status: ready_for_docs
+status: done
 priority: P2
 parent: S20260710T1206Z
 children: []
@@ -11,7 +11,7 @@ branch: local-board/T20260710T1220Z-design-review-routing-flag-move-precondition
 estimate: 2
 estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:22:11Z
-workCompletedAt: null
+workCompletedAt: 2026-07-10T13:22:01Z
 created: 2026-07-10T12:20:25Z
 updated: 2026-07-10T13:22:01Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
