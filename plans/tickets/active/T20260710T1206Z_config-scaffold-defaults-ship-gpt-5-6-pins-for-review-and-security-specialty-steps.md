@@ -13,7 +13,7 @@ estimateBasis: T20260710T1156Z
 workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:06:56Z
-updated: 2026-07-10T13:16:47Z
+updated: 2026-07-10T13:27:17Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -285,6 +285,19 @@ it in-process via `loadConfig` not throwing. Recommend in-process for hermeticit
 either satisfies the criterion.
 
 ## Implementation Notes
+
+## Implementation Notes
+
+Implemented exactly per the Technical Design (no deviations from the design's edit plan):
+
+- `src/config.js`: `defaultConfigJsonc()` `agents.review` now `{ route: "codex-task:read-only", model: "gpt-5.6-terra", effort: "high" }`; `design/security_threat_model` and `implement/security_audit` optionalSteps entries gained `agent: { route: "codex-task:read-only", model: "gpt-5.6-sol", effort: "xhigh" }`; agents-block and optionalSteps-block scaffold comments document the pins + escape hatch; `DEFAULT_CONFIG` header comment gained the `agents.review` value-divergence bullet. `DEFAULT_CONFIG` data untouched.
+- `test/config.test.js`: guard-test allowlist updated (`expected.agents.review = scaffolded.agents.review` plus `agents.review.effort`/`agents.review.model` in the sorted `collapsed` array, now 11 leaf paths / 10 collapsed entries after also absorbing the sibling T20260710T1220Z `requireDesignReview` insert); fixed the two flagged pre-existing assertions (`loadConfig reads the commented default config` line ~59, and the v1 optionalSteps-catalog no-agent loop, now asserting the two security entries carry the sol/xhigh profile); added new test "init scaffold in a temp repo ships the GPT-5.6 pins and loads without error" using `writeDefaultConfig` + `loadConfig`.
+- `test/cli.test.js` and `test/tickets.test.js`: fixed CLI/tickets tests that exercised the real scaffold and asserted the old unpinned/inline behavior for `agents.review`, `security_threat_model`, and `security_audit` (model-pin enforcement on `complete-step` now requires `@gpt-5.6-terra`/`@gpt-5.6-sol` executor suffixes on these three call sites; not called out explicitly in the design's file list but required to keep `npm test` green against the real scaffold).
+- `docs/CodexSupport.md` and `docs/specialty-steps.md`: noted the shipped pins and the escape hatch (delete `model`/`effort` keys or reroute).
+
+STEP 0 sibling merge: `local-board/T20260710T1220Z-...` merged cleanly with **zero conflicts** (git auto-merged `src/config.js` and `test/config.test.js`); the design's enumerated merge points (agents block, routing block, guard-test allowlist) all landed as clean additive inserts as predicted. Baseline after merge was 3 pre-existing failures (2 `install.test.js` PATH-verification tests, B20260710T1232Z, plus one `cli.test.js:2031` "estimation prompts" failure present on both parent branches pre-merge, unrelated to this ticket or the sibling).
+
+Final `npm test`: 497 tests, 493 pass, 3 fail (the same 3 baseline failures, confirmed unchanged in count and identity). `npm run check` clean. `node ./bin/local-board.js validate --root <worktree>` -> "Ticket validation OK".
 
 ## Review Findings
 
