@@ -13,7 +13,7 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T17:52:20Z
+updated: 2026-07-10T17:56:22Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -787,6 +787,12 @@ No changes to `plans/prompts/**`, so `npm run sync-resources` was not required; 
 - `docs/Workflow.md`'s "Agent Routing" section still documents the pre-`effort`-era `{ route, model?, prompt? }` grammar (missing `effort` too, predating this ticket) and was left untouched — out of this ticket's explicit doc scope (`docs/CodexSupport.md` only), but worth a follow-up doc-accuracy pass.
 
 ## Review Findings
+
+Verdict: changes_requested; target: implementation (codex-task:read-only, gpt-5.6-terra @ high, 2026-07-10, commits b981ff4+a70165a+1905cb0)
+
+1. [Medium] The D6 test contract is incomplete: several tests labelled byte-identical assert only key sets or key absence, so they would miss a regression to an existing legacy field value or nested payload shape. Examples: test/cli.test.js:474-480, 1181-1191, 1685-1715, 2595-2602; test/tickets.test.js:1127-1133; test/codex-dispatch.test.js:187-203. Fix: replace the spot checks with assert.deepEqual against the complete fallback-free result/payload/stamp shapes (controlled or captured ts values where needed), covering begin-step, gate-check, specialty-run, design-review-check, and translated dispatch outputs.
+
+Verified clean by static inspection: routing and schema validation, fallback threading through all consultation paths, specialty-stamp clearing, sanitization, prompt forwarding, and the D7 carve-out.
 
 ## Test Evidence
 
