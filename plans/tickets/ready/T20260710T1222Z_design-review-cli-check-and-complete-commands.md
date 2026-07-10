@@ -13,8 +13,8 @@ estimateBasis: T20260710T1220Z
 workStartedAt: 2026-07-10T13:25:24Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T13:32:36Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-10T13:33:32Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # design-review: CLI check and complete commands
@@ -383,3 +383,5 @@ config change (a non-goal here).
 - 2026-07-10T13:25:24Z: Ensured git branch local-board/T20260710T1222Z-design-review-cli-check-and-complete-commands (already-current).
 
 - 2026-07-10T13:32:36Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design: two thin cli.js wrappers (check resolver + complete recorder passthrough), flag-off refusal on both (mirrors recorder), no consultation stamp needed (hook short-circuits non-local-board routes, verified), verdict-agnostic evidence, wrong-root before any write, 8-case E2E plan. Estimate 2 (basis T20260710T1220Z, designer-recorded).
+
+- 2026-07-10T13:33:32Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none - thin CLI wrappers over existing recorder/resolver
