@@ -13,8 +13,8 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T15:46:10Z
-completedSteps: []
+updated: 2026-07-10T15:46:50Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
 # skills: process hardening from the 2026-07-10 parallel-run retro (post-merge suite, denial hint, reviewer no-test-run, prompt-edit full suite)
@@ -234,3 +234,5 @@ insertion into existing skill/prompt/agent Markdown, plus one resources mirror r
 ## Run Log
 
 - 2026-07-10T15:40:30Z: Ensured git branch local-board/T20260710T1533Z-skills-process-hardening-from-the-2026-07-10-parallel-run-retro-post-merge-suite-denial-hint-reviewer-no-test-run-prompt-edit-full-suite (already-current).
+
+- 2026-07-10T15:46:50Z: Completed design via claude-subagent:local-board-designer@opus: Four additive prose insertions designed with exact anchors: post-merge full-suite Closeout contract (both team skills), denial-recovery hint (Claude skills only; codex spawn_agent never triggers hook), reviewer no-test-run line (3 reviewer files + sync-resources), production-artifacts note in AGENTS.md. Estimate 2pts basis T20260710T1223Z.
