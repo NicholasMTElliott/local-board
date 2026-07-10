@@ -13,7 +13,7 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T17:56:22Z
+updated: 2026-07-10T18:09:31Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -831,3 +831,5 @@ Verified clean by static inspection: routing and schema validation, fallback thr
 - 2026-07-10T17:56:22Z: Completed review via codex-task:read-only@gpt-5.6-terra: changes_requested target implementation: 1 Medium - byte-identical tests assert key sets not full deep-equal shapes (6 cited locations); all functional invariants verified clean statically
 
 - 2026-07-10T17:56:22Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku, review:codex-task:read-only@gpt-5.6-terra].
+
+- 2026-07-10T18:09:31Z: Fix pass for review finding: six byte-identical tests strengthened to full deep-equal shapes (39dac82, test-only); exposed and encoded the wholesale agent-profile replacement semantics of loadConfig. Suite 565/0/1.
