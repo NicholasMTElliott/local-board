@@ -13,8 +13,8 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:22:11Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T13:07:26Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-10T13:09:47Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet"]
 routingApprovals: []
 ---
 # design-review: routing flag, move precondition, and evidence recorder
@@ -369,24 +369,6 @@ Fixed the two accepted Review Findings, scope limited to exactly those two:
 
 `npm run check`, `npm test` (494 tests: 491 pass, 2 known-baseline `install.test.js` failures tracked B20260710T1232Z, 1 skipped), and `node ./bin/local-board.js validate --root <worktree>` all green.
 
-## Implementation Notes
-
-Merged sibling T20260710T1156Z first (STEP 0, clean auto-merge, no conflicts). Baseline `npm test` after merge: 475 pass / 2 known-baseline `install.test.js` failures (real-PATH, tracked B20260710T1232Z) / 1 skipped.
-
-Implemented the `requireGateConsultation`-mirror triad exactly per design, with one necessary adaptation forced by the merge: the sibling ticket refactored `configuredRouteForAction` into a thin wrapper over a restructured `profileForAction` (mandatory-action branch vs. optional-specialty branch). The design's original "no `profileForAction` edit required" assumption was written against the pre-merge function shape. Post-merge, `profileForAction`'s mandatory branch had to be extended with `|| action === DESIGN_REVIEW_ACTION` (one-line additive change, same seam the design anticipated for `configuredRouteForAction`) so `config.agents["design-review"]` resolves correctly, including its `agents.default` fallback for parity with mandatory actions.
-
-`src/config.js`: added `agents["design-review"]` (route `codex-task:read-only`, model `gpt-5.6-sol`, effort `xhigh`) identically to both `DEFAULT_CONFIG` and `defaultConfigJsonc()`; added `routing.requireDesignReview` (`false`/`true` respectively) with comments matching the six existing backward-compat flags.
-
-`src/tickets.js`: added `DESIGN_REVIEW_ACTION` constant; `isKnownAction` and `profileForAction` recognize it; `producingStatusForToken` maps a design-review token to `ready_for_design`; `isDesignReviewGatedMove`/`hasDesignReviewToken` beside `gateStageForForwardMove`; a `moveTicket` precondition placed immediately after the gate-consultation block (same no-side-effects-on-refusal window); `recordDesignReview` modeled on `completeStep` (model-pin enforcement via `validateStepRouting({ enforceModel: true })`, `guardPrematureEvidence`, atomic write, `clearActiveStep`).
-
-Tests: `test/config.test.js` gained a `requireDesignReview` backward-compat-disabled case and the guard-test allowlist now has nine paths (added `routing.requireDesignReview`). `test/tickets.test.js` gained the full AC1–AC6 suite (refuse-then-allow for both `ready_for_design`/`designing`, backward/lateral/archive never gated, flag-off byte-identical, model-pin + `@codex-default` + empty-evidence + no-effort-leak, `guardPrematureEvidence` early/on-time, loop-back strip + Run Log enumeration + re-record, and confirmation design-review is absent from `doneRequires`) plus a direct `isDesignReviewGatedMove` unit test and a `producingStatusForToken`-mapping test via the exported `invalidateDownstreamEvidence`.
-
-Two pre-existing tests needed updates because the scaffold now ships `requireDesignReview: true` and a `codex-task`-routed `design-review` agent: `test/tickets.test.js`'s scaffold happy-path pipeline test now records a design review before its `ready_for_design -> ready_for_implementation` move; `test/cli.test.js`'s "zero codex-task routes" test now also overrides `design-review` to `inline`.
-
-`npm run check`, `npm test` (490 tests: 487 pass, 2 known-baseline `install.test.js` failures, 1 skipped), and `node ./bin/local-board.js validate` all green.
-
-Deviation from the written design: `profileForAction` edit (see above) — required by the post-merge function shape, not by the original pre-merge design text; scope and intent unchanged (design-review resolves through `config.agents["design-review"]`, never through the optionalSteps catalog).
-
 ## Review Findings
 
 verdict: changes_requested; target: implementation
@@ -424,3 +406,5 @@ Disposition: both findings accepted; loop-back to ready_for_implementation for t
 - 2026-07-10T13:00:06Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
 
 - 2026-07-10T13:00:06Z: Ensured git branch local-board/T20260710T1220Z-design-review-routing-flag-move-precondition-and-evidence-recorder (already-current).
+
+- 2026-07-10T13:09:47Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Original 4d54bce + review-fix 18c0580: design-review recognition/recorder/scanner all gated on requireDesignReview (flag-off byte-identical, zero-codex-routes test restored to pre-change form as proof), first-colon token parse requires non-empty executor, set-then-move bypass regression. 491 pass + 2 baseline.
