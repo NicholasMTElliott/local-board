@@ -13,7 +13,7 @@ estimateBasis: T20260709T1119Z
 workStartedAt: 2026-07-10T01:05:09Z
 workCompletedAt: null
 created: 2026-07-10T00:35:52Z
-updated: 2026-07-10T01:40:39Z
+updated: 2026-07-10T01:43:29Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -326,6 +326,19 @@ Residual (non-blocking): no automated hermetic test exists for a malformed confi
 Recommendation: pass.
 
 ## Documentation Updates
+
+Documentation step executed by codex-task:workspace-write (gpt-5.5, 107s) in the ticket worktree; edits committed by the orchestrator on the ticket branch.
+
+Changed:
+
+- memory-bank/systemPatterns.md, memory-bank/techContext.md: terse current-state facts added for the detection path — src/config.js scans routed actions, src/codex-detect.js runs fail-open availability checks; validate emits a stderr-only WARNING (exit code stays ticket-driven); claude-target install prints the same hint; local-board detects codex-task but does not install or manage it.
+
+Checked and deliberately left alone:
+
+- README.md Documentation Index and feature blurbs — no stale entries (docs files touched by this ticket pre-existed).
+- docs/Install.md and docs/CodexSupport.md — implementation-commit notes already accurate (actions named, missing prerequisites, fail-open, detected-not-managed, exit code unchanged).
+
+Validation: git diff --check clean on edited files; prose-only change.
 
 ## Questions
 
