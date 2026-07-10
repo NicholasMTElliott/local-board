@@ -6,7 +6,7 @@ priority: P2
 parent: S20260710T1206Z
 children: []
 blockedBy: [T20260710T1220Z, T20260710T1221Z]
-blocks: []
+blocks: [T20260710T1223Z]
 branch: null
 estimate: null
 estimateBasis: null
