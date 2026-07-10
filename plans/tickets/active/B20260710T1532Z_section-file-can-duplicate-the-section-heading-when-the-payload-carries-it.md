@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T15:54:42Z
+updated: 2026-07-10T16:01:44Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -127,6 +127,19 @@ Then `npm run check` and `node --test`.
 None blocking. One deliberate scoping call recorded above: validate flags duplicates only among `STANDARD_SECTIONS` names, not arbitrary duplicated H2s.
 
 ## Implementation Notes
+
+Implemented per design, with the confirmed function-name correction (validateTicketShape, not validateTicketStructure).
+
+1. `src/tickets.js`: added `assertPayloadHasNoSectionHeading(text)`, a pure helper that walks the payload with the existing fence-aware `contentLines` generator and throws on any unfenced `## ` line (reusing `SECTION_HEADING_RE`). Called from `setTicketSection` on `text.trim()`, immediately before `replaceSection`. Error message: `section payload must not contain a Markdown "## " heading line; pass only the section body (local-board manages the heading). Fence any literal "## " sample lines.`
+2. `src/tickets.js`: `validateTicketShape` (not `validateTicketStructure`) gained a fence-aware duplicate pass, right after the existing missing-section loop (~line 1864). It counts `## ` heading occurrences via `contentLines` + `SECTION_HEADING_RE`, scoped to `STANDARD_SECTIONS` names only, and pushes `${ticket.path}: duplicate ## ${name} section` for any count > 1.
+3. `test/tickets.test.js`: added 7 tests covering the design's full test list — reject own-heading payload, reject foreign leading heading, reject trailing foreign heading, accept an unfenced H3 subheading, idempotent double round-trip for plain content, and a validate test that bypasses the guard (writes the corrupted file directly) to confirm the duplicate-heading issue is flagged. The "accept fenced heading-like line" case is already covered by the pre-existing parametrized fenced round-trip tests (test/tickets.test.js:546), which continue to pass unchanged under the new guard.
+4. Prose contract note (`The payload is the section body only — do not include the section's own "## Heading"; fence any literal "## " sample lines.`) added to `SKILL.md`, `skills/codex/local-board/SKILL.md`, `SKILL_TEAM.md`, and `skills/codex/local-team/SKILL.md`. All four edits are outside any fenced `## CLI Commands` block; the `test/skill-usage-sync.test.js` byte-identity check (SKILL.md vs skills/codex/local-board/SKILL.md fenced blocks only) is unaffected. SKILL_TEAM.md and skills/codex/local-team/SKILL.md have no verbatim twin of the SKILL.md sentence, so the note was folded into their existing `section --file` mentions (a return-only-result bullet and an orchestrator-owned-state bullet respectively) rather than duplicating a standalone paragraph that doesn't exist in those files.
+
+No deviations from the chosen contract (reject, not strip). No CLI signature change.
+
+Test results: `npm run check` passes (all `node --check` syntax checks). `node --test` — 532 tests, 531 pass, 1 skipped (pre-existing slow smoke test, gated by `LOCAL_BOARD_SLOW_TESTS`), 0 fail.
+
+Commit: 192d9b9 on branch `local-board/B20260710T1532Z-section-file-can-duplicate-the-section-heading-when-the-payload-carries-it`, files: SKILL.md, SKILL_TEAM.md, skills/codex/local-board/SKILL.md, skills/codex/local-team/SKILL.md, src/tickets.js, test/tickets.test.js.
 
 ## Review Findings
 
