@@ -7,13 +7,13 @@ parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/B20260710T1225Z-check-dispatch-denies-legitimate-gate-check-consultation-dispatches-when-hooks-are-enabled
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T12:25:41Z
-updated: 2026-07-10T12:42:29Z
+updated: 2026-07-10T13:11:07Z
 completedSteps: []
 routingApprovals: []
 ---
