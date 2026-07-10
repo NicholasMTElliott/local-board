@@ -13,7 +13,7 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T15:50:38Z
+updated: 2026-07-10T15:59:23Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -238,3 +238,5 @@ insertion into existing skill/prompt/agent Markdown, plus one resources mirror r
 - 2026-07-10T15:46:50Z: Completed design via claude-subagent:local-board-designer@opus: Four additive prose insertions designed with exact anchors: post-merge full-suite Closeout contract (both team skills), denial-recovery hint (Claude skills only; codex spawn_agent never triggers hook), reviewer no-test-run line (3 reviewer files + sync-resources), production-artifacts note in AGENTS.md. Estimate 2pts basis T20260710T1223Z.
 
 - 2026-07-10T15:50:38Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none requested (prose-only skill/prompt edits; no security/UI/UX triggers)
+
+- 2026-07-10T15:59:23Z: Design review (codex-task:read-only gpt-5.6-sol@xhigh): FAIL. [High] Item 1 in Closeout does not gate refill: SKILL_TEAM control-loop step 6 refills before step 7 Closeout (same for codex wave-barrier step 5); closeout also lacks explicit manual-merge op for autoMerge:false. [Medium] Item 1 wording contradiction: full-suite-after-merge mandatory vs autoMerge alternative avoiding it. [Low] sync tests compare content modulo CRLF/LF normalization, not byte-identical. Disposition: design returns for revision; token intentionally not recorded until re-review passes.
