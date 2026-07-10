@@ -770,8 +770,9 @@ export async function moveTicket(root, ticketId, status, options = {}) {
         if (!hasDesignReviewToken(ticket)) {
           throw new Error(
             `${ticket.path}: move refused: ticket ${ticket.id} has no recorded design review. ` +
-              `Run the design-review step and record it with ` +
-              `"design-review ${ticket.id} --executor <route> --evidence <summary>" before moving to ${status}.`,
+              `Run "design-review-check ${ticket.id}" to resolve the reviewer route, then record the result with ` +
+              `"design-review-complete ${ticket.id} --executor <executor> --model <model> --evidence <text>" ` +
+              `before moving to ${status}.`,
           );
         }
       }
@@ -1538,6 +1539,13 @@ export async function recordGateConsultation(root, ticketId, stage, executor, ev
   const now = options.now ?? new Date();
   const runLogLine = `- ${formatIsoSeconds(now)}: Gate consultation ${stage} via ${executor}: ${evidence.trim()}`;
   const writtenPath = await stampGateToken(root, ticketId, token, runLogLine, { ...options, now });
+  // Clears the ledger's consultation entry (gate-check's stamp, or the last
+  // specialty-run's stamp -- there is no separate specialty-completion verb,
+  // so this is the catch-all for both, mirroring completeStep's clear).
+  // Best-effort, same rationale as completeStep: a missing/already-cleared
+  // entry is a no-op, and a clear failure must never block evidence recording
+  // that already succeeded.
+  await clearActiveStep(root, ticketId).catch(() => {});
   return { ticket: ticketId, stage, executor, path: writtenPath };
 }
 

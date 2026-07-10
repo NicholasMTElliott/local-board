@@ -15,6 +15,7 @@ import {
   createTicket,
   discover,
   findTicket,
+  formatIsoSeconds,
   getSectionText,
   linkParent,
   moveTicket,
@@ -23,6 +24,7 @@ import {
   queryNext,
   queryReady,
   queryTicket,
+  recordDesignReview,
   recordGateConsultation,
   recordGateSkippedEmptyCatalog,
   schemaRecord,
@@ -37,7 +39,7 @@ import {
   validate,
 } from "./tickets.js";
 import { assertAutoMergeReady, autoMergeTicketBranch, commitPlanningTransition, startTicketWork } from "./git.js";
-import { checkDispatch } from "./active-steps.js";
+import { checkDispatch, stampActiveStep } from "./active-steps.js";
 import { translateCodexDispatch } from "./codex-dispatch.js";
 import { codexTaskWarning } from "./codex-detect.js";
 import { loadConfig, OPTIONAL_STEP_STAGES, resolveOptionalStepAgent } from "./config.js";
@@ -170,6 +172,12 @@ export async function main(argv) {
     }
     if (command === "specialty-run") {
       return await commandSpecialtyRun(root, args);
+    }
+    if (command === "design-review-check") {
+      return await commandDesignReviewCheck(root, args, allowMainRoot);
+    }
+    if (command === "design-review-complete") {
+      return await commandDesignReviewComplete(root, args, allowMainRoot);
     }
     if (command === "calibration") {
       const sub = args.shift();
@@ -1132,6 +1140,7 @@ async function commandGateCheck(root, args, allowMainRoot) {
   });
 
   const promptPath = path.resolve(root, "plans", "prompts", "steps", "gate-check.md");
+  const gateProfile = config.agents?.["gate-check"] ?? { route: "inline" };
   // Only verify the prompt exists when a dispatch will actually occur: an
   // empty catalog for this stage means gate-check.md is never opened, so a
   // missing file here must not fail what would otherwise be a legitimate
@@ -1140,6 +1149,28 @@ async function commandGateCheck(root, args, allowMainRoot) {
   let recorded = null;
   if (!skip) {
     await assertPromptExists(promptPath, "gate-check");
+    // Non-skip branch: stamp a scoped consultation entry in the main-anchored
+    // active-steps ledger so `check-dispatch` recognizes the upcoming gate
+    // agent dispatch as authorized (B20260710T1225Z). Only for a
+    // Task-dispatched route -- an `inline`/`codex-task:` gate is never routed
+    // through the Task/Agent hook, so stamping there would be harmless but
+    // pointless. `complete-step` already cleared the stage's action entry
+    // before `gate-check` runs (the documented flow), and `gate-complete`
+    // clears this entry after recording the consultation -- the two records
+    // never overlap in time (single-dispatch-in-flight invariant), so this
+    // overwrite of the ledger's one record per ticket is safe.
+    if (typeof gateProfile.route === "string" && gateProfile.route.startsWith("claude-subagent:")) {
+      await stampActiveStep(root, ticket.id, {
+        ticket: ticket.id,
+        kind: "gate",
+        action: "gate-check",
+        stage,
+        route: gateProfile.route,
+        model: gateProfile.model ?? null,
+        root: path.resolve(root),
+        ts: formatIsoSeconds(new Date()),
+      });
+    }
   } else {
     // Empty-catalog branch: the CLI itself has deterministically established
     // there is nothing to consult, so it self-certifies the consultation by
@@ -1166,7 +1197,6 @@ async function commandGateCheck(root, args, allowMainRoot) {
     acceptanceCriteria: getSectionText(ticket.body, "Acceptance Criteria") ?? "",
   };
 
-  const gateProfile = config.agents?.["gate-check"] ?? { route: "inline" };
   const payload = {
     ticket: ticket.id,
     stage,
@@ -1227,6 +1257,103 @@ async function commandGateComplete(root, args, allowMainRoot) {
   return 0;
 }
 
+async function commandDesignReviewCheck(root, args, allowMainRoot) {
+  const asJson = takeFlag(args, "--json");
+  const ticketId = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined) {
+    throw new Error("design-review-check requires: <ticket-id> [--allow-main-root] [--json]");
+  }
+
+  // Parity with commandGateCheck: refuse a wrong-root invocation before any
+  // further work, even though this command performs no dispatch or write of
+  // its own.
+  await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
+
+  const config = await loadConfig(root);
+  if (config.routing?.requireDesignReview !== true) {
+    throw new Error(
+      "design-review-check: design review is disabled: set routing.requireDesignReview to true in the board config",
+    );
+  }
+
+  const profile = config.agents?.["design-review"];
+  if (profile === undefined || profile.route === undefined) {
+    throw new Error(
+      "design-review-check: routing.requireDesignReview is true but no agents[\"design-review\"] profile is configured. Run \"local-board init\" or restore the default profile (codex-task:read-only, gpt-5.6-sol, xhigh).",
+    );
+  }
+
+  const { ticket } = await findTicket(root, ticketId);
+
+  const promptPath = path.resolve(root, "plans", "prompts", "steps", "design_review.md");
+  await assertPromptExists(promptPath, "design-review");
+
+  const baseRecord = ticketRecord(root, ticket);
+  const currentAction = config.workflow?.statusActions?.[ticket.status] ?? null;
+  const ticketContext = {
+    id: baseRecord.id,
+    type: baseRecord.type,
+    status: baseRecord.status,
+    priority: baseRecord.priority,
+    path: baseRecord.path,
+    title: baseRecord.title,
+    currentAction,
+    requirement: getSectionText(ticket.body, "Requirement") ?? "",
+    acceptanceCriteria: getSectionText(ticket.body, "Acceptance Criteria") ?? "",
+  };
+
+  const payload = {
+    ticket: ticket.id,
+    prompt: promptPath,
+    agent: profile.route,
+    model: profile.model ?? null,
+    effort: profile.effort ?? null,
+    ticketPath: ticket.path,
+    ticketContext,
+  };
+
+  if (asJson) {
+    console.log(JSON.stringify(payload, null, 2));
+  } else {
+    const effortSuffix = profile.effort ? ` effort=${profile.effort}` : "";
+    const modelSuffix = profile.model ? `@${profile.model}` : "";
+    console.log(`design-review-check ${ticket.id} agent=${profile.route}${modelSuffix}${effortSuffix}`);
+    console.log(promptPath);
+  }
+  return 0;
+}
+
+async function commandDesignReviewComplete(root, args, allowMainRoot) {
+  const asJson = takeFlag(args, "--json");
+  const executor = takeOption(args, "--executor");
+  const model = takeOption(args, "--model");
+  const evidence = takeOption(args, "--evidence");
+  const ticketId = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined || executor === undefined || evidence === undefined) {
+    throw new Error(
+      "design-review-complete requires: <ticket-id> --executor <executor> [--model <model>] --evidence <text> [--allow-main-root] [--json]",
+    );
+  }
+
+  // Before any write: a wrong-root invocation must be refused before
+  // recordDesignReview acquires the lock or writes the ticket file.
+  await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
+
+  const composedExecutor = composeExecutor(executor, model);
+  const result = await recordDesignReview(root, ticketId, composedExecutor, evidence);
+  await maybeCommitPlanning(root, { ticketId: result.ticket, command: "design-review-complete", detail: "design-review" });
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`${result.ticket} design-review ${result.executor} ${result.path}`);
+  }
+  return 0;
+}
+
 async function commandSpecialtyRun(root, args) {
   const asJson = takeFlag(args, "--json");
   const ticketId = args.shift();
@@ -1264,6 +1391,24 @@ async function commandSpecialtyRun(root, args) {
   // existing test asserts out.agent is the plain route string. See
   // docs/specialty-steps.md.
   const { route: agent, model, effort } = resolveOptionalStepAgent(entry.agent);
+
+  // Stamp a scoped consultation entry in the ledger, mirroring gate-check's
+  // non-skip stamp (B20260710T1225Z), so `check-dispatch` authorizes the
+  // upcoming specialty agent dispatch instead of falling back to the stage's
+  // action route. Only for a Task-dispatched route; `gate-complete`'s clear
+  // covers this entry too (there is no separate specialty-completion verb).
+  if (typeof agent === "string" && agent.startsWith("claude-subagent:")) {
+    await stampActiveStep(root, ticket.id, {
+      ticket: ticket.id,
+      kind: "specialty",
+      action: entry.name,
+      stage,
+      route: agent,
+      model: model ?? null,
+      root: path.resolve(root),
+      ts: formatIsoSeconds(new Date()),
+    });
+  }
 
   const baseRecord = ticketRecord(root, ticket);
   const currentAction = config.workflow?.statusActions?.[ticket.status] ?? null;
@@ -1466,6 +1611,8 @@ const USAGE_TEXT = `Usage:
   local-board [--root <path>] gate-check <ticket-id> --stage <stage> [--allow-main-root] [--json]
   local-board [--root <path>] gate-complete <ticket-id> --stage <stage> --executor <executor> [--model <model>] [--evidence <text>] [--allow-main-root] [--json]
   local-board [--root <path>] specialty-run <ticket-id> <step-name> [--json]
+  local-board [--root <path>] design-review-check <ticket-id> [--allow-main-root] [--json]
+  local-board [--root <path>] design-review-complete <ticket-id> --executor <executor> [--model <model>] --evidence <text> [--allow-main-root] [--json]
   local-board [--root <path>] calibration suggest <ticket-id> [--json]
 
 --allow-main-root overrides the wrong-root mutation guard (worktrees.guardWrongRoot)

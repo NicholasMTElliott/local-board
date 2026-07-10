@@ -3,6 +3,7 @@ import path from "node:path";
 
 import { resolveMainRoot, withFileLock } from "./lock.js";
 import { modelSatisfies, resolveExpectedStep, writeTicketFile } from "./tickets.js";
+import { resolveTicketWorktreeRoot } from "./worktrees.js";
 
 const CLAUDE_SUBAGENT_PREFIX = "claude-subagent:";
 
@@ -139,9 +140,20 @@ async function checkDispatchForTicket(root, agent, model, ticketId) {
     expectedRoute = record.route;
     expectedModel = record.model ?? null;
   } else {
+    // No ledger record: fall back to the ticket's configured action. Resolve
+    // against the ticket's registered worktree (if any) rather than `root`
+    // unchanged -- a hook invocation typically runs from the shared main
+    // checkout, whose copy of the ticket file can be stale once a worktree
+    // has advanced the ticket's status locally. `resolveTicketWorktreeRoot`
+    // is itself fail-safe (never throws, returns `null` on any error or when
+    // no worktree is registered), so this can only ever narrow `root` to a
+    // more accurate path -- never break the existing single-ticket/solo-board
+    // behaviour.
+    const worktreeRoot = await resolveTicketWorktreeRoot(root, ticketId);
+    const resolveRoot = worktreeRoot ?? root;
     let resolved;
     try {
-      resolved = await resolveExpectedStep(root, ticketId);
+      resolved = await resolveExpectedStep(resolveRoot, ticketId);
     } catch {
       return { code: 2, body: { ok: false, reason: "ticket-not-found", ticket: ticketId } };
     }

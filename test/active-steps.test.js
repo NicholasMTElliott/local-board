@@ -707,6 +707,327 @@ test("check-dispatch: a corrupt ledger is an error (exit 2, JSON verdict on stdo
   });
 });
 
+// --- Gate/specialty consultation stamping (B20260710T1225Z) ---
+
+test("gate-check stamps a scoped gate consultation entry; check-dispatch allows the correctly-routed gate dispatch at each gated stage boundary", async () => {
+  await withBoard(async (root) => {
+    // Give the "test" stage a non-empty catalog too (the seeded default
+    // leaves it empty), so all three gated stages exercise the non-skip
+    // stamp path.
+    const configPath = path.join(root, "plans", "local-board.config.jsonc");
+    const configText = await readFile(configPath, "utf8");
+    await writeFile(
+      configPath,
+      configText.replace(
+        '"test": []',
+        '"test": [{ "name": "regression_notes", "prompt": "plans/prompts/optional-steps/test/regression_notes.md", "triggers": "Any change." }]',
+      ),
+      "utf8",
+    );
+    await mkdir(path.join(root, "plans", "prompts", "optional-steps", "test"), { recursive: true });
+    await writeFile(
+      path.join(root, "plans", "prompts", "optional-steps", "test", "regression_notes.md"),
+      "# Regression Notes\n",
+      "utf8",
+    );
+
+    const stages = [
+      { stage: "design", status: "ready_for_design", action: "design", executor: "claude-subagent:local-board-designer@opus" },
+      { stage: "implement", status: "ready_for_implementation", action: "implement", executor: "claude-subagent:local-board-implementer@sonnet" },
+      { stage: "test", status: "ready_for_test", action: "test", executor: "claude-subagent:local-board-tester@sonnet" },
+    ];
+
+    for (const { stage, status, action, executor } of stages) {
+      const create = await runCli(["--root", root, "create", "task", `Gate boundary ${stage}`, "--status", status, "--priority", "P2"]);
+      assert.equal(create.code, 0, create.stderr);
+      const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+      if (action === "design") {
+        assert.equal((await runCli(["--root", root, "estimate", ticketId, "2"])).code, 0);
+      }
+      assert.equal((await runCli(["--root", root, "begin-step", ticketId, "--json"])).code, 0);
+
+      const complete = await runCli([
+        "--root", root, "complete-step", ticketId, action,
+        "--executor", executor, "--evidence", "Done.", "--json",
+      ]);
+      assert.equal(complete.code, 0, complete.stderr);
+      // complete-step clears the action ledger entry (existing behaviour).
+      assert.equal(Object.hasOwn(await readActiveSteps(root), ticketId), false);
+
+      const gate = await runCli(["--root", root, "gate-check", ticketId, "--stage", stage, "--json"]);
+      assert.equal(gate.code, 0, gate.stderr);
+      assert.equal(JSON.parse(gate.stdout).skip, false);
+
+      const steps = await readActiveSteps(root);
+      assert.equal(steps[ticketId].kind, "gate");
+      assert.equal(steps[ticketId].stage, stage);
+      assert.equal(steps[ticketId].route, "claude-subagent:local-board-gatecheck");
+      assert.equal(steps[ticketId].model, "haiku");
+
+      const dispatch = await runCli([
+        "--root", root, "check-dispatch",
+        "--agent", "local-board-gatecheck", "--model", "haiku", "--ticket", ticketId,
+      ]);
+      assert.equal(dispatch.code, 0, dispatch.stderr);
+      assert.deepEqual(JSON.parse(dispatch.stdout), {
+        ok: true,
+        reason: "match",
+        expected: { agent: "local-board-gatecheck", model: "haiku" },
+        ticket: ticketId,
+      });
+    }
+  });
+});
+
+test("check-dispatch denies a misrouted gate dispatch, and denies a gate dispatch when no consultation was ever stamped (fallback to the action route)", async () => {
+  await withBoard(async (root) => {
+    const create = await runCli(["--root", root, "create", "task", "Gate misroute", "--status", "ready_for_design", "--priority", "P2"]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+    assert.equal((await runCli(["--root", root, "estimate", ticketId, "2"])).code, 0);
+    assert.equal((await runCli(["--root", root, "begin-step", ticketId, "--json"])).code, 0);
+    assert.equal(
+      (
+        await runCli([
+          "--root", root, "complete-step", ticketId, "design",
+          "--executor", "claude-subagent:local-board-designer@opus",
+          "--evidence", "Designed.", "--json",
+        ])
+      ).code,
+      0,
+    );
+
+    // No gate-check has run yet: the ledger is empty (complete-step cleared
+    // the action record). check-dispatch falls back to the *action* route
+    // (designer), so a gate-agent dispatch is denied -- proving the stamp,
+    // not the agent name, is what authorises a gate dispatch.
+    const beforeGateCheck = await runCli([
+      "--root", root, "check-dispatch",
+      "--agent", "local-board-gatecheck", "--model", "haiku", "--ticket", ticketId,
+    ]);
+    assert.equal(beforeGateCheck.code, 1);
+    assert.deepEqual(JSON.parse(beforeGateCheck.stdout), {
+      ok: false,
+      reason: "agent-mismatch",
+      expected: { agent: "local-board-designer", model: "opus" },
+      ticket: ticketId,
+    });
+
+    assert.equal((await runCli(["--root", root, "gate-check", ticketId, "--stage", "design", "--json"])).code, 0);
+
+    // A misrouted dispatch (wrong agent) still denies once the consultation
+    // stamp exists.
+    const misrouted = await runCli(["--root", root, "check-dispatch", "--agent", "local-board-tester", "--ticket", ticketId]);
+    assert.equal(misrouted.code, 1);
+    assert.deepEqual(JSON.parse(misrouted.stdout), {
+      ok: false,
+      reason: "agent-mismatch",
+      expected: { agent: "local-board-gatecheck", model: "haiku" },
+      ticket: ticketId,
+    });
+
+    // The correctly-routed gate dispatch is now allowed.
+    const correct = await runCli([
+      "--root", root, "check-dispatch",
+      "--agent", "local-board-gatecheck", "--model", "haiku", "--ticket", ticketId,
+    ]);
+    assert.equal(correct.code, 0, correct.stderr);
+    assert.equal(JSON.parse(correct.stdout).reason, "match");
+  });
+});
+
+test("gate-complete clears the gate consultation ledger entry, so a later gate dispatch falls back to the action route and denies", async () => {
+  await withBoard(async (root) => {
+    const create = await runCli(["--root", root, "create", "task", "Gate-complete clears", "--status", "ready_for_design", "--priority", "P2"]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+    assert.equal((await runCli(["--root", root, "estimate", ticketId, "2"])).code, 0);
+    assert.equal((await runCli(["--root", root, "begin-step", ticketId, "--json"])).code, 0);
+    assert.equal(
+      (
+        await runCli([
+          "--root", root, "complete-step", ticketId, "design",
+          "--executor", "claude-subagent:local-board-designer@opus",
+          "--evidence", "Designed.", "--json",
+        ])
+      ).code,
+      0,
+    );
+    assert.equal((await runCli(["--root", root, "gate-check", ticketId, "--stage", "design", "--json"])).code, 0);
+    assert.ok(Object.hasOwn(await readActiveSteps(root), ticketId), "gate-check must stamp the consultation entry");
+
+    assert.equal(
+      (
+        await runCli([
+          "--root", root, "gate-complete", ticketId,
+          "--stage", "design",
+          "--executor", "claude-subagent:local-board-gatecheck@haiku",
+          "--evidence", "security_threat_model", "--json",
+        ])
+      ).code,
+      0,
+    );
+    assert.equal(Object.hasOwn(await readActiveSteps(root), ticketId), false, "gate-complete must clear the ledger entry");
+
+    const afterComplete = await runCli([
+      "--root", root, "check-dispatch",
+      "--agent", "local-board-gatecheck", "--model", "haiku", "--ticket", ticketId,
+    ]);
+    assert.equal(afterComplete.code, 1);
+    assert.deepEqual(JSON.parse(afterComplete.stdout), {
+      ok: false,
+      reason: "agent-mismatch",
+      expected: { agent: "local-board-designer", model: "opus" },
+      ticket: ticketId,
+    });
+  });
+});
+
+test("specialty-run stamps a scoped consultation entry for a claude-subagent profile; check-dispatch allows it (and reports model-unverifiable with --model omitted)", async () => {
+  await withBoard(async (root) => {
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({
+        version: 1,
+        optionalSteps: {
+          design: [
+            {
+              name: "custom_review",
+              prompt: "plans/prompts/optional-steps/design/custom_review.md",
+              triggers: "Anything.",
+              agent: { route: "claude-subagent:local-board-reviewer", model: "opus" },
+            },
+          ],
+          implement: [],
+          test: [],
+        },
+      }),
+      "utf8",
+    );
+    await mkdir(path.join(root, "plans", "prompts", "optional-steps", "design"), { recursive: true });
+    await writeFile(
+      path.join(root, "plans", "prompts", "optional-steps", "design", "custom_review.md"),
+      "# Custom Review\n",
+      "utf8",
+    );
+
+    const create = await runCli(["--root", root, "create", "task", "Specialty consultation", "--status", "ready_for_design", "--priority", "P2"]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const run = await runCli(["--root", root, "specialty-run", ticketId, "custom_review", "--json"]);
+    assert.equal(run.code, 0, run.stderr);
+
+    const steps = await readActiveSteps(root);
+    assert.equal(steps[ticketId].kind, "specialty");
+    assert.equal(steps[ticketId].action, "custom_review");
+    assert.equal(steps[ticketId].stage, "design");
+    assert.equal(steps[ticketId].route, "claude-subagent:local-board-reviewer");
+    assert.equal(steps[ticketId].model, "opus");
+
+    const withModel = await runCli([
+      "--root", root, "check-dispatch",
+      "--agent", "local-board-reviewer", "--model", "opus", "--ticket", ticketId,
+    ]);
+    assert.equal(withModel.code, 0, withModel.stderr);
+    assert.equal(JSON.parse(withModel.stdout).reason, "match");
+
+    const withoutModel = await runCli(["--root", root, "check-dispatch", "--agent", "local-board-reviewer", "--ticket", ticketId]);
+    assert.equal(withoutModel.code, 0, withoutModel.stderr);
+    assert.equal(JSON.parse(withoutModel.stdout).reason, "model-unverifiable");
+  });
+});
+
+test(
+  "check-dispatch: stale-main-root fallback resolves the expected route via the ticket's registered worktree",
+  { skip: !GIT_AVAILABLE },
+  async () => {
+    await withRepo(async (root) => {
+      // Zero out optionalSteps so gate-check's empty-catalog auto-stamp
+      // satisfies requireGateConsultation without a real agent dispatch --
+      // this test targets Decision 2 (stale-root fallback), not Decision 1
+      // (consultation stamping), which has dedicated tests above.
+      await writeFile(
+        path.join(root, "plans", "local-board.config.jsonc"),
+        JSON.stringify({ version: 1, optionalSteps: { design: [], implement: [], test: [] } }),
+        "utf8",
+      );
+      await git(root, ["add", "plans"]);
+      await git(root, ["commit", "-m", "Zero optionalSteps for worktree fallback test"]);
+
+      const ticketPath = await createTicket(root, "task", "Stale main root fallback", {
+        status: "ready_for_implementation",
+        now: new Date("2026-07-10T14:00:00Z"),
+      });
+      await git(root, ["add", "plans"]);
+      await git(root, ["commit", "-m", "Add ticket"]);
+      const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+      const worktree = await addTicketWorktree(root, ticketId);
+
+      // Advance status inside the worktree, past two transitions (the first
+      // gate-satisfied via the empty-catalog auto-stamp, the second gate-free),
+      // so the worktree's ticket file diverges from the main checkout's stale
+      // copy (still "ready_for_implementation").
+      assert.equal((await runCli(["--root", worktree.worktreePath, "begin-step", ticketId, "--json"])).code, 0);
+      assert.equal(
+        (
+          await runCli([
+            "--root", worktree.worktreePath, "complete-step", ticketId, "implement",
+            "--executor", "claude-subagent:local-board-implementer@sonnet",
+            "--evidence", "Implemented.", "--json",
+          ])
+        ).code,
+        0,
+      );
+      assert.equal(
+        (await runCli(["--root", worktree.worktreePath, "gate-check", ticketId, "--stage", "implement", "--json"])).code,
+        0,
+      );
+      assert.equal(
+        (await runCli(["--root", worktree.worktreePath, "move", ticketId, "ready_for_review", "--json"])).code,
+        0,
+      );
+      assert.equal(
+        (await runCli(["--root", worktree.worktreePath, "move", ticketId, "ready_for_test", "--json"])).code,
+        0,
+      );
+
+      // No ledger entry at this point (begin-step's stamp was cleared by
+      // complete-step). check-dispatch invoked from the MAIN checkout (as the
+      // hook would be) must resolve the expected route from the WORKTREE's
+      // current status ("ready_for_test" -> test -> tester/sonnet), not the
+      // main checkout's stale copy ("ready_for_implementation" -> implement).
+      const viaWorktree = await runCli([
+        "--root", root, "check-dispatch",
+        "--agent", "local-board-tester", "--model", "sonnet", "--ticket", ticketId,
+      ]);
+      assert.equal(viaWorktree.code, 0, viaWorktree.stderr);
+      assert.deepEqual(JSON.parse(viaWorktree.stdout), {
+        ok: true,
+        reason: "match",
+        expected: { agent: "local-board-tester", model: "sonnet" },
+        ticket: ticketId,
+      });
+
+      // Control: a ticket with no registered worktree still resolves from the
+      // invocation root unchanged -- today's behaviour, unaffected by the fix.
+      const controlPath = await createTicket(root, "task", "No worktree control", {
+        status: "ready_for_implementation",
+        now: new Date("2026-07-10T14:05:00Z"),
+      });
+      const controlId = path.basename(controlPath).split("_", 1)[0];
+      const control = await runCli([
+        "--root", root, "check-dispatch",
+        "--agent", "local-board-implementer", "--model", "sonnet", "--ticket", controlId,
+      ]);
+      assert.equal(control.code, 0, control.stderr);
+      assert.equal(JSON.parse(control.stdout).reason, "match");
+    });
+  },
+);
+
 async function hasGit() {
   try {
     await execFileAsync("git", ["--version"], { encoding: "utf8" });
