@@ -469,15 +469,50 @@ test("begin-step (T20260710T1532Z, D6): configuredFallbackModels and codexDispat
       "--status", "ready_for_design", "--priority", "P2",
     ]);
     assert.equal(create.code, 0, create.stderr);
-    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+    const ticketPath = create.stdout.trim();
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    // Full expected begin-step result: transitions is sourced from the
+    // scaffolded config (not re-typed) since it is large boilerplate text
+    // unrelated to this ticket's fallbackModels behavior, but every other
+    // field is a literal expected VALUE, not just a key -- a regression that
+    // swaps/blanks configuredModel, configuredPrompt, strict, etc. now fails
+    // here instead of only a key-set check.
+    const config = await loadConfig(root);
+    const expectedResult = {
+      ticket: ticketId,
+      action: "design",
+      status: "ready_for_design",
+      transitions: config.workflow.transitions.ready_for_design,
+      configuredAgent: "claude-subagent:local-board-designer",
+      configuredModel: "opus",
+      configuredEffort: null,
+      configuredPrompt: "plans/prompts/steps/design.md",
+      strict: true,
+      delegationRequired: true,
+      branch: null,
+      path: path.relative(root, ticketPath),
+    };
 
     const baseline = await runCli(["--root", root, "begin-step", ticketId, "--json"]);
     assert.equal(baseline.code, 0, baseline.stderr);
-    assert.equal(Object.hasOwn(JSON.parse(baseline.stdout), "configuredFallbackModels"), false);
+    assert.deepEqual(JSON.parse(baseline.stdout), expectedResult);
 
     const codexBaseline = await runCli(["--root", root, "begin-step", ticketId, "--harness", "codex", "--json"]);
     assert.equal(codexBaseline.code, 0, codexBaseline.stderr);
-    assert.equal(Object.hasOwn(JSON.parse(codexBaseline.stdout).codexDispatch, "fallbackModels"), false);
+    const agentsDir = path.join(REPO_ROOT, "agents", "codex");
+    assert.deepEqual(JSON.parse(codexBaseline.stdout), {
+      ...expectedResult,
+      codexDispatch: {
+        dispatchKind: "spawn_agent",
+        agentType: "worker",
+        promptPath: path.join(agentsDir, "local-board-designer.md"),
+        model: null,
+        effort: null,
+        evidenceExecutor: "claude-subagent:local-board-designer@codex-default",
+        known: true,
+      },
+    });
 
     // Pin an ordered fallbackModels list for "design" and re-run against a
     // fresh ticket.
@@ -1173,22 +1208,64 @@ test("CLI gate-check (T20260710T1532Z, D6): a fallback-free gate profile is byte
       "--status", "ready_for_design", "--priority", "P2",
     ]);
     assert.equal(create.code, 0, create.stderr);
-    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+    const ticketPath = create.stdout.trim();
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    // catalog/gateProfile are sourced from the scaffolded config itself
+    // (rather than re-typed prose) since the scaffold's optionalSteps.design
+    // catalog is large boilerplate unrelated to this ticket's fallback
+    // behavior; the catalog transform (name/prompt/triggers/agent only) is
+    // still asserted verbatim below, exercising the real regression class
+    // (a dropped/renamed/extra field) rather than only a key-set check.
+    const config = await loadConfig(root);
+    const gateProfile = config.agents["gate-check"];
+    const expectedCatalog = (config.optionalSteps?.design ?? []).map((entry) => {
+      const normalized = { name: entry.name, prompt: entry.prompt, triggers: entry.triggers };
+      if (Object.hasOwn(entry, "agent")) {
+        normalized.agent = entry.agent;
+      }
+      return normalized;
+    });
 
     const result = await runCli(["--root", root, "gate-check", ticketId, "--stage", "design", "--json"]);
     assert.equal(result.code, 0, result.stderr);
     const out = JSON.parse(result.stdout);
-    assert.deepEqual(Object.keys(out).sort(), [
-      "agent", "catalog", "model", "prompt", "recorded", "skip", "stage", "ticket", "ticketContext", "ticketPath",
-    ].sort());
-    assert.equal(Object.hasOwn(out, "effort"), false);
-    assert.equal(Object.hasOwn(out, "fallbackModels"), false);
-    assert.equal(Object.hasOwn(out, "codexDispatch"), false);
+    assert.deepEqual(out, {
+      ticket: ticketId,
+      stage: "design",
+      prompt: path.resolve(root, "plans", "prompts", "steps", "gate-check.md"),
+      agent: gateProfile.route,
+      model: gateProfile.model ?? null,
+      ticketPath,
+      ticketContext: {
+        id: ticketId,
+        type: "task",
+        status: "ready_for_design",
+        priority: "P2",
+        path: path.relative(root, ticketPath),
+        title: "Gate-check legacy shape",
+        currentAction: "design",
+        requirement: "",
+        acceptanceCriteria: "",
+      },
+      catalog: expectedCatalog,
+      skip: expectedCatalog.length === 0,
+      recorded: expectedCatalog.length === 0 ? "gate:design:skipped-empty-catalog" : null,
+    });
 
     const steps = await readActiveSteps(root);
-    assert.deepEqual(Object.keys(steps[ticketId]).sort(), [
-      "action", "kind", "model", "root", "route", "stage", "ticket", "ts",
-    ]);
+    const stamp = steps[ticketId];
+    assert.deepEqual(stamp, {
+      ticket: ticketId,
+      kind: "gate",
+      action: "gate-check",
+      stage: "design",
+      route: gateProfile.route,
+      model: gateProfile.model ?? null,
+      root: path.resolve(root),
+      ts: stamp.ts,
+    });
+    assert.match(stamp.ts, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
   });
 });
 
@@ -1678,19 +1755,37 @@ test("CLI design-review-check (T20260710T1532Z, D6/D7): a fallback-free payload 
       "--status", "ready_for_design", "--priority", "P2",
     ]);
     assert.equal(create1.code, 0, create1.stderr);
-    const ticketId1 = path.basename(create1.stdout.trim()).split("_", 1)[0];
+    const ticketPath1 = create1.stdout.trim();
+    const ticketId1 = path.basename(ticketPath1).split("_", 1)[0];
     const result1 = await runCli(["--root", root, "design-review-check", ticketId1, "--json"]);
     assert.equal(result1.code, 0, result1.stderr);
     const out1 = JSON.parse(result1.stdout);
-    assert.deepEqual(Object.keys(out1).sort(), [
-      "agent", "effort", "model", "prompt", "ticket", "ticketContext", "ticketPath",
-    ].sort());
-    assert.equal(Object.hasOwn(out1, "fallbackModels"), false);
-    assert.equal(Object.hasOwn(out1, "codexDispatch"), false);
+    assert.deepEqual(out1, {
+      ticket: ticketId1,
+      prompt: path.resolve(root, "plans", "prompts", "steps", "design_review.md"),
+      agent: "codex-task:read-only",
+      model: "gpt-5.6-sol",
+      effort: "xhigh",
+      ticketPath: ticketPath1,
+      ticketContext: {
+        id: ticketId1,
+        type: "task",
+        status: "ready_for_design",
+        priority: "P2",
+        path: path.relative(root, ticketPath1),
+        title: "Design-review legacy shape default",
+        currentAction: "design",
+        requirement: "",
+        acceptanceCriteria: "",
+      },
+    });
     assert.equal(Object.hasOwn(await readActiveSteps(root), ticketId1), false);
 
     // claude-subagent route, no fallbackModels: hook-gated but no stamp is
     // written (D7 known limitation, explicitly out of scope for this ticket).
+    // Agent profiles are replaced wholesale per action (loadConfig, not
+    // deep-merged): the overlay omits "effort", so it resolves to null, not
+    // DEFAULT_CONFIG's "xhigh".
     await writeFile(
       path.join(root, "plans", "local-board.config.jsonc"),
       JSON.stringify({
@@ -1706,12 +1801,30 @@ test("CLI design-review-check (T20260710T1532Z, D6/D7): a fallback-free payload 
       "--status", "ready_for_design", "--priority", "P2",
     ]);
     assert.equal(create2.code, 0, create2.stderr);
-    const ticketId2 = path.basename(create2.stdout.trim()).split("_", 1)[0];
+    const ticketPath2 = create2.stdout.trim();
+    const ticketId2 = path.basename(ticketPath2).split("_", 1)[0];
     const result2 = await runCli(["--root", root, "design-review-check", ticketId2, "--json"]);
     assert.equal(result2.code, 0, result2.stderr);
     const out2 = JSON.parse(result2.stdout);
-    assert.equal(Object.hasOwn(out2, "fallbackModels"), false);
-    assert.equal(Object.hasOwn(out2, "codexDispatch"), false);
+    assert.deepEqual(out2, {
+      ticket: ticketId2,
+      prompt: path.resolve(root, "plans", "prompts", "steps", "design_review.md"),
+      agent: "claude-subagent:local-board-reviewer",
+      model: "sonnet",
+      effort: null,
+      ticketPath: ticketPath2,
+      ticketContext: {
+        id: ticketId2,
+        type: "task",
+        status: "ready_for_design",
+        priority: "P2",
+        path: path.relative(root, ticketPath2),
+        title: "Design-review legacy shape claude-subagent no fallback",
+        currentAction: "design",
+        requirement: "",
+        acceptanceCriteria: "",
+      },
+    });
     assert.equal(Object.hasOwn(await readActiveSteps(root), ticketId2), false);
   });
 });
@@ -2587,16 +2700,33 @@ test("CLI specialty-run (T20260710T1532Z, D6): a fallback-free specialty payload
       "--status", "implementing", "--priority", "P2",
     ]);
     assert.equal(create.code, 0, create.stderr);
-    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+    const ticketPath = create.stdout.trim();
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
 
     const result = await runCli(["--root", root, "specialty-run", ticketId, "security_audit", "--json"]);
     assert.equal(result.code, 0, result.stderr);
     const out = JSON.parse(result.stdout);
-    assert.deepEqual(Object.keys(out).sort(), [
-      "agent", "effort", "model", "prompt", "stage", "step", "ticket", "ticketContext", "ticketPath",
-    ].sort());
-    assert.equal(Object.hasOwn(out, "fallbackModels"), false);
-    assert.equal(Object.hasOwn(out, "codexDispatch"), false);
+    assert.deepEqual(out, {
+      ticket: ticketId,
+      stage: "implement",
+      step: "security_audit",
+      prompt: path.resolve(root, "plans/prompts/optional-steps/impl/security_audit.md"),
+      agent: "codex-task:read-only",
+      model: "gpt-5.6-sol",
+      effort: "xhigh",
+      ticketPath,
+      ticketContext: {
+        id: ticketId,
+        type: "task",
+        status: "implementing",
+        priority: "P2",
+        path: path.relative(root, ticketPath),
+        title: "Specialty legacy shape",
+        currentAction: null,
+        requirement: "",
+        acceptanceCriteria: "",
+      },
+    });
     // codex-task:read-only is not hook-gated, so no ledger stamp is written.
     const steps = await readActiveSteps(root);
     assert.equal(Object.hasOwn(steps, ticketId), false);

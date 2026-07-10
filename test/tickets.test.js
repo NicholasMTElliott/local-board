@@ -47,7 +47,7 @@ import {
   writeTicketFile,
 } from "../src/tickets.js";
 import { initProject } from "../src/scaffold.js";
-import { defaultConfigJsonc, loadConfig } from "../src/config.js";
+import { DEFAULT_CONFIG, defaultConfigJsonc, loadConfig } from "../src/config.js";
 import { readActiveSteps, stampActiveStepNoClobber } from "../src/active-steps.js";
 import { removeFixtureDir } from "./helpers/fixtures.js";
 
@@ -1125,15 +1125,40 @@ test("beginStep (T20260710T1532Z, D6): configuredFallbackModels and the active-s
     });
     const noFallbackId = path.basename(noFallbackPath).split("_", 1)[0];
     const noFallbackResult = await beginStep(root, noFallbackId);
-    assert.equal(Object.hasOwn(noFallbackResult, "configuredFallbackModels"), false);
+    // No config file exists yet (ENOENT fallback), so beginStep resolves
+    // entirely against DEFAULT_CONFIG. Full expected result/stamp shapes,
+    // not just key sets, so a regression that swaps/blanks a field (e.g.
+    // configuredPrompt, strict) fails here instead of passing silently.
+    assert.deepEqual(noFallbackResult, {
+      ticket: noFallbackId,
+      action: "review",
+      status: "ready_for_review",
+      transitions: DEFAULT_CONFIG.workflow.transitions.ready_for_review,
+      configuredAgent: "codex-task:read-only",
+      configuredModel: null,
+      configuredEffort: null,
+      configuredPrompt: "plans/prompts/roles/code_reviewer.md",
+      strict: true,
+      delegationRequired: true,
+      branch: null,
+      path: path.relative(root, noFallbackPath),
+    });
     const noFallbackSteps = await readActiveSteps(root);
-    assert.deepEqual(Object.keys(noFallbackSteps[noFallbackId]).sort(), [
-      "action", "kind", "model", "root", "route", "ticket", "ts",
-    ]);
-    assert.equal(Object.hasOwn(noFallbackSteps[noFallbackId], "fallbackModels"), false);
+    const noFallbackStamp = noFallbackSteps[noFallbackId];
+    assert.deepEqual(noFallbackStamp, {
+      ticket: noFallbackId,
+      kind: "action",
+      action: "review",
+      route: "codex-task:read-only",
+      model: null,
+      root: path.resolve(root),
+      ts: noFallbackStamp.ts,
+    });
+    assert.match(noFallbackStamp.ts, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
 
     // Fallback-configured: both the result and the ledger stamp carry the
-    // ordered fallbackModels list.
+    // ordered fallbackModels list; every other field stays as resolved above
+    // (mergeConfig deep-merges this overlay onto DEFAULT_CONFIG's agents.review).
     await writeConfig(root, JSON.stringify({
       agents: {
         review: {
@@ -1150,9 +1175,34 @@ test("beginStep (T20260710T1532Z, D6): configuredFallbackModels and the active-s
     });
     const fallbackId = path.basename(fallbackPath).split("_", 1)[0];
     const fallbackResult = await beginStep(root, fallbackId);
-    assert.deepEqual(fallbackResult.configuredFallbackModels, ["gpt-5.5"]);
+    assert.deepEqual(fallbackResult, {
+      ticket: fallbackId,
+      action: "review",
+      status: "ready_for_review",
+      transitions: DEFAULT_CONFIG.workflow.transitions.ready_for_review,
+      configuredAgent: "codex-task:read-only",
+      configuredModel: "gpt-5.6-terra",
+      configuredEffort: "high",
+      configuredPrompt: "plans/prompts/roles/code_reviewer.md",
+      strict: true,
+      delegationRequired: true,
+      branch: null,
+      path: path.relative(root, fallbackPath),
+      configuredFallbackModels: ["gpt-5.5"],
+    });
     const fallbackSteps = await readActiveSteps(root);
-    assert.deepEqual(fallbackSteps[fallbackId].fallbackModels, ["gpt-5.5"]);
+    const fallbackStamp = fallbackSteps[fallbackId];
+    assert.deepEqual(fallbackStamp, {
+      ticket: fallbackId,
+      kind: "action",
+      action: "review",
+      route: "codex-task:read-only",
+      model: "gpt-5.6-terra",
+      fallbackModels: ["gpt-5.5"],
+      root: path.resolve(root),
+      ts: fallbackStamp.ts,
+    });
+    assert.match(fallbackStamp.ts, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
   });
 });
 

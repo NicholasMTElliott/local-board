@@ -191,7 +191,15 @@ test("translateCodexDispatch (T20260710T1532Z, D6): omits fallbackModels entirel
     prompt: null,
     agentsDir: AGENTS_DIR,
   });
-  assert.equal(Object.hasOwn(undefinedCase, "fallbackModels"), false);
+  assert.deepEqual(undefinedCase, {
+    dispatchKind: "spawn_agent",
+    agentType: "worker",
+    promptPath: path.join(AGENTS_DIR, "local-board-implementer.md"),
+    model: "gpt-5-codex",
+    effort: null,
+    evidenceExecutor: "claude-subagent:local-board-implementer@gpt-5-codex",
+    known: true,
+  });
 
   const nullCase = translateCodexDispatch({
     route: "codex-task:read-only",
@@ -200,7 +208,17 @@ test("translateCodexDispatch (T20260710T1532Z, D6): omits fallbackModels entirel
     fallbackModels: null,
     agentsDir: AGENTS_DIR,
   });
-  assert.equal(Object.hasOwn(nullCase, "fallbackModels"), false);
+  assert.deepEqual(nullCase, {
+    dispatchKind: "spawn_agent",
+    agentType: "explorer",
+    promptPath: null,
+    model: null,
+    effort: null,
+    evidenceExecutor: "codex-task:read-only@codex-default",
+    known: true,
+    passthrough: true,
+    note: "native Codex route; not table-translated",
+  });
 });
 
 test("translateCodexDispatch (T20260710T1532Z): sanitizes an alias-containing fallbackModels list (Claude aliases dropped) while effort carries through unchanged", () => {
