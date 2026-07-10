@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T17:54:23Z
+updated: 2026-07-10T18:14:48Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -342,3 +342,5 @@ merely likely.
 - 2026-07-10T17:53:21Z: Completed design via claude-subagent:local-board-designer@opus: typeStatusAdvisory helper (stderr warn, statusActions x doneRequires predicate); authoring-correction lane ADOPTED: isAuthoringCorrectionLane requires zero completedSteps AND zero routingApprovals, OR-ed into enforceTransitions; proven no-op vs gate/DR/invalidation/ledger sweeps. Unit+e2e tests incl. evidence-guard matrix; Workflow.md notes. Estimate 2pts basis T20260710T1533Z.
 
 - 2026-07-10T17:54:23Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none requested (workflow policy, no auth/UI/UX triggers)
+
+- 2026-07-10T18:14:48Z: Design review (sol@xhigh): FAIL. [High] Empty completedSteps+routingApprovals does not imply never-worked: beginStep may have stamped a kind:action ledger record; the moveTicket sweep clears only gate/specialty kinds, so a stale design-action record survives a lane correction (e.g. ready_for_design -> ready_for_decomposition) and checkDispatch would still authorize the designer. Fix: lane move must clear/abandon action-kind records (or lane requires no active-step record); add beginStep-then-correct test proving stale authorization cannot survive. Disposition: designer revision.
