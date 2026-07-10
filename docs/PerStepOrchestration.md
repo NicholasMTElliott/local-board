@@ -186,6 +186,8 @@ executors are pure work units.
    - Return-only result → orchestrator writes a temp file, `section --file`,
      then `complete-step <action> --executor <route>@<model> --evidence ...`
      (with `approve-inline` first when an executor had to run inline in a pinch).
+     The section payload is body-only: omit the target `## Heading`, and fence
+     literal top-level `## ` samples.
    - Self-writing result → the executor already committed in the worktree;
      orchestrator records `complete-step` evidence.
    - Choose the next status from the `transitions` guidance returned by

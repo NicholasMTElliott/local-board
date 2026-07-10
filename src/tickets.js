@@ -1218,6 +1218,24 @@ function validateCommentMarkers(ticket) {
   return issues;
 }
 
+// Guards setTicketSection against the duplicate-heading corruption class: a
+// payload that itself carries an unfenced top-level `## ` heading line
+// (leading, trailing, or embedded) would either duplicate the real heading
+// or be silently promoted to a new section boundary by locateSection's
+// anySectionRe on the next scan. Reuses the fence-aware contentLines walker
+// so a fenced `## ` sample line (the documented escape hatch) is never
+// flagged. `### ` and deeper subheadings are unaffected. Pure; throws
+// rather than stripping, so corruption surfaces at call time, not later.
+function assertPayloadHasNoSectionHeading(text) {
+  for (const { line } of contentLines(text)) {
+    if (SECTION_HEADING_RE.test(line)) {
+      throw new Error(
+        'section payload must not contain a Markdown "## " heading line; pass only the section body (local-board manages the heading). Fence any literal "## " sample lines.',
+      );
+    }
+  }
+}
+
 export async function setTicketSection(root, ticketId, section, text, options = {}) {
   return withTicketLock(
     root,
@@ -1227,7 +1245,9 @@ export async function setTicketSection(root, ticketId, section, text, options = 
       if (options.__afterRead) {
         await options.__afterRead();
       }
-      const body = replaceSection(ticket.body, section, text.trim());
+      const trimmed = text.trim();
+      assertPayloadHasNoSectionHeading(trimmed);
+      const body = replaceSection(ticket.body, section, trimmed);
       const frontMatter = withUpdated({ ...ticket.frontMatter }, options.now);
       await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
       return ticket.path;
@@ -1864,6 +1884,42 @@ function validateTicketShape(board, ticket) {
   for (const section of STANDARD_SECTIONS) {
     if (locateSection(ticket.body, section) === null) {
       issues.push(`${ticket.path}: missing ## ${section} section`);
+    }
+  }
+
+  // Fence-aware duplicate-heading detection for legacy tickets corrupted
+  // before the setTicketSection reject guard existed. Only flags duplicated
+  // STANDARD_SECTIONS names -- the class that makes locateSection/
+  // getSectionText silently ambiguous -- not arbitrary repeated H2s, so a
+  // body that intentionally fences a non-standard heading sample is never a
+  // false positive.
+  //
+  // Scoped to non-closed statuses only (B20260710T1532Z loop-back): a done
+  // or archived ticket is immutable closed history, and this check running
+  // board-wide against ~40 real done/archived tickets predating the guard
+  // hard-failed every validate/preflight/closeout. Live tickets (any status
+  // not in CLOSED_STATUSES) keep the hard guard so new corruption is still
+  // caught before it reaches done/archived. Uses fm.status, not ticket.status
+  // (readTicket copies frontMatter.status into ticket.status, so they agree
+  // for a well-formed ticket; fm is the canonical source already used
+  // throughout this function).
+  if (!isClosedStatus(fm.status)) {
+    const standardSectionCounts = new Map();
+    for (const { line } of contentLines(ticket.body)) {
+      const headingMatch = SECTION_HEADING_RE.exec(line);
+      if (headingMatch === null) {
+        continue;
+      }
+      const name = headingMatch[1];
+      if (!STANDARD_SECTIONS.includes(name)) {
+        continue;
+      }
+      standardSectionCounts.set(name, (standardSectionCounts.get(name) ?? 0) + 1);
+    }
+    for (const [name, count] of standardSectionCounts) {
+      if (count > 1) {
+        issues.push(`${ticket.path}: duplicate ## ${name} section`);
+      }
     }
   }
 

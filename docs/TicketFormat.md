@@ -120,6 +120,8 @@ The CLI validator checks:
 - dependency-blocked tickets are not placed in `status: blocked`;
 - ISO-8601 `created`, `updated`, and non-null work timestamp values with timezone offsets or `Z`.
 
+For duplicated standard-section headings, `validate` reports the issue only for tickets whose status is neither `done` nor `archived`; closed history is exempt.
+
 ## Rewriting Front Matter
 
 Use the CLI for state changes that affect canonical front matter:
@@ -145,7 +147,7 @@ With `retention.archiveOnMoveDone: true`, `move <ticket-id> done` also moves old
 
 `set` and `update-field` are aliases for front matter updates. `id`, `type`, `created`, and `updated` are managed fields and cannot be set directly.
 
-The writer emits required fields in canonical order and preserves the Markdown body. `section` replaces one Markdown section body by heading name. Inline text is supported for short updates; `section --file <path>` is preferred for multi-line Markdown. Create the `--file` target with the Write tool, never with shell redirection (`echo`, heredoc, `Set-Content`, `Out-File`).
+The writer emits required fields in canonical order and preserves the Markdown body. `section` replaces one Markdown section body by heading name. Inline text is supported for short updates; `section --file <path>` is preferred for multi-line Markdown. Create the `--file` target with the Write tool, never with shell redirection (`echo`, heredoc, `Set-Content`, `Out-File`). The payload is the section body only; do not include the section's own `## Heading`, and fence any literal top-level `## ` sample lines.
 
 `link-parent` and `link-child` update reciprocal `parent`/`children` fields. `block` and `unblock` update reciprocal `blockedBy`/`blocks` fields.
 `block` does not move ticket status. Dependency-blocked tickets stay in their ready status and become eligible automatically when dependencies close.

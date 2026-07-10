@@ -406,5 +406,5 @@ local-board unblock <ticket-id> <dependency-id>
 This block is the single-ticket command surface, not the full CLI. Run `local-board` with no arguments for complete usage, `schema --json` for accepted enums, and `where --json` for asset paths. `worktree-list`, `team-config`, and `list` live in the parallel (`local-team`) skill. Do not inspect source to discover commands.
 
 Use `comment` for run-log style notes. Use `move` for status transitions. Use relationship commands for parent/child and dependency state.
-Use `section --file <path>` for generated or multi-line Markdown. Inline `section <text>` is only for short edits. Create the `--file` target with the Write tool; never build it with `echo`, heredoc, `Set-Content`, or `Out-File`.
+Use `section --file <path>` for generated or multi-line Markdown. Inline `section <text>` is only for short edits. Create the `--file` target with the Write tool; never build it with `echo`, heredoc, `Set-Content`, or `Out-File`. The payload is the section body only — do not include the section's own `## Heading`; fence any literal `## ` sample lines.
 Use `blockedBy` for ticket dependencies without moving the dependent ticket to `blocked`.

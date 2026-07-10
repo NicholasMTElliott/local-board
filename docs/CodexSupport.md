@@ -116,7 +116,7 @@ Agent profiles may also pin `effort` (a reasoning-effort token) alongside `model
 3. Run `query-next --json` or `query-ticket <id> --json`.
 4. Run `begin-step <id> --harness codex --json`.
 5. Dispatch the step from the returned `codexDispatch` block.
-6. Persist return-only output with `section --file`; workers persist their scoped edits.
+6. Persist return-only output with `section --file`; workers persist their scoped edits. Section payloads are body-only, so omit the target `## Heading` and fence literal top-level `## ` samples.
 7. Run `complete-step`.
 8. Run gate-check and specialty steps for design, implement, or test stages.
 9. Move to one returned transition status.

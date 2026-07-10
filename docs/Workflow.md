@@ -140,7 +140,8 @@ node ./bin/local-board.js block T20260514T1237Z T20260514T1236Z
 
 Optional structured `comment` markers are documented in [Comment Markers](comment-markers.md).
 Use `move` for status transitions. Do not use `set status`; it delegates to the same move behavior so folder placement stays consistent.
-Use `section --file <path>` for generated or multi-line Markdown. Inline `section <text>` is best for short one-line edits. Create the `--file` target with the Write tool; never build it with `echo`, heredoc, `Set-Content`, or `Out-File`.
+Use `section --file <path>` for generated or multi-line Markdown. Inline `section <text>` is best for short one-line edits. Create the `--file` target with the Write tool; never build it with `echo`, heredoc, `Set-Content`, or `Out-File`. The payload is the section body only; do not include the section's own `## Heading`, and fence any literal top-level `## ` sample lines.
+`validate` reports duplicated standard-section headings only for tickets whose status is not `done` or `archived`; closed history is exempt.
 Use `block` and `unblock` for ticket dependencies. Do not move dependency-blocked tickets to `blocked`; that status is reserved for non-ticket blockers.
 
 When `routing.requireDesignReview` is enabled, `design-review-check` resolves the configured review profile, prompt, and ticket context; `design-review-complete` records the design-review evidence through the core recorder.
