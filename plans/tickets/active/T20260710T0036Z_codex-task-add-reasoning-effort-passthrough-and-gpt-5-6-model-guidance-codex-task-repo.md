@@ -13,8 +13,8 @@ estimateBasis: T20260709T1119Z
 workStartedAt: 2026-07-10T01:05:10Z
 workCompletedAt: null
 created: 2026-07-10T00:36:09Z
-updated: 2026-07-10T01:15:16Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet"]
+updated: 2026-07-10T01:16:07Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # codex-task: add --reasoning-effort passthrough and GPT-5.6 model guidance (../codex-task repo)
@@ -201,3 +201,5 @@ None blocking. The two verification items (Windows real-codex smoke, exact 400 w
 - 2026-07-10T01:10:46Z: Ensured git branch local-board/T20260710T0036Z-codex-task-add-reasoning-effort-passthrough-and-gpt-5-6-model-guidance-codex-task-repo (already-current).
 
 - 2026-07-10T01:15:16Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Commit 1568eb5 on codex-task/T20260710T0036Z-reasoning-effort: flag parse, spawn-args -c override, reasoningEffort echo at all 7 emit sites, SKILL.md, 4 new smoke tests (9/9 pass). Orchestrator ran real-codex Windows smoke from the branch: gpt-5.6-terra + --reasoning-effort high returned ok:true with reasoningEffort echoed (5.4s), settling the design's quoting risk.
+
+- 2026-07-10T01:16:07Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - internal CLI flag passthrough, explicitly excluded by security_audit trigger; no UI
