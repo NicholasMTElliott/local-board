@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:25:41Z
 updated: 2026-07-10T14:39:01Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # check-dispatch denies legitimate gate-check consultation dispatches when hooks are enabled
@@ -497,3 +497,5 @@ Validation: git diff --check clean; prose-only change.
 - 2026-07-10T14:34:13Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. Live temp-board acceptance: documented flow ok:true/exit 0, misroute denied exit 1; 43/43 ledger tests; suite at declared branch baseline; evidence-gate hook observed enforcing correctly mid-test.
 
 - 2026-07-10T14:34:14Z: Ensured git branch local-board/B20260710T1225Z-check-dispatch-denies-legitimate-gate-check-consultation-dispatches-when-hooks-are-enabled (already-current).
+
+- 2026-07-10T14:39:01Z: Completed document via codex-task:workspace-write: systemPatterns dispatch-verification facts + EnforcementHooks ledger expectations synced; committed on branch.
