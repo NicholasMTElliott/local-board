@@ -7,13 +7,13 @@ parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260710T1535Z-create-type-vs-status-advisory-and-an-evidence-free-authoring-correction-lane
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T15:32:40Z
+updated: 2026-07-10T17:45:25Z
 completedSteps: []
 routingApprovals: []
 ---
