@@ -8,12 +8,12 @@ children: []
 blockedBy: []
 blocks: [T20260710T1222Z]
 branch: local-board/T20260710T1221Z-design-review-prompt-file-resources-sync-and-init-scaffold
-estimate: null
-estimateBasis: null
+estimate: 1
+estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:22:12Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T12:25:20Z
+updated: 2026-07-10T12:25:27Z
 completedSteps: []
 routingApprovals: []
 ---
