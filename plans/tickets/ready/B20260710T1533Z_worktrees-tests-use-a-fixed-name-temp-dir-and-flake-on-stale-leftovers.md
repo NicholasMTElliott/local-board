@@ -13,7 +13,7 @@ estimateBasis: B20260710T1532Z
 workStartedAt: 2026-07-10T17:07:08Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T17:39:32Z
+updated: 2026-07-10T17:42:43Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -289,6 +289,14 @@ Verdict: pass (claude-subagent:local-board-tester@sonnet, 2026-07-10, commit d37
 npm run check clean. Full suite 535 tests - 534 pass, 0 fail, 1 skip. test/worktrees.test.js run three times consecutively: 40/40 each, no flakes. Independent stale-abort simulation: manually pre-seeded os.tmpdir()/explicit-worktrees/T20260522T1506Z/junk.txt (separate from the test's own seeding), suite ran green - the withRepo pre-clean recovered; the fixed dir was gone after the run via the finally teardown. Diff scope: exactly test/worktrees.test.js + ticket planning file. Working tree clean after all runs.
 
 ## Documentation Updates
+
+Updated `memory-bank/techContext.md` because `techContext.md` already records test fixture conventions. Added one factual sentence noting that worktree tests using `withRepo` pre-clean resolved worktrees roots before setup so fixed-name roots above `mkdtemp` do not inherit stale leftovers.
+
+No `docs/` narrative page covered test fixtures, so no human-facing docs were changed.
+
+Verification: `node --test --test-isolation=none test/skill-usage-sync.test.js test/resources-sync.test.js` passed: 9 tests, 0 failures.
+
+Commit: attempted `B20260710T1533Z: docs note worktree fixture pre-clean`, but git could not create `C:/Users/Nicho/Documents/local-board/.git/worktrees/B20260710T1533Z/index.lock` (`Permission denied`) from this sandbox. Changes are left uncommitted.
 
 ## Questions
 
