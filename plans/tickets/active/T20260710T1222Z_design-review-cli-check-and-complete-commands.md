@@ -13,8 +13,8 @@ estimateBasis: T20260710T1220Z
 workStartedAt: 2026-07-10T13:25:24Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T13:49:04Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet"]
+updated: 2026-07-10T13:49:51Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # design-review: CLI check and complete commands
@@ -436,3 +436,5 @@ validate` → "Ticket validation OK".
 - 2026-07-10T13:34:55Z: Ensured git branch local-board/T20260710T1222Z-design-review-cli-check-and-complete-commands (already-current).
 
 - 2026-07-10T13:49:04Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Commits 452d20a (B1225Z peer merge, clean) + 7b2dd91: design-review-check resolver + design-review-complete recorder passthrough, main() + usage wiring, 7 new tests (pipeline, skip-refused, model pin, flag-off, wrong-root in worktrees.test.js). 505 pass + 2 baseline. Two documented micro-deviations (ticketContext.type parity; wrong-root test placement).
+
+- 2026-07-10T13:49:51Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - CLI wrappers over existing recorder/resolver
