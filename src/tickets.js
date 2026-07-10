@@ -134,10 +134,20 @@ export function isDesignReviewGatedMove(fromStatus, toStatus) {
   return DESIGN_REVIEW_FROM.has(fromStatus) && toStatus === "ready_for_implementation";
 }
 
+// Parses on the first colon (mirroring completedStepRecords) and requires a
+// non-empty executor: a bare "design-review" or a "design-review:" token
+// with an empty/garbage executor is NOT recorder-produced evidence and must
+// not satisfy the precondition.
 function hasDesignReviewToken(ticket) {
-  return asList(ticket.frontMatter.completedSteps).some(
-    (token) => token === DESIGN_REVIEW_ACTION || token.startsWith(`${DESIGN_REVIEW_ACTION}:`),
-  );
+  return asList(ticket.frontMatter.completedSteps).some((token) => {
+    const separator = token.indexOf(":");
+    if (separator === -1) {
+      return false;
+    }
+    const action = token.slice(0, separator);
+    const executor = token.slice(separator + 1);
+    return action === DESIGN_REVIEW_ACTION && executor.trim() !== "";
+  });
 }
 
 // Fixed structural mapping from a gate/optional-step "stage" name to the
@@ -1391,6 +1401,11 @@ export async function recordDesignReview(root, ticketId, executor, evidence, opt
   }
 
   const config = await loadConfig(root);
+  if (config.routing?.requireDesignReview !== true) {
+    throw new Error(
+      "design-review is disabled: set routing.requireDesignReview to true in the board config to enable the design-review recorder",
+    );
+  }
   if (!isValidAgentValue(executor)) {
     throw new Error(`executor must be one of ${schemaAgentValues().join(", ")}`);
   }
@@ -2346,7 +2361,14 @@ function optionalStepEntry(config, name) {
 }
 
 function isKnownAction(config, action) {
-  if (action === DESIGN_REVIEW_ACTION) return true;
+  if (action === DESIGN_REVIEW_ACTION) {
+    // Flag-off inertness: design-review is not a known/dispatchable action
+    // unless routing.requireDesignReview is true, so begin-step
+    // --action design-review, resolveExpectedStep, and completeStep all
+    // refuse it on flag-off boards, exactly like any other unconfigured
+    // action.
+    return config.routing?.requireDesignReview === true;
+  }
   const actions = new Set(Object.values(config.workflow.statusActions));
   return actions.has(action) || optionalStepEntry(config, action) !== null;
 }
@@ -2372,8 +2394,12 @@ function profileForAction(config, action) {
   const mandatory = new Set(Object.values(config.workflow.statusActions));
   // design-review is absent from workflow.statusActions but resolves through
   // the agents map exactly like a mandatory action (config.agents["design-review"]),
-  // never through the optionalSteps catalog.
-  if (mandatory.has(action) || action === DESIGN_REVIEW_ACTION) {
+  // never through the optionalSteps catalog -- and only when the flag is on
+  // (flag-off inertness: config.agents["design-review"] is never consulted).
+  if (
+    mandatory.has(action) ||
+    (action === DESIGN_REVIEW_ACTION && config.routing?.requireDesignReview === true)
+  ) {
     const entry = config.agents[action] ?? config.agents.default ?? { route: "inline" };
     return typeof entry === "string" ? { route: entry } : entry;
   }

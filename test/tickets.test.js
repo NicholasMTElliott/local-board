@@ -2811,8 +2811,78 @@ test("moveTicket design-review gating is disabled by default (switch off) and vi
   });
 });
 
+test("flag-off inertness: begin-step --action design-review, resolveExpectedStep, and completeStep all refuse design-review as an unknown action when routing.requireDesignReview is false/omitted", async () => {
+  await withBoard(async (root) => {
+    // No config file at all: DEFAULT_CONFIG fallback keeps requireDesignReview false.
+    const noConfig = await createTicket(root, "task", "Flag off dispatch, no config", { status: "ready_for_design" });
+    const noConfigId = path.basename(noConfig).split("_", 1)[0];
+    await assert.rejects(beginStep(root, noConfigId, "design-review"), /action must be a mandatory action/);
+    await assert.rejects(resolveExpectedStep(root, noConfigId, "design-review"), /action must be a mandatory action/);
+    await assert.rejects(
+      completeStep(root, noConfigId, "design-review", "codex-task:read-only", "verdict PASS"),
+      /action must be a mandatory action/,
+    );
+
+    // Explicit false: same refusal.
+    await writeConfig(root, JSON.stringify({ routing: { requireDesignReview: false } }));
+    const explicitOff = await createTicket(root, "task", "Flag off dispatch, explicit false", { status: "ready_for_design" });
+    const explicitOffId = path.basename(explicitOff).split("_", 1)[0];
+    await assert.rejects(beginStep(root, explicitOffId, "design-review"), /action must be a mandatory action/);
+    await assert.rejects(resolveExpectedStep(root, explicitOffId, "design-review"), /action must be a mandatory action/);
+    await assert.rejects(
+      completeStep(root, explicitOffId, "design-review", "codex-task:read-only", "verdict PASS"),
+      /action must be a mandatory action/,
+    );
+  });
+});
+
+test("flag-off inertness: recordDesignReview refuses while routing.requireDesignReview is false/omitted, naming the flag", async () => {
+  await withBoard(async (root) => {
+    const noConfig = await createTicket(root, "task", "Flag off recorder, no config", { status: "ready_for_design" });
+    const noConfigId = path.basename(noConfig).split("_", 1)[0];
+    await assert.rejects(
+      recordDesignReview(root, noConfigId, "codex-task:read-only@gpt-5.6-sol", "verdict PASS"),
+      /routing\.requireDesignReview/,
+    );
+
+    await writeConfig(root, JSON.stringify({ routing: { requireDesignReview: false } }));
+    const explicitOff = await createTicket(root, "task", "Flag off recorder, explicit false", { status: "ready_for_design" });
+    const explicitOffId = path.basename(explicitOff).split("_", 1)[0];
+    await assert.rejects(
+      recordDesignReview(root, explicitOffId, "codex-task:read-only@gpt-5.6-sol", "verdict PASS"),
+      /routing\.requireDesignReview/,
+    );
+  });
+});
+
+test("moveTicket design-review gate rejects a malformed completedSteps token (bare 'design-review' or 'design-review:' with an empty executor) as satisfying the precondition", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { requireDesignReview: true } }));
+
+    for (const malformed of ["design-review", "design-review:", "design-review:   "]) {
+      const ticketPath = await createTicket(root, "task", `Malformed token ${malformed}`, { status: "ready_for_design" });
+      const ticketId = path.basename(ticketPath).split("_", 1)[0];
+      await setTicketField(root, ticketId, "completedSteps", [malformed]);
+
+      await assert.rejects(
+        moveTicket(root, ticketId, "ready_for_implementation"),
+        /no recorded design review.*design-review .*before moving to ready_for_implementation/s,
+        `token "${malformed}" must not bypass the design-review precondition`,
+      );
+    }
+
+    // Sanity: a genuine recorder-produced token still passes.
+    const ok = await createTicket(root, "task", "Well-formed token", { status: "ready_for_design" });
+    const okId = path.basename(ok).split("_", 1)[0];
+    await setTicketField(root, okId, "completedSteps", ["design-review:codex-task:read-only@gpt-5.6-sol"]);
+    const moved = await moveTicket(root, okId, "ready_for_implementation");
+    assert.match(await readFile(moved, "utf8"), /^status: ready_for_implementation$/m);
+  });
+});
+
 test("recordDesignReview enforces the configured model pin (gpt-5.6-sol), accepts @codex-default, rejects a mismatched model and empty evidence, and never leaks effort into the token", async () => {
   await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { requireDesignReview: true } }));
     const ticketPath = await createTicket(root, "task", "Design review model pin", { status: "ready_for_design" });
     const ticketId = path.basename(ticketPath).split("_", 1)[0];
 
@@ -2858,6 +2928,7 @@ test("recordDesignReview enforces the configured model pin (gpt-5.6-sol), accept
 
 test("recordDesignReview accepts @codex-default as satisfying the pinned model", async () => {
   await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { requireDesignReview: true } }));
     const ticketPath = await createTicket(root, "task", "Design review codex-default", { status: "ready_for_design" });
     const ticketId = path.basename(ticketPath).split("_", 1)[0];
 
@@ -2882,7 +2953,7 @@ test("recordDesignReview requires a non-empty overrideReason when override is tr
 
 test("recordDesignReview: guardPrematureEvidence refuses recording ahead of ready_for_design, allows recording at ready_for_design/designing", async () => {
   await withBoard(async (root) => {
-    await writeConfig(root, JSON.stringify({ routing: { guardPrematureEvidence: true } }));
+    await writeConfig(root, JSON.stringify({ routing: { requireDesignReview: true, guardPrematureEvidence: true } }));
 
     const early = await createTicket(root, "task", "Premature design review", { status: "ready_for_decomposition" });
     const earlyId = path.basename(early).split("_", 1)[0];

@@ -500,7 +500,15 @@ export function resolveOptionalStepAgent(agentValue) {
 export function codexTaskRoutedActions(config) {
   const actions = [];
   if (isObject(config?.agents)) {
+    // Flag-off inertness: agents["design-review"] is never consulted (and
+    // must not surface a validate/install codex-task warning) unless
+    // routing.requireDesignReview is true, even though the default profile
+    // ships that key pre-routed to codex-task:read-only.
+    const requireDesignReview = config?.routing?.requireDesignReview === true;
     for (const [action, value] of Object.entries(config.agents)) {
+      if (action === "design-review" && !requireDesignReview) {
+        continue;
+      }
       const route = typeof value === "string" ? value : value?.route;
       if (typeof route === "string" && route.startsWith("codex-task:")) {
         actions.push(action);

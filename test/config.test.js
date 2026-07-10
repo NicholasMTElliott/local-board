@@ -657,6 +657,25 @@ test("codexTaskRoutedActions detects a raw (un-normalized) object-form optionalS
   assert.deepEqual(codexTaskRoutedActions(raw), ["security_threat_model (design)"]);
 });
 
+test("codexTaskRoutedActions excludes agents[\"design-review\"] unless routing.requireDesignReview is true (flag-off inertness)", () => {
+  const base = {
+    agents: { "design-review": { route: "codex-task:read-only", model: "gpt-5.6-sol", effort: "xhigh" } },
+    optionalSteps: {},
+  };
+  // Flag omitted and flag explicitly false: design-review must not surface,
+  // even though its default profile is pre-routed to codex-task.
+  assert.deepEqual(codexTaskRoutedActions(base), []);
+  assert.deepEqual(
+    codexTaskRoutedActions({ ...base, routing: { requireDesignReview: false } }),
+    [],
+  );
+  // Flag on: design-review is scanned like any other codex-task-routed action.
+  assert.deepEqual(
+    codexTaskRoutedActions({ ...base, routing: { requireDesignReview: true } }),
+    ["design-review"],
+  );
+});
+
 test("loadConfig rejects duplicate optionalSteps names within a stage", async () => {
   await withRoot(async (root) => {
     await writeConfig(root, `{
