@@ -27,8 +27,21 @@ function isActionLedgerEntry(record, action) {
   return (record.kind ?? "action") === "action" && record.action === action;
 }
 
-function isConsultationLedgerEntry(record, stage) {
-  return (record.kind === "gate" || record.kind === "specialty") && record.stage === stage;
+// Third review (B20260710T1225Z): `recordGateConsultation` backs the
+// `gate-complete` verb, which only ever records a GATE agent's verdict --
+// there is no separate specialty-completion verb, but that does NOT make
+// recordGateConsultation the clear point for a specialty stamp. Before this
+// predicate was kind-agnostic (`kind === "gate" || kind === "specialty"`), a
+// stale/retried `gate-complete --stage design` could clear a NEWER
+// `specialty-run` stamp for a still-unconsulted specialty in the same
+// "design" stage -- a different kind, wrongly erased because only `stage`
+// was compared. `recordGateConsultation` must therefore match ONLY its own
+// kind ("gate"), never "specialty". A lingering specialty stamp is instead
+// cleared by `moveTicket`'s broad abandonment sweep (isAnyConsultationLedgerEntry,
+// below) once the ticket actually leaves the stage, or self-heals on the next
+// `begin-step`/`specialty-run` overwrite.
+function isGateLedgerEntry(record, stage) {
+  return record.kind === "gate" && record.stage === stage;
 }
 
 // Broad variant used only by `moveTicket`'s abandonment cleanup, which is not
@@ -829,12 +842,23 @@ export async function moveTicket(root, ticketId, status, options = {}) {
       // through questions/blocked, or a loop-back) before that consultation
       // is ever completed, the stamp would otherwise linger and later
       // wrongly authorize a gate/specialty dispatch for a different stage.
-      // Any successful move clears a lingering consultation-kind entry for
-      // this ticket; action-kind entries (an in-flight begin-step dispatch)
-      // are left untouched -- moving a ticket is not evidence an action
-      // dispatch abandoned. Best-effort: a clear failure must never undo an
-      // already-successful move.
-      await clearActiveStepIf(root, ticketId, isAnyConsultationLedgerEntry).catch(() => {});
+      // Any successful FORWARD-OR-SIDEWAYS move (a real status change) clears
+      // a lingering consultation-kind entry for this ticket; action-kind
+      // entries (an in-flight begin-step dispatch) are left untouched --
+      // moving a ticket is not evidence an action dispatch abandoned.
+      // Best-effort: a clear failure must never undo an already-successful
+      // move.
+      //
+      // Skipped for a same-status re-save (ticket.status === status, e.g. a
+      // front-matter-only rewrite that happens to pass the current status --
+      // third review, B20260710T1225Z): a re-save abandons nothing, so
+      // sweeping here would erase a legitimate, still-pending gate/specialty
+      // consultation stamp for no reason (e.g. a Run Log comment appended via
+      // a code path that round-trips through moveTicket with the unchanged
+      // status). Reserve the sweep for calls that actually change status.
+      if (ticket.status !== status) {
+        await clearActiveStepIf(root, ticketId, isAnyConsultationLedgerEntry).catch(() => {});
+      }
 
       return targetPath;
     },
@@ -1453,18 +1477,27 @@ export async function recordGateConsultation(root, ticketId, stage, executor, ev
   const now = options.now ?? new Date();
   const runLogLine = `- ${formatIsoSeconds(now)}: Gate consultation ${stage} via ${executor}: ${evidence.trim()}`;
   const writtenPath = await stampGateToken(root, ticketId, token, runLogLine, { ...options, now });
-  // Clears the ledger's consultation entry (gate-check's stamp, or the last
-  // specialty-run's stamp -- there is no separate specialty-completion verb,
-  // so this is the catch-all for both, mirroring completeStep's clear).
-  // Best-effort, same rationale as completeStep: a missing/already-cleared
-  // entry is a no-op, and a clear failure must never block evidence recording
-  // that already succeeded. Conditional (B20260710T1225Z, re-review 2): only
-  // clears a gate/specialty entry for THIS `stage`, never a newer action
-  // stamp (e.g. begin-step for the NEXT stage, already running before this
-  // clear fires), and never a newer gate/specialty stamp for a DIFFERENT
-  // stage (e.g. this call is a stale/retried gate-complete for "design" while
-  // a fresh gate-check for "implement" already stamped its own entry).
-  await clearActiveStepIf(root, ticketId, (record) => isConsultationLedgerEntry(record, stage)).catch(() => {});
+  // Clears the ledger's gate-check stamp for THIS stage only. Best-effort,
+  // same rationale as completeStep: a missing/already-cleared entry is a
+  // no-op, and a clear failure must never block evidence recording that
+  // already succeeded. Conditional (B20260710T1225Z, re-review 2): only
+  // clears a gate entry for THIS `stage`, never a newer action stamp (e.g.
+  // begin-step for the NEXT stage, already running before this clear fires),
+  // and never a newer gate stamp for a DIFFERENT stage (e.g. this call is a
+  // stale/retried gate-complete for "design" while a fresh gate-check for
+  // "implement" already stamped its own entry).
+  //
+  // Deliberately does NOT clear a "specialty"-kind entry (third review
+  // residual, B20260710T1225Z): gate-complete records only the GATE agent's
+  // verdict, never a specialty's. A stale/retried gate-complete for this
+  // stage must not erase a still-live specialty-run stamp for a different,
+  // not-yet-consulted specialty in the SAME stage -- there is no "this
+  // gate-complete call also completed that specialty" relationship to assert.
+  // A lingering specialty stamp is instead cleared by moveTicket's broad
+  // abandonment sweep (isAnyConsultationLedgerEntry) once the ticket actually
+  // leaves the stage, or self-heals on the next begin-step/specialty-run
+  // overwrite. See isGateLedgerEntry's comment for the full rationale.
+  await clearActiveStepIf(root, ticketId, (record) => isGateLedgerEntry(record, stage)).catch(() => {});
   return { ticket: ticketId, stage, executor, path: writtenPath };
 }
 

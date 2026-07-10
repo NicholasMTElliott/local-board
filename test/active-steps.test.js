@@ -1473,6 +1473,124 @@ test(
   },
 );
 
+test(
+  "a same-status move (re-save) does NOT sweep a live consultation stamp; only a real status change abandons it (third review edge case)",
+  async () => {
+    await withBoard(async (root) => {
+      const create = await runCli(["--root", root, "create", "task", "Same-status re-save", "--status", "ready_for_design", "--priority", "P2"]);
+      assert.equal(create.code, 0, create.stderr);
+      const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+      assert.equal((await runCli(["--root", root, "estimate", ticketId, "2"])).code, 0);
+      assert.equal((await runCli(["--root", root, "begin-step", ticketId, "--json"])).code, 0);
+      assert.equal(
+        (
+          await runCli([
+            "--root", root, "complete-step", ticketId, "design",
+            "--executor", "claude-subagent:local-board-designer@opus",
+            "--evidence", "Designed.", "--json",
+          ])
+        ).code,
+        0,
+      );
+      assert.equal((await runCli(["--root", root, "gate-check", ticketId, "--stage", "design", "--json"])).code, 0);
+      const stamp = (await readActiveSteps(root))[ticketId];
+      assert.ok(stamp, "gate-check must stamp the consultation entry");
+
+      // Re-save the ticket at its CURRENT status (ready_for_design ->
+      // ready_for_design). This is not an abandonment -- the ticket never
+      // left the stage -- so the pending gate consultation must survive.
+      const resave = await runCli(["--root", root, "move", ticketId, "ready_for_design", "--json"]);
+      assert.equal(resave.code, 0, resave.stderr);
+
+      assert.deepEqual(
+        (await readActiveSteps(root))[ticketId],
+        stamp,
+        "a same-status re-save must not sweep a live consultation stamp",
+      );
+
+      // Control: a real status change still sweeps it (existing behaviour,
+      // unchanged by this fix).
+      const move = await runCli(["--root", root, "move", ticketId, "blocked", "--json"]);
+      assert.equal(move.code, 0, move.stderr);
+      assert.equal(
+        Object.hasOwn(await readActiveSteps(root), ticketId),
+        false,
+        "a real status change must still sweep the abandoned stamp",
+      );
+    });
+  },
+);
+
+test(
+  "gate-complete --stage design does NOT clear a live specialty consultation stamp for a design-stage specialty (third review residual); the specialty dispatch still passes check-dispatch",
+  async () => {
+    await withBoard(async (root) => {
+      await writeFile(
+        path.join(root, "plans", "local-board.config.jsonc"),
+        JSON.stringify({
+          version: 1,
+          optionalSteps: {
+            design: [
+              {
+                name: "custom_review",
+                prompt: "plans/prompts/optional-steps/design/custom_review.md",
+                triggers: "Anything.",
+                agent: { route: "claude-subagent:local-board-reviewer", model: "opus" },
+              },
+            ],
+            implement: [],
+            test: [],
+          },
+        }),
+        "utf8",
+      );
+      await mkdir(path.join(root, "plans", "prompts", "optional-steps", "design"), { recursive: true });
+      await writeFile(
+        path.join(root, "plans", "prompts", "optional-steps", "design", "custom_review.md"),
+        "# Custom Review\n",
+        "utf8",
+      );
+
+      const create = await runCli(["--root", root, "create", "task", "Gate-complete must not clear a specialty stamp", "--status", "ready_for_design", "--priority", "P2"]);
+      assert.equal(create.code, 0, create.stderr);
+      const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+      const run = await runCli(["--root", root, "specialty-run", ticketId, "custom_review", "--json"]);
+      assert.equal(run.code, 0, run.stderr);
+      const specialtyStamp = (await readActiveSteps(root))[ticketId];
+      assert.equal(specialtyStamp.kind, "specialty");
+      assert.equal(specialtyStamp.stage, "design");
+
+      // A stale/retried gate-complete for the SAME stage ("design"). Before
+      // the fix, isConsultationLedgerEntry matched any "gate" OR "specialty"
+      // entry sharing `stage`, so this call would wrongly erase the live
+      // specialty stamp even though gate-complete only ever records the GATE
+      // agent's verdict.
+      const gateComplete = await runCli([
+        "--root", root, "gate-complete", ticketId,
+        "--stage", "design",
+        "--executor", "claude-subagent:local-board-gatecheck@haiku",
+        "--evidence", "none", "--json",
+      ]);
+      assert.equal(gateComplete.code, 0, gateComplete.stderr);
+
+      const steps = await readActiveSteps(root);
+      assert.deepEqual(
+        steps[ticketId],
+        specialtyStamp,
+        "gate-complete must not clear a live specialty consultation stamp for the same stage",
+      );
+
+      const dispatch = await runCli([
+        "--root", root, "check-dispatch",
+        "--agent", "local-board-reviewer", "--model", "opus", "--ticket", ticketId,
+      ]);
+      assert.equal(dispatch.code, 0, dispatch.stderr);
+      assert.equal(JSON.parse(dispatch.stdout).reason, "match", "the specialty dispatch must remain authorized after the same-stage gate-complete");
+    });
+  },
+);
+
 test("clearActiveStepIf clears only when the predicate matches the current entry, atomically under the ledger lock", async () => {
   await withBoard(async (root) => {
     await stampActiveStep(root, "T1", { ticket: "T1", kind: "action", action: "design", route: "r1", model: "opus" });
