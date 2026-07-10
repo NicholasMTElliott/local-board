@@ -1,7 +1,7 @@
 ---
 id: B20260710T1533Z
 type: bug
-status: ready_for_docs
+status: done
 priority: P3
 parent: null
 children: []
@@ -11,9 +11,9 @@ branch: local-board/B20260710T1533Z-worktrees-tests-use-a-fixed-name-temp-dir-an
 estimate: 2
 estimateBasis: B20260710T1532Z
 workStartedAt: 2026-07-10T17:07:08Z
-workCompletedAt: null
+workCompletedAt: 2026-07-10T17:43:49Z
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T17:43:48Z
+updated: 2026-07-10T17:43:49Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
