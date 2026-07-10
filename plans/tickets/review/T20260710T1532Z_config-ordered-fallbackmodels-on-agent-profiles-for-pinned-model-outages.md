@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
 updated: 2026-07-10T18:16:15Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
 # config: ordered fallbackModels on agent profiles for pinned-model outages
@@ -839,3 +839,5 @@ Verified clean by static inspection: routing and schema validation, fallback thr
 - 2026-07-10T18:10:07Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none requested (test-only delta)
 
 - 2026-07-10T18:16:15Z: Focused re-review of 39dac82 (terra@medium): pass. Deep-equal shapes concrete for all fallbackModels-relevant fields; scaffold boilerplate sourced from fixture config; nothing weakened.
+
+- 2026-07-10T18:16:15Z: Completed review via codex-task:read-only@gpt-5.6-terra: pass on focused re-review (39dac82); prior full review (terra@high) verified all functional invariants clean
