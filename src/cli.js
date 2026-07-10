@@ -34,6 +34,7 @@ import {
   suggestCalibration,
   TICKET_ID_RE,
   ticketRecord,
+  typeStatusAdvisory,
   unblockTicket,
   unlinkParent,
   validate,
@@ -467,6 +468,17 @@ async function commandCreate(root, args) {
   const ticketPath = await createTicket(root, ticketType, title, { status, priority, parent });
   const createdId = path.basename(ticketPath, ".md").split("_")[0];
   await maybeCommitPlanning(root, { ticketId: createdId, command: "create", detail: ticketType });
+
+  // Warning-only, unconditional: never refuses the create (the status stays
+  // schema-legal either way) and existing boards/scripts see byte-identical
+  // stdout. Loads config once and computes the advisory after the ticket
+  // already exists, so a config load failure cannot block creation.
+  const config = await loadConfig(root);
+  const advisory = typeStatusAdvisory(config, ticketType, status);
+  if (advisory) {
+    console.warn(advisory);
+  }
+
   console.log(ticketPath);
   return 0;
 }

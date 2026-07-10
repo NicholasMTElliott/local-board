@@ -365,6 +365,76 @@ function invertStatusActions(config) {
   return actionToStatus;
 }
 
+// Naive English pluralizer for the four fixed ticket types (epic/story/
+// task/bug) used in the typeStatusAdvisory message. "story" -> "stories";
+// everything else just gets a trailing "s".
+function pluralize(word) {
+  if (/[^aeiou]y$/i.test(word)) {
+    return `${word.slice(0, -1)}ies`;
+  }
+  return `${word}s`;
+}
+
+// Create-time advisory: fires when `type` is created at `status` but that
+// status's action is not one of the actions `type` needs for done
+// (config.routing.doneRequires[type]). This is a create-time convention
+// check only -- it is warning-only for existing boards (it never refuses a
+// create; every schema-legal status stays legal) and is unrelated to
+// enforceTransitions/isTransitionAllowed. Pure and deterministic: same
+// (config, type, status) always yields the same result.
+//
+// Predicate (fires iff both hold):
+//   1. config.workflow.statusActions[status] is defined (so backlog and the
+//      non-pipeline active statuses like questions/blocked never fire), AND
+//   2. that action is NOT a member of config.routing.doneRequires[type].
+//
+// Returns the warning string (single line, "WARNING:" prefix, matching the
+// codexTaskWarning convention) or null when the predicate does not fire, the
+// status has no mapped action, or `type` has no doneRequires entry to compare
+// against (defensive: nothing to be inconsistent with).
+export function typeStatusAdvisory(config, type, status) {
+  const action = config.workflow.statusActions[status];
+  if (action === undefined) {
+    return null;
+  }
+
+  const required = config.routing.doneRequires?.[type];
+  if (required === undefined) {
+    return null;
+  }
+
+  if (required.includes(action)) {
+    return null;
+  }
+
+  const conventionalAction = required[0];
+  if (conventionalAction === undefined) {
+    return null;
+  }
+
+  const actionToStatus = invertStatusActions(config);
+  const conventionalStatus = actionToStatus[conventionalAction] ?? null;
+  const requiredList = `[${required.join(", ")}]`;
+
+  if (conventionalStatus !== null) {
+    return (
+      `WARNING: ${type} created at ${status}, but ${pluralize(type)} complete via "${conventionalAction}" ` +
+      `(routing.doneRequires.${type} = ${requiredList}); the conventional entry status is ${conventionalStatus}. ` +
+      `The ticket was created; re-place it with "move <id> ${conventionalStatus} --override --reason ` +
+      `\"<text>\"" if this was unintended.`
+    );
+  }
+
+  // Defensive edge (custom config): doneRequires[type][0]'s action has no
+  // producing status in statusActions. Name the action alone instead of
+  // throwing or fabricating a status.
+  return (
+    `WARNING: ${type} created at ${status}, but ${pluralize(type)} complete via "${conventionalAction}" ` +
+    `(routing.doneRequires.${type} = ${requiredList}); no status in workflow.statusActions produces the ` +
+    `"${conventionalAction}" action, so no conventional entry status could be determined.`
+  );
+}
+
 // Resolves the producing ready_* status for a single completedSteps or
 // routingApprovals token, or null when the token cannot be placed (unknown
 // action; defensive — never strip what we cannot place). Handles all three

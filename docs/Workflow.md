@@ -48,6 +48,8 @@ Current trigger statuses are:
 
 `backlog` is not selected by `next`; move a ticket to a ready status when it should enter the automation queue.
 
+`create` prints a stderr warning (never a refusal) when the requested `--status` is a trigger status whose action is not one of the type's `routing.doneRequires` actions -- e.g. a `story` or `epic` created at any trigger status other than `ready_for_decomposition`, or a `task`/`bug` created at `ready_for_decomposition`. The warning names the conventional entry status and cites the `doneRequires` rationale. This is warning-only for existing boards: the requested status is still created (all trigger statuses stay schema-legal), stdout still holds exactly the created ticket path, and boards/scripts that never trigger the mismatch see byte-identical output. It is independent of `routing.enforceTransitions`; the sanctioned correction for a genuine mistake is `move <id> <status> --override --reason "<text>"` (a plain `move` off the transition map is refused when `enforceTransitions` is on).
+
 Ticket dependencies should not use `status: blocked`. Keep the dependent ticket in its intended ready status and record the dependency with `block <ticket-id> <dependency-id>`. The ticket will become eligible automatically when every `blockedBy` ticket is `done` or `archived`.
 
 Priority order is `P0`, `P1`, `P2`, `P3`, then `P4`. Ties use configured pipeline order, then oldest `created`, then ticket ID.
