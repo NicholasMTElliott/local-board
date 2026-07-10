@@ -13,8 +13,8 @@ estimateBasis: T20260710T1220Z
 workStartedAt: 2026-07-10T13:25:24Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T13:58:53Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-10T14:00:02Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet"]
 routingApprovals: []
 ---
 # design-review: CLI check and complete commands
@@ -475,3 +475,5 @@ Disposition: findings 1, 3, 4 loop back for a fix pass; finding 2 deferred to T2
 - 2026-07-10T13:53:38Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
 
 - 2026-07-10T13:53:38Z: Ensured git branch local-board/T20260710T1222Z-design-review-cli-check-and-complete-commands (already-current).
+
+- 2026-07-10T14:00:02Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Original 7b2dd91 + review-fix e535c63: refusal names real recovery commands, [--json] usage fix, 4 targeted tests (no-ledger-write, wrong-root/--allow-main-root both commands, combined executor). 509 pass + 2 baseline.
