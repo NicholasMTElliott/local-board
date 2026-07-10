@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T16:54:16Z
+updated: 2026-07-10T16:57:50Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -163,13 +163,9 @@ Verified clean: reject guard fence-aware and H2-only with actionable message; du
 
 ## Test Evidence
 
-Verdict: pass (claude-subagent:local-board-tester@sonnet, 2026-07-10)
+Round 1 (full, claude-subagent:local-board-tester@sonnet): pass. Full suite 531/0/1; targeted tickets+skill-sync 173/0/1. Live CLI probe verified all guard paths: own-heading payload refused with actionable fencing message; trailing foreign H2 refused; fenced H2 sample + unfenced H3 accepted with single heading; identical repeated write byte-identical body. Skill diffs: one prose clause per file, outside fences; CLI Commands fences byte-identical. Probe auto-commits (3, probe-file-only) verified and dropped by orchestrator via git reset --hard a3cc73d.
 
-Full suite: npm run check clean; node --test 532 tests — 531 pass, 0 fail, 1 skip (pre-existing gated slow smoke test). Targeted: test/tickets.test.js + test/skill-usage-sync.test.js — 174 tests, 173 pass, 1 skip, 0 fail; all 6 new guard/idempotence tests and the validate duplicate-heading test pass.
-
-Live CLI acceptance (throwaway probe ticket in worktree): payload starting with its own H2 heading refused with the actionable fencing message (exit 2); trailing foreign H2 refused (exit 2); fenced H2 sample plus unfenced H3 accepted with exactly one section heading in the file; identical repeated write succeeded with byte-identical body (only front-matter updated timestamp changed). Skill diffs vs mainline: one prose clause per skill file, all outside fenced blocks; CLI Commands fences byte-identical (skill-usage-sync green).
-
-Hygiene note: the probe's CLI auto-commits (3 commits, probe file only) were verified probe-only and dropped by the orchestrator via git reset --hard a3cc73d; working tree clean at a3cc73d.
+Round 2 (focused re-test after validate-scoping loop-back, same executor): pass. npm run check clean; full suite 534 tests - 533 pass, 0 fail, 1 skip; test/tickets.test.js 170/0/1 with live-status duplicate test and both done/archived exemption tests passing individually. Board-level acceptance: local-board validate on this real board (with ~40 legacy closed tickets carrying duplicated headings) exits 0, Ticket validation OK. Branch history mainline..HEAD: 47 commits, all ticket-prefixed; no probe pollution. No live probe repeated this round (auto-commit pollution avoidance); board-level validate covers the operational acceptance.
 
 ## Documentation Updates
 
