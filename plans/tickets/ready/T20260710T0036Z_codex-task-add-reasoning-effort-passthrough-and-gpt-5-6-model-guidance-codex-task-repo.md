@@ -13,7 +13,7 @@ estimateBasis: T20260709T1119Z
 workStartedAt: 2026-07-10T01:05:10Z
 workCompletedAt: null
 created: 2026-07-10T00:36:09Z
-updated: 2026-07-10T01:20:29Z
+updated: 2026-07-10T01:23:37Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only]
 routingApprovals: []
 ---
@@ -195,6 +195,34 @@ Reviewer notes:
 5. npm test could not run inside the read-only sandbox (spawn EPERM); execution verification deferred to the test stage. Implementer had reported 9/9 passing, and the orchestrator separately ran a real-codex Windows smoke (gpt-5.6-terra + high) that returned ok:true with the effort echoed.
 
 ## Test Evidence
+
+Environment: Windows 11, C:\Users\Nicho\Documents\codex-task, branch codex-task/T20260710T0036Z-reasoning-effort @ 1568eb5. Tester: claude-subagent:local-board-tester (sonnet).
+
+Commands and results:
+
+- npm run check — pass.
+- npm test — 9/9 pass, 0 fail (5 pre-existing + 4 new reasoning-effort smoke tests).
+- --help documents the flag in synopsis and Codex pass-throughs list.
+- Missing value (flag last, flag only): usage error, exit 2.
+- Empty-string value: rejected identically to missing value in parseArgs (before spawn).
+- Repeated flag: last occurrence wins, no error (code read + execution).
+- --profile interaction: code inspection — the -c override and --profile are pushed independently; precedence between a profile's effort and the CLI override is codex's concern.
+
+Acceptance criteria:
+
+| Criterion | Result |
+|---|---|
+| set case composes -c model_reasoning_effort="high" | PASS (argv-capture smoke test) |
+| unset case: spawn args byte-identical, no -c | PASS |
+| reasoningEffort in result JSON, set and unset | PASS |
+| npm run check and npm test pass | PASS (9/9) |
+| SKILL.md usage/params/output example updated | PASS (reviewer consistency check; orchestrator spot check: 13 flag/model references present) |
+| --help documents flag | PASS |
+| missing value rejected | PASS (exit 2) |
+
+Prior stage corroboration: orchestrator ran a real-codex Windows smoke from the branch (gpt-5.6-terra + --reasoning-effort high) returning ok:true with reasoningEffort echoed (Run Log).
+
+Anomaly (tester self-reported): one inadvertent real codex exec occurred during the repeated-flag probe (PATH narrowing failed to hide the codex shim colocated with node). Prompt "noop", default model, ~8s, completed, zero file changes, tree clean afterward. Counts against ChatGPT quota; no test validity impact.
 
 ## Documentation Updates
 
