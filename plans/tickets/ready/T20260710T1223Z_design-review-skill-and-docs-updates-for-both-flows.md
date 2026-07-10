@@ -13,7 +13,7 @@ estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T12:20:26Z
-updated: 2026-07-10T12:21:31Z
+updated: 2026-07-10T13:53:38Z
 completedSteps: []
 routingApprovals: []
 ---
@@ -56,3 +56,5 @@ No code or config changes. No prompt authoring (sibling prompt task).
 ## Questions
 
 ## Run Log
+
+- 2026-07-10T13:53:38Z: Deferred review finding from T20260710T1222Z (terra@high): the curated CLI Commands blocks in SKILL.md and skills/codex/local-board/SKILL.md must gain design-review-check and design-review-complete (byte-identical), and consider the reviewer's suggestion to extend test/skill-usage-sync.test.js to require the intended command surface rather than only block identity.
