@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T19:17:28Z
+updated: 2026-07-10T19:26:53Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -737,3 +737,5 @@ gate; both must pass in `../codex-task`.
 - 2026-07-10T18:50:05Z: Design review #3 (sol@xhigh): FAIL. [High] isolateTerminalError BANNER_LINE misses real banner lines (session id:, user) and codex can emit output before the final error, so the 8-line window can still trip durable exclusions and the warning first-line would be banner text (test 2 internally inconsistent); classify the final error line(s) only or define a reliable boundary. [Medium] Bare please-try-again still in Phase 2 - require accompanying capacity/rate/temporary signal. [Medium] lastMessagePath reuse across retries can serve stale content on a later code-zero no-message attempt - mandatory pre-retry delete or attempt-specific path + sentinel test. Disposition: revision #3; round 4 = hard stop (non-PASS/CONCERNS on new blockers goes to questions).
 
 - 2026-07-10T19:11:31Z: Design review #4 (sol@xhigh): FAIL, one new High - the real Windows sandbox-wrapper failure surfaces as apply_patch tool failure inside a continuing turn: codex exits 0 with taskResult blocked, so the exit-nonzero retry loop never fires for the second motivating transient class. Disposition: final revision #4 per reviewer's specified fix (retry when exit 0 + taskResult blocked + isolated sandbox-wrapper pattern in captured output; missing/malformed-final-message and other contract failures stay non-retryable). Round 5 non-PASS/CONCERNS parks the ticket in questions.
+
+- 2026-07-10T19:26:53Z: Design review #5 FINAL (sol@xhigh): FAIL. [High] Trigger B matches sandbox-wrapper phrases in untyped tails, so prompt echoes or model explanations mentioning the phrase on a durable blocked run would retry - violates transient-only. Five rounds each found a new real defect; per the declared stop, parking in questions with options (continue structured-event round / descope Trigger B / accept residual).
