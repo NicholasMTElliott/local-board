@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T18:08:08Z
+updated: 2026-07-10T18:22:51Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -439,3 +439,5 @@ None block implementation.
 - 2026-07-10T17:52:56Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none requested (CLI wrapper retry flag; no security/UI/UX triggers)
 
 - 2026-07-10T18:01:57Z: Design review (sol@xhigh): FAIL. [High] Exclusion-first patterns break the transient/durable split: blanket 'limit exceeded' catches '429 rate limit exceeded' before transient patterns; bare 'try again' misclassifies durable failures; unsupported-effort exclusions omit 'reasoning effort' wording. [Medium] Byte-identical test as specified is unstable (durationMs, sessionDir) and only checks attempts-absence; needs deterministic seams + baseline fixture or clarified requirement. [Medium] Coverage gaps: 429-transient class, unsupported model/effort exclusions, mixed durable+transient tails, code-zero malformed-JSON no-retry; assert fake state counter to prove invocation count. Disposition: designer revision.
+
+- 2026-07-10T18:22:51Z: Design re-review #2 (sol@xhigh): FAIL. [High] codex exec writes a config banner incl. 'reasoning effort: <level>' to stderr before the diagnostic, so the broad reasoning-effort exclusion matches on realistic capacity failures and suppresses the retry (codex issue 22047); isolate the terminal error portion, narrow the effort exclusion to explicit rejection grammar, add a banner-bearing capacity test. [Medium] Structural-equivalence dynamic-field enumeration incomplete (session path in error/warnings on some failure paths, session IDs in tails); narrow contract to tested fixed-tail paths or normalize. [Medium] attempts contract vs pre-loop structured failures (bad cwd, preflight, session-dir) - specify gated attempts:0 + one preflight test. Disposition: revision #2.
