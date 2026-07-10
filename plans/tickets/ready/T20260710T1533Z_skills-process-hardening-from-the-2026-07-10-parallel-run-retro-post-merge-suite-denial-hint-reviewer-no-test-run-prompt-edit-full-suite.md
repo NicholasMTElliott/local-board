@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
 updated: 2026-07-10T17:17:34Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
 # skills: process hardening from the 2026-07-10 parallel-run retro (post-merge suite, denial hint, reviewer no-test-run, prompt-edit full suite)
@@ -545,3 +545,5 @@ issued the terminal move and its Refill preceded the separate `## Closeout` sect
 - 2026-07-10T17:00:19Z: Design review #5 (sol@xhigh): FAIL. [High] New: proposed Refill condition requires completed Closeout, but step-4 questions/blocked exits drop tickets from in-flight without Closeout - those slots could never refill; distinguish: questions/blocked exits free slots immediately, done exits free after merge+ff+green suite+fix-forward. [Low] Qualify branch pruning as only-when-configured-and-successful (pruneMergedBranches). Disposition: final revision #5 (one-sentence fix); round 6 is hard stop - non-PASS/CONCERNS goes to questions.
 
 - 2026-07-10T17:17:34Z: Design review #6 (sol@xhigh): CONCERNS - 1 Medium: SKILL_TEAM edits 4-5 preserve the absolute 'move/complete-step leave the ticket dirty' claim while the manual-mode passage is conditional; implementer must conditionalize the preserved sentence (commit only what the transition hook left uncommitted). Orchestrator disposition: proceed to implementation with the conditionalization folded into the implementer brief. Six review rounds total; verdicts FAIL x5 then CONCERNS.
+
+- 2026-07-10T17:17:34Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: CONCERNS after 6 rounds: 1 Medium (conditionalize preserved dirty-ticket claim), folded into implementation; all High findings from rounds 1-5 resolved in design
