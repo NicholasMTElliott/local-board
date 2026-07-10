@@ -6,14 +6,14 @@ priority: P2
 parent: S20260710T1206Z
 children: []
 blockedBy: []
-blocks: []
+blocks: [T20260710T1222Z]
 branch: null
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T12:21:30Z
+updated: 2026-07-10T12:21:31Z
 completedSteps: []
 routingApprovals: []
 ---
