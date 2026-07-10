@@ -124,6 +124,8 @@ node ./bin/local-board.js start-work T20260514T1234Z --branch preseeded/ticket-p
 node ./bin/local-board.js begin-step T20260514T1234Z --json
 node ./bin/local-board.js check-dispatch --agent local-board-implementer --model sonnet --ticket T20260514T1234Z
 node ./bin/local-board.js complete-step T20260514T1234Z review --executor codex-task:read-only --model gpt-5.5 --evidence "Review findings recorded."
+node ./bin/local-board.js design-review-check T20260514T1234Z --json
+node ./bin/local-board.js design-review-complete T20260514T1234Z --executor codex-task:read-only --model gpt-5.6-sol --evidence "Design review passed."
 node ./bin/local-board.js approve-inline T20260514T1234Z review --reason "User approved fallback."
 node ./bin/local-board.js move T20260514T1234Z ready_for_design
 node ./bin/local-board.js move T20260514T1234Z done --json
@@ -140,6 +142,8 @@ Optional structured `comment` markers are documented in [Comment Markers](commen
 Use `move` for status transitions. Do not use `set status`; it delegates to the same move behavior so folder placement stays consistent.
 Use `section --file <path>` for generated or multi-line Markdown. Inline `section <text>` is best for short one-line edits. Create the `--file` target with the Write tool; never build it with `echo`, heredoc, `Set-Content`, or `Out-File`.
 Use `block` and `unblock` for ticket dependencies. Do not move dependency-blocked tickets to `blocked`; that status is reserved for non-ticket blockers.
+
+When `routing.requireDesignReview` is enabled, `design-review-check` resolves the configured review profile, prompt, and ticket context; `design-review-complete` records the design-review evidence through the core recorder.
 
 ## Branch Handling
 
