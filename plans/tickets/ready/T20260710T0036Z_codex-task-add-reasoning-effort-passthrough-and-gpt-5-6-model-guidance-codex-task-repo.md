@@ -13,7 +13,7 @@ estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T00:36:09Z
-updated: 2026-07-10T00:38:41Z
+updated: 2026-07-10T00:38:52Z
 completedSteps: []
 routingApprovals: []
 ---
@@ -69,3 +69,5 @@ The codex-task wrapper (sibling repo `../codex-task`, no board of its own — tr
 ## Questions
 
 ## Run Log
+
+- 2026-07-10T00:38:52Z: Probe evidence (2026-07-09, codex-cli 0.144.1): gpt-5.6-{sol,terra,luna} accepted via --model; -c model_reasoning_effort enum on terra = none|minimal|low|medium|high|xhigh (server 400 enumerates); sol additionally accepts max and ultra (both exit 0). Effort sets are model-dependent; do not validate client-side.
