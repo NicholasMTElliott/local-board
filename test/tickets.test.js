@@ -41,6 +41,7 @@ import {
   setTicketSection,
   stateReport,
   suggestCalibration,
+  typeStatusAdvisory,
   unblockTicket,
   unlinkParent,
   validate,
@@ -3207,6 +3208,72 @@ test("isDesignReviewGatedMove identifies only the design -> implementation forwa
   // Wrong from/to pairing does not accidentally match.
   assert.equal(isDesignReviewGatedMove("ready_for_implementation", "ready_for_review"), false);
   assert.equal(isDesignReviewGatedMove("ready_for_test", "ready_for_implementation"), false);
+});
+
+test("typeStatusAdvisory: fires for a type/status mismatch against doneRequires, names the conventional status, and stays silent for conventional or non-pipeline statuses", () => {
+  // story/epic: doneRequires is ["decompose"]; any trigger status whose
+  // action isn't "decompose" fires and names ready_for_decomposition.
+  const storyAdvisory = typeStatusAdvisory(DEFAULT_CONFIG, "story", "ready_for_design");
+  assert.match(storyAdvisory, /^WARNING: story created at ready_for_design/);
+  assert.match(storyAdvisory, /ready_for_decomposition/);
+  assert.match(storyAdvisory, /"decompose"/);
+  assert.match(storyAdvisory, /routing\.doneRequires\.story = \[decompose\]/);
+
+  const epicAdvisory = typeStatusAdvisory(DEFAULT_CONFIG, "epic", "ready_for_implementation");
+  assert.match(epicAdvisory, /^WARNING: epic created at ready_for_implementation/);
+  assert.match(epicAdvisory, /ready_for_decomposition/);
+
+  // task/bug: doneRequires covers every trigger action except "decompose",
+  // so only ready_for_decomposition fires; ready_for_design (in the list)
+  // stays silent.
+  assert.equal(typeStatusAdvisory(DEFAULT_CONFIG, "task", "ready_for_design"), null);
+
+  const taskAdvisory = typeStatusAdvisory(DEFAULT_CONFIG, "task", "ready_for_decomposition");
+  assert.match(taskAdvisory, /^WARNING: task created at ready_for_decomposition/);
+  assert.match(taskAdvisory, /ready_for_design/);
+
+  const bugAdvisory = typeStatusAdvisory(DEFAULT_CONFIG, "bug", "ready_for_decomposition");
+  assert.match(bugAdvisory, /^WARNING: bug created at ready_for_decomposition/);
+  assert.match(bugAdvisory, /ready_for_design/);
+
+  // Every other doneRequires-covered status stays silent for task/bug.
+  for (const status of ["ready_for_implementation", "ready_for_review", "ready_for_test", "ready_for_docs"]) {
+    assert.equal(typeStatusAdvisory(DEFAULT_CONFIG, "task", status), null, `task@${status} must stay silent`);
+    assert.equal(typeStatusAdvisory(DEFAULT_CONFIG, "bug", status), null, `bug@${status} must stay silent`);
+  }
+
+  // backlog and non-pipeline active statuses have no statusActions entry:
+  // the predicate's first condition never holds, so every type stays silent.
+  for (const type of ["epic", "story", "task", "bug"]) {
+    assert.equal(typeStatusAdvisory(DEFAULT_CONFIG, type, "backlog"), null, `${type}@backlog must stay silent`);
+    assert.equal(typeStatusAdvisory(DEFAULT_CONFIG, type, "questions"), null, `${type}@questions must stay silent`);
+  }
+
+  // The suggested correction is the working form: a plain move would be
+  // refused under enforceTransitions, so the advisory must include the
+  // --override --reason ceremony.
+  assert.match(storyAdvisory, /move <id> ready_for_decomposition --override --reason/);
+});
+
+test("typeStatusAdvisory is defensive against custom-config edges: missing doneRequires[type] never fires, and a doneRequires action with no producing status names the action instead of throwing", () => {
+  // No doneRequires entry at all for a custom type: nothing to compare
+  // against, so the advisory stays silent rather than firing on every status.
+  const configWithoutTypeEntry = {
+    ...DEFAULT_CONFIG,
+    routing: { ...DEFAULT_CONFIG.routing, doneRequires: {} },
+  };
+  assert.equal(typeStatusAdvisory(configWithoutTypeEntry, "task", "ready_for_design"), null);
+
+  // doneRequires[type][0]'s action has no producing status in
+  // statusActions: name the action, do not throw or fabricate a status.
+  const configWithUnproducedAction = {
+    ...DEFAULT_CONFIG,
+    routing: { ...DEFAULT_CONFIG.routing, doneRequires: { task: ["publish"] } },
+  };
+  assert.doesNotThrow(() => typeStatusAdvisory(configWithUnproducedAction, "task", "ready_for_design"));
+  const unproducedAdvisory = typeStatusAdvisory(configWithUnproducedAction, "task", "ready_for_design");
+  assert.match(unproducedAdvisory, /"publish"/);
+  assert.match(unproducedAdvisory, /no conventional entry status could be determined/);
 });
 
 test("moveTicket refuses the design -> implementation forward move without a recorded design review, and allows it once recorded (both ready_for_design and designing)", async () => {

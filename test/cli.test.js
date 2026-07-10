@@ -265,6 +265,58 @@ test("validate: a genuine ticket error and a codex-task route both surface -- ex
   });
 });
 
+// console.warn is not one of the streams the in-process runCli helper
+// (below) patches, so the create-advisory tests use the child-process
+// runCliChild harness (same reason the codex-task-warning tests above do).
+test("create: a story created at a mismatched status (ready_for_design) prints the type-vs-status advisory on stderr, naming the conventional entry status; stdout still holds exactly the created path", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const result = await runCliChild([
+      "--root",
+      root,
+      "create",
+      "story",
+      "Story created too early",
+      "--status",
+      "ready_for_design",
+    ]);
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(result.stderr, /^WARNING: story created at ready_for_design/m);
+    assert.match(result.stderr, /ready_for_decomposition/);
+    assert.match(result.stderr, /"decompose"/);
+    assert.match(result.stderr, /move <id> ready_for_decomposition --override --reason/);
+
+    const ticketPath = result.stdout.trim();
+    assert.match(ticketPath, /S\d{8}T\d{4}Z_story-created-too-early\.md$/);
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^status: ready_for_design$/m);
+  });
+});
+
+test("create: a task created at ready_for_design (its own conventional entry status) stays silent -- no advisory on stderr, stdout unaffected", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const result = await runCliChild([
+      "--root",
+      root,
+      "create",
+      "task",
+      "Task created at its normal status",
+      "--status",
+      "ready_for_design",
+    ]);
+    assert.equal(result.code, 0, result.stderr);
+    assert.doesNotMatch(result.stderr, /WARNING/);
+
+    const ticketPath = result.stdout.trim();
+    assert.match(ticketPath, /T\d{8}T\d{4}Z_task-created-at-its-normal-status\.md$/);
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^status: ready_for_design$/m);
+  });
+});
+
 test("--version and version subcommand each print the package.json version and exit 0", async () => {
   const packageJson = JSON.parse(
     await readFile(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8"),
