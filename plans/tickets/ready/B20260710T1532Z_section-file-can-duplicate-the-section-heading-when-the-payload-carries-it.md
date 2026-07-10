@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
 updated: 2026-07-10T16:17:17Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet"]
 routingApprovals: []
 ---
 # section --file can duplicate the section heading when the payload carries it
@@ -178,3 +178,5 @@ Verified clean: reject guard fence-aware and H2-only with actionable message; du
 - 2026-07-10T16:13:44Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku, review:codex-task:read-only@gpt-5.6-terra].
 
 - 2026-07-10T16:17:17Z: Fix pass for review finding: idempotent re-write test now asserts byte-for-byte body equality across identical writes (parseMarkdownTicket body, excludes updated timestamp). Commit 137620a; suite 531/0/1.
+
+- 2026-07-10T16:17:17Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Review fix: byte-identical-body assertion added to idempotence test (137620a); full suite 531 pass/0 fail/1 skip. Original implementation 192d9b9 unchanged.
