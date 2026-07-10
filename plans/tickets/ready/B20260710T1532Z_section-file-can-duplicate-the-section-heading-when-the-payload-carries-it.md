@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T15:50:18Z
+updated: 2026-07-10T15:54:01Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -143,3 +143,5 @@ None blocking. One deliberate scoping call recorded above: validate flags duplic
 - 2026-07-10T15:48:27Z: Completed design via claude-subagent:local-board-designer@opus: Reject contract: setTicketSection refuses payloads containing an unfenced top-level H2 line, actionable message names fencing escape; validate flags legacy duplicated standard-section headings via fence-aware walker. Repro confirmed at replaceSection. Estimate 2pts basis B20260708T0459Z.
 
 - 2026-07-10T15:50:18Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none requested (internal CLI fix; no security/UI/UX triggers)
+
+- 2026-07-10T15:54:01Z: Design review (codex-task:read-only gpt-5.6-sol@xhigh): CONCERNS. 1x Low: design cites validateTicketStructure; actual function is validateTicketShape (src/tickets.js:1784, missing-section loop ~1864). All other cited mechanics verified accurate. Disposition: proceed; implementer brief carries the corrected function name.
