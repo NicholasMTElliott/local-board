@@ -13,8 +13,8 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:14:10Z
 workCompletedAt: null
 created: 2026-07-10T11:56:26Z
-updated: 2026-07-10T12:27:06Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-10T12:41:24Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet"]
 routingApprovals: []
 ---
 # optionalSteps: accept agent profiles with model and effort pins at the specialty-step level
@@ -230,3 +230,5 @@ None blocking. The one genuine decision — `specialty-run` field naming — is 
 - 2026-07-10T12:27:05Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none - config schema and CLI JSON surface
 
 - 2026-07-10T12:27:06Z: Ensured git branch local-board/T20260710T1156Z-optionalsteps-accept-agent-profiles-with-model-and-effort-pins-at-the-specialty-step-level (already-current).
+
+- 2026-07-10T12:41:24Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Commit 683a4d3: shared profile grammar (normalizeAgentProfile label+allowPrompt), normalizeOptionalStepAgent + resolveOptionalStepAgent, specialty-aware profileForAction (agents.default denied to specialties), scanner object-form fix, specialty-run model/effort surfacing, skills/docs, 14 new tests. 475 pass + 2 known-baseline PATH failures (B20260710T1232Z); check + validate green.
