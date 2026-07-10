@@ -13,7 +13,7 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:22:12Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T12:46:47Z
+updated: 2026-07-10T12:51:13Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -278,6 +278,19 @@ Acceptance criteria: all four PASS (existence/content contract; byte-identical L
 Anomalies: none. No external AI CLI or paid service invoked; no files created or modified.
 
 ## Documentation Updates
+
+Documentation step executed by codex-task:workspace-write (gpt-5.6-luna @ reasoning-effort medium, 59s); edit committed by the orchestrator as 38f10fa on the ticket branch.
+
+Changed:
+
+- memory-bank/systemPatterns.md: design_review.md added to the scaffolded step-prompt enumeration.
+
+Checked and deliberately left alone:
+
+- memory-bank/techContext.md, docs/, README.md Documentation Index — no equivalent stale enumeration; no new doc file was added by this ticket.
+- Feature-level design-review documentation (skill files, workflow narrative) — owned by sibling T20260710T1223Z, out of scope here.
+
+Validation: git diff --check clean; prose-only change.
 
 ## Questions
 
