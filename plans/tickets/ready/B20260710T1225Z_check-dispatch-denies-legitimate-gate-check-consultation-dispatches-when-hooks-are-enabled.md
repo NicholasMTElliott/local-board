@@ -481,3 +481,5 @@ Anomalies: the real globally-installed evidence-gate hook fired during the probe
 - 2026-07-10T14:26:37Z: Ensured git branch local-board/B20260710T1225Z-check-dispatch-denies-legitimate-gate-check-consultation-dispatches-when-hooks-are-enabled (already-current).
 
 - 2026-07-10T14:34:13Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. Live temp-board acceptance: documented flow ok:true/exit 0, misroute denied exit 1; 43/43 ledger tests; suite at declared branch baseline; evidence-gate hook observed enforcing correctly mid-test.
+
+- 2026-07-10T14:34:14Z: Ensured git branch local-board/B20260710T1225Z-check-dispatch-denies-legitimate-gate-check-consultation-dispatches-when-hooks-are-enabled (already-current).
