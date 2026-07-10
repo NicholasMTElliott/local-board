@@ -13,7 +13,7 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:22:11Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T13:11:05Z
+updated: 2026-07-10T13:13:01Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -381,7 +381,9 @@ verdict: changes_requested; target: implementation
 
 Verified clean by the reviewer: transition enforcement ordering; deterministic gate-consultation precedence with no write side effects on refusal; recorder validation order (empty evidence -> model pin -> premature guard); first-colon parsing preserves codex-task:read-only; lock + Run Log mirror completeStep; identical default profiles; allowlist gained exactly one path. Coverage gaps noted for the two findings plus combined-refusal ordering and single-emission of the loop-back Run Log line. (Reviewer sandbox could not spawn test workers; suite verification stays with the test stage.)
 
-Disposition: both findings accepted; loop-back to ready_for_implementation for the fix pass.
+Disposition: both findings accepted; looped back, fixed in commit 18c0580, re-reviewed.
+
+Re-review: verdict: pass (codex-task:read-only, gpt-5.6-terra @ reasoning-effort medium, 48s). Verified: recognition/recorder/scanner all flag-gated with the zero-codex-routes test restored as inertness proof and omitted/false/on regression coverage; token parse requires a non-whitespace executor after the first colon with a public set-then-move regression plus well-formed control; commit scope limited to the two fixes, no plans/ changes.
 
 ## Test Evidence
 
