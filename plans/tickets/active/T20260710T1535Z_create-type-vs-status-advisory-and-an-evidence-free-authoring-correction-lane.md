@@ -1,7 +1,7 @@
 ---
 id: T20260710T1535Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P3
 parent: null
 children: []
@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T19:02:03Z
+updated: 2026-07-10T19:02:04Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -265,3 +265,5 @@ unchanged.
 - 2026-07-10T19:02:02Z: Design review #4 (sol@xhigh): CONCERNS - 2 Medium wording fixes for the implementer: (1) opening says defaults-off but invocation is unconditional - phrase as warning-only for existing boards; (2) warning's suggested correction must use the working form move <id> <status> --override --reason <text> (plain move is refused under enforceTransitions). Disposition: proceed to implementation with both folded in.
 
 - 2026-07-10T19:02:03Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: CONCERNS after 4 rounds (3 on the now-rejected lane, 1 on descoped advisory): 2 Medium wording fixes folded into implementation; advisory design sound
+
+- 2026-07-10T19:02:04Z: Ensured git branch local-board/T20260710T1535Z-create-type-vs-status-advisory-and-an-evidence-free-authoring-correction-lane (already-current).
