@@ -13,7 +13,7 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T17:32:55Z
+updated: 2026-07-10T17:35:43Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -555,6 +555,16 @@ Full suite 534 tests - 533 pass, 0 fail, 1 skip (pre-existing slow smoke); npm r
 Textual acceptance: (a) closeout-before-refill contract present in both team skills with fast-forward before the merged-default suite and questions/blocked-vs-done slot rules; (b) denial-recovery hint identical in the two Claude skills, absent from both codex mirrors; (c) no-test-run line in all three reviewer files plus the synced resources mirror; (d) AGENTS.md production-artifacts note under Plan Files; (e) every added prose passage within the 1-3 sentence cap (structural renumbering exempt per design); (f) the CLI Commands fenced blocks extracted and diffed pairwise at mainline and HEAD - all identical.
 
 ## Documentation Updates
+
+Updated narrative documentation where it described the affected process contract:
+
+- `docs/PerStepOrchestration.md`: corrected the per-step loop so terminal `done` moves are owned by Closeout, Closeout runs before `done` slot refill, and refill distinguishes immediate `questions`/`blocked` exits from gated `done` exits.
+- `docs/Workflow.md`: added the parallel-orchestration closeout rule that a `done` slot waits for `fast-forward`, a green full suite on the merged default branch, and any fix-forward.
+- `memory-bank/systemPatterns.md`: recorded the same closeout/refill contract tersely for future agents.
+
+No skill files, agent files, prompt files, or fenced blocks were edited.
+
+Verification: `node --test --test-isolation=none test/skill-usage-sync.test.js test/resources-sync.test.js` passed 9/9.
 
 ## Questions
 

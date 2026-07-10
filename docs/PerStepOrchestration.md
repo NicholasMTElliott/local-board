@@ -190,8 +190,9 @@ executors are pure work units.
      literal top-level `## ` samples.
    - Self-writing result → the executor already committed in the worktree;
      orchestrator records `complete-step` evidence.
-   - Choose the next status from the `transitions` guidance returned by
-     `begin-step`/`query-ticket` and `move`.
+   - Choose the next non-terminal status from the `transitions` guidance returned
+     by `begin-step`/`query-ticket` and `move`; terminal `done` moves are handled
+     by Closeout.
    - If T continues to another ready step, leave it in-flight and dispatch its
      next step. If T reaches `questions`/`blocked`, surface it, drop from
      in-flight, keep in `assignedLog`.
@@ -232,16 +233,18 @@ ordered and deterministic:
    race. The orchestrator should also avoid dispatching two implement steps it
    *already knows* overlap (from design scope) concurrently — serialize those —
    but the backstop covers the unknown-overlap case it cannot predict.
-6. **Refill.** When an in-flight ticket terminates and `readyQueue` is non-empty
-   and `inFlight < maxInFlight`, pull the next ready ticket (`worktree-add` +
+6. **Closeout.** On a ticket's terminal step the orchestrator runs `move … done`;
+   with `git.autoMerge` on, that command performs the guarded merge and prunes
+   the branch when configured and safe, while manual-merge boards perform the
+   merge before verification. After the default checkout is reconciled with
+   `fast-forward`, run the full suite on the merged default branch and fix
+   unexpected failures before freeing the `done` slot for refill.
+7. **Refill.** `questions`/`blocked` exits free their slots immediately; `done`
+   exits refill only after Closeout has completed its merge, `fast-forward`, full
+   suite, and any fix-forward. When `readyQueue` is non-empty and
+   `inFlight < maxInFlight`, pull the next ready ticket (`worktree-add` +
    `start-work`) and begin dispatching it. Newly-unblocked dependents and
    `decompose` children appear here on the next `list --ready`.
-7. **Closeout.** On a ticket's terminal step the orchestrator runs `move … done`
-   (auto-merge + rebase-onto-default precondition + branch prune). Because one
-   orchestrator serializes transitions, merge races are minimal; the CLI
-   precondition still guards. After each auto-merge, run `fast-forward` to
-   reconcile the orchestrator's own checkout (executors do code work in
-   worktrees, so the main checkout only tracks the default branch).
 8. **Terminate.** When `readyQueue` is empty and `inFlight` is empty, emit the
    final per-ticket summary (ticket, model(s) used per step, final status,
    branch, one-line evidence, questions/blockers).
