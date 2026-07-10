@@ -1,7 +1,7 @@
 ---
 id: T20260710T1156Z
 type: task
-status: ready_for_review
+status: ready_for_implementation
 priority: P2
 parent: null
 children: []
@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T12:14:10Z
 workCompletedAt: null
 created: 2026-07-10T11:56:26Z
 updated: 2026-07-10T12:48:28Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # optionalSteps: accept agent profiles with model and effort pins at the specialty-step level
@@ -248,3 +248,5 @@ Disposition: all three findings accepted; loop-back to ready_for_implementation 
 - 2026-07-10T12:41:24Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Commit 683a4d3: shared profile grammar (normalizeAgentProfile label+allowPrompt), normalizeOptionalStepAgent + resolveOptionalStepAgent, specialty-aware profileForAction (agents.default denied to specialties), scanner object-form fix, specialty-run model/effort surfacing, skills/docs, 14 new tests. 475 pass + 2 known-baseline PATH failures (B20260710T1232Z); check + validate green.
 
 - 2026-07-10T12:42:44Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - internal schema/resolver/CLI surface
+
+- 2026-07-10T12:48:28Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
