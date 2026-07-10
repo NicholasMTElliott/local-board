@@ -13,7 +13,7 @@ estimateBasis: T20260710T1220Z
 workStartedAt: 2026-07-10T13:25:24Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T13:53:38Z
+updated: 2026-07-10T13:58:53Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -368,6 +368,8 @@ config change (a non-goal here).
 
 ## Implementation Notes
 
+## Implementation Notes
+
 Implemented exactly per Technical Design, no core-logic changes.
 
 - **src/cli.js**: imported `recordDesignReview` from `./tickets.js`. Added
@@ -386,34 +388,49 @@ Implemented exactly per Technical Design, no core-logic changes.
   `type` in the narrow context for consistency with gate-check rather than
   hand-stripping it; adjusted the test's expected key list accordingly.
 
+**Review-fix pass (findings 1, 3, 4; finding 2 deferred to T20260710T1223Z)**
+
+1. **src/tickets.js:~772** (Medium, ACCEPTED): the missing-design-review move
+   refusal named a nonexistent `design-review` command. Rewrote it to name the
+   two real recovery commands and their required arguments: `design-review-check
+   <ticket-id>` then `design-review-complete <ticket-id> --executor <executor>
+   --model <model> --evidence <text>`. Strengthened the E2E "skip is refused"
+   test in test/cli.test.js and the two `tickets.test.js` unit tests (forward-move
+   refusal, malformed-token refusal) to assert the corrected remediation text
+   (both command names present, in order), not just the "no recorded design
+   review" prefix.
+2. **src/cli.js:~1338** (Low, ACCEPTED): added `[--json]` to
+   `design-review-complete`'s thrown missing-argument usage string (the handler
+   already accepted `--json` and `USAGE_TEXT` already advertised it). Asserted
+   `/\[--json\]/` in the existing argument-validation test.
+3. **Test coverage** (Low, ACCEPTED): added four focused tests:
+   - `test/cli.test.js`: "design-review-check performs no dispatch and stamps
+     nothing in the active-steps ledger" — reads `readActiveSteps` before/after
+     a `design-review-check` call and asserts no entry for the ticket (deep-equal
+     ledger snapshot).
+   - `test/worktrees.test.js`: "design-review-check refuses from the main root
+     ... --allow-main-root overrides" — wrong-root refusal on the resolver plus
+     override success, parity with the existing gate-check wrong-root pair.
+   - `test/worktrees.test.js`: "design-review-complete --allow-main-root
+     overrides the wrong-root guard from the main root" — the override path for
+     the mutating command (previously only the plain refusal + correct-root
+     success were covered).
+   - `test/cli.test.js`: "design-review-complete accepts a combined route@model
+     --executor with no --model flag" — `--executor
+     codex-task:read-only@codex-default` with no `--model`, asserting the
+     recorded executor is the combined string unchanged (`composeExecutor`
+     passthrough when `model` is omitted).
+
 **Test Evidence**
 
-Added the 8-case E2E plan (test/cli.test.js, requireDesignReview:true via
-`init` scaffold):
-1. resolution shape (`--json` + plain) — agent/model/effort/prompt/ticketContext.
-2. missing prompt names `local-board init`.
-3. missing-args coverage for both commands (ticket id / --executor / --evidence).
-4. full pipeline: design → gate-complete (design stage, unrelated guard) →
-   design-review-check → design-review-complete → move succeeds; skip is
-   refused with "no recorded design review".
-5. model pin: mismatched `--model` refused; `gpt-5.6-sol` and `codex-default`
-   succeed.
-6. flag-off: both commands refuse naming `routing.requireDesignReview`.
+Full suite: `npm test` → 512 tests, 509 pass, 2 fail (tracked install.test.js
+PATH tests, pre-existing/unrelated), 1 skipped — 4 more passing tests than the
+prior implementation pass (505/508), all net-new review-fix coverage.
+`npm run check` clean. `node ./bin/local-board.js validate --root
+<worktree>` → "Ticket validation OK".
 
-Case 5 of the design's numbering ("wrong root refused before write") requires
-a real `git worktree` registration (`findRegisteredWorktree` shells out to
-`git worktree list --porcelain`), which cli.test.js has no fixture machinery
-for. Placed that test in **test/worktrees.test.js** instead, directly
-alongside the existing analogous gate-check wrong-root tests (`withRepo`/`git`
-helpers, `displayPath`/`escapeRegExp`), asserting refusal from the main root
-before any write (byte-identical ticket file, no `design-review` token) and
-success from the ticket's own registered worktree root.
-
-Full suite: `npm test` → 508 tests, 505 pass, 2 fail (tracked
-install.test.js PATH tests, pre-existing/unrelated), 1 skipped — 7 more
-passing tests than the pre-implementation baseline (501/498/2/1), all net-new
-design-review coverage. `npm run check` clean. `node ./bin/local-board.js
-validate` → "Ticket validation OK".
+Disposition: findings 1, 3, 4 fixed in this pass; finding 2 (SKILL.md command
+reference updates) remains deferred to T20260710T1223Z untouched.
 
 ## Review Findings
 
