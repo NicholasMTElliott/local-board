@@ -1154,6 +1154,7 @@ export async function beginStep(root, ticketId, actionOverride = null) {
   const { ticket, action } = resolveStepFromBoard(board, config, ticketId, actionOverride);
   const configuredAgent = agentForAction(config, action);
   const configuredModel = modelForAction(config, action);
+  const configuredEffort = effortForAction(config, action);
 
   const result = {
     ticket: ticket.id,
@@ -1162,6 +1163,7 @@ export async function beginStep(root, ticketId, actionOverride = null) {
     transitions: transitionsForStatus(config, ticket.status),
     configuredAgent,
     configuredModel,
+    configuredEffort,
     configuredPrompt: promptForAction(config, action),
     strict: config.routing?.strict === true,
     delegationRequired: config.routing?.strict === true && configuredAgent !== "inline",
@@ -2243,6 +2245,10 @@ function agentForAction(config, action) {
 
 function modelForAction(config, action) {
   return profileForAction(config, action).model ?? null;
+}
+
+function effortForAction(config, action) {
+  return profileForAction(config, action).effort ?? null;
 }
 
 function promptForAction(config, action) {

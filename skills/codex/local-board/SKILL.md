@@ -56,7 +56,7 @@ For each returned ticket:
 
 1. Read the returned ticket `path`, returned `prompt`, `branch`, `transitions`, and relevant project context.
 2. Default: run `worktree-add <ticket-id> --json` first and capture `worktreePath` — see `## Worktrees`.
-3. Run `begin-step <ticket-id> --root <worktreePath> --harness codex --json` to resolve `action`, `configuredAgent`, `configuredModel`, `configuredPrompt`, and the translated `codexDispatch` block, and record the in-flight step for dispatch verification.
+3. Run `begin-step <ticket-id> --root <worktreePath> --harness codex --json` to resolve `action`, `configuredAgent`, `configuredModel`, `configuredEffort`, `configuredPrompt`, and the translated `codexDispatch` block, and record the in-flight step for dispatch verification.
 4. Before `implement`, `review`, `test`, or `document`, run `start-work <ticket-id> --root <worktreePath> --json`.
 5. Dispatch the returned action through the route translation contract below.
 6. Persist return-only output with `section --file`; self-writing workers write their own scoped changes.
@@ -72,7 +72,9 @@ When `routing.enforceTransitions` is `true` (the `init` scaffold default), `move
 
 Strict routing validates the configured logical route, not the physical Codex worker. Preserve the configured route when recording completion. When the route matches and the action's profile pins a model, `complete-step` also requires the recorded model (via `--model` or the combined `@model` suffix) to match `configuredModel`, or `codex-default` (always accepted — see below), or an approved deviation via `approve-inline --executor <route>@<model>`.
 
-Do not hand-translate the route. Run `begin-step <ticket-id> --harness codex --json` and dispatch straight from the returned `codexDispatch` block: `agentType` (`worker`/`explorer`, dispatch with `spawn_agent`), `promptPath` (absolute), `model`, and `evidenceExecutor` (the exact `--executor` value for `complete-step`). This is the single authoritative implementation of the mapping (`src/codex-dispatch.js`); the table below is illustrative only.
+Do not hand-translate the route. Run `begin-step <ticket-id> --harness codex --json` and dispatch straight from the returned `codexDispatch` block: `agentType` (`worker`/`explorer`, dispatch with `spawn_agent`), `promptPath` (absolute), `model`, `effort`, and `evidenceExecutor` (the exact `--executor` value for `complete-step`). This is the single authoritative implementation of the mapping (`src/codex-dispatch.js`); the table below is illustrative only.
+
+`codexDispatch.effort` carries the configured reasoning-effort token, or `null` when unset — unlike `model`, it is pass-through with no sanitization (effort names are not Claude/Codex-partitioned). When `effort` is non-null, native `codex-task:*` dispatches append `--reasoning-effort <effort>` to the wrapper invocation; `claude-subagent:*` spawns pass it as the spawn's effort option.
 
 | Configured route | Codex dispatch | Prompt |
 |---|---|---|

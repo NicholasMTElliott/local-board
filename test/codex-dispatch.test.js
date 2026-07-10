@@ -70,9 +70,64 @@ test("translateCodexDispatch handles inline: no model, evidenceExecutor inline, 
     agentType: null,
     promptPath: "resources/prompts/steps/implement.md",
     model: null,
+    effort: null,
     evidenceExecutor: "inline",
     known: true,
   });
+});
+
+test("translateCodexDispatch threads effort onto every branch: null when unset, verbatim when set, no sanitization", () => {
+  const claudeSubagentUnset = translateCodexDispatch({
+    route: "claude-subagent:local-board-implementer",
+    model: null,
+    prompt: null,
+    agentsDir: AGENTS_DIR,
+  });
+  assert.equal(claudeSubagentUnset.effort, null);
+
+  const claudeSubagentSet = translateCodexDispatch({
+    route: "claude-subagent:local-board-implementer",
+    model: null,
+    prompt: null,
+    effort: "xhigh",
+    agentsDir: AGENTS_DIR,
+  });
+  assert.equal(claudeSubagentSet.effort, "xhigh");
+
+  const codexTaskUnset = translateCodexDispatch({
+    route: "codex-task:read-only",
+    model: null,
+    prompt: null,
+    agentsDir: AGENTS_DIR,
+  });
+  assert.equal(codexTaskUnset.effort, null);
+
+  const codexTaskSet = translateCodexDispatch({
+    route: "codex-task:read-only",
+    model: null,
+    prompt: null,
+    effort: "medium",
+    agentsDir: AGENTS_DIR,
+  });
+  assert.equal(codexTaskSet.effort, "medium");
+
+  const inlineDispatch = translateCodexDispatch({
+    route: "inline",
+    model: null,
+    prompt: null,
+    agentsDir: AGENTS_DIR,
+  });
+  assert.equal(inlineDispatch.effort, null);
+
+  // No sanitization: an arbitrary token passes through verbatim, unlike model.
+  const arbitraryEffort = translateCodexDispatch({
+    route: "claude-subagent:local-board-implementer",
+    model: null,
+    prompt: null,
+    effort: "some-arbitrary-token",
+    agentsDir: AGENTS_DIR,
+  });
+  assert.equal(arbitraryEffort.effort, "some-arbitrary-token");
 });
 
 test("translateCodexDispatch passes through native codex-task routes with a passthrough marker", () => {

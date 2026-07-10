@@ -610,6 +610,7 @@ async function commandBeginStep(root, args) {
       route: result.configuredAgent,
       model: result.configuredModel,
       prompt: result.configuredPrompt,
+      effort: result.configuredEffort,
       agentsDir,
     });
   }
