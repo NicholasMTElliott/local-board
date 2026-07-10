@@ -13,8 +13,8 @@ estimateBasis: T20260710T0036Z
 workStartedAt: 2026-07-10T01:31:18Z
 workCompletedAt: null
 created: 2026-07-10T00:36:10Z
-updated: 2026-07-10T01:37:00Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-10T01:37:42Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # config: add effort to agent profiles and thread it through begin-step and codex dispatch
@@ -181,3 +181,5 @@ None blocking. One design decision is recorded rather than asked: effort is deli
 - 2026-07-10T01:31:18Z: Ensured git branch local-board/T20260710T0037Z-config-add-effort-to-agent-profiles-and-thread-it-through-begin-step-and-codex-dispatch (already-current).
 
 - 2026-07-10T01:37:00Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design written by opus designer: effort mirrors model field (same shape regex, inline rejection, no harness denylist), configuredEffort on begin-step, codexDispatch threading, effort excluded from evidence/ledger by design, additive low-collision edits vs T0035Z. Estimate 2 (basis T20260710T0036Z, designer-recorded).
+
+- 2026-07-10T01:37:42Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none - config schema field + JSON surface, no auth/UI/UX
