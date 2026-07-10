@@ -1,7 +1,7 @@
 ---
 id: T20260710T0037Z
 type: task
-status: ready_for_design
+status: ready_for_implementation
 priority: P2
 parent: null
 children: []
@@ -13,7 +13,7 @@ estimateBasis: T20260710T0036Z
 workStartedAt: 2026-07-10T01:31:18Z
 workCompletedAt: null
 created: 2026-07-10T00:36:10Z
-updated: 2026-07-10T01:37:42Z
+updated: 2026-07-10T01:37:43Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
