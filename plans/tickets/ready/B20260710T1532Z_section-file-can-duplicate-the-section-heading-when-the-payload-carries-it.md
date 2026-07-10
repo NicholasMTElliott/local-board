@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T16:26:27Z
+updated: 2026-07-10T16:33:05Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -150,6 +150,14 @@ Verdict: changes_requested; target: implementation (codex-task:read-only, gpt-5.
 Verified clean: reject guard fence-aware and H2-only with actionable message; duplicate-heading validation correctly in validateTicketShape, scoped to STANDARD_SECTIONS, fence-aware; rejection/fenced/H3/duplicate-validation test paths covered; skill notes outside CLI fences, single-ticket CLI blocks unchanged. Static review only (suite intentionally not run in review sandbox).
 
 ## Test Evidence
+
+Verdict: pass (claude-subagent:local-board-tester@sonnet, 2026-07-10)
+
+Full suite: npm run check clean; node --test 532 tests — 531 pass, 0 fail, 1 skip (pre-existing gated slow smoke test). Targeted: test/tickets.test.js + test/skill-usage-sync.test.js — 174 tests, 173 pass, 1 skip, 0 fail; all 6 new guard/idempotence tests and the validate duplicate-heading test pass.
+
+Live CLI acceptance (throwaway probe ticket in worktree): payload starting with its own H2 heading refused with the actionable fencing message (exit 2); trailing foreign H2 refused (exit 2); fenced H2 sample plus unfenced H3 accepted with exactly one section heading in the file; identical repeated write succeeded with byte-identical body (only front-matter updated timestamp changed). Skill diffs vs mainline: one prose clause per skill file, all outside fenced blocks; CLI Commands fences byte-identical (skill-usage-sync green).
+
+Hygiene note: the probe's CLI auto-commits (3 commits, probe file only) were verified probe-only and dropped by the orchestrator via git reset --hard a3cc73d; working tree clean at a3cc73d.
 
 ## Documentation Updates
 
