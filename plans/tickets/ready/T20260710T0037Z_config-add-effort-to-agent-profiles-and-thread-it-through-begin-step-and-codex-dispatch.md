@@ -1,7 +1,7 @@
 ---
 id: T20260710T0037Z
 type: task
-status: ready_for_review
+status: ready_for_implementation
 priority: P2
 parent: null
 children: []
@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T01:31:18Z
 workCompletedAt: null
 created: 2026-07-10T00:36:10Z
 updated: 2026-07-10T01:50:05Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # config: add effort to agent profiles and thread it through begin-step and codex dispatch
@@ -201,3 +201,5 @@ Disposition: both findings accepted; ticket looped back to ready_for_implementat
 - 2026-07-10T01:45:45Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Commits 7fbcf15 (clean peer merge of T0035Z) + d3c425d: effort field in normalizeAgentProfile, effortForAction helper, configuredEffort in begin-step, codexDispatch effort threading (null default, no sanitization), skill/docs prose, 7 net new tests. 465 pass/1 skip; check + validate green; ledger/evidence exclusion test-verified.
 
 - 2026-07-10T01:46:26Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - internal config parsing and JSON surface; ledger/evidence untouched
+
+- 2026-07-10T01:50:05Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
