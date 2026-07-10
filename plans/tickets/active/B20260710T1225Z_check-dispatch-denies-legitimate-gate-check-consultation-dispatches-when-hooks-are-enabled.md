@@ -1,7 +1,7 @@
 ---
 id: B20260710T1225Z
 type: bug
-status: ready_for_implementation
+status: implementing
 priority: P1
 parent: null
 children: []
@@ -373,3 +373,5 @@ Disposition: all three findings accepted; loop-back to ready_for_implementation 
 - 2026-07-10T13:36:20Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - dispatch-coordination machinery; adds valid expectations without changing authorization rules
 
 - 2026-07-10T13:44:38Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
+
+- 2026-07-10T13:44:38Z: Ensured git branch local-board/B20260710T1225Z-check-dispatch-denies-legitimate-gate-check-consultation-dispatches-when-hooks-are-enabled (already-current).
