@@ -13,7 +13,7 @@ estimateBasis: T20260710T0036Z
 workStartedAt: 2026-07-10T01:31:18Z
 workCompletedAt: null
 created: 2026-07-10T00:36:10Z
-updated: 2026-07-10T01:54:05Z
+updated: 2026-07-10T01:57:09Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only]
 routingApprovals: []
 ---
@@ -185,6 +185,31 @@ Disposition: both findings accepted; ticket looped back to ready_for_implementat
 Re-review: PASS (codex-task:read-only, gpt-5.6-luna @ reasoning-effort medium, 38s). Verified: docs now state shape-validation locally / model-support validation server-side with the --reasoning-effort mapping intact; new assertions cover the unknown claude-subagent branch and unrecognized-route fallback and would fail if effort were dropped; fix commit contains only the two intended changes, no plans/ files. (Re-reviewer test spawn blocked by read-only sandbox as before; execution covered by implementer's 466-pass run and the upcoming test stage.)
 
 ## Test Evidence
+
+Environment: worktree branch at 7af21e9 (code commits d3c425d + 75b4116, peer merge 7fbcf15). Tester: claude-subagent:local-board-tester (sonnet). No files created; tree clean before and after.
+
+Commands and results:
+
+- npm run check — pass.
+- npm test — 467 tests: 466 pass, 0 fail, 1 pre-existing skip (26.3s).
+- validate — Ticket validation OK.
+- Targeted rerun of the four affected test files: all 8 effort-specific tests pass, including the two review-fix additions.
+- Live probe of exported translateCodexDispatch across all six branch shapes (inline, codex-task passthrough, known/unknown claude-subagent, unrecognized route, unset): effort threads verbatim (high, xhigh, medium, low, ultra tokens), null only when unset, no sanitization — matches design.
+
+Acceptance criteria:
+
+| Criterion | Result |
+|---|---|
+| { route: codex-task:read-only, model: gpt-5.6-sol, effort: xhigh } validates and round-trips | PASS (loadConfig deepEqual test) |
+| begin-step returns configuredEffort; --harness codex carries it in codexDispatch | PASS (cli.test.js) |
+| { route: inline, effort: high } rejected with actionable message | PASS (test + live probe) |
+| No-effort boards byte-identical (no effort key when unset) | PASS (backward-compat test) |
+| No effort leakage into completedSteps or active-steps ledger | PASS (front-matter grep clean; ledger file absent) |
+| check + full test suite green | PASS |
+
+Method note: normalizeAgentProfile is unexported (disk-based loadConfig only); with file creation off-limits for this role, criterion 2a was verified through the green test/config.test.js assertions rather than an ad hoc fixture. translateCodexDispatch was probed live directly.
+
+Gaps/anomalies: none.
 
 ## Documentation Updates
 
