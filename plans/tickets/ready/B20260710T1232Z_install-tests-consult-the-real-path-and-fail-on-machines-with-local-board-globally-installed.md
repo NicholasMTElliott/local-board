@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T13:48:46Z
 workCompletedAt: null
 created: 2026-07-10T12:32:28Z
-updated: 2026-07-10T14:04:42Z
+updated: 2026-07-10T14:08:17Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -311,6 +311,23 @@ Reviewer-verified: assertion strength preserved (clone test asserts both checkou
 Residual risk: reviewer sandbox could not execute the suite (fixture spawning blocked); execution verification with the test stage.
 
 ## Test Evidence
+
+verdict: pass
+
+Environment: worktree commit 400a400, node v24.14.0, machine HAS local-board globally installed (C:\nvm4w\nodejs\local-board.cmd; npm prefix -g = nodeDir) — the exact original failure condition, so passing is direct acceptance proof for the with-install case. Tester: claude-subagent:local-board-tester (sonnet). Tree clean post-run.
+
+Commands and results:
+
+- npm run check — pass.
+- npm test x2 — 497 tests: 496 pass, 0 fail, 1 pre-existing skip, both runs identical (no worktrees.test.js flake reproduced).
+- Isolated PATH-verification pattern run — 2/2 pass.
+- git show --stat 400a400 — only test/install.test.js changed.
+
+Acceptance criteria: all PASS — with-install passing verified on this machine; determinism via the injected seam by construction; no production change; suite fully green (old 2-failure baseline gone); assertion strength preserved (clone asserts npm install -g . AND npm link; packaged asserts npm install -g local-board AND doesNotMatch npm link).
+
+Guardrail: no external AI CLI invoked (the codex-target path exercises only the injected predicate in-process).
+
+Anomalies: none.
 
 ## Documentation Updates
 
