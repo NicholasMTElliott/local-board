@@ -1,7 +1,7 @@
 ---
 id: T20260710T1156Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: null
 children: []
@@ -13,7 +13,7 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:14:10Z
 workCompletedAt: null
 created: 2026-07-10T11:56:26Z
-updated: 2026-07-10T12:27:05Z
+updated: 2026-07-10T12:27:06Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -228,3 +228,5 @@ None blocking. The one genuine decision — `specialty-run` field naming — is 
 - 2026-07-10T12:26:03Z: Gate-check dispatch for the design stage was denied by the routing-validator hook (check-dispatch agent-mismatch: no gate-check awareness). Filed B20260710T1225Z. Proceeding via the hook's documented residual: gate dispatch without the Ticket: anchor line; consultation remains verified by gate-complete evidence.
 
 - 2026-07-10T12:27:05Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none - config schema and CLI JSON surface
+
+- 2026-07-10T12:27:06Z: Ensured git branch local-board/T20260710T1156Z-optionalsteps-accept-agent-profiles-with-model-and-effort-pins-at-the-specialty-step-level (already-current).
