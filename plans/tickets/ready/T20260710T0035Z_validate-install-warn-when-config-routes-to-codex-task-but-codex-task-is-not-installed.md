@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T01:05:09Z
 workCompletedAt: null
 created: 2026-07-10T00:35:52Z
 updated: 2026-07-10T01:43:29Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # validate/install: warn when config routes to codex-task but codex-task is not installed
@@ -359,3 +359,5 @@ Validation: git diff --check clean on edited files; prose-only change.
 - 2026-07-10T01:34:51Z: Completed review via codex-task:read-only: CONCERNS resolved non-blocking: major finding refuted (config schema rejects object-form optionalSteps agent at load, src/config.js:601); minor test-hardening note recorded as follow-up. No blocking issues.
 
 - 2026-07-10T01:40:38Z: Completed test via claude-subagent:local-board-tester@sonnet: 458/459 pass (1 pre-existing skip); all acceptance criteria PASS via live env-override probes; both warning clauses verified verbatim; fail-open confirmed; review coverage gap closed. Recommendation: pass.
+
+- 2026-07-10T01:43:29Z: Completed document via codex-task:workspace-write: memory-bank systemPatterns + techContext synced with detection behavior; README index and docs notes verified current; committed on ticket branch.
