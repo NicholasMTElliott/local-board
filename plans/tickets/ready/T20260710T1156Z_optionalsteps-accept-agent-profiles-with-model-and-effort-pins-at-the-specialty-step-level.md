@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T12:14:10Z
 workCompletedAt: null
 created: 2026-07-10T11:56:26Z
 updated: 2026-07-10T13:07:34Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet"]
 routingApprovals: []
 ---
 # optionalSteps: accept agent profiles with model and effort pins at the specialty-step level
@@ -328,3 +328,5 @@ Gaps: private schema functions not independently re-probed live (no-Write constr
 - 2026-07-10T13:02:06Z: Completed review via codex-task:read-only@gpt-5.6-terra: Initial changes_requested (3 findings, terra@high) fixed in c4ed945; focused re-review verdict: pass (terra@medium). No open findings.
 
 - 2026-07-10T13:02:07Z: Ensured git branch local-board/T20260710T1156Z-optionalsteps-accept-agent-profiles-with-model-and-effort-pins-at-the-specialty-step-level (already-current).
+
+- 2026-07-10T13:07:34Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. 477/480 (2 = exact B1232Z baseline); live probes for pins round-trip, scanner both shapes, effort exclusion; guardrail honored.
