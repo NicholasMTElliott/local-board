@@ -21,6 +21,7 @@ import {
   gateStageForForwardMove,
   getSectionText,
   invalidateDownstreamEvidence,
+  isDesignReviewGatedMove,
   isTransitionAllowed,
   linkParent,
   moveTicket,
@@ -28,6 +29,7 @@ import {
   parseFrontMatter,
   queryNext,
   queryTicket,
+  recordDesignReview,
   recordGateConsultation,
   recordGateSkippedEmptyCatalog,
   renderMarkdownTicket,
@@ -2733,6 +2735,327 @@ test("back-compat: a ticket already at ready_for_docs with no gate tokens still 
 });
 
 // ---------------------------------------------------------------------------
+// requireDesignReview (T20260710T1220Z): a requireGateConsultation-style
+// stage-scoped required step gated on the design -> implementation forward
+// move, with its own recorder (recordDesignReview) modeled on completeStep.
+// ---------------------------------------------------------------------------
+
+test("isDesignReviewGatedMove identifies only the design -> implementation forward pair", () => {
+  assert.equal(isDesignReviewGatedMove("ready_for_design", "ready_for_implementation"), true);
+  assert.equal(isDesignReviewGatedMove("designing", "ready_for_implementation"), true);
+
+  // Backward, lateral, and archive/done moves are never gated.
+  assert.equal(isDesignReviewGatedMove("ready_for_implementation", "ready_for_design"), false);
+  assert.equal(isDesignReviewGatedMove("ready_for_design", "questions"), false);
+  assert.equal(isDesignReviewGatedMove("ready_for_design", "blocked"), false);
+  assert.equal(isDesignReviewGatedMove("done", "archived"), false);
+  // Wrong from/to pairing does not accidentally match.
+  assert.equal(isDesignReviewGatedMove("ready_for_implementation", "ready_for_review"), false);
+  assert.equal(isDesignReviewGatedMove("ready_for_test", "ready_for_implementation"), false);
+});
+
+test("moveTicket refuses the design -> implementation forward move without a recorded design review, and allows it once recorded (both ready_for_design and designing)", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { requireDesignReview: true } }));
+
+    for (const from of ["ready_for_design", "designing"]) {
+      const ticketPath = await createTicket(root, "task", `Design review gated from ${from}`, { status: from });
+      const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+      await assert.rejects(
+        moveTicket(root, ticketId, "ready_for_implementation"),
+        /no recorded design review.*design-review .*before moving to ready_for_implementation/s,
+        `${from} -> ready_for_implementation must be refused without a recorded design review`,
+      );
+
+      await recordDesignReview(root, ticketId, "codex-task:read-only@gpt-5.6-sol", "verdict PASS");
+      const moved = await moveTicket(root, ticketId, "ready_for_implementation");
+      assert.match(await readFile(moved, "utf8"), /^status: ready_for_implementation$/m);
+    }
+  });
+});
+
+test("moveTicket design-review gating never blocks backward, lateral, or archive/done moves, even with the switch on", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { requireDesignReview: true } }));
+
+    const backward = await createTicket(root, "task", "Backward loop-back", { status: "ready_for_implementation" });
+    const backwardId = path.basename(backward).split("_", 1)[0];
+    await moveTicket(root, backwardId, "ready_for_design");
+
+    const questions = await createTicket(root, "task", "Needs questions", { status: "ready_for_design" });
+    const questionsId = path.basename(questions).split("_", 1)[0];
+    await moveTicket(root, questionsId, "questions");
+
+    const blocked = await createTicket(root, "task", "Non-ticket blocker", { status: "designing" });
+    const blockedId = path.basename(blocked).split("_", 1)[0];
+    await moveTicket(root, blockedId, "blocked");
+
+    const doneTicket = await createTicket(root, "task", "Already done", { status: "done" });
+    const doneId = path.basename(doneTicket).split("_", 1)[0];
+    await moveTicket(root, doneId, "archived");
+  });
+});
+
+test("moveTicket design-review gating is disabled by default (switch off) and via explicit false: byte-identical to today", async () => {
+  await withBoard(async (root) => {
+    // No config file at all: DEFAULT_CONFIG fallback keeps requireDesignReview false.
+    const noConfig = await createTicket(root, "task", "No config design-review gate", { status: "ready_for_design" });
+    const noConfigId = path.basename(noConfig).split("_", 1)[0];
+    await moveTicket(root, noConfigId, "ready_for_implementation");
+
+    await writeConfig(root, JSON.stringify({ routing: { requireDesignReview: false } }));
+    const explicitOff = await createTicket(root, "task", "Explicit switch off", { status: "designing" });
+    const explicitOffId = path.basename(explicitOff).split("_", 1)[0];
+    await moveTicket(root, explicitOffId, "ready_for_implementation");
+  });
+});
+
+test("flag-off inertness: begin-step --action design-review, resolveExpectedStep, and completeStep all refuse design-review as an unknown action when routing.requireDesignReview is false/omitted", async () => {
+  await withBoard(async (root) => {
+    // No config file at all: DEFAULT_CONFIG fallback keeps requireDesignReview false.
+    const noConfig = await createTicket(root, "task", "Flag off dispatch, no config", { status: "ready_for_design" });
+    const noConfigId = path.basename(noConfig).split("_", 1)[0];
+    await assert.rejects(beginStep(root, noConfigId, "design-review"), /action must be a mandatory action/);
+    await assert.rejects(resolveExpectedStep(root, noConfigId, "design-review"), /action must be a mandatory action/);
+    await assert.rejects(
+      completeStep(root, noConfigId, "design-review", "codex-task:read-only", "verdict PASS"),
+      /action must be a mandatory action/,
+    );
+
+    // Explicit false: same refusal.
+    await writeConfig(root, JSON.stringify({ routing: { requireDesignReview: false } }));
+    const explicitOff = await createTicket(root, "task", "Flag off dispatch, explicit false", { status: "ready_for_design" });
+    const explicitOffId = path.basename(explicitOff).split("_", 1)[0];
+    await assert.rejects(beginStep(root, explicitOffId, "design-review"), /action must be a mandatory action/);
+    await assert.rejects(resolveExpectedStep(root, explicitOffId, "design-review"), /action must be a mandatory action/);
+    await assert.rejects(
+      completeStep(root, explicitOffId, "design-review", "codex-task:read-only", "verdict PASS"),
+      /action must be a mandatory action/,
+    );
+  });
+});
+
+test("flag-off inertness: recordDesignReview refuses while routing.requireDesignReview is false/omitted, naming the flag", async () => {
+  await withBoard(async (root) => {
+    const noConfig = await createTicket(root, "task", "Flag off recorder, no config", { status: "ready_for_design" });
+    const noConfigId = path.basename(noConfig).split("_", 1)[0];
+    await assert.rejects(
+      recordDesignReview(root, noConfigId, "codex-task:read-only@gpt-5.6-sol", "verdict PASS"),
+      /routing\.requireDesignReview/,
+    );
+
+    await writeConfig(root, JSON.stringify({ routing: { requireDesignReview: false } }));
+    const explicitOff = await createTicket(root, "task", "Flag off recorder, explicit false", { status: "ready_for_design" });
+    const explicitOffId = path.basename(explicitOff).split("_", 1)[0];
+    await assert.rejects(
+      recordDesignReview(root, explicitOffId, "codex-task:read-only@gpt-5.6-sol", "verdict PASS"),
+      /routing\.requireDesignReview/,
+    );
+  });
+});
+
+test("moveTicket design-review gate rejects a malformed completedSteps token (bare 'design-review' or 'design-review:' with an empty executor) as satisfying the precondition", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { requireDesignReview: true } }));
+
+    for (const malformed of ["design-review", "design-review:", "design-review:   "]) {
+      const ticketPath = await createTicket(root, "task", `Malformed token ${malformed}`, { status: "ready_for_design" });
+      const ticketId = path.basename(ticketPath).split("_", 1)[0];
+      await setTicketField(root, ticketId, "completedSteps", [malformed]);
+
+      await assert.rejects(
+        moveTicket(root, ticketId, "ready_for_implementation"),
+        /no recorded design review.*design-review .*before moving to ready_for_implementation/s,
+        `token "${malformed}" must not bypass the design-review precondition`,
+      );
+    }
+
+    // Sanity: a genuine recorder-produced token still passes.
+    const ok = await createTicket(root, "task", "Well-formed token", { status: "ready_for_design" });
+    const okId = path.basename(ok).split("_", 1)[0];
+    await setTicketField(root, okId, "completedSteps", ["design-review:codex-task:read-only@gpt-5.6-sol"]);
+    const moved = await moveTicket(root, okId, "ready_for_implementation");
+    assert.match(await readFile(moved, "utf8"), /^status: ready_for_implementation$/m);
+  });
+});
+
+test("recordDesignReview enforces the configured model pin (gpt-5.6-sol), accepts @codex-default, rejects a mismatched model and empty evidence, and never leaks effort into the token", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { requireDesignReview: true } }));
+    const ticketPath = await createTicket(root, "task", "Design review model pin", { status: "ready_for_design" });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await assert.rejects(
+      recordDesignReview(root, ticketId, "codex-task:read-only", "  "),
+      /non-empty evidence/,
+    );
+
+    // missing: route-only executor, no @model suffix.
+    await assert.rejects(
+      recordDesignReview(root, ticketId, "codex-task:read-only", "verdict PASS"),
+      /completed on model \(none\), but configured model is gpt-5\.6-sol/,
+    );
+
+    // mismatch: wrong @model suffix.
+    await assert.rejects(
+      recordDesignReview(root, ticketId, "codex-task:read-only@gpt-5.6-terra", "verdict PASS"),
+      /completed on model gpt-5\.6-terra, but configured model is gpt-5\.6-sol/,
+    );
+
+    const textBeforeMatch = await readFile(ticketPath, "utf8");
+    assert.match(textBeforeMatch, /^completedSteps: \[\]$/m);
+
+    // match: exact configured model.
+    const result = await recordDesignReview(
+      root,
+      ticketId,
+      "codex-task:read-only@gpt-5.6-sol",
+      "verdict PASS: no blocking issues.",
+      { now: new Date("2026-07-10T13:00:00Z") },
+    );
+    assert.equal(result.ticket, ticketId);
+    assert.equal(result.executor, "codex-task:read-only@gpt-5.6-sol");
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \["design-review:codex-task:read-only@gpt-5\.6-sol"\]$/m);
+    assert.match(text, /Recorded design review via codex-task:read-only@gpt-5\.6-sol: verdict PASS: no blocking issues\./);
+    // Effort ("xhigh") is a dispatch hint only; it never enters the token or evidence.
+    assert.equal(text.includes("xhigh"), false);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("recordDesignReview accepts @codex-default as satisfying the pinned model", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { requireDesignReview: true } }));
+    const ticketPath = await createTicket(root, "task", "Design review codex-default", { status: "ready_for_design" });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await recordDesignReview(root, ticketId, "codex-task:read-only@codex-default", "verdict PASS (translated run).");
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \["design-review:codex-task:read-only@codex-default"\]$/m);
+  });
+});
+
+test("recordDesignReview requires a non-empty overrideReason when override is true", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Design review override validation", { status: "ready_for_design" });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await assert.rejects(
+      recordDesignReview(root, ticketId, "codex-task:read-only@gpt-5.6-sol", "verdict PASS", { override: true }),
+      /--override requires a non-empty overrideReason/,
+    );
+  });
+});
+
+test("recordDesignReview: guardPrematureEvidence refuses recording ahead of ready_for_design, allows recording at ready_for_design/designing", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { requireDesignReview: true, guardPrematureEvidence: true } }));
+
+    const early = await createTicket(root, "task", "Premature design review", { status: "ready_for_decomposition" });
+    const earlyId = path.basename(early).split("_", 1)[0];
+    await assert.rejects(
+      recordDesignReview(root, earlyId, "codex-task:read-only@gpt-5.6-sol", "too early"),
+      /design-review refused: recording it now at status ready_for_decomposition would/,
+    );
+
+    // Equal rank (ready_for_design/designing) is not stripped, so recording succeeds.
+    const onTime = await createTicket(root, "task", "On-time design review", { status: "ready_for_design" });
+    const onTimeId = path.basename(onTime).split("_", 1)[0];
+    await recordDesignReview(root, onTimeId, "codex-task:read-only@gpt-5.6-sol", "on time");
+  });
+});
+
+test("design-review token maps to ready_for_design for loop-back invalidation and the premature-evidence guard", async () => {
+  await withBoard(async (root) => {
+    const config = await loadConfig(root);
+    const frontMatter = {
+      completedSteps: [
+        "design:claude-subagent:local-board-designer@opus",
+        "design-review:codex-task:read-only@gpt-5.6-sol",
+      ],
+      routingApprovals: [],
+    };
+
+    // Target ready_for_design (rank equal to design-review's producing status):
+    // both design and design-review are at-or-downstream and stripped.
+    const stripped = invalidateDownstreamEvidence(frontMatter, config, "ready_for_design");
+    assert.deepEqual(stripped.removed.completedSteps, [
+      "design:claude-subagent:local-board-designer@opus",
+      "design-review:codex-task:read-only@gpt-5.6-sol",
+    ]);
+    assert.deepEqual(stripped.completedSteps, []);
+
+    // Target ready_for_implementation (rank downstream of design): design-review
+    // survives, since its producing status (ready_for_design) is upstream.
+    const survived = invalidateDownstreamEvidence(frontMatter, config, "ready_for_implementation");
+    assert.deepEqual(survived.removed, { completedSteps: [], routingApprovals: [] });
+    assert.deepEqual(survived.completedSteps, frontMatter.completedSteps);
+  });
+});
+
+test("moveTicket loop-back invalidation strips the design-review token, enumerates it in the Run Log, and a re-run re-records fresh evidence", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      routing: { requireDesignReview: true, invalidateOnLoopBack: true },
+    }));
+
+    const ticketPath = await createTicket(root, "task", "Design review loop-back", { status: "ready_for_design" });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Design evidence.");
+    await recordDesignReview(root, ticketId, "codex-task:read-only@gpt-5.6-sol", "verdict PASS");
+    await moveTicket(root, ticketId, "ready_for_implementation");
+
+    const { ticket: beforeLoopBack } = await findTicket(root, ticketId);
+    assert.deepEqual(beforeLoopBack.frontMatter.completedSteps, [
+      "design:claude-subagent:local-board-designer@opus",
+      "design-review:codex-task:read-only@gpt-5.6-sol",
+    ]);
+
+    // Design gap found in implementation: loop back to ready_for_design.
+    await moveTicket(root, ticketId, "ready_for_design");
+
+    const { ticket: afterLoopBack } = await findTicket(root, ticketId);
+    assert.deepEqual(afterLoopBack.frontMatter.completedSteps, []);
+    assert.match(
+      afterLoopBack.body,
+      /Invalidated downstream evidence on loop-back to ready_for_design: .*design-review:codex-task:read-only@gpt-5\.6-sol/,
+    );
+    assert.match(afterLoopBack.body, /design:claude-subagent:local-board-designer@opus/);
+
+    // Re-run re-records fresh evidence, and the forward move succeeds again.
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Re-designed.");
+    await recordDesignReview(root, ticketId, "codex-task:read-only@gpt-5.6-sol", "verdict PASS, second pass.");
+    const moved = await moveTicket(root, ticketId, "ready_for_implementation");
+    assert.match(await readFile(moved, "utf8"), /^status: ready_for_implementation$/m);
+  });
+});
+
+test("design-review is not required by doneRequires: a done move succeeds without a design-review token even with the flag on", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({ routing: { requireDesignReview: true } }));
+    const ticketPath = await createTicket(root, "task", "Design review not in doneRequires", {
+      status: "ready_for_docs",
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Design evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer@sonnet", "Implementation evidence.");
+    await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
+    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester@sonnet", "Test evidence.");
+    await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
+
+    const moved = await moveTicket(root, ticketId, "done");
+    assert.match(await readFile(moved, "utf8"), /^status: done$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // invalidateOnLoopBack (T20260707T1328Z): strip stale downstream evidence on
 // a loop-back move.
 // ---------------------------------------------------------------------------
@@ -3518,6 +3841,8 @@ test("moveTicket enforceTransitions on (scaffold config) permits the full task/b
     await moveTicket(root, ticketId, "designing");
     await moveTicket(root, ticketId, "ready_for_design");
     await recordGateSkippedEmptyCatalog(root, ticketId, "design");
+    // The scaffold also enables requireDesignReview.
+    await recordDesignReview(root, ticketId, "codex-task:read-only@gpt-5.6-sol", "verdict PASS");
     await moveTicket(root, ticketId, "ready_for_implementation");
     await moveTicket(root, ticketId, "implementing");
     await moveTicket(root, ticketId, "ready_for_implementation");

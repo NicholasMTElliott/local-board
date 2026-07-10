@@ -337,6 +337,9 @@ test("defaultConfigJsonc matches DEFAULT_CONFIG except for documented difference
   //     backward compat with boards that omit the key; the scaffold enables
   //     it for new repos (commits planning-only changes after every mutating
   //     command).
+  //   - routing.requireDesignReview: DEFAULT_CONFIG keeps it off for backward
+  //     compat with configs that omit the key; the scaffold enables it for
+  //     new repos.
   // Any OTHER difference here means someone edited one copy's shared blocks
   // (workflow, agents, routing, retention, git, worktrees) without updating
   // the other. Fix by updating both DEFAULT_CONFIG and defaultConfigJsonc(),
@@ -350,10 +353,11 @@ test("defaultConfigJsonc matches DEFAULT_CONFIG except for documented difference
   expected.routing.enforceTransitions = true;
   expected.routing.guardPrematureEvidence = true;
   expected.git.commitPlanningOnTransition = true;
+  expected.routing.requireDesignReview = true;
   assert.deepEqual(scaffolded, expected);
 
   // Guard against the allowlist above silently growing to mask unrelated
-  // drift: confirm these eight paths are the *only* places DEFAULT_CONFIG and
+  // drift: confirm these nine paths are the *only* places DEFAULT_CONFIG and
   // the scaffold differ.
   const rawDiffs = leafDiffPaths(DEFAULT_CONFIG, parseJsonc(defaultConfigJsonc()));
   const collapsed = [...new Set(
@@ -366,6 +370,7 @@ test("defaultConfigJsonc matches DEFAULT_CONFIG except for documented difference
     "routing.enforceTransitions",
     "routing.guardPrematureEvidence",
     "routing.invalidateOnLoopBack",
+    "routing.requireDesignReview",
     "routing.requireGateConsultation",
     "worktrees.guardWrongRoot",
   ]);
@@ -456,6 +461,28 @@ test("loadConfig defaults git.commitPlanningOnTransition to false when omitted (
     // The shipped scaffold enables it for new repos.
     await writeConfig(root, defaultConfigJsonc());
     assert.equal((await loadConfig(root)).git.commitPlanningOnTransition, true);
+  });
+});
+
+test("loadConfig defaults routing.requireDesignReview to false when omitted (backward-compat disabled)", async () => {
+  await withRoot(async (root) => {
+    // No config file at all: DEFAULT_CONFIG fallback keeps it off.
+    assert.equal((await loadConfig(root)).routing.requireDesignReview, false);
+
+    // Config file present but omits the key: deep-merge onto DEFAULT_CONFIG
+    // must not silently turn it on.
+    await writeConfig(root, `{ "version": 1 }`);
+    assert.equal((await loadConfig(root)).routing.requireDesignReview, false);
+
+    // Explicit false stays off; explicit true turns it on.
+    await writeConfig(root, JSON.stringify({ routing: { requireDesignReview: false } }));
+    assert.equal((await loadConfig(root)).routing.requireDesignReview, false);
+    await writeConfig(root, JSON.stringify({ routing: { requireDesignReview: true } }));
+    assert.equal((await loadConfig(root)).routing.requireDesignReview, true);
+
+    // The shipped scaffold enables it for new repos.
+    await writeConfig(root, defaultConfigJsonc());
+    assert.equal((await loadConfig(root)).routing.requireDesignReview, true);
   });
 });
 
@@ -654,6 +681,25 @@ test("codexTaskRoutedActions detects a raw (un-normalized) object-form optionalS
   }
 }`);
   assert.deepEqual(codexTaskRoutedActions(raw), ["security_threat_model (design)"]);
+});
+
+test("codexTaskRoutedActions excludes agents[\"design-review\"] unless routing.requireDesignReview is true (flag-off inertness)", () => {
+  const base = {
+    agents: { "design-review": { route: "codex-task:read-only", model: "gpt-5.6-sol", effort: "xhigh" } },
+    optionalSteps: {},
+  };
+  // Flag omitted and flag explicitly false: design-review must not surface,
+  // even though its default profile is pre-routed to codex-task.
+  assert.deepEqual(codexTaskRoutedActions(base), []);
+  assert.deepEqual(
+    codexTaskRoutedActions({ ...base, routing: { requireDesignReview: false } }),
+    [],
+  );
+  // Flag on: design-review is scanned like any other codex-task-routed action.
+  assert.deepEqual(
+    codexTaskRoutedActions({ ...base, routing: { requireDesignReview: true } }),
+    ["design-review"],
+  );
 });
 
 test("loadConfig rejects duplicate optionalSteps names within a stage", async () => {
