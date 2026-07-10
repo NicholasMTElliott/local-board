@@ -1,7 +1,7 @@
 ---
 id: B20260710T1532Z
 type: bug
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: null
 children: []
@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T15:54:02Z
+updated: 2026-07-10T15:54:42Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -147,3 +147,5 @@ None blocking. One deliberate scoping call recorded above: validate flags duplic
 - 2026-07-10T15:54:01Z: Design review (codex-task:read-only gpt-5.6-sol@xhigh): CONCERNS. 1x Low: design cites validateTicketStructure; actual function is validateTicketShape (src/tickets.js:1784, missing-section loop ~1864). All other cited mechanics verified accurate. Disposition: proceed; implementer brief carries the corrected function name.
 
 - 2026-07-10T15:54:02Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: CONCERNS: 1 Low (validateTicketShape naming); proceed
+
+- 2026-07-10T15:54:42Z: Ensured git branch local-board/B20260710T1532Z-section-file-can-duplicate-the-section-heading-when-the-payload-carries-it (already-current).
