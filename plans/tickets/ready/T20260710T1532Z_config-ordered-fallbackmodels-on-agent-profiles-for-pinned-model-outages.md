@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
 updated: 2026-07-10T18:09:31Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet"]
 routingApprovals: []
 ---
 # config: ordered fallbackModels on agent profiles for pinned-model outages
@@ -833,3 +833,5 @@ Verified clean by static inspection: routing and schema validation, fallback thr
 - 2026-07-10T17:56:22Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku, review:codex-task:read-only@gpt-5.6-terra].
 
 - 2026-07-10T18:09:31Z: Fix pass for review finding: six byte-identical tests strengthened to full deep-equal shapes (39dac82, test-only); exposed and encoded the wholesale agent-profile replacement semantics of loadConfig. Suite 565/0/1.
+
+- 2026-07-10T18:09:31Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Review fix: deep-equal legacy-shape assertions at all six cited locations (39dac82, test-only); suite 565/0/1; production commits b981ff4+a70165a+1905cb0 unchanged
