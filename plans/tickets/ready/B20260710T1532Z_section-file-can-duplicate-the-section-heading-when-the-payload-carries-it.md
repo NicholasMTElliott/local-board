@@ -7,13 +7,13 @@ parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/B20260710T1532Z-section-file-can-duplicate-the-section-heading-when-the-payload-carries-it
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T15:32:39Z
+updated: 2026-07-10T15:40:06Z
 completedSteps: []
 routingApprovals: []
 ---
