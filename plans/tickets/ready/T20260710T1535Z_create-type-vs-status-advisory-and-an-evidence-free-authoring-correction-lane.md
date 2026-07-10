@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T19:13:29Z
+updated: 2026-07-10T19:17:24Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -274,6 +274,10 @@ Verdict: pass (codex-task:read-only, gpt-5.6-terra @ high, 2026-07-10, commits c
 No findings. typeStatusAdvisory implements the status-action/doneRequires predicate with absent-entry and unproduced-action handling, deriving the conventional status via the existing inversion helper; commandCreate warns unconditionally via console.warn before printing the path with the create result intact; warning and docs use the required move --override --reason correction form and describe warning-only behavior; unit and child-process coverage match the fire/silent matrix; no transition, ledger, or lane code shipped. Static review only.
 
 ## Test Evidence
+
+Verdict: pass (claude-subagent:local-board-tester@sonnet, 2026-07-10, commits c8f812b+eb542c8)
+
+npm run check clean. Full suite 571 tests - 570 pass, 0 fail, 1 skip (pre-existing slow smoke). Sync tests 9/9. Live CLI probe on an isolated throwaway board: story@ready_for_design warned on stderr naming ready_for_decomposition with the --override --reason correction form while stdout printed only the path (exit 0); task@ready_for_design silent (0-byte stderr); task@ready_for_decomposition warned naming ready_for_design. Lane-code absence confirmed: no isAuthoringCorrectionLane/admittedViaLane matches in the src diff. Scope exactly the five declared files + ticket file. docs/Workflow.md advisory paragraph verified accurate. Probe directory removed; worktree board untouched.
 
 ## Documentation Updates
 
