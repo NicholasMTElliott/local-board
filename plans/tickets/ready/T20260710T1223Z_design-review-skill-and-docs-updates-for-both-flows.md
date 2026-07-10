@@ -10,10 +10,10 @@ blocks: []
 branch: local-board/T20260710T1223Z-design-review-skill-and-docs-updates-for-both-flows
 estimate: null
 estimateBasis: null
-workStartedAt: null
+workStartedAt: 2026-07-10T14:16:04Z
 workCompletedAt: null
 created: 2026-07-10T12:20:26Z
-updated: 2026-07-10T14:16:03Z
+updated: 2026-07-10T14:16:04Z
 completedSteps: []
 routingApprovals: []
 ---
@@ -58,3 +58,5 @@ No code or config changes. No prompt authoring (sibling prompt task).
 ## Run Log
 
 - 2026-07-10T13:53:38Z: Deferred review finding from T20260710T1222Z (terra@high): the curated CLI Commands blocks in SKILL.md and skills/codex/local-board/SKILL.md must gain design-review-check and design-review-complete (byte-identical), and consider the reviewer's suggestion to extend test/skill-usage-sync.test.js to require the intended command surface rather than only block identity.
+
+- 2026-07-10T14:16:04Z: Ensured git branch local-board/T20260710T1223Z-design-review-skill-and-docs-updates-for-both-flows (already-current).
