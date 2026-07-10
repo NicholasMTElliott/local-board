@@ -1,7 +1,7 @@
 ---
 id: T20260710T0036Z
 type: task
-status: ready_for_docs
+status: done
 priority: P2
 parent: null
 children: []
@@ -11,9 +11,9 @@ branch: local-board/T20260710T0036Z-codex-task-add-reasoning-effort-passthrough-
 estimate: 2
 estimateBasis: T20260709T1119Z
 workStartedAt: 2026-07-10T01:05:10Z
-workCompletedAt: null
+workCompletedAt: 2026-07-10T01:30:20Z
 created: 2026-07-10T00:36:09Z
-updated: 2026-07-10T01:30:19Z
+updated: 2026-07-10T01:30:20Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
