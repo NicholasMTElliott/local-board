@@ -54,6 +54,7 @@ updated: 2026-05-14T12:34:00-04:00
 `completedSteps` records deterministic workflow evidence as `<action>:<executor>` tokens. `routingApprovals` records explicit user-approved route deviations such as `review:inline`.
 
 Front matter is canonical. Folder placement is for humans and should match status.
+`create` accepts schema-legal initial statuses but warns on stderr when the status action does not match the ticket type's `routing.doneRequires`; correcting an unintended off-map placement remains an explicit `move <id> <status> --override --reason <text>`.
 
 ## Status Folder Mapping
 

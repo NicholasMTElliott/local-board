@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T19:17:25Z
+updated: 2026-07-10T19:19:53Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -280,6 +280,13 @@ Verdict: pass (claude-subagent:local-board-tester@sonnet, 2026-07-10, commits c8
 npm run check clean. Full suite 571 tests - 570 pass, 0 fail, 1 skip (pre-existing slow smoke). Sync tests 9/9. Live CLI probe on an isolated throwaway board: story@ready_for_design warned on stderr naming ready_for_decomposition with the --override --reason correction form while stdout printed only the path (exit 0); task@ready_for_design silent (0-byte stderr); task@ready_for_decomposition warned naming ready_for_design. Lane-code absence confirmed: no isAuthoringCorrectionLane/admittedViaLane matches in the src diff. Scope exactly the five declared files + ticket file. docs/Workflow.md advisory paragraph verified accurate. Probe directory removed; worktree board untouched.
 
 ## Documentation Updates
+
+- Updated docs/TicketFormat.md with a concise create/status note: schema-legal initial statuses are still accepted, type-vs-status mismatches warn on stderr, and off-map correction remains explicit `move <id> <status> --override --reason <text>`.
+- Updated memory-bank/systemPatterns.md with the terse current-state fact: `create` warns based on `workflow.statusActions` vs `routing.doneRequires`; the evidence-free authoring-correction lane was considered and rejected, so correction stays `move --override --reason`.
+- Left README.md unchanged because it only lists a create command example and does not enumerate create/status behavior.
+- Left docs/Workflow.md unchanged because the advisory paragraph was already completed in the implement step and this document step was instructed not to touch it.
+- Verification: `node --test --test-isolation=none test/skill-usage-sync.test.js test/resources-sync.test.js` passed 9/9.
+- Commit attempt: `T20260710T1535Z: docs record create advisory behavior` was blocked by sandbox permission denial while creating the linked worktree git index lock; changes remain uncommitted.
 
 ## Questions
 
