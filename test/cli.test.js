@@ -383,6 +383,80 @@ test("begin-step --harness codex adds an additive codexDispatch block; base fiel
   });
 });
 
+test("begin-step surfaces configuredEffort (null when unset, pinned value when set) and threads it into codexDispatch.effort without touching the ledger stamp or evidence", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const create = await runCli([
+      "--root", root, "create", "task", "Effort-pinned task",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    // Baseline (default config): no effort key configured for "design".
+    const baseline = await runCli(["--root", root, "begin-step", ticketId, "--json"]);
+    assert.equal(baseline.code, 0);
+    const baselineResult = JSON.parse(baseline.stdout);
+    assert.equal(baselineResult.configuredEffort, null);
+    assert.equal(baselineResult.configuredAgent, "claude-subagent:local-board-designer");
+    assert.equal(baselineResult.configuredModel, "opus");
+
+    const codexBaseline = await runCli(["--root", root, "begin-step", ticketId, "--harness", "codex", "--json"]);
+    assert.equal(codexBaseline.code, 0);
+    assert.equal(JSON.parse(codexBaseline.stdout).codexDispatch.effort, null);
+
+    // Pin an effort for "design" and re-run against a fresh ticket.
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({
+        agents: {
+          design: { route: "claude-subagent:local-board-designer", model: "opus", effort: "xhigh" },
+        },
+      }),
+      "utf8",
+    );
+
+    const create2 = await runCli([
+      "--root", root, "create", "task", "Effort-pinned task 2",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create2.code, 0);
+    const ticketId2 = path.basename(create2.stdout.trim()).split("_", 1)[0];
+
+    const pinned = await runCli(["--root", root, "begin-step", ticketId2, "--json"]);
+    assert.equal(pinned.code, 0);
+    const pinnedResult = JSON.parse(pinned.stdout);
+    assert.equal(pinnedResult.configuredEffort, "xhigh");
+    assert.equal(pinnedResult.configuredAgent, "claude-subagent:local-board-designer");
+    assert.equal(pinnedResult.configuredModel, "opus");
+
+    const codexPinned = await runCli(["--root", root, "begin-step", ticketId2, "--harness", "codex", "--json"]);
+    assert.equal(codexPinned.code, 0);
+    const codexPinnedResult = JSON.parse(codexPinned.stdout);
+    assert.equal(codexPinnedResult.codexDispatch.effort, "xhigh");
+    assert.equal(codexPinnedResult.configuredEffort, "xhigh");
+
+    // The active-step ledger stamp has no effort field.
+    const steps = await readActiveSteps(root);
+    const stamped = steps[ticketId2];
+    assert.equal(Object.hasOwn(stamped, "effort"), false);
+    assert.deepEqual(Object.keys(stamped).sort(), ["action", "model", "root", "route", "ticket", "ts"]);
+
+    // Evidence is unchanged: complete-step composes <route>@<model>, no effort.
+    assert.equal((await runCli(["--root", root, "estimate", ticketId2, "2"])).code, 0);
+    const complete = await runCli([
+      "--root", root, "complete-step", ticketId2, "design",
+      "--executor", "claude-subagent:local-board-designer", "--model", "opus",
+      "--evidence", "Design evidence.",
+    ]);
+    assert.equal(complete.code, 0, complete.stderr);
+    const board = await discover(root);
+    const ticket = board.tickets.find((t) => t.id === ticketId2);
+    assert.deepEqual(ticket.frontMatter.completedSteps, ["design:claude-subagent:local-board-designer@opus"]);
+  });
+});
+
 test("list --ready uses config-aware eligibility, ordering, JSON shape, status filter, and limit", async () => {
   await withBoard(async (root) => {
     const readyImpl = await createTicket(root, "task", "Ready implementation", {

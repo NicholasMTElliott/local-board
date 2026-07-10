@@ -53,7 +53,7 @@ function evidenceExecutorFor(route, sanitizedModel) {
   return sanitizedModel ? `${route}@${sanitizedModel}` : `${route}@codex-default`;
 }
 
-// translateCodexDispatch({ route, model, prompt, agentsDir }) -> codexDispatch
+// translateCodexDispatch({ route, model, prompt, effort, agentsDir }) -> codexDispatch
 //
 // - `route`: the configured logical route (begin-step's `configuredAgent`),
 //   e.g. "inline", "codex-task:workspace-write", "claude-subagent:local-board-designer".
@@ -61,10 +61,16 @@ function evidenceExecutorFor(route, sanitizedModel) {
 //   a Claude alias, a real id, or null.
 // - `prompt`: the configured project prompt (begin-step's `configuredPrompt`),
 //   may be null.
+// - `effort`: the configured reasoning-effort token (begin-step's
+//   `configuredEffort`), or null. Passed through verbatim -- unlike `model`,
+//   effort is not Claude/Codex-partitioned, so there is no sanitization
+//   denylist. Config already rejects effort on inline routes, so the inline
+//   branch's effort is null in practice; the field is still included on
+//   every branch for shape uniformity.
 // - `agentsDir`: absolute directory containing the Codex executor prompt
 //   fragments (one file per known claude-subagent role), resolved by the
 //   caller (CLI layer) via the same seam `where` uses. Never resolved here.
-export function translateCodexDispatch({ route, model, prompt, agentsDir }) {
+export function translateCodexDispatch({ route, model, prompt, effort, agentsDir }) {
   if (route === "inline") {
     // inline runs on the orchestrator's own model and cannot pin one
     // (consistent with composeExecutor/isValidAgentValue).
@@ -73,6 +79,7 @@ export function translateCodexDispatch({ route, model, prompt, agentsDir }) {
       agentType: null,
       promptPath: prompt ?? null,
       model: null,
+      effort: effort ?? null,
       evidenceExecutor: "inline",
       known: true,
     };
@@ -91,6 +98,7 @@ export function translateCodexDispatch({ route, model, prompt, agentsDir }) {
         agentType,
         promptPath: path.join(agentsDir, `local-board-${roleName}.md`),
         model: sanitizedModel,
+        effort: effort ?? null,
         evidenceExecutor: evidenceExecutorFor(route, sanitizedModel),
         known: true,
       };
@@ -103,6 +111,7 @@ export function translateCodexDispatch({ route, model, prompt, agentsDir }) {
       agentType: null,
       promptPath: null,
       model: sanitizedModel,
+      effort: effort ?? null,
       evidenceExecutor: evidenceExecutorFor(route, sanitizedModel),
       known: false,
       note: `unknown claude-subagent route "${route}"; ask the user for approval before falling back to inline, or move the ticket to questions`,
@@ -120,6 +129,7 @@ export function translateCodexDispatch({ route, model, prompt, agentsDir }) {
       agentType,
       promptPath: prompt ?? null,
       model: sanitizedModel,
+      effort: effort ?? null,
       evidenceExecutor: evidenceExecutorFor(route, sanitizedModel),
       known: true,
       passthrough: true,
@@ -135,6 +145,7 @@ export function translateCodexDispatch({ route, model, prompt, agentsDir }) {
     agentType: null,
     promptPath: null,
     model: sanitizedModel,
+    effort: effort ?? null,
     evidenceExecutor: evidenceExecutorFor(route, sanitizedModel),
     known: false,
     note: `unrecognized route "${route}"; ask the user for approval before falling back to inline, or move the ticket to questions`,

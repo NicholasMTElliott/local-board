@@ -282,11 +282,11 @@ The gate **consultation** is a separate, stricter concern from specialty evidenc
 
 Use `plans/local-board.config.jsonc` to decide how each action is handled. Comments and trailing commas are valid:
 
-Each entry is a route string or a `{ route, model?, prompt? }` profile. `begin-step` resolves it to `configuredAgent` (route), `configuredModel`, and `configuredPrompt`, and records the active step for dispatch verification.
+Each entry is a route string or a `{ route, model?, effort?, prompt? }` profile. `begin-step` resolves it to `configuredAgent` (route), `configuredModel`, `configuredEffort`, and `configuredPrompt`, and records the active step for dispatch verification (effort is a dispatch hint only and is not part of the ledger stamp).
 
-- `inline`: do the work in the current agent, on the orchestrator's model. `inline` cannot carry a per-step model.
-- `claude-subagent:<agent-name>`: dispatch the named Claude subagent. When `configuredModel` is set, pin the subagent's model to it at dispatch — this is how per-step models (haiku gate-check, opus design, sonnet implement, etc.) take effect.
-- `codex-task:<mode>`: use codex-task in the configured mode, such as `codex-task:read-only` or `codex-task:workspace-write`. `codex-task` dispatches are serial-by-design: never background one with a shell `&` (concurrent `CODEX_HOME` use corrupts session state) — use the harness's own background/spawn dispatch when you need concurrency.
+- `inline`: do the work in the current agent, on the orchestrator's model. `inline` cannot carry a per-step model or effort.
+- `claude-subagent:<agent-name>`: dispatch the named Claude subagent. When `configuredModel` is set, pin the subagent's model to it at dispatch — this is how per-step models (haiku gate-check, opus design, sonnet implement, etc.) take effect. When `configuredEffort` is set, pass it as the subagent dispatch's effort option (the Claude harness's per-agent reasoning-effort control).
+- `codex-task:<mode>`: use codex-task in the configured mode, such as `codex-task:read-only` or `codex-task:workspace-write`. `codex-task` dispatches are serial-by-design: never background one with a shell `&` (concurrent `CODEX_HOME` use corrupts session state) — use the harness's own background/spawn dispatch when you need concurrency. When `configuredEffort` is set, pass `--reasoning-effort <effort>` to the codex-task wrapper.
 
 Bundled Claude subagent names:
 

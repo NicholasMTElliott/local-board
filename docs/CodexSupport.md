@@ -95,6 +95,10 @@ where ticket worktrees are created:
 
 Do not pass Claude aliases such as `opus`, `sonnet`, or `haiku` to Codex spawned agents. `begin-step --harness codex` sanitizes this automatically: `codexDispatch.model` is `null` and `codexDispatch.evidenceExecutor` carries `@codex-default` whenever the configured model has no valid Codex id. A null `model` means do not pass a model override to Codex.
 
+### Effort
+
+Agent profiles may also pin `effort` (a reasoning-effort token) alongside `model`. `begin-step --harness codex` surfaces it as `codexDispatch.effort` — `null` when unset, no sanitization when set (unlike `model`, effort names are not Claude/Codex-partitioned, so the value passes through verbatim). A non-null effort maps to `--reasoning-effort <effort>` on `codex-task:*` routes. Effort values are plan- and model-dependent: local-board only shape-validates the token locally (same charset rule as `model`), never enumerating which values a given model supports — the target harness/server validates that.
+
 ## Single-Ticket Flow
 
 1. Read project instructions and Memory Bank.

@@ -131,6 +131,83 @@ test("loadConfig rejects a model on an inline route", async () => {
   });
 });
 
+test("loadConfig accepts { route, model, effort } agent profiles", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      agents: {
+        review: { route: "codex-task:read-only", model: "gpt-5.6-sol", effort: "xhigh" },
+      },
+    }));
+    const config = await loadConfig(root);
+    assert.deepEqual(config.agents.review, {
+      route: "codex-task:read-only",
+      model: "gpt-5.6-sol",
+      effort: "xhigh",
+    });
+  });
+});
+
+test("loadConfig accepts effort without model, and model without effort (independence)", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      agents: {
+        design: { route: "codex-task:read-only", effort: "medium" },
+        review: { route: "codex-task:read-only", model: "gpt-5.6-terra" },
+      },
+    }));
+    const config = await loadConfig(root);
+    assert.deepEqual(config.agents.design, { route: "codex-task:read-only", effort: "medium" });
+    assert.deepEqual(config.agents.review, { route: "codex-task:read-only", model: "gpt-5.6-terra" });
+  });
+});
+
+test("loadConfig rejects an effort on an inline route", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      agents: { design: { route: "inline", effort: "high" } },
+    }));
+    await assert.rejects(loadConfig(root), /inline.*cannot carry an effort/);
+  });
+});
+
+test("loadConfig rejects a shape-invalid effort", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      agents: { design: { route: "codex-task:read-only", effort: "x high" } },
+    }));
+    await assert.rejects(loadConfig(root), /effort must be/);
+  });
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      agents: { design: { route: "codex-task:read-only", effort: "" } },
+    }));
+    await assert.rejects(loadConfig(root), /effort must be/);
+  });
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      agents: { design: { route: "codex-task:read-only", effort: 5 } },
+    }));
+    await assert.rejects(loadConfig(root), /effort must be/);
+  });
+});
+
+test("loadConfig omits effort from a profile when no effort key is present (backward-compat)", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      agents: { design: { route: "codex-task:read-only", model: "gpt-5.6-luna" } },
+    }));
+    const config = await loadConfig(root);
+    assert.equal(Object.hasOwn(config.agents.design, "effort"), false);
+  });
+});
+
 test("loadConfig rejects an invalid agent route", async () => {
   await withRoot(async (root) => {
     await writeConfig(root, JSON.stringify({

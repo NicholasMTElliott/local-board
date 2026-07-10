@@ -70,9 +70,64 @@ test("translateCodexDispatch handles inline: no model, evidenceExecutor inline, 
     agentType: null,
     promptPath: "resources/prompts/steps/implement.md",
     model: null,
+    effort: null,
     evidenceExecutor: "inline",
     known: true,
   });
+});
+
+test("translateCodexDispatch threads effort onto every branch: null when unset, verbatim when set, no sanitization", () => {
+  const claudeSubagentUnset = translateCodexDispatch({
+    route: "claude-subagent:local-board-implementer",
+    model: null,
+    prompt: null,
+    agentsDir: AGENTS_DIR,
+  });
+  assert.equal(claudeSubagentUnset.effort, null);
+
+  const claudeSubagentSet = translateCodexDispatch({
+    route: "claude-subagent:local-board-implementer",
+    model: null,
+    prompt: null,
+    effort: "xhigh",
+    agentsDir: AGENTS_DIR,
+  });
+  assert.equal(claudeSubagentSet.effort, "xhigh");
+
+  const codexTaskUnset = translateCodexDispatch({
+    route: "codex-task:read-only",
+    model: null,
+    prompt: null,
+    agentsDir: AGENTS_DIR,
+  });
+  assert.equal(codexTaskUnset.effort, null);
+
+  const codexTaskSet = translateCodexDispatch({
+    route: "codex-task:read-only",
+    model: null,
+    prompt: null,
+    effort: "medium",
+    agentsDir: AGENTS_DIR,
+  });
+  assert.equal(codexTaskSet.effort, "medium");
+
+  const inlineDispatch = translateCodexDispatch({
+    route: "inline",
+    model: null,
+    prompt: null,
+    agentsDir: AGENTS_DIR,
+  });
+  assert.equal(inlineDispatch.effort, null);
+
+  // No sanitization: an arbitrary token passes through verbatim, unlike model.
+  const arbitraryEffort = translateCodexDispatch({
+    route: "claude-subagent:local-board-implementer",
+    model: null,
+    prompt: null,
+    effort: "some-arbitrary-token",
+    agentsDir: AGENTS_DIR,
+  });
+  assert.equal(arbitraryEffort.effort, "some-arbitrary-token");
 });
 
 test("translateCodexDispatch passes through native codex-task routes with a passthrough marker", () => {
@@ -101,13 +156,30 @@ test("translateCodexDispatch passes through native codex-task routes with a pass
 
 test("translateCodexDispatch flags an unknown claude-subagent role as known:false without fabricating a path", () => {
   const dispatch = translateCodexDispatch({
-    route: "claude-subagent:foo",
+    route: "claude-subagent:local-board-nonexistent",
     model: null,
     prompt: null,
+    effort: "high",
     agentsDir: AGENTS_DIR,
   });
   assert.equal(dispatch.known, false);
   assert.equal(dispatch.promptPath, null);
   assert.equal(typeof dispatch.note, "string");
   assert.ok(dispatch.note.length > 0);
+  assert.equal(dispatch.effort, "high");
+});
+
+test("translateCodexDispatch threads effort unchanged onto the unrecognized-route fallback", () => {
+  const dispatch = translateCodexDispatch({
+    route: "some-unrecognized-route",
+    model: null,
+    prompt: null,
+    effort: "medium",
+    agentsDir: AGENTS_DIR,
+  });
+  assert.equal(dispatch.known, false);
+  assert.equal(dispatch.promptPath, null);
+  assert.equal(typeof dispatch.note, "string");
+  assert.ok(dispatch.note.length > 0);
+  assert.equal(dispatch.effort, "medium");
 });

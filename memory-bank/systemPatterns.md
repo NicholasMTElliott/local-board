@@ -127,6 +127,7 @@ Fresh `init` scaffolds the full packaged prompt tree into `plans/prompts/`:
 Skills should be orchestration entrypoints. Step behavior should live in prompt files and deterministic scripts where possible.
 
 The installable `local-board` skill is the portable entrypoint. Project-local prompts are runtime inputs; missing configured prompts are loud CLI errors, not silent fallback behavior.
+Agent profiles are route strings or `{ route, model?, effort?, prompt? }` objects; `effort` is shape-validated like `model` and rejected on `inline` routes.
 The `## CLI Commands` blocks in root `SKILL.md` and `skills/codex/local-board/SKILL.md` are curated to 27 commands, byte-identical, and enforced by `test/skill-usage-sync.test.js`; root `SKILL.md` is canonical.
 `init` restores missing packaged prompts/templates but never overwrites existing prompt files, even with `--overwrite`.
 For design/implement/test stages with a non-empty specialty catalog, the orchestrator skill runs `gate-check` + `specialty-run` between mandatory action completion and stage transition.
@@ -167,9 +168,11 @@ mode); config `agents.<action>.model` overrides the frontmatter default.
 translation server-side (`src/codex-dispatch.js`, the single authority) and
 returns an additive `codexDispatch` block: `dispatchKind`, `agentType`,
 absolute `promptPath`, sanitized `model` (`null` = no Codex override),
+configured `effort` (`null` when unset; otherwise passed through verbatim),
 `evidenceExecutor` (`@codex-default` when no valid Codex model id exists), and
 `known` (`false` = ask before inline fallback or move to `questions`).
-Default `--harness claude` (or no flag) leaves begin-step's output unchanged;
+Default `--harness claude` (or no flag) leaves begin-step's output unchanged.
+begin-step also surfaces the profile's `configuredEffort`;
 the active-steps ledger stamp always records the configured logical route/model
 regardless of harness. `codex-default` is a wildcard that satisfies any pinned
 model in strict-routing model enforcement (see below).
@@ -190,7 +193,7 @@ model must equal `configuredModel`, equal `codex-default`, or be covered by a
 --executor <route>@<model>`). Done-time re-validation (`validateRouting`) stays
 route-only for back-compat with evidence recorded before this rule.
 
-Dispatch verification uses `.local-board/active-steps.json` as the deterministic in-flight ledger, anchored at the main checkout's git common dir so linked worktrees share one record. `begin-step` stamps the ticket's resolved action/route/model there; `complete-step` and `approve-inline` clear the ticket's entry. `check-dispatch --agent [--model] [--ticket]` reads the ledger for hook use, always emits JSON on stdout, and exits 0 allow / 1 deny / 2 error while passing through non-local-board agents and unverifiable models. Claude Code enforcement hooks are opt-in via `local-board install --hooks`: routing-validator, dispatch-ledger, evidence-gate, and approve-inline-consent. Hooks fail open on errors/timeouts; CLI strict routing remains the backstop.
+Dispatch verification uses `.local-board/active-steps.json` as the deterministic in-flight ledger, anchored at the main checkout's git common dir so linked worktrees share one record. `begin-step` stamps the ticket's resolved action/route/model there; configured effort is deliberately excluded from the ledger and all evidence tokens because it is a dispatch hint, not routed-work identity. `complete-step` and `approve-inline` clear the ticket's entry. `check-dispatch --agent [--model] [--ticket]` reads the ledger for hook use, always emits JSON on stdout, and exits 0 allow / 1 deny / 2 error while passing through non-local-board agents and unverifiable models. Claude Code enforcement hooks are opt-in via `local-board install --hooks`: routing-validator, dispatch-ledger, evidence-gate, and approve-inline-consent. Hooks fail open on errors/timeouts; CLI strict routing remains the backstop.
 
 Return-only subagents (reviewer, tester, decomposer, gatecheck) have no Write or Edit tool. They return section content (Review Findings, Test Evidence) or JSON as Markdown in their final message; the orchestrator writes the temp file with the Write tool and runs `section --file`. Never instruct a return-only subagent to create a file — it falls back to Bash redirection (`echo`, heredoc, `Set-Content`), which breaks on backticks and code fences. The same return-only contract applies to `codex-task:read-only` routes. The designer is the exception: it has a scoped Write tool and self-writes its `Technical Design` section, returning only a terse summary, because that payload is the largest and the Write tool avoids the redirection bug.
 

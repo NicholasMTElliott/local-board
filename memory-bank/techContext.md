@@ -52,6 +52,7 @@ SKILL.md              installable orchestration skill template
   that exact allow rule, leaving user-modified rules in place.
 - `worktrees.location` controls ticket worktree placement: sibling default, inside `.worktrees`, or explicit non-`plans/` path.
 - `package.json` `files` allowlist defines the npm package surface.
+- Agent profiles support `{ route, model?, effort?, prompt? }`; `effort` is shape-validated like `model`, rejected on inline routes, surfaced by `begin-step`, and passed through `codexDispatch` without sanitization. It is excluded from evidence tokens and the active-steps ledger.
 
 ## Open Decisions
 - Agent routing refinements after real orchestration runs.

@@ -365,8 +365,9 @@ export async function loadConfig(root = ".") {
 }
 
 // Normalize the agents map so every entry is a profile object
-// { route, model?, prompt? }. A bare string is sugar for { route }, so legacy
-// configs and DEFAULT_CONFIG (which use route strings) load unchanged.
+// { route, model?, effort?, prompt? }. A bare string is sugar for { route },
+// so legacy configs and DEFAULT_CONFIG (which use route strings) load
+// unchanged.
 function normalizeAgents(merged) {
   if (!isObject(merged.agents)) {
     throw new Error("agents must be an object");
@@ -387,11 +388,11 @@ function normalizeAgentProfile(value, key) {
   }
   if (!isObject(value)) {
     throw new Error(
-      `agents.${key} must be a route string or a { route, model?, prompt? } object`,
+      `agents.${key} must be a route string or a { route, model?, effort?, prompt? } object`,
     );
   }
 
-  const { route, model, prompt } = value;
+  const { route, model, effort, prompt } = value;
   if (typeof route !== "string" || !isValidAgentRoute(route)) {
     throw new Error(
       `agents.${key} requires a valid route string; got ${JSON.stringify(route)}`,
@@ -411,6 +412,20 @@ function normalizeAgentProfile(value, key) {
       );
     }
     profile.model = model;
+  }
+
+  if (effort !== undefined && effort !== null) {
+    if (typeof effort !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(effort)) {
+      throw new Error(
+        `agents.${key} effort must be a non-empty reasoning-effort token; got ${JSON.stringify(effort)}`,
+      );
+    }
+    if (route === "inline") {
+      throw new Error(
+        `agents.${key} route "inline" cannot carry an effort; route the step to a subagent to pin reasoning effort`,
+      );
+    }
+    profile.effort = effort;
   }
 
   if (prompt !== undefined && prompt !== null) {
@@ -868,11 +883,13 @@ export function defaultConfigJsonc() {
   },
 
   // Agent routing is enforced by strict routing commands and validation.
-  // Each entry is a route string or a { route, model?, prompt? } profile.
-  // A bare string is sugar for { route }. route values: inline,
+  // Each entry is a route string or a { route, model?, effort?, prompt? }
+  // profile. A bare string is sugar for { route }. route values: inline,
   // claude-subagent:<agent-name>, codex-task:<mode>. model pins the per-step
   // model for subagent/codex routes (alias like opus/sonnet/haiku or a full id);
-  // it is rejected on inline routes. prompt overrides workflow.actionPrompts.
+  // it is rejected on inline routes. effort pins a reasoning-effort token
+  // (shape-checked only, not enumerated; also rejected on inline routes).
+  // prompt overrides workflow.actionPrompts.
   // Codex examples: codex-task:read-only, codex-task:workspace-write.
   "agents": {
     "decompose": { "route": "claude-subagent:local-board-decomposer", "model": "opus" },
