@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: 2026-07-10T14:39:01Z
 created: 2026-07-10T12:25:41Z
-updated: 2026-07-10T14:39:01Z
+updated: 2026-07-10T14:44:57Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
@@ -499,3 +499,5 @@ Validation: git diff --check clean; prose-only change.
 - 2026-07-10T14:34:14Z: Ensured git branch local-board/B20260710T1225Z-check-dispatch-denies-legitimate-gate-check-consultation-dispatches-when-hooks-are-enabled (already-current).
 
 - 2026-07-10T14:39:01Z: Completed document via codex-task:workspace-write: systemPatterns dispatch-verification facts + EnforcementHooks ledger expectations synced; committed on branch.
+
+- 2026-07-10T14:44:57Z: Post-merge integration fix on mainline (2007c44): the merge combined this ticket's identity-scoped ledger primitives with the earlier-merged design-review recorder, which still called the removed clearActiveStep (ReferenceError, 11 test failures). recordDesignReview now uses clearActiveStepIf with an isActionLedgerEntry('design-review') predicate. Suite restored to 524/0/1.
