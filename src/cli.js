@@ -1335,7 +1335,7 @@ async function commandDesignReviewComplete(root, args, allowMainRoot) {
 
   if (ticketId === undefined || executor === undefined || evidence === undefined) {
     throw new Error(
-      "design-review-complete requires: <ticket-id> --executor <executor> [--model <model>] --evidence <text> [--allow-main-root]",
+      "design-review-complete requires: <ticket-id> --executor <executor> [--model <model>] --evidence <text> [--allow-main-root] [--json]",
     );
   }
 

@@ -2764,7 +2764,7 @@ test("moveTicket refuses the design -> implementation forward move without a rec
 
       await assert.rejects(
         moveTicket(root, ticketId, "ready_for_implementation"),
-        /no recorded design review.*design-review .*before moving to ready_for_implementation/s,
+        /no recorded design review.*design-review-check .*design-review-complete .*before moving to ready_for_implementation/s,
         `${from} -> ready_for_implementation must be refused without a recorded design review`,
       );
 
@@ -2866,7 +2866,7 @@ test("moveTicket design-review gate rejects a malformed completedSteps token (ba
 
       await assert.rejects(
         moveTicket(root, ticketId, "ready_for_implementation"),
-        /no recorded design review.*design-review .*before moving to ready_for_implementation/s,
+        /no recorded design review.*design-review-check .*design-review-complete .*before moving to ready_for_implementation/s,
         `token "${malformed}" must not bypass the design-review precondition`,
       );
     }

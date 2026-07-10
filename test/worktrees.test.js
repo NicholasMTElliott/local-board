@@ -581,6 +581,58 @@ test("design-review-complete refuses from the main root before any write when th
   });
 });
 
+test("design-review-check refuses from the main root before any resolution when the ticket has a registered worktree; --allow-main-root overrides", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, _baseBranch, worktreesRoot) => {
+    const ticketPath = await createTicket(root, "task", "Design-review-check guard ticket", {
+      status: "ready_for_design",
+      now: new Date("2026-05-22T16:09:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    assert.equal((await runCli(["--root", root, "worktree-add", ticketId, "--json"])).code, 0);
+    const worktreePath = path.join(worktreesRoot, ticketId);
+
+    const refused = await runCli(["--root", root, "design-review-check", ticketId]);
+    assert.equal(refused.code, 2);
+    assert.match(refused.stderr, new RegExp(`^refusing to mutate ${escapeRegExp(ticketId)} from `));
+    assert.match(
+      refused.stderr,
+      new RegExp(`Re-run with --root ${escapeRegExp(displayPath(worktreePath))}, or pass --allow-main-root to override\\.$`),
+    );
+
+    // --allow-main-root overrides the guard even though design-review-check
+    // performs no write of its own.
+    const overridden = await runCli(["--root", root, "design-review-check", ticketId, "--allow-main-root", "--json"]);
+    assert.equal(overridden.code, 0, overridden.stderr);
+    assert.equal(JSON.parse(overridden.stdout).agent, "codex-task:read-only");
+  });
+});
+
+test("design-review-complete --allow-main-root overrides the wrong-root guard from the main root", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Design-review-complete guard override ticket", {
+      status: "ready_for_design",
+      now: new Date("2026-05-22T16:10:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    assert.equal((await runCli(["--root", root, "worktree-add", ticketId, "--json"])).code, 0);
+
+    const result = await runCli([
+      "--root", root, "design-review-complete", ticketId,
+      "--executor", "codex-task:read-only", "--model", "gpt-5.6-sol", "--evidence", "PASS",
+      "--allow-main-root", "--json",
+    ]);
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(
+      await readFile(ticketPath, "utf8"),
+      /design-review:codex-task:read-only@gpt-5\.6-sol/,
+    );
+  });
+});
+
 test("assertInvocationRootForTicket fails open when git resolution fails (non-git directory)", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "local-board-guard-nogit-"));
   try {

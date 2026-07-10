@@ -770,8 +770,9 @@ export async function moveTicket(root, ticketId, status, options = {}) {
         if (!hasDesignReviewToken(ticket)) {
           throw new Error(
             `${ticket.path}: move refused: ticket ${ticket.id} has no recorded design review. ` +
-              `Run the design-review step and record it with ` +
-              `"design-review ${ticket.id} --executor <route> --evidence <summary>" before moving to ${status}.`,
+              `Run "design-review-check ${ticket.id}" to resolve the reviewer route, then record the result with ` +
+              `"design-review-complete ${ticket.id} --executor <executor> --model <model> --evidence <text>" ` +
+              `before moving to ${status}.`,
           );
         }
       }

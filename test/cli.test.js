@@ -1293,6 +1293,7 @@ test("CLI design-review-check and design-review-complete each require a ticket i
     const missingEvidence = await runCli(["--root", root, "design-review-complete", ticketId, "--executor", "codex-task:read-only"]);
     assert.equal(missingEvidence.code, 2);
     assert.match(missingEvidence.stderr, /design-review-complete requires/);
+    assert.match(missingEvidence.stderr, /\[--json\]/);
   });
 });
 
@@ -1337,6 +1338,16 @@ test("CLI design-review full pipeline: design -> design-review-check -> design-r
     const skipped = await runCli(["--root", root, "move", ticketId, "ready_for_implementation"]);
     assert.notEqual(skipped.code, 0);
     assert.match(skipped.stderr, /no recorded design review/);
+    assert.match(
+      skipped.stderr,
+      new RegExp(`Run "design-review-check ${ticketId}" to resolve the reviewer route, then record the result with `),
+    );
+    assert.match(
+      skipped.stderr,
+      new RegExp(
+        `"design-review-complete ${ticketId} --executor <executor> --model <model> --evidence <text>" before moving to ready_for_implementation\\.`,
+      ),
+    );
 
     const check = await runCli(["--root", root, "design-review-check", ticketId, "--json"]);
     assert.equal(check.code, 0, check.stderr);
@@ -1434,6 +1445,53 @@ test("CLI design-review-check and design-review-complete both refuse on a flag-o
     ]);
     assert.notEqual(complete.code, 0);
     assert.match(complete.stderr, /routing\.requireDesignReview/);
+  });
+});
+
+test("CLI design-review-check performs no dispatch and stamps nothing in the active-steps ledger", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const create = await runCli([
+      "--root", root, "create", "task", "Design-review-check no ledger write",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const before = await readActiveSteps(root);
+    assert.equal(Object.hasOwn(before, ticketId), false);
+
+    const result = await runCli(["--root", root, "design-review-check", ticketId, "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+
+    // Unlike gate-check's non-empty-catalog branch, design-review-check
+    // routes to codex-task:read-only (not a local-board-* claude-subagent),
+    // which checkDispatch short-circuits: no consultation entry is stamped.
+    const after = await readActiveSteps(root);
+    assert.deepEqual(after, before);
+    assert.equal(Object.hasOwn(after, ticketId), false);
+  });
+});
+
+test("CLI design-review-complete accepts a combined route@model --executor with no --model flag", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const create = await runCli([
+      "--root", root, "create", "task", "Design-review combined executor",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const result = await runCli([
+      "--root", root, "design-review-complete", ticketId,
+      "--executor", "codex-task:read-only@codex-default", "--evidence", "PASS", "--json",
+    ]);
+    assert.equal(result.code, 0, result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.executor, "codex-task:read-only@codex-default");
   });
 });
 
