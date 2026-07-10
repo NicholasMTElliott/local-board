@@ -13,7 +13,7 @@ estimateBasis: T20260710T1220Z
 workStartedAt: 2026-07-10T13:25:24Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T14:06:04Z
+updated: 2026-07-10T14:14:06Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -471,6 +471,20 @@ Acceptance criteria: all ten rows PASS — resolution shape, missing-prompt nami
 Anomalies: none beyond the tracked baseline.
 
 ## Documentation Updates
+
+Documentation step executed by codex-task:workspace-write (gpt-5.6-luna @ reasoning-effort medium; first attempt failed on a transient Windows-sandbox apply_patch refusal + model capacity error, retry succeeded in 348s); edits committed by the orchestrator on the ticket branch.
+
+Changed:
+
+- memory-bank/systemPatterns.md: design-review-check and design-review-complete added to the MVP CLI inventory with resolver/recorder/evidence and requireDesignReview gating facts.
+- docs/Workflow.md: minimal command examples for the design-review pair.
+
+Checked and deliberately left alone:
+
+- README.md, memory-bank/techContext.md — no changes needed.
+- SKILL files — owned by T20260710T1223Z (including the curated CLI Commands blocks and the deferred review finding).
+
+Validation: prose-only change; git diff --check clean.
 
 ## Questions
 
