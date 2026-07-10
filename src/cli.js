@@ -40,7 +40,7 @@ import { assertAutoMergeReady, autoMergeTicketBranch, commitPlanningTransition, 
 import { checkDispatch } from "./active-steps.js";
 import { translateCodexDispatch } from "./codex-dispatch.js";
 import { codexTaskWarning } from "./codex-detect.js";
-import { loadConfig, OPTIONAL_STEP_STAGES } from "./config.js";
+import { loadConfig, OPTIONAL_STEP_STAGES, resolveOptionalStepAgent } from "./config.js";
 import { buildTargets, resolvesOnPath, runInstall } from "./install.js";
 import { initProject, packagedResourceDir } from "./scaffold.js";
 import {
@@ -1258,7 +1258,12 @@ async function commandSpecialtyRun(root, args) {
 
   const promptPath = path.resolve(root, entry.prompt);
   await assertPromptExists(promptPath, "specialty-run");
-  const agent = Object.hasOwn(entry, "agent") ? entry.agent : "inline";
+  // Deliberately named agent/model/effort (not begin-step's
+  // configuredAgent/configuredModel/configuredEffort): specialty-run is a
+  // pure resolver with no configured-vs-actual ledger duality, and an
+  // existing test asserts out.agent is the plain route string. See
+  // docs/specialty-steps.md.
+  const { route: agent, model, effort } = resolveOptionalStepAgent(entry.agent);
 
   const baseRecord = ticketRecord(root, ticket);
   const currentAction = config.workflow?.statusActions?.[ticket.status] ?? null;
@@ -1280,6 +1285,8 @@ async function commandSpecialtyRun(root, args) {
     step: entry.name,
     prompt: promptPath,
     agent,
+    model,
+    effort,
     ticketPath: ticket.path,
     ticketContext,
   };
@@ -1287,7 +1294,8 @@ async function commandSpecialtyRun(root, args) {
   if (asJson) {
     console.log(JSON.stringify(payload, null, 2));
   } else {
-    console.log(`specialty-run ${ticket.id} step=${entry.name} stage=${stage} agent=${agent}`);
+    const modelSuffix = model ? `@${model}` : "";
+    console.log(`specialty-run ${ticket.id} step=${entry.name} stage=${stage} agent=${agent}${modelSuffix}`);
     console.log(promptPath);
   }
   return 0;

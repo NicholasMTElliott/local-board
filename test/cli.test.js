@@ -1590,6 +1590,8 @@ test("CLI specialty-run dispatches to optionalSteps catalog by status-derived st
     assert.equal(implOut.stage, "implement");
     assert.equal(implOut.step, "security_audit");
     assert.equal(implOut.agent, "inline");
+    assert.equal(implOut.model, null);
+    assert.equal(implOut.effort, null);
     assert.equal(typeof implOut.ticketPath, "string");
     assert.equal(
       implOut.prompt.endsWith(path.join("plans", "prompts", "optional-steps", "impl", "security_audit.md")),
@@ -1792,8 +1794,64 @@ test("CLI specialty-run returns per-entry agent override when configured", async
     assert.equal(result.code, 0, result.stderr);
     const out = JSON.parse(result.stdout);
     assert.equal(out.agent, "codex-task:read-only");
+    assert.equal(out.model, null);
+    assert.equal(out.effort, null);
     assert.equal(out.step, "custom_review");
     assert.equal(out.stage, "design");
+  });
+});
+
+test("CLI specialty-run returns model/effort pins for an object-form optionalSteps[].agent profile", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({
+        version: 1,
+        optionalSteps: {
+          design: [],
+          implement: [
+            {
+              name: "security_audit",
+              prompt: "plans/prompts/optional-steps/impl/security_audit.md",
+              triggers: "Anything touched by the security audit.",
+              agent: { route: "codex-task:read-only", model: "gpt-5.6-sol", effort: "xhigh" },
+            },
+          ],
+          test: [],
+        },
+      }),
+      "utf8",
+    );
+
+    const create = await runCli([
+      "--root",
+      root,
+      "create",
+      "task",
+      "Specialty pinned-profile target",
+      "--status",
+      "implementing",
+      "--priority",
+      "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const result = await runCli(["--root", root, "specialty-run", ticketId, "security_audit", "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.agent, "codex-task:read-only");
+    assert.equal(out.model, "gpt-5.6-sol");
+    assert.equal(out.effort, "xhigh");
+
+    const plain = await runCli(["--root", root, "specialty-run", ticketId, "security_audit"]);
+    assert.equal(plain.code, 0, plain.stderr);
+    assert.match(
+      plain.stdout.split("\n")[0],
+      /^specialty-run .* step=security_audit stage=implement agent=codex-task:read-only@gpt-5\.6-sol$/,
+    );
   });
 });
 

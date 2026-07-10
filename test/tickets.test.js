@@ -1031,6 +1031,153 @@ test("completeStep accepts @codex-default as satisfying any pinned model", async
   });
 });
 
+test("completeStep enforces a pinned model on a specialty step (optionalSteps[].agent object form), codex-default wildcard accepted, no effort in the token", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      optionalSteps: {
+        implement: [
+          {
+            name: "security_audit",
+            prompt: "p.md",
+            triggers: "t",
+            agent: { route: "codex-task:read-only", model: "gpt-5.6-sol", effort: "xhigh" },
+          },
+        ],
+      },
+    }));
+    const ticketPath = await createTicket(root, "task", "Pinned specialty target", {
+      status: "implementing",
+      now: new Date("2026-07-10T12:00:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    // missing: route-only executor, no @model suffix.
+    await assert.rejects(
+      completeStep(root, ticketId, "security_audit", "codex-task:read-only", "Security audit evidence."),
+      /completed on model \(none\), but configured model is gpt-5\.6-sol/,
+    );
+
+    // mismatch: wrong @model suffix.
+    await assert.rejects(
+      completeStep(root, ticketId, "security_audit", "codex-task:read-only@gpt-5.6-terra", "Security audit evidence."),
+      /completed on model gpt-5\.6-terra, but configured model is gpt-5\.6-sol/,
+    );
+
+    const textBeforeMatch = await readFile(ticketPath, "utf8");
+    assert.match(textBeforeMatch, /^completedSteps: \[\]$/m);
+
+    // match: exact configured model.
+    await completeStep(
+      root,
+      ticketId,
+      "security_audit",
+      "codex-task:read-only@gpt-5.6-sol",
+      "Security audit evidence.",
+    );
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \["security_audit:codex-task:read-only@gpt-5\.6-sol"\]$/m);
+    // Effort ("xhigh") is a dispatch hint only; it never enters the evidence token.
+    assert.equal(text.includes("xhigh"), false);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("completeStep accepts @codex-default as satisfying a pinned specialty model", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      optionalSteps: {
+        implement: [
+          {
+            name: "security_audit",
+            prompt: "p.md",
+            triggers: "t",
+            agent: { route: "codex-task:read-only", model: "gpt-5.6-sol" },
+          },
+        ],
+      },
+    }));
+    const ticketPath = await createTicket(root, "task", "Codex-translated specialty", {
+      status: "implementing",
+      now: new Date("2026-07-10T12:00:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await completeStep(
+      root,
+      ticketId,
+      "security_audit",
+      "codex-task:read-only@codex-default",
+      "Codex-translated security audit evidence.",
+    );
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \["security_audit:codex-task:read-only@codex-default"\]$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("completeStep leaves a specialty step with a string-only agent unpinned (no model enforcement, agents.default not consulted)", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      // agents.default, if it existed, must NOT leak onto a specialty step
+      // that carries no agent override (or a bare-string override).
+      agents: { default: { route: "claude-subagent:local-board-designer", model: "opus" } },
+      optionalSteps: {
+        implement: [
+          { name: "security_audit", prompt: "p.md", triggers: "t", agent: "codex-task:read-only" },
+        ],
+      },
+    }));
+    const ticketPath = await createTicket(root, "task", "Unpinned specialty target", {
+      status: "implementing",
+      now: new Date("2026-07-10T12:00:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    // No model configured on the specialty: any executor model (or none) on the correct route is accepted.
+    await completeStep(root, ticketId, "security_audit", "codex-task:read-only", "Security audit evidence.");
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \[security_audit:codex-task:read-only\]$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+});
+
+test("completeStep preserves the agents.default fallback for a mandatory action with no dedicated agents entry", async () => {
+  await withBoard(async (root) => {
+    // Introduce a mandatory action name (via workflow.statusActions) with no
+    // matching agents.<action> entry, so profileForAction's mandatory branch
+    // must fall through to agents.default (unchanged behavior — see the
+    // companion "denied to specialties" test above).
+    await writeConfig(root, JSON.stringify({
+      workflow: { statusActions: { ready_for_implementation: "custom_gate" } },
+      agents: { default: { route: "codex-task:read-only", model: "gpt-5.6-terra" } },
+    }));
+    const ticketPath = await createTicket(root, "task", "Custom-action fallback target", {
+      status: "implementing",
+      now: new Date("2026-07-10T12:00:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await assert.rejects(
+      completeStep(root, ticketId, "custom_gate", "codex-task:read-only", "Custom action evidence."),
+      /completed on model \(none\), but configured model is gpt-5\.6-terra/,
+    );
+
+    await completeStep(
+      root,
+      ticketId,
+      "custom_gate",
+      "codex-task:read-only@gpt-5.6-terra",
+      "Custom action evidence.",
+    );
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \["custom_gate:codex-task:read-only@gpt-5\.6-terra"\]$/m);
+  });
+});
+
 test("composeExecutor: no model given returns the executor verbatim (bare or already-combined)", () => {
   assert.equal(composeExecutor("claude-subagent:local-board-designer", undefined), "claude-subagent:local-board-designer");
   assert.equal(composeExecutor("claude-subagent:local-board-designer", null), "claude-subagent:local-board-designer");

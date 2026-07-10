@@ -42,6 +42,11 @@ the affected action(s) and the missing prerequisite(s); the check never fails
 the command it runs in (`validate`'s exit code is driven only by ticket
 issues). See [docs/Install.md](Install.md#prerequisites) for the remedy.
 
+Detection also covers `optionalSteps[].agent` entries routed to `codex-task:*`,
+whether written as a bare route string or as a `{ route, model?, effort? }`
+profile object (see [docs/specialty-steps.md](specialty-steps.md)) — the
+warning names the entry as `<step-name> (<stage>)`.
+
 ## Route Translation
 
 Existing projects can keep Claude-first config in `plans/local-board.config.jsonc`. `begin-step <ticket-id> --harness codex --json` computes the translation from the configured route directly (single authority: `src/codex-dispatch.js`) and returns it as an additive `codexDispatch` block. Dispatch straight from that block instead of a hand-maintained table.
@@ -98,6 +103,8 @@ Do not pass Claude aliases such as `opus`, `sonnet`, or `haiku` to Codex spawned
 ### Effort
 
 Agent profiles may also pin `effort` (a reasoning-effort token) alongside `model`. `begin-step --harness codex` surfaces it as `codexDispatch.effort` — `null` when unset, no sanitization when set (unlike `model`, effort names are not Claude/Codex-partitioned, so the value passes through verbatim). A non-null effort maps to `--reasoning-effort <effort>` on `codex-task:*` routes. Effort values are plan- and model-dependent: local-board only shape-validates the token locally (same charset rule as `model`), never enumerating which values a given model supports — the target harness/server validates that.
+
+`optionalSteps[].agent` accepts the same `{ route, model?, effort? }` profile grammar (route grammar, model/effort shape, `inline` rejects both) as `agents.<action>`, minus `prompt` (specialty entries carry their own top-level `prompt` instead). `specialty-run --json` returns the resolved `model`/`effort` alongside `agent`; dispatch a `codex-task:*` specialty by passing `--model <model>` / `--reasoning-effort <effort>` to the wrapper when non-null, mirroring `codexDispatch.model`/`codexDispatch.effort` above. See [docs/specialty-steps.md](specialty-steps.md) for the full evidence-recording contract.
 
 ## Single-Ticket Flow
 
