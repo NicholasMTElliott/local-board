@@ -336,3 +336,5 @@ Residual risk: acceptance coverage is distributed across config/CLI tests rather
 - 2026-07-10T13:29:13Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - config default values/comments/tests/docs; no execution-gating surface
 
 - 2026-07-10T13:32:20Z: Completed review via codex-task:read-only@gpt-5.6-terra: verdict: pass, no findings. Allowlist exact, merge-leak impossibility traced, escape hatch accurate.
+
+- 2026-07-10T13:32:20Z: Ensured git branch local-board/T20260710T1206Z-config-scaffold-defaults-ship-gpt-5-6-pins-for-review-and-security-specialty-steps (already-current).
