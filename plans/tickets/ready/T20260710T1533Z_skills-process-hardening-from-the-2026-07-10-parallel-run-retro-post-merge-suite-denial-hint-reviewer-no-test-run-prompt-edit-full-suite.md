@@ -13,7 +13,7 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T16:03:41Z
+updated: 2026-07-10T16:10:51Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -524,3 +524,5 @@ merged-default full suite in both merge modes, gating refill, with an explicit m
 - 2026-07-10T15:50:38Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none requested (prose-only skill/prompt edits; no security/UI/UX triggers)
 
 - 2026-07-10T15:59:23Z: Design review (codex-task:read-only gpt-5.6-sol@xhigh): FAIL. [High] Item 1 in Closeout does not gate refill: SKILL_TEAM control-loop step 6 refills before step 7 Closeout (same for codex wave-barrier step 5); closeout also lacks explicit manual-merge op for autoMerge:false. [Medium] Item 1 wording contradiction: full-suite-after-merge mandatory vs autoMerge alternative avoiding it. [Low] sync tests compare content modulo CRLF/LF normalization, not byte-identical. Disposition: design returns for revision; token intentionally not recorded until re-review passes.
+
+- 2026-07-10T16:10:51Z: Design re-review (sol@xhigh): FAIL. [High] Revision payload used H2 headings - terminated Technical Design section, obsolete prior design stranded below (the very defect class B20260710T1532Z fixes). [High] Both Closeout sequences run the suite before fast-forward - tests pre-merge tree; fast-forward must precede the full suite. [High] Item 1 wording exceeds the 1-3 sentence acceptance criterion (7 and 4 sentences). Disposition: designer repairs ticket body (H3-only internal headings, remove stranded blocks) and condenses; third review round to follow.
