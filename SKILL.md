@@ -278,6 +278,35 @@ Specialty evidence is never gated by `routing.doneRequires`; it lives in `comple
 
 The gate **consultation** is a separate, stricter concern from specialty evidence. When `routing.requireGateConsultation` is `true` (the `init` scaffold default), `move` refuses the three forward transitions out of a gated stage — `ready_for_design`/`designing` → `ready_for_implementation`, `ready_for_implementation`/`implementing` → `ready_for_review`, `ready_for_test`/`testing` → `ready_for_docs` — unless a `gate:<stage>:...` token is recorded for that stage. Backward, lateral (`questions`/`blocked`), and archive/done moves are never gated. If `move` refuses with a "no recorded gate consultation" error, run `gate-check` (and `gate-complete` if the catalog was non-empty) for the named stage, then retry the move.
 
+## Design Review
+
+On a board with `routing.requireDesignReview` on (the `init` scaffold default), a design-review step runs between the design-stage gate-check and the move to `ready_for_implementation`.
+
+Resolve the reviewer:
+
+```sh
+local-board design-review-check <ticket-id> --json
+```
+
+It returns the `agent` route (default `codex-task:read-only`), `model` (`gpt-5.6-sol`), `effort` (`xhigh`), the resolved `prompt` (`plans/prompts/steps/design_review.md`), and a narrow `ticketContext`. It performs no dispatch and stamps nothing.
+
+Dispatch the reviewer through the returned `agent` route, pinning `model` and passing `effort` (`--reasoning-effort <effort>` for a `codex-task:*` route; the subagent's effort dispatch option for a `claude-subagent:*` route). The reviewer is read-only and return-only.
+
+Parse the **first line** of the reviewer's reply — exactly one verdict token, `PASS` / `CONCERNS` / `FAIL`, followed by any numbered findings. Do not `JSON.parse`; the design-review verdict contract is first-line TEXT, unlike gate-check's JSON.
+
+Record the verdict, using the resolved `agent`/`model` verbatim:
+
+```sh
+local-board design-review-complete <ticket-id> --executor <agent> --model <model> --evidence "<VERDICT>: <summary>" --json
+```
+
+This records `design-review:<agent>@<model>` and unblocks the forward move (omit `--model` only when the resolver returned a null model).
+
+- **PASS / CONCERNS**: proceed with `move <ticket-id> ready_for_implementation`. CONCERNS are advisory; the orchestrator may proceed at its judgment.
+- **FAIL**: `move <ticket-id> ready_for_design` and re-run the design with the findings as input. The loop-back strips the `design-review` token and, with `invalidateOnLoopBack` on (scaffold default), the `design` token too, so the redesigned ticket must re-record both `design` and `design-review` evidence before it can advance again.
+
+On a board with `routing.requireDesignReview` off, skip this step entirely — `design-review-check` refuses with a flag-naming message, and the design→implementation move is not gated.
+
 ## Delegation
 
 Use `plans/local-board.config.jsonc` to decide how each action is handled. Comments and trailing commas are valid:
@@ -357,6 +386,8 @@ local-board approve-inline <ticket-id> <action> --reason "<reason>" [--executor 
 local-board gate-check <ticket-id> --stage <stage> [--json]
 local-board gate-complete <ticket-id> --stage <stage> --executor <executor> [--model <model>] [--evidence "<evidence>"] [--json]
 local-board specialty-run <ticket-id> <step-name> [--json]
+local-board design-review-check <ticket-id> [--json]
+local-board design-review-complete <ticket-id> --executor <executor> [--model <model>] --evidence "<evidence>" [--json]
 local-board calibration suggest <ticket-id> [--json]
 local-board estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]
 local-board move <ticket-id> <status> [--override] [--reason "<text>"] [--json]

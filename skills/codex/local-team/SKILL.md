@@ -43,7 +43,7 @@ Use wave-barrier mode first:
    - run `start-work --root <worktreePath> --json` before implement/review/test/document;
    - dispatch from the returned `codexDispatch` block (`agentType`, `promptPath`, `model`, `evidenceExecutor`).
 3. Await the wave of spawned agents.
-4. Persist each result, record `complete-step`, run gate-check/specialty flow for design/implement/test, then `move`.
+4. Persist each result, record `complete-step`, run gate-check/specialty flow for design/implement/test, then `move`. For the `design` stage specifically, when `routing.requireDesignReview` is on, insert a design-review step between gate-check and the move to `ready_for_implementation`: resolve `design-review-check`, dispatch the returned reviewer route (`codex-task:read-only` with `--model`/`--reasoning-effort`, or translate a `claude-subagent:` route via `codexDispatch`), parse the first-line `PASS`/`CONCERNS`/`FAIL` verdict (never JSON), record via `design-review-complete` with the resolved executor/model, and on `FAIL` move to `ready_for_design` with the findings as input (the loop-back strips both `design` and `design-review` evidence). Skipped when the flag is off.
 5. Refill open slots with newly ready tickets.
 6. Repeat until no tickets are in flight and no ready tickets remain.
 

@@ -134,6 +134,14 @@ scheduling cache and is cheap to rebuild after a compaction.
      gate-agent only when `gate-check`'s `skip` field is `false`; when `skip` is
      `true` (empty `catalog`) skip the dispatch entirely — there is nothing to
      classify.
+   - For the `design` stage specifically, after gate-check and before moving to
+     `ready_for_implementation`, when `routing.requireDesignReview` is on:
+     resolve `design-review-check`, dispatch the returned reviewer route (pin
+     `model`, pass `effort`), parse the first-line `PASS`/`CONCERNS`/`FAIL`
+     verdict (never JSON), record it via `design-review-complete` with the
+     resolved executor/model, and on `FAIL` move to `ready_for_design` with the
+     findings as input — the loop-back strips both `design` and `design-review`
+     evidence. Skipped on boards where the flag is off.
    - Choose the next status from the returned `transitions` and `move`. If the
      ticket continues, dispatch its next step. If it hits `questions`/`blocked`,
      surface it and drop it from in-flight (keep in `assignedLog`).
