@@ -7,13 +7,13 @@ parent: S20260710T1206Z
 children: []
 blockedBy: [T20260710T1220Z, T20260710T1221Z]
 blocks: [T20260710T1223Z]
-branch: null
+branch: local-board/T20260710T1222Z-design-review-cli-check-and-complete-commands
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T12:26:04Z
+updated: 2026-07-10T13:25:24Z
 completedSteps: []
 routingApprovals: []
 ---
