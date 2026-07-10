@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T13:25:24Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
 updated: 2026-07-10T14:03:10Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
 # design-review: CLI check and complete commands
@@ -481,3 +481,5 @@ Re-review: verdict: pass (terra@medium, 36s). Refusal text gives the real two-co
 - 2026-07-10T14:00:02Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Original 7b2dd91 + review-fix e535c63: refusal names real recovery commands, [--json] usage fix, 4 targeted tests (no-ledger-write, wrong-root/--allow-main-root both commands, combined executor). 509 pass + 2 baseline.
 
 - 2026-07-10T14:01:37Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - CLI diagnostics/usage/tests
+
+- 2026-07-10T14:03:10Z: Completed review via codex-task:read-only@gpt-5.6-terra: Initial changes_requested (4 findings; #2 deferred to T1223Z) fixed in e535c63; re-review verdict: pass (terra@medium). No open findings on this ticket.
