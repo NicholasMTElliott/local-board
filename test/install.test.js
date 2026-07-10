@@ -85,6 +85,22 @@ function findPathKey(env) {
   return Object.keys(env).find((key) => key.toLowerCase() === "path") ?? "PATH";
 }
 
+// Monkey-patches console.log around a synchronous call (runInstallInProcess
+// is synchronous) and returns both its exit code and the captured log lines.
+// Used by the codex-task install-hint tests, which assert on printed content
+// rather than the exit code alone.
+function captureConsoleLog(fn) {
+  const lines = [];
+  const original = console.log;
+  console.log = (message = "") => lines.push(String(message));
+  try {
+    const code = fn();
+    return { code, lines };
+  } finally {
+    console.log = original;
+  }
+}
+
 function installEnv(home, { includeLocalBoardStub = true, sanitizePath = false, requireHome = false } = {}) {
   const env = {
     ...process.env,
@@ -226,6 +242,65 @@ test("installer stamps the package version into rendered skills, install-info.js
       { encoding: "utf8" },
     );
     assert.equal(stdout.trim(), packageJson.version);
+  });
+});
+
+test("claude-target install prints the codex-task hint when the cwd project config routes to codex-task", async () => {
+  await withHome(async (home) => {
+    const cwd = mkdtempSync(path.join(os.tmpdir(), "local-board-install-cwd-"));
+    try {
+      mkdirSync(path.join(cwd, "plans"), { recursive: true });
+      writeFileSync(
+        path.join(cwd, "plans", "local-board.config.jsonc"),
+        JSON.stringify({ agents: { review: "codex-task:read-only" } }),
+      );
+
+      // Differentiates by command so the installer's own "local-board on
+      // PATH" precheck still passes (true) while the codex-task detection
+      // probe specifically reports `codex` as absent (false).
+      const logs = captureConsoleLog(() =>
+        runInstallInProcess(["--target=claude"], {
+          home,
+          cwd,
+          resolvesOnPath: (command) => command !== "codex",
+        }),
+      );
+
+      assert.equal(logs.code, 0);
+      assert.ok(
+        logs.lines.some((line) => /WARNING:.*codex-task/.test(line)),
+        logs.lines.join("\n"),
+      );
+      assert.ok(logs.lines.some((line) => /review/.test(line)));
+    } finally {
+      await removeFixtureDir(cwd);
+    }
+  });
+});
+
+test("claude-target install prints no codex-task hint when the cwd project config has zero codex-task routes", async () => {
+  await withHome(async (home) => {
+    const cwd = mkdtempSync(path.join(os.tmpdir(), "local-board-install-cwd-"));
+    try {
+      mkdirSync(path.join(cwd, "plans"), { recursive: true });
+      writeFileSync(
+        path.join(cwd, "plans", "local-board.config.jsonc"),
+        JSON.stringify({ agents: { review: "inline" } }),
+      );
+
+      const logs = captureConsoleLog(() =>
+        runInstallInProcess(["--target=claude"], { home, cwd, resolvesOnPath: () => true }),
+      );
+
+      assert.equal(logs.code, 0);
+      assert.equal(
+        logs.lines.some((line) => /codex-task/.test(line)),
+        false,
+        logs.lines.join("\n"),
+      );
+    } finally {
+      await removeFixtureDir(cwd);
+    }
   });
 });
 

@@ -1,4 +1,5 @@
 import { access, readFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -38,8 +39,9 @@ import {
 import { assertAutoMergeReady, autoMergeTicketBranch, commitPlanningTransition, startTicketWork } from "./git.js";
 import { checkDispatch } from "./active-steps.js";
 import { translateCodexDispatch } from "./codex-dispatch.js";
+import { codexTaskWarning } from "./codex-detect.js";
 import { loadConfig, OPTIONAL_STEP_STAGES } from "./config.js";
-import { runInstall } from "./install.js";
+import { buildTargets, resolvesOnPath, runInstall } from "./install.js";
 import { initProject, packagedResourceDir } from "./scaffold.js";
 import {
   addTicketWorktree,
@@ -265,6 +267,14 @@ async function commandValidate(root, args) {
     for (const issue of issues) {
       console.error(issue);
     }
+  }
+
+  // Detection-only, fail-open, stderr: independent of --json and of whether
+  // issues.length is 0, so exit code stays driven solely by issues.length.
+  const home = homedir();
+  const warning = codexTaskWarning(config, { home, resolvesOnPath, buildTargets });
+  if (warning) {
+    console.warn(warning);
   }
 
   return issues.length === 0 ? 0 : 1;

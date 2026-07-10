@@ -1,8 +1,10 @@
+import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import test from "node:test";
 import assert from "node:assert/strict";
 
@@ -11,6 +13,60 @@ import { loadConfig } from "../src/config.js";
 import { createTicket, discover, queryNext } from "../src/tickets.js";
 import { readActiveSteps } from "../src/active-steps.js";
 import { removeFixtureDir } from "./helpers/fixtures.js";
+
+const execFileAsync = promisify(execFile);
+const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const CLI_BIN = path.join(REPO_ROOT, "bin", "local-board.js");
+
+// A minimal PATH for the child process, containing only the current Node
+// executable's directory plus the OS-minimum directories needed for
+// `where`/`command -v` and `node` itself to resolve. Deliberately excludes
+// any ambient PATH entries (notably a real `codex` install), so the
+// codex-task-detection integration tests below are hermetic -- they pass
+// identically whether or not `codex` is installed on the machine running
+// the suite. Mirrors test/install.test.js's sanitizedSystemPath.
+function sanitizedSystemPathForCodexDetect() {
+  const nodeDir = path.dirname(process.execPath);
+  if (process.platform === "win32") {
+    const windir = process.env.SystemRoot || process.env.WINDIR || "C:\\Windows";
+    return [
+      nodeDir,
+      windir,
+      path.join(windir, "System32"),
+      path.join(windir, "System32", "Wbem"),
+      path.join(windir, "System32", "WindowsPowerShell", "v1.0"),
+    ].join(path.delimiter);
+  }
+  return [nodeDir, "/usr/bin", "/bin"].join(path.delimiter);
+}
+
+// Child-process CLI runner for tests that need real env isolation
+// (HOME/USERPROFILE and a sanitized PATH), which the in-process `runCli`
+// helper below cannot provide since it shares the test process's env/PATH
+// and os.homedir(). Used only by the codex-task detection integration
+// tests, which must control both the skill-dir home lookup and the `codex`
+// PATH probe hermetically.
+async function runCliChild(args, { home } = {}) {
+  const env = { ...process.env };
+  const pathKey = Object.keys(env).find((key) => key.toLowerCase() === "path") ?? "PATH";
+  if (home !== undefined) {
+    env.HOME = home;
+    env.USERPROFILE = home;
+    env.HOMEDRIVE = path.parse(home).root.replace(/[\\/]+$/, "");
+    env.HOMEPATH = home.slice(path.parse(home).root.length);
+  }
+  env[pathKey] = sanitizedSystemPathForCodexDetect();
+  try {
+    const result = await execFileAsync(process.execPath, [CLI_BIN, ...args], {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+      env,
+    });
+    return { code: 0, stdout: result.stdout, stderr: result.stderr };
+  } catch (error) {
+    return { code: typeof error.code === "number" ? error.code : 1, stdout: error.stdout ?? "", stderr: error.stderr ?? "" };
+  }
+}
 
 async function withBoard(fn) {
   const root = await mkdtemp(path.join(os.tmpdir(), "local-board-cli-"));
@@ -142,6 +198,70 @@ test("CLI command surface supports init, create, query, mutate, relate, report, 
     assert.match(movedText, /Use the existing parser\./);
     assert.match(movedText, /Avoid shell quoting for long Markdown\./);
     assert.match(movedText, /CLI touched this\./);
+  });
+});
+
+test("validate: config routing review to codex-task warns on stderr when codex is undetected, exit code unchanged", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    // DEFAULT_CONFIG/the init scaffold already route review -> codex-task:read-only;
+    // no config override needed. No tickets required either -- the warning is
+    // emitted from config alone, independent of ticket validity.
+    const home = await mkdtemp(path.join(os.tmpdir(), "local-board-cli-codex-home-"));
+    try {
+      const result = await runCliChild(["--root", root, "validate"], { home });
+      assert.equal(result.code, 0, result.stderr);
+      assert.match(result.stderr, /WARNING:.*codex-task/);
+      assert.match(result.stderr, /review/);
+    } finally {
+      await removeFixtureDir(home);
+    }
+  });
+});
+
+test("validate: config with zero codex-task routes prints no codex-task warning", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const configPath = path.join(root, "plans", "local-board.config.jsonc");
+    await writeFile(
+      configPath,
+      JSON.stringify({ agents: { review: "inline", document: "inline" } }),
+      "utf8",
+    );
+
+    const home = await mkdtemp(path.join(os.tmpdir(), "local-board-cli-codex-home-"));
+    try {
+      const result = await runCliChild(["--root", root, "validate"], { home });
+      assert.equal(result.code, 0, result.stderr);
+      assert.doesNotMatch(result.stderr, /codex-task/);
+    } finally {
+      await removeFixtureDir(home);
+    }
+  });
+});
+
+test("validate: a genuine ticket error and a codex-task route both surface -- exit 1, warning still present", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const createResult = await runCli(["--root", root, "create", "task", "Broken Ticket"]);
+    assert.equal(createResult.code, 0);
+    const ticketPath = createResult.stdout.trim();
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^blockedBy: \[\]$/m);
+    await writeFile(ticketPath, text.replace(/^blockedBy: \[\]$/m, 'blockedBy: ["T20200101T0000Z"]'), "utf8");
+
+    const home = await mkdtemp(path.join(os.tmpdir(), "local-board-cli-codex-home-"));
+    try {
+      const result = await runCliChild(["--root", root, "validate"], { home });
+      assert.equal(result.code, 1);
+      assert.match(result.stderr, /blockedBy T20200101T0000Z does not exist/);
+      assert.match(result.stderr, /WARNING:.*codex-task/);
+    } finally {
+      await removeFixtureDir(home);
+    }
   });
 });
 
