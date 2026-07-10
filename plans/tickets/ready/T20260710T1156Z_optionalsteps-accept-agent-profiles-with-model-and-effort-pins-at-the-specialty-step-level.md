@@ -13,7 +13,7 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:14:10Z
 workCompletedAt: null
 created: 2026-07-10T11:56:26Z
-updated: 2026-07-10T13:02:07Z
+updated: 2026-07-10T13:07:34Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -271,6 +271,31 @@ Disposition: all three findings accepted; looped back, fixed in commit c4ed945, 
 Re-review: verdict: pass (codex-task:read-only, gpt-5.6-terra @ reasoning-effort medium, 43s). Verified: effectiveStatusActionNames preserves defaults while catching custom overrides, message names both colliding sites, regression test uses a custom statusActions value; Object.hasOwn rejects owned prompt:null/undefined with the prior message and a null test; docs/Workflow.md documents both agent forms, the extended specialty-run example, and the model-recorded/effort-dispatch-only rules. Scope clean (three files, no plans/). Re-reviewer sandbox could not spawn test workers; suite verification with the test stage.
 
 ## Test Evidence
+
+verdict: pass
+
+Environment: worktree HEAD e71b74f (code commits 683a4d3 + c4ed945), node v24.14.0. Tester: claude-subagent:local-board-tester (sonnet).
+
+Commands and results:
+
+- npm run check — pass.
+- npm test — 480 tests: 477 pass, 2 fail (exact baseline match, test/install.test.js:887 and :902, B20260710T1232Z), 1 skip.
+- validate — Ticket validation OK.
+
+Acceptance-criteria coverage (live node -e probes, no files created, tree clean throughout):
+
+| Criterion | Result |
+|---|---|
+| Object profile round-trips pins (sol/xhigh) | PASS (resolveOptionalStepAgent live probe) |
+| Bare string stays string sugar | PASS (route with model/effort null) |
+| inline+pins / prompt (incl. null) / statusActions-collision rejections | PASS via named unit tests (functions module-private; assertions read and cross-checked; all green in the suite run) |
+| Scanner handles raw AND normalized object forms | PASS (live probe both shapes -> security_audit detected) |
+| specialty-run returns model/effort | PASS via cli.test.js:1804 (live invocation skipped: mutation risk) |
+| Effort excluded from evidence tokens | PASS (composeExecutor has no effort param; regression test asserts no xhigh substring in completedSteps) |
+
+Guardrail: no external AI CLI or paid service invoked.
+
+Gaps: private schema functions not independently re-probed live (no-Write constraint); covered by named green unit tests with assertions read directly.
 
 ## Documentation Updates
 
