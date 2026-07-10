@@ -13,7 +13,7 @@ estimateBasis: T20260710T1222Z
 workStartedAt: 2026-07-10T14:16:04Z
 workCompletedAt: null
 created: 2026-07-10T12:20:26Z
-updated: 2026-07-10T14:45:29Z
+updated: 2026-07-10T14:49:07Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -371,6 +371,23 @@ Disposition: all three accepted; fixed in 57e2a4f; re-reviewed.
 Re-review: verdict: pass (terra@medium, 74s). Verified: both Codex-voice files carry the begin-step --action design-review --harness codex instruction (CLI support traced in src/cli.js + src/tickets.js on flag-on boards); explicit --reasoning-effort mechanism; refusal sentence in both team flows matching the CLI message shape; commit confined to the three prose locations with CLI Commands blocks untouched and byte-identical.
 
 ## Test Evidence
+
+verdict: pass
+
+Environment: worktree at 4017b75 (code = 61812c2 + 57e2a4f). Tester: claude-subagent:local-board-tester (sonnet). Tree clean pre/post; no external AI CLI invoked.
+
+Commands and results:
+
+- npm run check — pass.
+- npm test — 511/514 with exactly the 2 allowed pre-merge PATH failures (fixed on mainline post-branch), 1 skip.
+- skill-usage-sync isolated — 5/5 including the REQUIRED_COMMANDS surface test.
+- validate — Ticket validation OK.
+
+Content verification: Design Review narrative at all designed insertion points (four skill files + docs/Workflow.md); both curated CLI Commands blocks contain the two command lines and are byte-identical (diff empty, SHA256 match); first-line TEXT verdict contract with explicit no-JSON-parse; FAIL loop-back stripping both tokens described everywhere; flag-off skip + design-review-check refusal in all four; codex-voice begin-step --harness codex instruction in both codex files; --reasoning-effort mechanism sentence in SKILL_TEAM.md.
+
+Acceptance criteria: all three PASS.
+
+Anomalies: none.
 
 ## Documentation Updates
 
