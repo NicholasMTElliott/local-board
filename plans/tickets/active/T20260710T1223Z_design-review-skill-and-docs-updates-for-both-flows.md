@@ -1,7 +1,7 @@
 ---
 id: T20260710T1223Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: S20260710T1206Z
 children: []
@@ -363,3 +363,5 @@ Disposition: all three accepted; loop-back for a prose fix pass.
 - 2026-07-10T14:28:05Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - prose and sync-test only
 
 - 2026-07-10T14:31:38Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
+
+- 2026-07-10T14:31:38Z: Ensured git branch local-board/T20260710T1223Z-design-review-skill-and-docs-updates-for-both-flows (already-current).
