@@ -32,7 +32,10 @@ When maintaining skill text, keep the repo-root `SKILL.md` and `skills/codex/loc
 ## codex-task availability (detected, not managed)
 
 The default config routes `review` -> `codex-task:read-only` and `document`
--> `codex-task:workspace-write`. codex-task is a **peer install**: local-board
+-> `codex-task:workspace-write`. The `init` scaffold pins `review` to
+`gpt-5.6-terra`/`high` out of the box; delete the `model`/`effort` keys on
+`agents.review` in `plans/local-board.config.jsonc` (or reroute the step) if
+your plan lacks GPT-5.6. codex-task is a **peer install**: local-board
 detects whether it is usable but never installs or manages it. `validate`
 (and a `claude`-target `install`) check, best-effort and fail-open, whether
 the `codex` CLI resolves on `PATH` and whether a codex-task skill is present

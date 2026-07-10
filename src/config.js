@@ -45,6 +45,13 @@ export const OPTIONAL_STEP_STAGES = ["design", "implement", "test"];
 //   - routing.requireDesignReview: false here (vs true in the scaffold) so a
 //     pre-existing config that omits the key does not silently start
 //     refusing the design->implementation forward move.
+//   - agents.review: unpinned here (route only) vs pinned to
+//     gpt-5.6-terra/high in the scaffold (and the scaffold's
+//     design/security_threat_model + implement/security_audit optionalSteps
+//     entries pinned to gpt-5.6-sol/xhigh) — this is a deliberate *value*
+//     divergence, not a backward-compat flag: the fallback stays
+//     model-agnostic so ENOENT/omitted-block boards never inherit a model
+//     their plan may not offer.
 // These differences are pinned by tests in test/config.test.js (search
 // "backward-compat disabled" and "empty optionalSteps catalog"). Do NOT
 // converge them to match the scaffold — see the guard test
@@ -972,12 +979,18 @@ export function defaultConfigJsonc() {
   // (shape-checked only, not enumerated; also rejected on inline routes).
   // prompt overrides workflow.actionPrompts.
   // Codex examples: codex-task:read-only, codex-task:workspace-write.
+  // New boards ship "review" pinned to gpt-5.6-terra/high and the two
+  // security specialty steps below pinned to gpt-5.6-sol/xhigh. If your plan
+  // lacks GPT-5.6, delete the model/effort keys (falls back to the plan's
+  // default model) or reroute the step; Codex validates the model
+  // server-side, and "local-board validate" plus the codex-task failure hint
+  // surface a missing/unsupported model.
   "agents": {
     "decompose": { "route": "claude-subagent:local-board-decomposer", "model": "opus" },
     "gate-check": { "route": "claude-subagent:local-board-gatecheck", "model": "haiku" },
     "design": { "route": "claude-subagent:local-board-designer", "model": "opus" },
     "implement": { "route": "claude-subagent:local-board-implementer", "model": "sonnet" },
-    "review": { "route": "codex-task:read-only" },
+    "review": { "route": "codex-task:read-only", "model": "gpt-5.6-terra", "effort": "high" },
     "test": { "route": "claude-subagent:local-board-tester", "model": "sonnet" },
     "document": { "route": "codex-task:workspace-write" },
     "design-review": { "route": "codex-task:read-only", "model": "gpt-5.6-sol", "effort": "xhigh" }
@@ -1094,12 +1107,16 @@ export function defaultConfigJsonc() {
   // hint only and never appears in completedSteps. Setting a stage to an
   // empty array wipes the default catalog for that stage; the loader's array
   // merge is wholesale.
+  // The two security_* entries below ship pinned to gpt-5.6-sol/xhigh. Same
+  // escape hatch as agents.review above: delete the model/effort keys or
+  // reroute if your plan lacks GPT-5.6.
   "optionalSteps": {
     "design": [
       {
         "name": "security_threat_model",
         "prompt": "plans/prompts/optional-steps/design/security_threat_model.md",
-        "triggers": "Auth, authorization, cryptography, external API integrations, PII handling, new attack surface."
+        "triggers": "Auth, authorization, cryptography, external API integrations, PII handling, new attack surface.",
+        "agent": { "route": "codex-task:read-only", "model": "gpt-5.6-sol", "effort": "xhigh" }
       },
       {
         "name": "ui_component_review",
@@ -1116,7 +1133,8 @@ export function defaultConfigJsonc() {
       {
         "name": "security_audit",
         "prompt": "plans/prompts/optional-steps/impl/security_audit.md",
-        "triggers": "Changes to authentication/authorization code; permission grants, consent state, or settings files that gate tool execution (e.g. Claude settings.json allow rules, hooks entries, approved-command lists); credential, token, or secret handling; external API calls; validation of untrusted input crossing a trust boundary (network payloads, uploaded files, third-party responses) - not internal CLI flag or argument parsing."
+        "triggers": "Changes to authentication/authorization code; permission grants, consent state, or settings files that gate tool execution (e.g. Claude settings.json allow rules, hooks entries, approved-command lists); credential, token, or secret handling; external API calls; validation of untrusted input crossing a trust boundary (network payloads, uploaded files, third-party responses) - not internal CLI flag or argument parsing.",
+        "agent": { "route": "codex-task:read-only", "model": "gpt-5.6-sol", "effort": "xhigh" }
       },
       {
         "name": "ui_visual_review",
