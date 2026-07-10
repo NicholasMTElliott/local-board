@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T14:16:04Z
 workCompletedAt: null
 created: 2026-07-10T12:20:26Z
 updated: 2026-07-10T14:45:29Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
 # design-review: skill and docs updates for both flows
@@ -399,3 +399,5 @@ Re-review: verdict: pass (terra@medium, 74s). Verified: both Codex-voice files c
 - 2026-07-10T14:36:07Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Original 61812c2 + review-fix 57e2a4f: codex-voice files instruct begin-step --action design-review --harness codex for codexDispatch; explicit --reasoning-effort mechanism in SKILL_TEAM.md; flag-off refusal sentence in both team flows. 511 pass + 2 pre-merge baseline; skill-sync 5/5.
 
 - 2026-07-10T14:37:24Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - three prose corrections
+
+- 2026-07-10T14:45:29Z: Completed review via codex-task:read-only@gpt-5.6-terra: Initial changes_requested (3 prose findings, terra@high) fixed in 57e2a4f; re-review verdict: pass (terra@medium). No open findings.
