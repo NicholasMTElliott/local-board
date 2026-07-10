@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -13,9 +13,11 @@ import { addTicketWorktree } from "../src/worktrees.js";
 import {
   checkDispatch,
   clearActiveStep,
+  clearActiveStepIf,
   ledgerPath,
   readActiveSteps,
   stampActiveStep,
+  stampActiveStepNoClobber,
 } from "../src/active-steps.js";
 import { removeFixtureDir } from "./helpers/fixtures.js";
 
@@ -1027,6 +1029,298 @@ test(
     });
   },
 );
+
+test(
+  "check-dispatch: a registered-but-missing worktree directory (manually removed, not pruned) falls back to the invocation root instead of erroring",
+  { skip: !GIT_AVAILABLE },
+  async () => {
+    await withRepo(async (root) => {
+      const ticketPath = await createTicket(root, "task", "Missing worktree dir fallback", {
+        status: "ready_for_implementation",
+        now: new Date("2026-07-10T15:00:00Z"),
+      });
+      await git(root, ["add", "plans"]);
+      await git(root, ["commit", "-m", "Add ticket"]);
+      const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+      const worktree = await addTicketWorktree(root, ticketId);
+      // Manually remove the worktree directory without `git worktree remove`
+      // (which would also drop it from the registry): `git worktree list
+      // --porcelain` keeps reporting the now-missing path until `git worktree
+      // prune` runs.
+      await rm(worktree.worktreePath, { recursive: true, force: true });
+
+      // No ledger entry: check-dispatch falls back. Before the fix,
+      // resolveTicketWorktreeRoot would hand back the missing directory,
+      // resolveExpectedStep would throw reading a nonexistent ticket file, and
+      // checkDispatchForTicket would return ticket-not-found (exit 2) -- the
+      // hook fail-opens for every agent instead of validating against the
+      // main checkout. After the fix, the missing directory is detected and
+      // the fallback resolves against `root` (the invocation root / main
+      // checkout) instead, producing a real verdict.
+      const dispatch = await runCli([
+        "--root", root, "check-dispatch",
+        "--agent", "local-board-implementer", "--model", "sonnet", "--ticket", ticketId,
+      ]);
+      assert.equal(dispatch.code, 0, dispatch.stderr);
+      assert.deepEqual(JSON.parse(dispatch.stdout), {
+        ok: true,
+        reason: "match",
+        expected: { agent: "local-board-implementer", model: "sonnet" },
+        ticket: ticketId,
+      });
+    });
+  },
+);
+
+// --- No-clobber consultation stamps (B20260710T1225Z review finding 1) ---
+
+test(
+  "gate-check does not clobber a live begin-step (action) stamp; it warns and leaves the action entry intact",
+  async () => {
+    await withBoard(async (root) => {
+      const create = await runCli(["--root", root, "create", "task", "Gate before complete-step", "--status", "ready_for_design", "--priority", "P2"]);
+      assert.equal(create.code, 0, create.stderr);
+      const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+      assert.equal((await runCli(["--root", root, "estimate", ticketId, "2"])).code, 0);
+      assert.equal((await runCli(["--root", root, "begin-step", ticketId, "--json"])).code, 0);
+
+      const beforeGate = (await readActiveSteps(root))[ticketId];
+      assert.equal(beforeGate.kind, "action");
+      assert.equal(beforeGate.route, "claude-subagent:local-board-designer");
+
+      // Out-of-order use: gate-check runs before complete-step, so the action
+      // stamp is still live. It must not be silently overwritten.
+      const warnings = [];
+      const originalWarn = console.warn;
+      console.warn = (message = "") => warnings.push(String(message));
+      let gate;
+      try {
+        gate = await runCli(["--root", root, "gate-check", ticketId, "--stage", "design", "--json"]);
+      } finally {
+        console.warn = originalWarn;
+      }
+      assert.equal(gate.code, 0, gate.stderr);
+      assert.ok(
+        warnings.some((message) => message.includes(ticketId) && message.includes("not stamped")),
+        `expected a not-stamped warning naming ${ticketId}, got: ${JSON.stringify(warnings)}`,
+      );
+
+      const afterGate = (await readActiveSteps(root))[ticketId];
+      assert.deepEqual(afterGate, beforeGate, "the live action stamp must survive the conflicting gate-check");
+
+      const dispatch = await runCli([
+        "--root", root, "check-dispatch",
+        "--agent", "local-board-designer", "--model", "opus", "--ticket", ticketId,
+      ]);
+      assert.equal(dispatch.code, 0, dispatch.stderr);
+      assert.equal(JSON.parse(dispatch.stdout).reason, "match", "the still-legitimate designer dispatch must remain authorized");
+    });
+  },
+);
+
+test(
+  "specialty-run does not clobber a different in-flight specialty stamp; it warns and leaves the first entry intact",
+  async () => {
+    await withBoard(async (root) => {
+      await writeFile(
+        path.join(root, "plans", "local-board.config.jsonc"),
+        JSON.stringify({
+          version: 1,
+          optionalSteps: {
+            design: [
+              {
+                name: "custom_review",
+                prompt: "plans/prompts/optional-steps/design/custom_review.md",
+                triggers: "Anything.",
+                agent: { route: "claude-subagent:local-board-reviewer", model: "opus" },
+              },
+              {
+                name: "second_review",
+                prompt: "plans/prompts/optional-steps/design/second_review.md",
+                triggers: "Anything else.",
+                agent: { route: "claude-subagent:local-board-tester", model: "sonnet" },
+              },
+            ],
+            implement: [],
+            test: [],
+          },
+        }),
+        "utf8",
+      );
+      await mkdir(path.join(root, "plans", "prompts", "optional-steps", "design"), { recursive: true });
+      await writeFile(
+        path.join(root, "plans", "prompts", "optional-steps", "design", "custom_review.md"),
+        "# Custom Review\n",
+        "utf8",
+      );
+      await writeFile(
+        path.join(root, "plans", "prompts", "optional-steps", "design", "second_review.md"),
+        "# Second Review\n",
+        "utf8",
+      );
+
+      const create = await runCli(["--root", root, "create", "task", "Two in-flight specialties", "--status", "ready_for_design", "--priority", "P2"]);
+      assert.equal(create.code, 0, create.stderr);
+      const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+      assert.equal((await runCli(["--root", root, "specialty-run", ticketId, "custom_review", "--json"])).code, 0);
+      const beforeSecond = (await readActiveSteps(root))[ticketId];
+      assert.equal(beforeSecond.action, "custom_review");
+
+      const warnings = [];
+      const originalWarn = console.warn;
+      console.warn = (message = "") => warnings.push(String(message));
+      let secondRun;
+      try {
+        secondRun = await runCli(["--root", root, "specialty-run", ticketId, "second_review", "--json"]);
+      } finally {
+        console.warn = originalWarn;
+      }
+      assert.equal(secondRun.code, 0, secondRun.stderr);
+      assert.ok(
+        warnings.some((message) => message.includes(ticketId) && message.includes("not stamped")),
+        `expected a not-stamped warning naming ${ticketId}, got: ${JSON.stringify(warnings)}`,
+      );
+
+      const afterSecond = (await readActiveSteps(root))[ticketId];
+      assert.deepEqual(
+        afterSecond,
+        beforeSecond,
+        "the first in-flight specialty stamp must survive the conflicting second specialty-run",
+      );
+
+      const dispatch = await runCli([
+        "--root", root, "check-dispatch",
+        "--agent", "local-board-reviewer", "--model", "opus", "--ticket", ticketId,
+      ]);
+      assert.equal(dispatch.code, 0, dispatch.stderr);
+      assert.equal(JSON.parse(dispatch.stdout).reason, "match", "the first-run specialty dispatch must remain authorized");
+    });
+  },
+);
+
+// --- Stamp identity + abandonment cleanup (B20260710T1225Z review finding 2) ---
+
+test(
+  "complete-step clears only its own action entry (by kind), preserving a newer gate stamp created before the clear runs",
+  async () => {
+    await withBoard(async (root) => {
+      const create = await runCli(["--root", root, "create", "task", "Clear by identity", "--status", "ready_for_implementation", "--priority", "P2"]);
+      assert.equal(create.code, 0, create.stderr);
+      const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+      assert.equal((await runCli(["--root", root, "begin-step", ticketId, "--json"])).code, 0);
+
+      // Simulate a gate stamp landing between complete-step's ticket write and
+      // its ledger clear (e.g. a gate-check that ran concurrently for this
+      // ticket). A real production race is timing-dependent; overwriting the
+      // ledger directly makes the race deterministic for the test.
+      const newerStamp = {
+        ticket: ticketId,
+        kind: "gate",
+        action: "gate-check",
+        stage: "implement",
+        route: "claude-subagent:local-board-gatecheck",
+        model: "haiku",
+        root: path.resolve(root),
+        ts: "2026-07-10T12:00:00Z",
+      };
+      await stampActiveStep(root, ticketId, newerStamp);
+
+      const complete = await runCli([
+        "--root", root, "complete-step", ticketId, "implement",
+        "--executor", "claude-subagent:local-board-implementer@sonnet",
+        "--evidence", "Implemented.", "--json",
+      ]);
+      assert.equal(complete.code, 0, complete.stderr);
+
+      const steps = await readActiveSteps(root);
+      assert.deepEqual(
+        steps[ticketId],
+        newerStamp,
+        "complete-step must not clear a gate-kind entry it doesn't correspond to",
+      );
+    });
+  },
+);
+
+test(
+  "an abandoned gate consultation stamp (gate-check run, never completed) is cleared when the ticket moves to a different status",
+  async () => {
+    await withBoard(async (root) => {
+      const create = await runCli(["--root", root, "create", "task", "Abandoned gate stamp", "--status", "ready_for_design", "--priority", "P2"]);
+      assert.equal(create.code, 0, create.stderr);
+      const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+      assert.equal((await runCli(["--root", root, "estimate", ticketId, "2"])).code, 0);
+      assert.equal((await runCli(["--root", root, "begin-step", ticketId, "--json"])).code, 0);
+      assert.equal(
+        (
+          await runCli([
+            "--root", root, "complete-step", ticketId, "design",
+            "--executor", "claude-subagent:local-board-designer@opus",
+            "--evidence", "Designed.", "--json",
+          ])
+        ).code,
+        0,
+      );
+      assert.equal((await runCli(["--root", root, "gate-check", ticketId, "--stage", "design", "--json"])).code, 0);
+      assert.ok(Object.hasOwn(await readActiveSteps(root), ticketId), "gate-check must stamp the consultation entry");
+
+      // The gate consultation is abandoned: no gate-complete, the ticket moves
+      // to "blocked" (a non-ticket blocker) instead.
+      const move = await runCli(["--root", root, "move", ticketId, "blocked", "--json"]);
+      assert.equal(move.code, 0, move.stderr);
+
+      assert.equal(
+        Object.hasOwn(await readActiveSteps(root), ticketId),
+        false,
+        "moving the ticket must clear the abandoned gate stamp",
+      );
+    });
+  },
+);
+
+test("clearActiveStepIf clears only when the predicate matches the current entry, atomically under the ledger lock", async () => {
+  await withBoard(async (root) => {
+    await stampActiveStep(root, "T1", { ticket: "T1", kind: "action", action: "design", route: "r1", model: "opus" });
+
+    const notCleared = await clearActiveStepIf(root, "T1", (record) => record.kind === "gate");
+    assert.equal(notCleared, false);
+    assert.ok(Object.hasOwn(await readActiveSteps(root), "T1"), "predicate mismatch must leave the entry intact");
+
+    const cleared = await clearActiveStepIf(root, "T1", (record) => record.kind === "action");
+    assert.equal(cleared, true);
+    assert.equal(Object.hasOwn(await readActiveSteps(root), "T1"), false);
+
+    // Missing entry is a no-op, not an error.
+    assert.equal(await clearActiveStepIf(root, "T-never-stamped", () => true), false);
+  });
+});
+
+test("stampActiveStepNoClobber stamps an empty slot, self-heals an idempotent re-stamp, and reports a conflict without overwriting", async () => {
+  await withBoard(async (root) => {
+    const first = { ticket: "T1", kind: "gate", route: "claude-subagent:local-board-gatecheck", model: "haiku" };
+    const emptySlot = await stampActiveStepNoClobber(root, "T1", first);
+    assert.equal(emptySlot.stamped, true);
+    assert.equal(emptySlot.conflict, null);
+
+    // Idempotent re-run: same kind+route+model self-heals (overwrites).
+    const idempotent = await stampActiveStepNoClobber(root, "T1", { ...first, ts: "2026-07-10T12:00:00Z" });
+    assert.equal(idempotent.stamped, true);
+    assert.equal((await readActiveSteps(root)).T1.ts, "2026-07-10T12:00:00Z");
+
+    // Conflicting stamp (different kind): left untouched, conflict reported.
+    const conflicting = await stampActiveStepNoClobber(root, "T1", {
+      ticket: "T1",
+      kind: "action",
+      route: "claude-subagent:local-board-designer",
+      model: "opus",
+    });
+    assert.equal(conflicting.stamped, false);
+    assert.equal(conflicting.conflict.kind, "gate");
+    assert.equal((await readActiveSteps(root)).T1.kind, "gate", "the live entry must survive the conflicting stamp attempt");
+  });
+});
 
 async function hasGit() {
   try {

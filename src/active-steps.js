@@ -109,6 +109,81 @@ export async function clearActiveStep(root, ticketId, options = {}) {
   );
 }
 
+// Identity-aware clear (B20260710T1225Z review fix): deletes this ticket's
+// ledger entry only when `predicate(existingRecord)` returns true, evaluated
+// on a fresh read taken under the SAME lock as the delete -- the read and the
+// delete are atomic, so there is no read-then-write race window where a
+// concurrent stamp could be identity-swapped out from under an unconditional
+// clear. This is what lets `completeStep`/`approveInline` (predicate: kind is
+// "action") and `recordGateConsultation` (predicate: kind is "gate" or
+// "specialty") each clear only the entry they correspond to, never a newer
+// entry of a different kind stamped in the gap between their own write and
+// their clear call. Missing entry or a predicate that returns false is a
+// no-op, matching `clearActiveStep`'s best-effort semantics.
+export async function clearActiveStepIf(root, ticketId, predicate, options = {}) {
+  const filePath = await ledgerPath(root);
+  let cleared = false;
+  await withFileLock(
+    `${filePath}.lock`,
+    async () => {
+      const current = await readLedgerSelfHeal(filePath);
+      const existing = current[ticketId];
+      if (existing === undefined || !predicate(existing)) {
+        return;
+      }
+      if (options.__afterRead) {
+        await options.__afterRead();
+      }
+      const next = { ...current };
+      delete next[ticketId];
+      await writeLedgerAtomic(filePath, next);
+      cleared = true;
+    },
+    options.lock,
+  );
+  return cleared;
+}
+
+// Consultation-only, no-clobber stamp (B20260710T1225Z review fix): used by
+// `gate-check`/`specialty-run` instead of `stampActiveStep`. The ledger holds
+// one record per ticket, and `gate-check`/`specialty-run` are expected to run
+// only after the stage's action entry has already been cleared -- but a
+// misuse of that ordering (a gate-check run before complete-step, or two
+// specialty-run calls racing) would otherwise silently clobber a still-live
+// entry and deny the legitimate in-flight dispatch. Stamps only when the
+// ticket has no entry yet, or the existing entry is an idempotent match for
+// this exact stamp (same kind+route+model -- a harmless re-run of the same
+// consultation, mirroring `stampActiveStep`'s self-healing re-stamp).
+// Otherwise leaves the existing entry untouched and reports it as `conflict`
+// so the caller can surface a non-fatal warning; the command itself must
+// still succeed.
+export async function stampActiveStepNoClobber(root, ticketId, record, options = {}) {
+  const filePath = await ledgerPath(root);
+  let conflict = null;
+  await withFileLock(
+    `${filePath}.lock`,
+    async () => {
+      const current = await readLedgerSelfHeal(filePath);
+      const existing = current[ticketId];
+      if (existing !== undefined && !isIdempotentStampMatch(existing, record)) {
+        conflict = existing;
+        return;
+      }
+      if (options.__afterRead) {
+        await options.__afterRead();
+      }
+      current[ticketId] = record;
+      await writeLedgerAtomic(filePath, current);
+    },
+    options.lock,
+  );
+  return { stamped: conflict === null, conflict };
+}
+
+function isIdempotentStampMatch(existing, next) {
+  return existing.kind === next.kind && existing.route === next.route && existing.model === next.model;
+}
+
 function bareRoute(route) {
   return typeof route === "string" && route.startsWith(CLAUDE_SUBAGENT_PREFIX)
     ? route.slice(CLAUDE_SUBAGENT_PREFIX.length)

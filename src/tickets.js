@@ -1,10 +1,24 @@
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { clearActiveStep, stampActiveStep } from "./active-steps.js";
+import { clearActiveStepIf, stampActiveStep } from "./active-steps.js";
 import { loadConfig, OPTIONAL_STEP_STAGES, resolveOptionalStepAgent } from "./config.js";
 import { withOrderedTicketLocks, withTicketLock } from "./lock.js";
 import { ticketWorktreeMintOffsetMinutes } from "./worktrees.js";
+
+// Ledger-entry kind predicates shared by the conditional clears below
+// (B20260710T1225Z review fix): `beginStep` stamps kind "action";
+// `gate-check`/`specialty-run` (src/cli.js) stamp kind "gate"/"specialty". A
+// record with no `kind` at all (pre-fix ledger data, or an external writer)
+// is treated as an action entry for backward compatibility, matching
+// `beginStep`'s pre-fix unconditional overwrite semantics.
+function isActionLedgerEntry(record) {
+  return (record.kind ?? "action") === "action";
+}
+
+function isConsultationLedgerEntry(record) {
+  return record.kind === "gate" || record.kind === "specialty";
+}
 
 export const PREFIX_TYPES = new Map([
   ["E", "epic"],
@@ -785,6 +799,20 @@ export async function moveTicket(root, ticketId, status, options = {}) {
         await writeTicketFile(targetPath, content, { renameFn: options.renameFn });
       }
 
+      // Abandonment cleanup (B20260710T1225Z review finding 2): a
+      // gate-check/specialty-run consultation stamp is only ever meant to
+      // live between its own stamp and the matching gate-complete's clear
+      // (recordGateConsultation). If the ticket instead moves away (e.g.
+      // through questions/blocked, or a loop-back) before that consultation
+      // is ever completed, the stamp would otherwise linger and later
+      // wrongly authorize a gate/specialty dispatch for a different stage.
+      // Any successful move clears a lingering consultation-kind entry for
+      // this ticket; action-kind entries (an in-flight begin-step dispatch)
+      // are left untouched -- moving a ticket is not evidence an action
+      // dispatch abandoned. Best-effort: a clear failure must never undo an
+      // already-successful move.
+      await clearActiveStepIf(root, ticketId, isConsultationLedgerEntry).catch(() => {});
+
       return targetPath;
     },
     options.lock,
@@ -1174,8 +1202,11 @@ export async function beginStep(root, ticketId, actionOverride = null) {
   // Additive side effect (unconditional, idempotent): stamps this ticket's
   // in-flight step so `check-dispatch` (T20260707T1325Z) can verify a later
   // Task dispatch against it. `begin-step`'s return shape is unchanged.
+  // `kind: "action"` (B20260710T1225Z) lets completeStep/approveInline clear
+  // only the entry they correspond to, via `clearActiveStepIf`.
   await stampActiveStep(root, ticket.id, {
     ticket: ticket.id,
+    kind: "action",
     action,
     route: configuredAgent,
     model: configuredModel,
@@ -1226,7 +1257,10 @@ export async function approveInline(root, ticketId, action, reason, options = {}
     },
     options.lock,
   );
-  await clearActiveStep(root, result.ticket).catch(() => {});
+  // Conditional (B20260710T1225Z): clears only the action entry it
+  // corresponds to, never a newer gate/specialty consultation stamped in the
+  // gap between this write and this clear (see clearActiveStepIf).
+  await clearActiveStepIf(root, result.ticket, isActionLedgerEntry).catch(() => {});
   return result;
 }
 
@@ -1327,7 +1361,9 @@ export async function completeStep(root, ticketId, action, executor, evidence, o
     },
     options.lock,
   );
-  await clearActiveStep(root, result.ticket).catch(() => {});
+  // Conditional (B20260710T1225Z): see the identical rationale on
+  // approveInline's clear above.
+  await clearActiveStepIf(root, result.ticket, isActionLedgerEntry).catch(() => {});
   return result;
 }
 
@@ -1398,8 +1434,10 @@ export async function recordGateConsultation(root, ticketId, stage, executor, ev
   // so this is the catch-all for both, mirroring completeStep's clear).
   // Best-effort, same rationale as completeStep: a missing/already-cleared
   // entry is a no-op, and a clear failure must never block evidence recording
-  // that already succeeded.
-  await clearActiveStep(root, ticketId).catch(() => {});
+  // that already succeeded. Conditional (B20260710T1225Z): only clears a
+  // gate/specialty entry, never a newer action stamp (e.g. begin-step for the
+  // NEXT stage, already running before this clear fires).
+  await clearActiveStepIf(root, ticketId, isConsultationLedgerEntry).catch(() => {});
   return { ticket: ticketId, stage, executor, path: writtenPath };
 }
 

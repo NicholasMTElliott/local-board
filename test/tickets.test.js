@@ -816,6 +816,7 @@ test("beginStep resolves an implementing-status ticket via the ready_for_impleme
     const steps = await readActiveSteps(root);
     assert.deepEqual(steps[ticketId], {
       ticket: ticketId,
+      kind: "action",
       action: "implement",
       route: "claude-subagent:local-board-implementer",
       model: "sonnet",

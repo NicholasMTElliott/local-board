@@ -441,7 +441,10 @@ test("begin-step surfaces configuredEffort (null when unset, pinned value when s
     const steps = await readActiveSteps(root);
     const stamped = steps[ticketId2];
     assert.equal(Object.hasOwn(stamped, "effort"), false);
-    assert.deepEqual(Object.keys(stamped).sort(), ["action", "model", "root", "route", "ticket", "ts"]);
+    // "kind" (B20260710T1225Z) discriminates action vs. gate/specialty
+    // ledger entries for the conditional clears; begin-step's action stamp
+    // carries kind: "action".
+    assert.deepEqual(Object.keys(stamped).sort(), ["action", "kind", "model", "root", "route", "ticket", "ts"]);
 
     // Evidence is unchanged: complete-step composes <route>@<model>, no effort.
     assert.equal((await runCli(["--root", root, "estimate", ticketId2, "2"])).code, 0);
