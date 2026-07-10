@@ -7,13 +7,13 @@ parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/S20260710T1206Z-design-review-step-codex-reviews-the-technical-design-before-implementation
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T12:06:56Z
-updated: 2026-07-10T12:07:33Z
+updated: 2026-07-10T12:14:09Z
 completedSteps: []
 routingApprovals: []
 ---
