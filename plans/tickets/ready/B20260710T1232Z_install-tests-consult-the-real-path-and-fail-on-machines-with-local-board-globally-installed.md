@@ -331,3 +331,5 @@ Residual risk: reviewer sandbox could not execute the suite (fixture spawning bl
 - 2026-07-10T14:01:38Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - test-only hermeticity rewrite
 
 - 2026-07-10T14:04:42Z: Completed review via codex-task:read-only@gpt-5.6-terra: verdict: pass, no findings. Assertion strength preserved; predicate scoped to local-board lookup only; packaged import hygienic; test-only scope confirmed.
+
+- 2026-07-10T14:04:42Z: Ensured git branch local-board/B20260710T1232Z-install-tests-consult-the-real-path-and-fail-on-machines-with-local-board-globally-installed (already-current).
