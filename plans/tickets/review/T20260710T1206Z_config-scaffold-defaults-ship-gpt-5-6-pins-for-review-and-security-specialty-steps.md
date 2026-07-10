@@ -13,7 +13,7 @@ estimateBasis: T20260710T1156Z
 workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:06:56Z
-updated: 2026-07-10T13:29:13Z
+updated: 2026-07-10T13:32:20Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -300,6 +300,20 @@ STEP 0 sibling merge: `local-board/T20260710T1220Z-...` merged cleanly with **ze
 Final `npm test`: 497 tests, 493 pass, 3 fail (the same 3 baseline failures, confirmed unchanged in count and identity). `npm run check` clean. `node ./bin/local-board.js validate --root <worktree>` -> "Ticket validation OK".
 
 ## Review Findings
+
+verdict: pass
+
+(codex-task:read-only, gpt-5.6-terra @ reasoning-effort high, 150s — reviewed commit dce310c; peer merge and planning commits excluded)
+
+No findings.
+
+Reviewer-verified:
+
+- Defaults-sync allowlist matches the actual leaf diff exactly (only agents.review.model/.effort diverge); DEFAULT_CONFIG keeps route-only review and empty optionalSteps arrays, so mergeConfig cannot leak GPT-5.6 pins into boards that omit those blocks.
+- Scaffold JSONC parses and normalizes cleanly; executor-suffix test updates are the required consequence of write-time model enforcement, not regression masks.
+- Scaffold comments + docs/CodexSupport.md + docs/specialty-steps.md state the pins and the removal/reroute escape hatch accurately; T0035Z detection covers prerequisites while unavailable-model rejection stays server-side.
+
+Residual risk: acceptance coverage is distributed across config/CLI tests rather than one direct init-plus-validate CLI assertion; reviewer sandbox could not run the suite (fixture spawning blocked) — verification stays with the test stage.
 
 ## Test Evidence
 
