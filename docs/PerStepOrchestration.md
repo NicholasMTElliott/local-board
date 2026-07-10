@@ -88,6 +88,9 @@ live config does not pin these; they show the shape of a profile object.
   - For `codex-task:*`: a codex model selector, a **separate namespace**. The
     validator must not check it against Claude aliases.
   - For `inline`: meaningless and **rejected** by the validator (see below).
+- `fallbackModels` (optional): ordered alternate model ids for a pinned `model`,
+  accepted by strict routing when the pinned model is unavailable and emitted
+  only when configured.
 - `prompt` (optional): repo-relative override of the action's default step
   prompt. Omitted → the existing `workflow.actionPrompts[action]` is used.
 
@@ -120,8 +123,8 @@ subagent route.** Practical fallouts:
   optional at the schema level (route-only tokens still parse), but when strict
   routing is on and the step's route matches the configured route and the
   action's profile pins a model, `complete-step` requires a matching `@<model>`
-  suffix — or `@codex-default` for a Codex-translated run, or a
-  `routingApprovals` entry for the full `route@model` token recorded via
+  suffix, a listed fallback model, `@codex-default` for a Codex-translated run,
+  or a `routingApprovals` entry for the full `route@model` token recorded via
   `approve-inline --executor <route>@<model>`. Done-time re-validation stays
   route-only so pre-existing evidence recorded before this rule (or before
   per-step models existed) is never retroactively broken.
@@ -340,7 +343,8 @@ a throwaway git repo using the real worktree CLI and real subagent dispatch with
 per-step models. Confirmed working:
 
 - per-step model dispatch in-loop (designer `opus`, implementer `sonnet`, tester
-  `sonnet`), each running on the requested model;
+  `sonnet`), each running on the requested model; fallback models are now a
+  configured ordered walk for pinned-model outages;
 - wave-barrier concurrency (two executors per wave, in parallel);
 - designer **self-write** (its own `Technical Design` section, temp file outside
   the worktree, terse return) and tester **return-only** (orchestrator persists);

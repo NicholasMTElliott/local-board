@@ -2,7 +2,7 @@ import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { resolveMainRoot, withFileLock } from "./lock.js";
-import { modelSatisfies, resolveExpectedStep, writeTicketFile } from "./tickets.js";
+import { modelAccepted, resolveExpectedStep, writeTicketFile } from "./tickets.js";
 import { resolveTicketWorktreeRoot } from "./worktrees.js";
 
 const CLAUDE_SUBAGENT_PREFIX = "claude-subagent:";
@@ -228,9 +228,14 @@ async function checkDispatchForTicket(root, agent, model, ticketId) {
 
   let expectedRoute;
   let expectedModel;
+  let expectedFallbackModels;
   if (record !== undefined) {
     expectedRoute = record.route;
     expectedModel = record.model ?? null;
+    // T20260710T1532Z, D5: gate with the stamp's own fallbackModels list
+    // (absent -> null, so modelAccepted degenerates to modelSatisfies on a
+    // fallback-free stamp -- authorization is byte-identical).
+    expectedFallbackModels = record.fallbackModels ?? null;
   } else {
     // No ledger record: fall back to the ticket's configured action. Resolve
     // against the ticket's registered worktree (if any) rather than `root`
@@ -251,6 +256,11 @@ async function checkDispatchForTicket(root, agent, model, ticketId) {
     }
     expectedRoute = resolved.route;
     expectedModel = resolved.model ?? null;
+    // T20260710T1532Z, D5/D7: no-ledger path resolves only the ticket's
+    // *status* action (resolveExpectedStep), not a specific pending
+    // specialty/gate/design-review action -- a pre-existing narrowing, out of
+    // scope here (see D7).
+    expectedFallbackModels = resolved.fallbackModels ?? null;
   }
 
   const expected = { agent: bareRoute(expectedRoute), model: expectedModel };
@@ -267,7 +277,7 @@ async function checkDispatchForTicket(root, agent, model, ticketId) {
     return { code: 0, body: { ok: true, reason: "model-unverifiable", expected, ticket: ticketId } };
   }
 
-  if (!modelSatisfies(expected.model, model)) {
+  if (!modelAccepted(expected.model, expectedFallbackModels, model)) {
     return { code: 1, body: { ok: false, reason: "model-mismatch", expected, ticket: ticketId } };
   }
 
@@ -282,6 +292,7 @@ async function checkDispatchByScan(root, agent, model) {
       continue;
     }
     const expectedModel = record.model ?? null;
+    const expectedFallbackModels = record.fallbackModels ?? null;
     const expected = { agent: routeBare, model: expectedModel };
 
     if (expectedModel === null) {
@@ -292,7 +303,7 @@ async function checkDispatchByScan(root, agent, model) {
       return { code: 0, body: { ok: true, reason: "model-unverifiable", ticket: ticketId, expected } };
     }
 
-    if (!modelSatisfies(expectedModel, model)) {
+    if (!modelAccepted(expectedModel, expectedFallbackModels, model)) {
       continue;
     }
 

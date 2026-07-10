@@ -183,3 +183,77 @@ test("translateCodexDispatch threads effort unchanged onto the unrecognized-rout
   assert.ok(dispatch.note.length > 0);
   assert.equal(dispatch.effort, "medium");
 });
+
+test("translateCodexDispatch (T20260710T1532Z, D6): omits fallbackModels entirely when null/undefined -- byte-identical to before this feature", () => {
+  const undefinedCase = translateCodexDispatch({
+    route: "claude-subagent:local-board-implementer",
+    model: "gpt-5-codex",
+    prompt: null,
+    agentsDir: AGENTS_DIR,
+  });
+  assert.deepEqual(undefinedCase, {
+    dispatchKind: "spawn_agent",
+    agentType: "worker",
+    promptPath: path.join(AGENTS_DIR, "local-board-implementer.md"),
+    model: "gpt-5-codex",
+    effort: null,
+    evidenceExecutor: "claude-subagent:local-board-implementer@gpt-5-codex",
+    known: true,
+  });
+
+  const nullCase = translateCodexDispatch({
+    route: "codex-task:read-only",
+    model: null,
+    prompt: null,
+    fallbackModels: null,
+    agentsDir: AGENTS_DIR,
+  });
+  assert.deepEqual(nullCase, {
+    dispatchKind: "spawn_agent",
+    agentType: "explorer",
+    promptPath: null,
+    model: null,
+    effort: null,
+    evidenceExecutor: "codex-task:read-only@codex-default",
+    known: true,
+    passthrough: true,
+    note: "native Codex route; not table-translated",
+  });
+});
+
+test("translateCodexDispatch (T20260710T1532Z): sanitizes an alias-containing fallbackModels list (Claude aliases dropped) while effort carries through unchanged", () => {
+  const dispatch = translateCodexDispatch({
+    route: "codex-task:read-only",
+    model: "gpt-5.6-terra",
+    prompt: null,
+    effort: "high",
+    fallbackModels: ["gpt-5.5", "sonnet"],
+    agentsDir: AGENTS_DIR,
+  });
+  assert.deepEqual(dispatch.fallbackModels, ["gpt-5.5"]);
+  assert.equal(dispatch.effort, "high");
+});
+
+test("translateCodexDispatch (T20260710T1532Z): a claude-subagent route whose fallbacks are all aliases sanitizes to an empty array (not omitted)", () => {
+  const dispatch = translateCodexDispatch({
+    route: "claude-subagent:local-board-implementer",
+    model: "sonnet",
+    prompt: null,
+    fallbackModels: ["opus", "haiku"],
+    agentsDir: AGENTS_DIR,
+  });
+  assert.deepEqual(dispatch.fallbackModels, []);
+});
+
+test("translateCodexDispatch (T20260710T1532Z, finding 5): prompt: promptPath populates codexDispatch.promptPath on a codex-task route", () => {
+  const dispatch = translateCodexDispatch({
+    route: "codex-task:read-only",
+    model: "gpt-5.6-sol",
+    prompt: "plans/prompts/steps/gate-check.md",
+    effort: "xhigh",
+    fallbackModels: ["gpt-5.5"],
+    agentsDir: AGENTS_DIR,
+  });
+  assert.equal(dispatch.promptPath, "plans/prompts/steps/gate-check.md");
+  assert.deepEqual(dispatch.fallbackModels, ["gpt-5.5"]);
+});

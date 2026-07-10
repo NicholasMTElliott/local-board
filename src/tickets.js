@@ -27,6 +27,21 @@ function isActionLedgerEntry(record, action) {
   return (record.kind ?? "action") === "action" && record.action === action;
 }
 
+// Identity-scoped predicate for a `kind: "specialty"` stamp (specialty-run,
+// src/cli.js), mirroring isActionLedgerEntry above. Used by completeStep
+// (T20260710T1532Z, D5-finding-1) to clear a delegated specialty's own
+// lingering ledger stamp at its own complete-step call, rather than leaving
+// it to the post-move moveTicket sweep (isAnyConsultationLedgerEntry below) --
+// design-review-check runs BEFORE that move, so without this clear a
+// specialty stamp left over from a delegated design specialty would make
+// stampActiveStepNoClobber (src/cli.js) report a conflict and skip the
+// design-review stamp, leaving the reviewer dispatch hook-rejected. Scoped to
+// the same action identity `completeStep` records for that specialty, so it
+// can never erase a different specialty's or a fresh entry's stamp.
+function isSpecialtyLedgerEntry(record, action) {
+  return record.kind === "specialty" && record.action === action;
+}
+
 // Third review (B20260710T1225Z): `recordGateConsultation` backs the
 // `gate-complete` verb, which only ever records a GATE agent's verdict --
 // there is no separate specialty-completion verb, but that does NOT make
@@ -36,10 +51,12 @@ function isActionLedgerEntry(record, action) {
 // `specialty-run` stamp for a still-unconsulted specialty in the same
 // "design" stage -- a different kind, wrongly erased because only `stage`
 // was compared. `recordGateConsultation` must therefore match ONLY its own
-// kind ("gate"), never "specialty". A lingering specialty stamp is instead
-// cleared by `moveTicket`'s broad abandonment sweep (isAnyConsultationLedgerEntry,
-// below) once the ticket actually leaves the stage, or self-heals on the next
-// `begin-step`/`specialty-run` overwrite.
+// kind ("gate"), never "specialty". A completed specialty's own stamp is now
+// cleared by `completeStep` itself (isSpecialtyLedgerEntry, T20260710T1532Z,
+// D5-finding-1); a lingering specialty stamp left by an abandoned (never
+// completed) specialty is still cleared by `moveTicket`'s broad abandonment
+// sweep (isAnyConsultationLedgerEntry, below) once the ticket actually leaves
+// the stage, or self-heals on the next `begin-step`/`specialty-run` overwrite.
 function isGateLedgerEntry(record, stage) {
   return record.kind === "gate" && record.stage === stage;
 }
@@ -49,9 +66,11 @@ function isGateLedgerEntry(record, stage) {
 // completeStep/approveInline/recordGateConsultation above) -- it is a
 // catch-all sweep for ANY lingering consultation stamp left behind when a
 // ticket moves away from a gated stage without ever reaching gate-complete
-// (e.g. into questions/blocked, or a loop-back). There is no single "the
-// stage this move is leaving" for a non-forward move, so this intentionally
-// stays kind-only.
+// (e.g. into questions/blocked, or a loop-back), including a specialty
+// abandoned before its own `complete-step` ran (a completed specialty's stamp
+// is already cleared at completion time by isSpecialtyLedgerEntry above,
+// T20260710T1532Z). There is no single "the stage this move is leaving" for a
+// non-forward move, so this intentionally stays kind-only.
 function isAnyConsultationLedgerEntry(record) {
   return record.kind === "gate" || record.kind === "specialty";
 }
@@ -1286,12 +1305,14 @@ function resolveStepFromBoard(board, config, ticketId, actionOverride) {
 export async function resolveExpectedStep(root, ticketId, actionOverride = null) {
   const [board, config] = await Promise.all([discover(root), loadConfig(root)]);
   const { ticket, action } = resolveStepFromBoard(board, config, ticketId, actionOverride);
+  const fallbackModels = fallbackModelsForAction(config, action);
   return {
     ticket: ticket.id,
     action,
     status: ticket.status,
     route: agentForAction(config, action),
     model: modelForAction(config, action),
+    ...(fallbackModels !== null ? { fallbackModels } : {}),
   };
 }
 
@@ -1306,6 +1327,7 @@ export async function beginStep(root, ticketId, actionOverride = null) {
   const configuredAgent = agentForAction(config, action);
   const configuredModel = modelForAction(config, action);
   const configuredEffort = effortForAction(config, action);
+  const configuredFallbackModels = fallbackModelsForAction(config, action);
 
   const result = {
     ticket: ticket.id,
@@ -1320,6 +1342,10 @@ export async function beginStep(root, ticketId, actionOverride = null) {
     delegationRequired: config.routing?.strict === true && configuredAgent !== "inline",
     branch: ticket.frontMatter.branch ?? null,
     path: path.relative(board.root, ticket.path),
+    // T20260710T1532Z, D6: added only when the resolved profile carries a
+    // non-empty fallbackModels list; absent (not null) otherwise, so a
+    // fallback-free board's begin-step result stays byte-identical.
+    ...(configuredFallbackModels !== null ? { configuredFallbackModels } : {}),
   };
 
   // Additive side effect (unconditional, idempotent): stamps this ticket's
@@ -1333,6 +1359,9 @@ export async function beginStep(root, ticketId, actionOverride = null) {
     action,
     route: configuredAgent,
     model: configuredModel,
+    // T20260710T1532Z, D6: only when non-empty, so check-dispatch's stamp read
+    // stays byte-identical on a fallback-free board.
+    ...(configuredFallbackModels !== null ? { fallbackModels: configuredFallbackModels } : {}),
     root: path.resolve(root),
     ts: formatIsoSeconds(new Date()),
   });
@@ -1486,8 +1515,17 @@ export async function completeStep(root, ticketId, action, executor, evidence, o
     options.lock,
   );
   // Conditional (B20260710T1225Z, re-review 2): see the identical rationale
-  // on approveInline's clear above.
-  await clearActiveStepIf(root, result.ticket, (record) => isActionLedgerEntry(record, action)).catch(() => {});
+  // on approveInline's clear above. Extended (T20260710T1532Z, D5-finding-1)
+  // to also clear a completed SPECIALTY's own `kind: "specialty"` stamp (the
+  // step's `action` is `entry.name`, the same `action` recorded here) --
+  // specialty-run left it lingering, and design-review-check (which runs
+  // before the ticket ever moves and triggers moveTicket's broader
+  // isAnyConsultationLedgerEntry sweep) would otherwise conflict against it.
+  await clearActiveStepIf(
+    root,
+    result.ticket,
+    (record) => isActionLedgerEntry(record, action) || isSpecialtyLedgerEntry(record, action),
+  ).catch(() => {});
   return result;
 }
 
@@ -2048,7 +2086,8 @@ function validateStepRouting(ticket, config, action, executor, { enforceModel = 
   }
 
   const executorModel = modelOf(executor);
-  if (modelSatisfies(configuredModel, executorModel)) {
+  const configuredFallbackModels = fallbackModelsForAction(config, action);
+  if (modelAccepted(configuredModel, configuredFallbackModels, executorModel)) {
     return issues;
   }
 
@@ -2058,8 +2097,9 @@ function validateStepRouting(ticket, config, action, executor, { enforceModel = 
 
   issues.push(
     `${ticket.path}: ${action} completed on model ${executorModel ?? "(none)"}, but configured model is ${configuredModel}; ` +
-      `record --executor ${configuredAgent}@${configuredModel} (or @codex-default for a Codex-translated run), ` +
-      `or approve the deviation with approve-inline --executor ${configuredAgent}@<model>.`,
+      `record --executor ${configuredAgent}@${configuredModel} (or @codex-default for a Codex-translated run` +
+      (configuredFallbackModels ? `, or a configured fallback model: ${configuredFallbackModels.join(", ")}` : "") +
+      `), or approve the deviation with approve-inline --executor ${configuredAgent}@<model>.`,
   );
   return issues;
 }
@@ -2586,6 +2626,14 @@ function modelForAction(config, action) {
   return profileForAction(config, action).model ?? null;
 }
 
+// The action's configured ordered fallbackModels list, or null when the
+// resolved profile carries none (T20260710T1532Z, D6: null is the signal for
+// every downstream layer -- result, stamp, payload -- to OMIT the key rather
+// than emit a placeholder, so a fallback-free board stays byte-identical).
+function fallbackModelsForAction(config, action) {
+  return profileForAction(config, action).fallbackModels ?? null;
+}
+
 function effortForAction(config, action) {
   return profileForAction(config, action).effort ?? null;
 }
@@ -2626,6 +2674,22 @@ function modelOf(value) {
 // model id to pin), so it satisfies any configured model.
 export function modelSatisfies(configuredModel, executorModel) {
   return executorModel === configuredModel || executorModel === "codex-default";
+}
+
+// Shared acceptance predicate (T20260710T1532Z, D4) used at BOTH strict-routing
+// enforcement seams: validateStepRouting's enforceModel branch above, and
+// check-dispatch (src/active-steps.js). Accepts the pin (or the codex-default
+// wildcard, via modelSatisfies) OR any model in the resolved fallbackModels
+// list. `fallbackModels` is `null` on a fallback-free board (or when the
+// resolved profile carries none), in which case this degenerates exactly to
+// modelSatisfies -- so fallback-free acceptance behavior is unchanged.
+// modelSatisfies itself is left untouched: its codex-default wildcard and its
+// other exported callers are not part of this feature.
+export function modelAccepted(configuredModel, fallbackModels, executorModel) {
+  return (
+    modelSatisfies(configuredModel, executorModel) ||
+    (Array.isArray(fallbackModels) && fallbackModels.includes(executorModel))
+  );
 }
 
 // Compose the `<route>@<model>` executor evidence string server-side so

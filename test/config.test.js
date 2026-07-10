@@ -10,6 +10,7 @@ import {
   defaultConfigJsonc,
   loadConfig,
   parseJsonc,
+  resolveOptionalStepAgent,
   writeDefaultConfig,
 } from "../src/config.js";
 import { removeFixtureDir } from "./helpers/fixtures.js";
@@ -217,6 +218,132 @@ test("loadConfig omits effort from a profile when no effort key is present (back
     const config = await loadConfig(root);
     assert.equal(Object.hasOwn(config.agents.design, "effort"), false);
   });
+});
+
+test("loadConfig accepts an ordered fallbackModels string array on an agent profile (T20260710T1532Z)", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      agents: {
+        review: {
+          route: "codex-task:read-only",
+          model: "gpt-5.6-terra",
+          effort: "high",
+          fallbackModels: ["gpt-5.5", "gpt-5.6-sol"],
+        },
+      },
+    }));
+    const config = await loadConfig(root);
+    assert.deepEqual(config.agents.review, {
+      route: "codex-task:read-only",
+      model: "gpt-5.6-terra",
+      effort: "high",
+      fallbackModels: ["gpt-5.5", "gpt-5.6-sol"],
+    });
+  });
+});
+
+test("loadConfig rejects a non-array fallbackModels", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      agents: { review: { route: "codex-task:read-only", model: "gpt-5.6-terra", fallbackModels: "gpt-5.5" } },
+    }));
+    await assert.rejects(loadConfig(root), /fallbackModels must be an array/);
+  });
+});
+
+test("loadConfig rejects an empty fallbackModels array", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      agents: { review: { route: "codex-task:read-only", model: "gpt-5.6-terra", fallbackModels: [] } },
+    }));
+    await assert.rejects(loadConfig(root), /fallbackModels must not be empty/);
+  });
+});
+
+test("loadConfig rejects a non-string or bad-charset fallbackModels entry", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      agents: { review: { route: "codex-task:read-only", model: "gpt-5.6-terra", fallbackModels: [42] } },
+    }));
+    await assert.rejects(loadConfig(root), /fallbackModels entries must be model aliases or ids/);
+  });
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      agents: { review: { route: "codex-task:read-only", model: "gpt-5.6-terra", fallbackModels: ["bad model"] } },
+    }));
+    await assert.rejects(loadConfig(root), /fallbackModels entries must be model aliases or ids/);
+  });
+});
+
+test("loadConfig rejects fallbackModels on an inline route", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      agents: { design: { route: "inline", model: null, fallbackModels: ["opus"] } },
+    }));
+    // inline + fallbackModels without model hits the "requires a pinned
+    // model" rule first for this particular combination; assert either
+    // rejection message is acceptable since both are correct refusals.
+    await assert.rejects(loadConfig(root), /fallbackModels/);
+  });
+});
+
+test("loadConfig rejects fallbackModels without a pinned model", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      agents: { review: { route: "codex-task:read-only", fallbackModels: ["gpt-5.5"] } },
+    }));
+    await assert.rejects(loadConfig(root), /fallbackModels requires a pinned model/);
+  });
+});
+
+test("loadConfig omits fallbackModels from a profile when no fallbackModels key is present (D6 back-compat, no stray key)", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      agents: { review: { route: "codex-task:read-only", model: "gpt-5.6-terra", effort: "high" } },
+    }));
+    const config = await loadConfig(root);
+    assert.deepEqual(config.agents.review, {
+      route: "codex-task:read-only",
+      model: "gpt-5.6-terra",
+      effort: "high",
+    });
+    assert.equal(Object.hasOwn(config.agents.review, "fallbackModels"), false);
+  });
+});
+
+test("resolveOptionalStepAgent surfaces fallbackModels only when the profile carries it (D6 byte-identical shapes)", () => {
+  assert.deepEqual(resolveOptionalStepAgent("claude-subagent:local-board-reviewer"), {
+    route: "claude-subagent:local-board-reviewer",
+    model: null,
+    effort: null,
+  });
+  assert.deepEqual(resolveOptionalStepAgent({ route: "codex-task:read-only", model: "gpt-5.6-sol", effort: "xhigh" }), {
+    route: "codex-task:read-only",
+    model: "gpt-5.6-sol",
+    effort: "xhigh",
+  });
+  assert.deepEqual(
+    resolveOptionalStepAgent({
+      route: "codex-task:read-only",
+      model: "gpt-5.6-sol",
+      effort: "xhigh",
+      fallbackModels: ["gpt-5.5"],
+    }),
+    {
+      route: "codex-task:read-only",
+      model: "gpt-5.6-sol",
+      effort: "xhigh",
+      fallbackModels: ["gpt-5.5"],
+    },
+  );
 });
 
 test("loadConfig rejects an invalid agent route", async () => {
@@ -607,6 +734,58 @@ test("loadConfig accepts a { route, model, effort } profile object for optionalS
   });
 });
 
+test("loadConfig accepts fallbackModels on an optionalSteps[].agent profile; prompt is still rejected (T20260710T1532Z, D3)", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      optionalSteps: {
+        implement: [
+          {
+            name: "security_audit",
+            prompt: "plans/prompts/optional-steps/impl/security_audit.md",
+            triggers: "Anything",
+            agent: {
+              route: "codex-task:read-only",
+              model: "gpt-5.6-sol",
+              effort: "xhigh",
+              fallbackModels: ["gpt-5.5"],
+            },
+          },
+        ],
+      },
+    }));
+    const config = await loadConfig(root);
+    assert.deepEqual(config.optionalSteps.implement[0].agent, {
+      route: "codex-task:read-only",
+      model: "gpt-5.6-sol",
+      effort: "xhigh",
+      fallbackModels: ["gpt-5.5"],
+    });
+  });
+
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      optionalSteps: {
+        implement: [
+          {
+            name: "security_audit",
+            prompt: "plans/prompts/optional-steps/impl/security_audit.md",
+            triggers: "Anything",
+            agent: {
+              route: "codex-task:read-only",
+              model: "gpt-5.6-sol",
+              prompt: "some/other.md",
+              fallbackModels: ["gpt-5.5"],
+            },
+          },
+        ],
+      },
+    }));
+    await assert.rejects(loadConfig(root), /agent cannot carry a prompt/);
+  });
+});
+
 test("loadConfig rejects a prompt field inside an optionalSteps[].agent profile", async () => {
   await withRoot(async (root) => {
     await writeConfig(root, JSON.stringify({
@@ -706,7 +885,7 @@ test("loadConfig rejects a malformed optionalSteps[].agent object (non-object, b
         ],
       },
     }));
-    await assert.rejects(loadConfig(root), /agent must be a route string or a \{ route, model\?, effort\? \} object/);
+    await assert.rejects(loadConfig(root), /agent must be a route string or a \{ route, model\?, effort\?, fallbackModels\? \} object/);
   });
 
   await withRoot(async (root) => {

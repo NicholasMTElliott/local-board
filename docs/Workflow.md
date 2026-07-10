@@ -165,7 +165,7 @@ Installed orchestration skills default to a per-ticket worktree before this bran
 ## Agent Routing
 
 `plans/local-board.config.jsonc` maps actions to agents. Each entry is a route
-string or a `{ route, model?, prompt? }` profile; a bare string is sugar for
+string or a `{ route, model?, effort?, fallbackModels?, prompt? }` profile; a bare string is sugar for
 `{ route }`. Supported `route` values are conventions interpreted by the
 orchestration skill and strict routing validator:
 
@@ -178,9 +178,14 @@ orchestration skill and strict routing validator:
 a codex model selector. A model on an `inline` route is rejected, because inline
 runs on the orchestrator's own model — route a step to a subagent to pin its
 model. `prompt` overrides `workflow.actionPrompts` for that action.
+`fallbackModels` is an optional ordered string array for pinned-model outages;
+it requires `model`, is rejected on `inline` routes, and is emitted in dispatch
+payloads only when configured. `effort` is a dispatch hint and is never recorded
+in evidence.
 
 `begin-step --json` resolves the entry to `configuredAgent` (route),
-`configuredModel`, and `configuredPrompt`. When the orchestrator dispatches a
+`configuredModel`, `configuredFallbackModels` when configured, and
+`configuredPrompt`. When the orchestrator dispatches a
 subagent route it pins the subagent to `configuredModel`; per-step models only
 take effect on subagent/codex routes. Completion should record the model that ran with the two-flag form:
 `complete-step <ticket-id> <action> --executor <route> --model <model>`.
@@ -191,9 +196,10 @@ example `design:claude-subagent:local-board-designer@opus`. The older
 hand-spliced form, `--executor <route>@<model>`, remains accepted. Strict routing
 matches the route, and — at `complete-step` write time, when the route matches
 and the action's profile pins a model — also requires the recorded model to
-match `configuredModel` (or `codex-default`, or an approved deviation recorded
-via `approve-inline --executor <route>@<model>`). Done-time re-validation stays
-route-only for back-compat with evidence recorded before this rule.
+match `configuredModel`, a listed `fallbackModels` entry, `codex-default`, or an
+approved deviation recorded via `approve-inline --executor <route>@<model>`.
+Done-time re-validation stays route-only for back-compat with evidence recorded
+before this rule.
 
 For dispatch verification, `begin-step` also records the ticket's active action,
 route, and model in `.local-board/active-steps.json` in the main checkout, so
@@ -284,8 +290,8 @@ Each stage contains entries shaped `{ name, prompt, triggers, agent? }`.
 - `triggers`: required human-readable guidance for deciding when the specialty applies.
 - `agent`: optional route override, accepting either form:
   - a bare route string using the same conventions as mandatory action routing: `inline`, `claude-subagent:<agent-name>`, or `codex-task:<mode>`;
-  - or a `{ route, model?, effort? }` profile object, using the same grammar as `agents.<action>` profiles (see "Agent routing" above) except `prompt` is rejected — the entry already owns a top-level `prompt` field, and an agent-profile `prompt` (including an explicit `null`) is an actionable load-time error pointing at the entry-level field instead.
-  - Omitted entries run inline. `route: "inline"` cannot carry a `model` or `effort`.
+  - or a `{ route, model?, effort?, fallbackModels? }` profile object, using the same grammar as `agents.<action>` profiles (see "Agent routing" above) except `prompt` is rejected — the entry already owns a top-level `prompt` field, and an agent-profile `prompt` (including an explicit `null`) is an actionable load-time error pointing at the entry-level field instead.
+  - Omitted entries run inline. `route: "inline"` cannot carry a `model`, `effort`, or `fallbackModels`.
   - Dispatch rule: pin the resolved `model` at dispatch (subagent model pin, or `codex-task`'s `--model`) and record it in completion evidence the same way mandatory steps do (`<route>@<model>`, `--model` on `complete-step`) so a pinned specialty model is enforced. `effort` is a dispatch hint only (`codex-task`'s `--reasoning-effort`, or frontmatter-static for `claude-subagent:`) and never appears in `completedSteps` evidence.
 
 ### Catalog
@@ -434,7 +440,7 @@ With `--json`, the command returns:
 }
 ```
 
-`agent` defaults to `inline` when the optional step entry has no override; when the entry's `agent` is a `{ route, model?, effort? }` profile object, `agent` is the profile's `route` and `model`/`effort` carry the pinned values (both `null` when the entry is a bare route string, or a profile that omits them). The CLI is a read-only dispatcher: it does not invoke any agent. The orchestrator hands the returned `prompt`, `agent`, `model`, `effort`, and `ticketContext` to the resolved execution route — pinning `model` at dispatch (subagent model pin or `codex-task --model`) and recording it in completion evidence the same way mandatory steps do, so a pinned specialty model is enforced by the normal step-evidence model gate; `effort` is a dispatch hint only (`codex-task --reasoning-effort`, or static frontmatter for `claude-subagent:`) and is never recorded in evidence. T20260516T1554Z (`orchestrator wiring`) will connect this resolver to the gate-check `requestedSteps` loop.
+`agent` defaults to `inline` when the optional step entry has no override; when the entry's `agent` is a `{ route, model?, effort?, fallbackModels? }` profile object, `agent` is the profile's `route` and `model`/`effort` carry the pinned values (both `null` when the entry is a bare route string, or a profile that omits them), while `fallbackModels` is returned only when configured. The CLI is a read-only dispatcher: it does not invoke any agent. The orchestrator hands the returned `prompt`, `agent`, `model`, `effort`, optional `fallbackModels`, and `ticketContext` to the resolved execution route — pinning `model` at dispatch (subagent model pin or `codex-task --model`) and recording the actual model in completion evidence the same way mandatory steps do, so a pinned specialty model is enforced by the normal step-evidence model gate and may be satisfied by a listed fallback; `effort` is a dispatch hint only (`codex-task --reasoning-effort`, or static frontmatter for `claude-subagent:`) and is never recorded in evidence. T20260516T1554Z (`orchestrator wiring`) will connect this resolver to the gate-check `requestedSteps` loop.
 
 ## Design Review
 
