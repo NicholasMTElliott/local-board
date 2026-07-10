@@ -414,3 +414,5 @@ Re-review: verdict: pass (codex-task:read-only, gpt-5.6-terra @ reasoning-effort
 - 2026-07-10T13:11:04Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - internal workflow machinery + flag gating
 
 - 2026-07-10T13:13:02Z: Completed review via codex-task:read-only@gpt-5.6-terra: Initial changes_requested (2 findings, terra@high) fixed in 18c0580; focused re-review verdict: pass (terra@medium). No open findings.
+
+- 2026-07-10T13:13:02Z: Ensured git branch local-board/T20260710T1220Z-design-review-routing-flag-move-precondition-and-evidence-recorder (already-current).
