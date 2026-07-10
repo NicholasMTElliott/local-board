@@ -13,7 +13,7 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T16:25:09Z
+updated: 2026-07-10T16:32:00Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -51,29 +51,39 @@ Remember the resources mirror: any plans/prompts edit requires npm run sync-reso
 Four independent documentation/prompt text additions from the 2026-07-10 parallel-run
 retrospective. No production code, no CLI behavior change. Each item is a bounded
 insertion into existing skill/prompt/agent Markdown, plus one resources mirror refresh.
-Item 1 additionally amends the team-skill scheduling sequence (not just Closeout prose)
-so the post-merge full suite provably gates slot refill.
+Item 1 additionally amends BOTH team skills' scheduling sequences (not just Closeout
+prose) so the post-merge full suite provably gates slot refill in each.
 
 ### Related tickets and conflicts
 
 - Incident sources are all from the 2026-07-10 parallel run (B20260710T1225Z merge break;
   two orchestrator agent-mismatch misses; codex review spawn-EPERM; an estimate-prompt
   assertion break from a prior reword). No open ticket touches these same anchors, so no
-  merge conflict is expected. The edits are additive prose plus one control-loop reorder.
+  merge conflict is expected. The edits are additive prose plus two control-loop reorders
+  (one per team skill).
 
 ### Insertion-point survey (confirmed by reading each file)
 
 - `SKILL_TEAM.md` has a numbered `## Control loop` (steps 1-8): 1 Seed, 2 Dispatch,
   3 Await, 4 On completion, 5 Conflict gate, **6 Refill** (lines 162-166), **7 Closeout**
-  (lines 167-175), 8 Terminate. Closeout owns `move ... done`; Refill textually precedes it.
-  Cross-references between steps are by NAME ("See Closeout", "see Dispatch"), never by
-  number, so the steps can be reordered without dangling references. Dispatch guidance also
-  lives in `## Execution profiles` (the `claude-subagent:<name>` bullet at line 61 introduces
+  (lines 167-175), 8 Terminate. Step 4's move is the NON-terminal transition only
+  ("Choose the next status ... and move", line 150); the terminal `move … done` lives
+  solely in Closeout, so SKILL_TEAM has no duplicate-move exposure — only an ordering
+  one (Refill textually precedes Closeout). Cross-references between steps are by NAME
+  ("See Closeout", "see Dispatch"), never by number, so the steps can be reordered
+  without dangling references. Closeout already carries the stale-default recovery
+  (rebase-onto-default-then-retry) and the commit-before-rebase note (move/complete-step
+  leave the ticket file dirty; rebase refuses a dirty tree). Dispatch guidance also lives
+  in `## Execution profiles` (the `claude-subagent:<name>` bullet at line 61 introduces
   the dispatch-ledger/routing-validator hooks and the `Ticket: <id>` anchor).
-- `skills/codex/local-team/SKILL.md` has a numbered `## Wave-Barrier Scheduling` (steps 1-6):
-  step 4 does `complete-step`/`move`, **step 5 "Refill open slots"** (line 47) precedes the
-  separate non-numbered `## Closeout` section (lines 92-102), which owns `move ... done`.
-  Same latent ordering: refill is reached before the closeout merge/verify text.
+- `skills/codex/local-team/SKILL.md` has a numbered `## Wave-Barrier Scheduling`
+  (steps 1-6): step 4 runs the GENERIC `complete-step`/gate/`move` for every transition
+  INCLUDING the terminal `move … done`, **step 5 "Refill open slots"** (line 47) precedes
+  the separate non-numbered `## Closeout` section (lines 92-102), which ALSO owns
+  `move … done` plus a stale-default recovery and a terminal
+  fast-forward-then-worktree-remove sentence. This file therefore has BOTH problems: a
+  faithful implementation could (a) move the terminal ticket twice (step 4 and Closeout)
+  and (b) refill before — even remove the worktree before — the merge/suite sequence.
 - `SKILL.md` (single-ticket, Claude) has `## Delegation` (lines 310-365).
 - `plans/prompts/roles/code_reviewer.md` is the reviewer role prompt (intro at lines 1-3;
   no `## Rules`/`## Constraints` block — first heading is `## Output and Persistence`).
@@ -83,26 +93,37 @@ so the post-merge full suite provably gates slot refill.
   `## Plan Files`). `CLAUDE.md` `@AGENTS.md`, so anything added to AGENTS.md reaches Claude
   sessions automatically.
 
-### Merge-mode behavior of `move ... done` (read from `src/cli.js` / `src/git.js`)
+### Merge-mode behavior of `move … done` (read from `src/cli.js` / `src/git.js`)
 
 `moveAndMaybeMerge` (`src/cli.js:794`) gates all merge work on
-`config.git.autoMerge === true`:
+`config.git.autoMerge === true`. `autoMergeTicketBranch` (`src/git.js:57`) has TWO
+internal branches selected by whether the default is checked out in another worktree
+(`branchCheckedOutElsewhere`), and its precondition (`assertAutoMergeReady`:
+merge-branch check, no-non-planning-changes, ticket-branch-up-to-date) runs first:
 
-- **`git.autoMerge: true`** — `move ... done` runs `assertAutoMergeReady` (the
-  rebase-onto-default precondition) and then `autoMergeTicketBranch` (`src/git.js:57`),
-  which switches to the default branch, `git merge --no-ff <ticket-branch>`, and prunes.
-  The CLI performs the merge into default.
-- **`git.autoMerge: false`** — `move ... done` performs NO merge and NO rebase precondition;
-  it only moves the ticket to `done` and commits planning changes. The ticket branch is left
-  unmerged. **The orchestrator must merge into default manually** (commit planning edits,
-  rebase the ticket branch onto default, switch to default, `git merge --no-ff <branch>`) —
-  the same non-fast-forward merge the CLI would otherwise do.
+- **`git.autoMerge: true`, normal worktree path** (the orchestrated case: `move` runs
+  with `--root <worktreePath>` while the default is checked out at the project root).
+  After the precondition and a planning-changes commit, `mergeBranchIntoDefaultRef`
+  (`src/git.js:189`) builds the merge commit with `git commit-tree`
+  (parents = old default + ticket branch) and advances the ref with
+  `git update-ref refs/heads/<default>`. The project-root **checkout is never touched**,
+  so it stays on the pre-merge tree until `local-board fast-forward` reconciles it —
+  which is exactly why the suite must wait for fast-forward. Merged branch is pruned
+  with `branch -d` where safe.
+- **`git.autoMerge: true`, main-checkout path** (default is NOT checked out elsewhere —
+  e.g. running from the project root itself). After the same precondition, the CLI
+  `git switch <default>` then `git merge --no-ff <branch> -m "Merge <id>"`, then prunes.
+  This `switch` + `merge --no-ff` description applies ONLY to this branch.
+- **`git.autoMerge: false`** — `move … done` performs NO merge and NO rebase precondition;
+  it only moves the ticket to `done` and commits planning changes (when
+  `git.commitPlanningOnTransition` is on). The ticket branch is left unmerged; the
+  orchestrator merges into default manually (see Item 1).
 
-This is the factual basis for Item 1's two branches: `autoMerge` decides WHO performs the
-merge, not WHETHER the post-merge suite runs. In BOTH modes, with worktree auto-merge the
-`move ... done` advance updates the default ref while the main checkout stays on the old tree
-until `local-board fast-forward` reconciles it — so the full suite must run only AFTER
-fast-forward, or it would test pre-merge code.
+This is the factual basis for Item 1's branches: `autoMerge` decides WHO performs the
+merge (and by which git mechanism), not WHETHER the post-merge suite runs. In the
+`autoMerge: true` worktree path the default ref advances while the checkout stays on the
+old tree, so the full suite MUST run only AFTER `local-board fast-forward` — otherwise it
+tests pre-merge code (the finding-2 correction from the prior round).
 
 ### Sync / test-guard machinery (read to bound the change)
 
@@ -145,86 +166,123 @@ Single-ticket `SKILL.md` closeout is intentionally out of scope (see Open questi
 The prior design appended the full-suite rule under Closeout only. That does NOT gate
 refill, because in both skills the refill step is reached BEFORE the closeout merge/verify
 text (SKILL_TEAM step 6 Refill precedes step 7 Closeout; codex step 5 Refill precedes the
-`## Closeout` section). A textually-clean auto-merge can still break tests via a
+separate `## Closeout` section). A textually-clean auto-merge can still break tests via a
 removed-function call or other semantic conflict git cannot see (this masked 11 failures in
 the B20260710T1225Z merge), so a freed slot could be refilled and new work dispatched on top
-of a broken default. The fix must make the SEQUENCE guarantee: terminal Closeout performs the
-applicable merge, reconciles the checkout with `fast-forward`, runs the merged-default full
-suite, and completes any fix-forward BEFORE the slot becomes refillable — which requires
-editing the step ordering/text, not just appending prose.
+of a broken default. The fix must make the SEQUENCE guarantee, in each skill's own numbered
+flow, that terminal Closeout performs the applicable merge, reconciles the checkout with
+`fast-forward` FIRST, runs the merged-default full suite, and completes any fix-forward
+BEFORE the slot becomes refillable — which requires editing step ordering/text, not just
+appending prose. Both recoveries already present (stale-default rebase-retry;
+commit-before-rebase) must be PRESERVED, not discarded.
 
-**Unambiguous merge-mode branches (resolves the earlier self-contradiction).** The full test
-suite on the merged default branch is **MANDATORY in BOTH modes**. `git.autoMerge` changes
-only WHO performs the merge, never whether the suite runs; and in either mode the suite runs
+**Merge-mode branches (mandatory in BOTH modes).** The full test suite on the merged
+default is MANDATORY whether `git.autoMerge` is on or off; the flag changes only WHO merges
+and by which git mechanism, never whether the suite runs, and in either mode the suite runs
 only AFTER `local-board fast-forward --json` has advanced the project-root checkout onto the
-merged default (with worktree auto-merge the ref advances before the checkout does, so a
-pre-fast-forward suite would test the old tree — the finding-2 correction):
+merged default:
 
-- `git.autoMerge: true` — `move ... done` performs the merge into default (rebase precondition
-  + `git merge --no-ff` + prune). The orchestrator then runs `fast-forward` in the project
-  root and runs the full suite on the resulting default branch.
-- `git.autoMerge: false` — `move ... done` does NOT merge; the orchestrator performs an
-  explicit manual merge into the default branch (commit planning edits, rebase the ticket
-  branch onto default, switch to default, `git merge --no-ff <branch>`), then runs
-  `fast-forward` in the project root and runs the full suite on the merged default branch.
+- `git.autoMerge: true` — `move … done` performs the merge into default itself (worktree
+  path: `commit-tree` + `update-ref`, checkout untouched; main-checkout path: `switch` +
+  `git merge --no-ff`). The orchestrator then runs `fast-forward` in the project root and
+  runs the full suite there.
+- `git.autoMerge: false` — `move … done` does NOT merge. Because the `move` transition
+  itself dirties the tree with the planning edit (and `git rebase` refuses a dirty tree),
+  the orchestrator: commits the post-`move` planning change, rebases the ticket branch onto
+  the default in its worktree, then FROM THE PROJECT ROOT switches to the default and
+  `git merge --no-ff <branch>`, then runs `fast-forward` and the full suite.
 
 In neither mode may a slot free or new work dispatch until that full suite is green (fix
-forward first on failure, then re-run). Delete the prior "boards may enable `git.autoMerge` so
-they need not gate refill on a manual suite run" wording entirely — it is the source of the
-contradiction and is now false.
+forward first on failure, then re-run). Delete any prior "boards may enable `git.autoMerge`
+so they need not gate refill on a manual suite run" wording — it is false and was the source
+of an earlier self-contradiction.
 
 **SKILL_TEAM.md edits (`## Control loop`):**
 
-1. **Reorder steps 6 and 7 so Closeout precedes Refill** (structural step-reorder, not a
-   prose insertion). Closeout becomes step 6; Refill becomes step 7. This is safe: every
+1. **Reorder steps 6 and 7 so Closeout precedes Refill** (structural step-reorder, exempt
+   from the sentence cap). Closeout becomes step 6; Refill becomes step 7. Safe: every
    cross-reference to these steps is by name ("See Closeout", "see Dispatch"), never by
    number, and the Concurrency-mode prose already describes the logical order as
    "advance + conflict-check + refill" (line 184), consistent with closeout-before-refill.
    No other renumbering is needed.
 
-2. **Replace the (now step 6) Closeout body** with this passage (<=3 sentences, orchestrator
-   audience), which encodes move -> merge (mode-branched) -> fast-forward -> merged-default
-   full suite -> fix-forward -> free slot:
+2. **Keep the existing Closeout recovery sentences** (the stale-default
+   rebase-onto-default-then-retry sentence, the "commit any planning-change edits before
+   rebasing — move/complete-step leave the ticket file dirty and rebase refuses" sentence,
+   and the "on an unresolvable conflict move to questions" sentence). Do NOT delete these —
+   they carry recoveries the prior revision dropped.
 
-   "**Closeout.** On a ticket's terminal step, commit any planning-change edits (a dirty tree
-   blocks rebase) and run `move <ticket-id> done --root <worktreePath> --json`; with
-   `git.autoMerge` on the CLI merges the branch into the default, and with it off you merge
-   manually (rebase onto default, switch to default, `git merge --no-ff <branch>`). Then run
-   `local-board fast-forward --json` in the project root FIRST to advance the checkout onto
-   the merged default, and only then run the FULL test suite there — a textually clean merge
-   can still break tests via a semantic conflict git cannot see (this masked 11 failures in
-   the B20260710T1225Z merge). On any failure fix forward and re-run the suite before
-   `worktree-remove`; the slot is not refillable until this green suite completes."
+3. **Replace ONLY the final Closeout sentence** (the current
+   "After each successful `move … done`, run `fast-forward` … then `worktree-remove`.")
+   with this passage (<=3 sentences, orchestrator audience):
 
-3. **Amend the (now step 7) Refill opening** to state the precondition explicitly (<=1
-   sentence), e.g.: "When an in-flight ticket's Closeout has completed (merge + fast-forward +
-   green merged-default full suite + any fix-forward) and the ready queue is non-empty and
-   in-flight `< maxInFlight`, pull the next ready ticket ..." — so the refill text itself
-   points back to the gating closeout.
+   "After `move … done` succeeds: with `git.autoMerge` on the CLI already merged the branch
+   into the default, and with it off you merge manually — commit the post-`move` planning
+   edit (the transition dirties the tree and `git rebase` would refuse), rebase the ticket
+   branch onto the default in its worktree, then from the project root switch to the default
+   and `git merge --no-ff <branch>`. Then run `local-board fast-forward --json` in the
+   project root FIRST to advance your checkout onto the merged default, and only then run the
+   FULL test suite there — a textually clean merge can still break tests via a semantic
+   conflict git cannot see (this masked 11 failures in the B20260710T1225Z merge). On any
+   failure fix forward and re-run the suite before `worktree-remove`; the slot is not
+   refillable until this green suite completes."
 
-**skills/codex/local-team/SKILL.md edits:**
+4. **Amend the (now step 7) Refill opening** to state the precondition explicitly
+   (<=1 sentence), e.g.: "When an in-flight ticket's Closeout has completed (merge +
+   fast-forward + green merged-default full suite + any fix-forward) and the ready queue is
+   non-empty and in-flight `< maxInFlight`, pull the next ready ticket …" — so the refill
+   text itself points back to the gating closeout.
 
-1. **`## Wave-Barrier Scheduling` step 5 (Refill)** — change "Refill open slots with newly
-   ready tickets." to gate on closeout (<=1 sentence): "Refill open slots with newly ready
-   tickets — but a slot only frees after its ticket's Closeout (below) has merged the branch,
-   fast-forwarded the checkout, run the full suite on the merged default branch, and completed
-   any fix-forward." This makes the numbered sequence enforce closeout-before-refill even
-   though `## Closeout` is a separate later section.
+**skills/codex/local-team/SKILL.md edits (structural reorder + `## Closeout` replacement):**
 
-2. **`## Closeout` section** — extend it with this passage (<=3 sentences, identical
-   substantive contract to SKILL_TEAM, in the codex file's terser style):
+The codex file needs BOTH a numbered-flow restructure (so the terminal move is not
+duplicated and Closeout precedes Refill) AND a replacement of the stale terminal sentence in
+its `## Closeout` section:
 
-   "With `git.autoMerge` on, `move ... done` merges the branch into the default; with it off,
-   merge manually (commit planning edits, rebase onto default, switch to default,
-   `git merge --no-ff <branch>`). Then run `local-board fast-forward --json` in the project
-   root to advance your checkout onto the merged default, and only then run the FULL test
-   suite there — a clean merge can still break tests via a semantic conflict git cannot see
-   (this masked 11 failures in the B20260710T1225Z merge). On failure fix forward and re-run
-   before `worktree-remove`; do not free or refill the slot until that suite is green."
+1. **`## Wave-Barrier Scheduling` step 4** — narrow the generic `move` to NON-terminal
+   transitions (<=1 sentence added/qualified): "… run gate-check/specialty flow for
+   design/implement/test, then `move` for non-terminal transitions only; terminal
+   `move … done` is handled by Closeout (step 5) so the merged-default suite can gate the
+   slot." This removes the duplicate-move exposure.
 
-Audience note: both target skills are orchestrator skills; the substantive contract (mandatory
-merged-default full suite in both merge modes, run only after `fast-forward`, gating refill,
-with an explicit manual merge on `autoMerge: false`) is identical across them.
+2. **Insert a new numbered step 5 "Closeout" BEFORE Refill** (structural insertion; keep the
+   step body <=3 sentences), pushing Refill to step 6 and Repeat to step 7:
+   "5. **Closeout (terminal tickets only, before refill).** When a ticket reaches its
+   terminal step, run the `## Closeout` sequence below — the terminal `move … done`
+   (mode-branched merge), then `local-board fast-forward --json` FIRST, then the FULL suite
+   on the merged default, then any fix-forward — and remove the worktree only after that
+   suite is green. A slot frees for refill only after this green suite completes."
+
+3. **Renumber Refill to step 6 and Repeat to step 7.** The steps carry no by-number
+   cross-references, so renumbering is safe. (Optional <=1-sentence reminder in Refill:
+   "only after the ticket's Closeout suite is green".)
+
+4. **`## Closeout` section** — KEEP its first sentence (the `move … done` command) and KEEP
+   its stale-default recovery sentences ("If it refuses because the branch lacks the latest
+   default, commit planning-only ticket edits in the worktree, rebase the ticket branch onto
+   default, and retry." and "If conflicts cannot be resolved safely, move the ticket to
+   questions."). **REPLACE ONLY the final terminal sentence** ("After each successful `done`,
+   run `fast-forward --json` in the project root and then `worktree-remove`.") with this
+   passage (<=3 sentences), so the move is issued exactly once and the worktree is removed
+   only after the suite passes:
+
+   "With `git.autoMerge` on, `move … done` already merged the branch into the default (via
+   `commit-tree` + `update-ref` when the default is checked out at the project root, leaving
+   that checkout on the old tree); with it off, merge manually — commit the post-`move`
+   planning edit, rebase the ticket branch onto the default in its worktree, then from the
+   project root switch to the default and `git merge --no-ff <branch>`. Then run
+   `local-board fast-forward --json` in the project root FIRST to advance your checkout onto
+   the merged default, and only then run the FULL test suite there — a clean merge can still
+   break tests via a semantic conflict git cannot see (this masked 11 failures in the
+   B20260710T1225Z merge). On failure fix forward and re-run before `worktree-remove`; do not
+   free or refill the slot until that suite is green."
+
+Audience note: both target skills are orchestrator skills; the substantive contract
+(mandatory merged-default full suite in both merge modes, run only after `fast-forward`,
+gating refill, with an explicit manual merge on `autoMerge: false` and both existing
+recoveries preserved) is identical across them. The codex file additionally needs the
+numbered-flow restructure because its step 4 previously issued the terminal move and its
+Refill preceded the separate `## Closeout` section.
 
 #### Item 2 — dispatch denial-recovery hint (orchestrator audience, Claude only)
 
@@ -291,8 +349,8 @@ with an explicit manual merge on `autoMerge: false`) is identical across them.
 
 | File | Item | Sync/mirror action |
 |---|---|---|
-| `SKILL_TEAM.md` | 1, 2 | none (not synced); Item 1 reorders steps 6/7 + rewrites Closeout/Refill |
-| `skills/codex/local-team/SKILL.md` | 1 | none; amend Wave-Barrier step 5 + `## Closeout` |
+| `SKILL_TEAM.md` | 1, 2 | none (not synced); Item 1 reorders steps 6/7, keeps Closeout recoveries + replaces its final sentence, amends Refill opening |
+| `skills/codex/local-team/SKILL.md` | 1 | none; Item 1 narrows step 4 to non-terminal moves, inserts a numbered Closeout step 5 before Refill (Refill->6, Repeat->7), keeps Closeout recoveries + replaces the terminal fast-forward/worktree-remove sentence |
 | `SKILL.md` | 2 | none (leave `## CLI Commands` untouched) |
 | `plans/prompts/roles/code_reviewer.md` | 3 | `npm run sync-resources` -> `resources/prompts/roles/code_reviewer.md` |
 | `agents/claude/local-board-reviewer.md` | 3 | none (agents ship directly) |
@@ -309,20 +367,26 @@ with an explicit manual merge on `autoMerge: false`) is identical across them.
   content assertion red. (Pure CRLF/LF differences inside the fence are normalized away by the
   test's `normalizeEol`, so they will not fail it — but do not touch the command lines.) Keep
   edits strictly outside those fences.
-- Item 1 reorder correctness: after swapping SKILL_TEAM steps 6/7, confirm no prose still
-  implies Refill runs before Closeout, and that the Refill opening's new precondition matches
-  the Closeout body (merge -> fast-forward -> suite -> fix-forward). The two team-skill
-  contracts must stay in parity (no test enforces cross-skill Item-1 parity — the reviewer
-  must eyeball both).
-- Ordering regression: if the full suite is run before `local-board fast-forward`, with
-  worktree auto-merge it tests the pre-merge tree and the semantic-conflict guard is void.
-  Fast-forward MUST precede the suite in both modes.
+- Codex restructure correctness: after narrowing step 4 to non-terminal moves and inserting
+  the numbered Closeout step 5, confirm the terminal `move … done` is issued EXACTLY ONCE
+  (only via the `## Closeout` section, referenced by step 5), that no prose still implies
+  Refill runs before Closeout, and that the worktree is removed only after the green suite.
+- Dropped-recovery regression: the replacement must preserve BOTH team skills' existing
+  recoveries — the stale-default rebase-onto-default-then-retry AND the
+  commit-before-rebase note (manual-mode `move` dirties planning state; rebase refuses a
+  dirty tree). Only the final terminal fast-forward/worktree-remove sentence is replaced.
+- Ordering regression: if the full suite is run before `local-board fast-forward`, the
+  `autoMerge: true` worktree path tests the pre-merge tree (ref advanced, checkout not) and
+  the semantic-conflict guard is void. Fast-forward MUST precede the suite in both modes.
+- Cross-skill Item-1 parity: no test enforces it; the reviewer must eyeball both team skills'
+  contracts for identical substance.
 - Over-scoping item 2 into the codex mirrors would be wrong (hook is Claude-only); avoid it.
 
 ### Test strategy / verification plan
 
-1. Make the edits (four items; Item 1 includes the SKILL_TEAM step reorder + codex Refill/
-   Closeout amendments).
+1. Make the edits (four items; Item 1 = SKILL_TEAM step 6/7 reorder + Closeout final-sentence
+   replacement + Refill amendment, AND codex step-4 narrowing + inserted Closeout step 5 +
+   Refill/Repeat renumber + codex `## Closeout` terminal-sentence replacement).
 2. `npm run sync-resources` (mandatory because `plans/prompts/roles/code_reviewer.md` changed).
 3. `npm run check` (syntax gate; unaffected by md but part of the standard gate).
 4. `node --test` — the FULL suite, not just guard suites (this ticket is itself the reason).
@@ -332,8 +396,10 @@ with an explicit manual merge on `autoMerge: false`) is identical across them.
    (untouched prompts), `test/install.test.js` / `test/pack.test.js` / `test/tickets.test.js`
    (path/existence only).
 5. Confirm no `## CLI Commands` fence command lines changed (git diff review of `SKILL.md`),
-   and eyeball SKILL_TEAM/codex Item-1 parity plus the step reorder and the
-   fast-forward-before-suite ordering.
+   eyeball SKILL_TEAM/codex Item-1 parity, confirm the SKILL_TEAM reorder and the codex
+   step-4-narrow + inserted step 5 + renumber, verify the terminal move fires exactly once in
+   the codex skill, both existing recoveries survive in both skills, and the
+   fast-forward-before-suite ordering holds in every branch.
 
 ### Open questions
 
