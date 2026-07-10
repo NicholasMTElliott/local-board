@@ -515,6 +515,98 @@ test("check-dispatch: configured model null always passes the model check", asyn
   });
 });
 
+test("check-dispatch (T20260710T1532Z, D5): action-path fallback model is accepted, unlisted is refused, pin/codex-default still accepted; a fallback-free stamp gates by modelSatisfies alone", async () => {
+  await withBoard(async (root) => {
+    // Ledger record carrying fallbackModels, as begin-step now stamps when
+    // the resolved profile lists a non-empty fallbackModels (D6).
+    await stampActiveStep(root, "T-fallback-action", {
+      ticket: "T-fallback-action",
+      kind: "action",
+      action: "review",
+      route: "claude-subagent:local-board-reviewer",
+      model: "gpt-5.6-terra",
+      fallbackModels: ["gpt-5.5"],
+    });
+
+    const fallbackAccepted = await checkDispatch(root, {
+      agent: "local-board-reviewer",
+      model: "gpt-5.5",
+      ticketId: "T-fallback-action",
+    });
+    assert.equal(fallbackAccepted.code, 0);
+    assert.equal(fallbackAccepted.body.reason, "match");
+
+    const unlisted = await checkDispatch(root, {
+      agent: "local-board-reviewer",
+      model: "gpt-4o",
+      ticketId: "T-fallback-action",
+    });
+    assert.equal(unlisted.code, 1);
+    assert.equal(unlisted.body.reason, "model-mismatch");
+
+    const pinned = await checkDispatch(root, {
+      agent: "local-board-reviewer",
+      model: "gpt-5.6-terra",
+      ticketId: "T-fallback-action",
+    });
+    assert.equal(pinned.code, 0);
+    assert.equal(pinned.body.reason, "match");
+
+    // A fallback-free ledger record for a different ticket gates by
+    // modelSatisfies alone -- unlisted model is still refused, no fallback list.
+    await stampActiveStep(root, "T-no-fallback-action", {
+      ticket: "T-no-fallback-action",
+      kind: "action",
+      action: "review",
+      route: "claude-subagent:local-board-reviewer",
+      model: "gpt-5.6-terra",
+    });
+    const noFallbackDenied = await checkDispatch(root, {
+      agent: "local-board-reviewer",
+      model: "gpt-5.5",
+      ticketId: "T-no-fallback-action",
+    });
+    assert.equal(noFallbackDenied.code, 1);
+    assert.equal(noFallbackDenied.body.reason, "model-mismatch");
+  });
+});
+
+test("check-dispatch (T20260710T1532Z, D5/D7): no-ledger path threads the status action's fallbackModels", async () => {
+  await withBoard(async (root) => {
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({
+        agents: {
+          implement: {
+            route: "claude-subagent:local-board-implementer",
+            model: "sonnet",
+            fallbackModels: ["haiku-fallback"],
+          },
+        },
+      }),
+      "utf8",
+    );
+
+    const ticketPath = await createTicket(root, "task", "No-ledger fallback resolution", {
+      status: "implementing",
+      now: new Date("2026-07-07T10:33:40Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const fallbackAccepted = await runCli([
+      "--root", root, "check-dispatch", "--agent", "local-board-implementer", "--model", "haiku-fallback", "--ticket", ticketId,
+    ]);
+    assert.equal(fallbackAccepted.code, 0, fallbackAccepted.stderr);
+    assert.equal(JSON.parse(fallbackAccepted.stdout).reason, "match");
+
+    const unlisted = await runCli([
+      "--root", root, "check-dispatch", "--agent", "local-board-implementer", "--model", "gpt-4o", "--ticket", ticketId,
+    ]);
+    assert.equal(unlisted.code, 1);
+    assert.equal(JSON.parse(unlisted.stdout).reason, "model-mismatch");
+  });
+});
+
 test("check-dispatch: no active step for the scanned agent denies", async () => {
   await withBoard(async (root) => {
     const result = await runCli(["--root", root, "check-dispatch", "--agent", "local-board-implementer"]);

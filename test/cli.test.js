@@ -460,6 +460,62 @@ test("begin-step surfaces configuredEffort (null when unset, pinned value when s
   });
 });
 
+test("begin-step (T20260710T1532Z, D6): configuredFallbackModels and codexDispatch.fallbackModels are present only when the resolved profile carries a non-empty fallbackModels list; absent (byte-identical, exact deep-equal) otherwise", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const create = await runCli([
+      "--root", root, "create", "task", "No fallback configured",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const baseline = await runCli(["--root", root, "begin-step", ticketId, "--json"]);
+    assert.equal(baseline.code, 0, baseline.stderr);
+    assert.equal(Object.hasOwn(JSON.parse(baseline.stdout), "configuredFallbackModels"), false);
+
+    const codexBaseline = await runCli(["--root", root, "begin-step", ticketId, "--harness", "codex", "--json"]);
+    assert.equal(codexBaseline.code, 0, codexBaseline.stderr);
+    assert.equal(Object.hasOwn(JSON.parse(codexBaseline.stdout).codexDispatch, "fallbackModels"), false);
+
+    // Pin an ordered fallbackModels list for "design" and re-run against a
+    // fresh ticket.
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({
+        agents: {
+          design: {
+            route: "claude-subagent:local-board-designer",
+            model: "opus",
+            fallbackModels: ["gpt-5.5-fallback", "sonnet"],
+          },
+        },
+      }),
+      "utf8",
+    );
+    const create2 = await runCli([
+      "--root", root, "create", "task", "Fallback configured",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create2.code, 0, create2.stderr);
+    const ticketId2 = path.basename(create2.stdout.trim()).split("_", 1)[0];
+
+    const pinned = await runCli(["--root", root, "begin-step", ticketId2, "--json"]);
+    assert.equal(pinned.code, 0, pinned.stderr);
+    assert.deepEqual(JSON.parse(pinned.stdout).configuredFallbackModels, ["gpt-5.5-fallback", "sonnet"]);
+
+    const codexPinned = await runCli(["--root", root, "begin-step", ticketId2, "--harness", "codex", "--json"]);
+    assert.equal(codexPinned.code, 0, codexPinned.stderr);
+    // "sonnet" is a Claude alias and is sanitized out of the Codex-walkable list.
+    assert.deepEqual(JSON.parse(codexPinned.stdout).codexDispatch.fallbackModels, ["gpt-5.5-fallback"]);
+
+    // The active-step ledger stamp carries the raw (unsanitized) list.
+    const steps = await readActiveSteps(root);
+    assert.deepEqual(steps[ticketId2].fallbackModels, ["gpt-5.5-fallback", "sonnet"]);
+  });
+});
+
 test("list --ready uses config-aware eligibility, ordering, JSON shape, status filter, and limit", async () => {
   await withBoard(async (root) => {
     const readyImpl = await createTicket(root, "task", "Ready implementation", {
@@ -1108,6 +1164,132 @@ test("CLI gate-check does not record ticket evidence on a non-empty catalog, but
   });
 });
 
+test("CLI gate-check (T20260710T1532Z, D6): a fallback-free gate profile is byte-identical to the legacy payload/stamp shape (no effort, no fallbackModels, no codexDispatch)", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const create = await runCli([
+      "--root", root, "create", "task", "Gate-check legacy shape",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const result = await runCli(["--root", root, "gate-check", ticketId, "--stage", "design", "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.deepEqual(Object.keys(out).sort(), [
+      "agent", "catalog", "model", "prompt", "recorded", "skip", "stage", "ticket", "ticketContext", "ticketPath",
+    ].sort());
+    assert.equal(Object.hasOwn(out, "effort"), false);
+    assert.equal(Object.hasOwn(out, "fallbackModels"), false);
+    assert.equal(Object.hasOwn(out, "codexDispatch"), false);
+
+    const steps = await readActiveSteps(root);
+    assert.deepEqual(Object.keys(steps[ticketId]).sort(), [
+      "action", "kind", "model", "root", "route", "stage", "ticket", "ts",
+    ]);
+  });
+});
+
+test("CLI gate-check (T20260710T1532Z, D5/D6): a fallback-configured claude-subagent gate profile gains effort, fallbackModels, and a codexDispatch sub-block (bundle only, never individually); the stamp carries fallbackModels; effort and the resolved promptPath are preserved", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    // A minimal config overlay: agents["gate-check"] fallback pin, plus a
+    // non-empty optionalSteps.design catalog entry (a bare overlay of just
+    // "agents" would otherwise merge onto DEFAULT_CONFIG's EMPTY
+    // optionalSteps, not the scaffold's populated one -- see loadConfig --
+    // producing an empty catalog and skipping the non-empty-catalog stamp
+    // branch entirely).
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({
+        agents: {
+          "gate-check": {
+            route: "claude-subagent:local-board-gatecheck",
+            model: "haiku",
+            effort: "high",
+            // Not a Claude alias (opus/sonnet/haiku) and does not start with
+            // "claude", so it survives codexDispatch sanitization unchanged --
+            // alias-dropping sanitization itself is covered separately in
+            // test/codex-dispatch.test.js.
+            fallbackModels: ["gpt-5.5-fallback"],
+          },
+        },
+        optionalSteps: {
+          design: [
+            { name: "custom_review", prompt: "p.md", triggers: "t" },
+          ],
+        },
+      }),
+      "utf8",
+    );
+
+    const create = await runCli([
+      "--root", root, "create", "task", "Gate-check fallback bundle",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const result = await runCli(["--root", root, "gate-check", ticketId, "--stage", "design", "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.effort, "high");
+    assert.deepEqual(out.fallbackModels, ["gpt-5.5-fallback"]);
+    assert.equal(out.codexDispatch.effort, "high");
+    // A known claude-subagent role's codexDispatch.promptPath is the Codex
+    // executor prompt fragment (translateCodexDispatch's existing
+    // claude-subagent branch behavior), not the raw prompt param -- the
+    // `prompt: promptPath` forwarding contract (finding 5) specifically
+    // targets the codex-task consultation branch (see the codex-task variant
+    // test below), where promptPath would otherwise be null.
+    assert.match(out.codexDispatch.promptPath.replace(/\\/g, "/"), /local-board-gatecheck\.md$/);
+    assert.deepEqual(out.codexDispatch.fallbackModels, ["gpt-5.5-fallback"]);
+
+    const steps = await readActiveSteps(root);
+    assert.deepEqual(steps[ticketId].fallbackModels, ["gpt-5.5-fallback"]);
+  });
+});
+
+test("CLI gate-check (T20260710T1532Z, finding 5): a fallback-configured codex-task gate route's codexDispatch.promptPath equals the resolved prompt path, dispatchable directly; a fallback-free profile emits no codexDispatch block at all", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({
+        agents: {
+          "gate-check": {
+            route: "codex-task:read-only",
+            model: "gpt-5.6-sol",
+            effort: "xhigh",
+            fallbackModels: ["gpt-5.5"],
+          },
+        },
+      }),
+      "utf8",
+    );
+
+    const create = await runCli([
+      "--root", root, "create", "task", "Gate-check codex-task fallback",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const result = await runCli(["--root", root, "gate-check", ticketId, "--stage", "design", "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.codexDispatch.promptPath, out.prompt);
+    assert.deepEqual(out.codexDispatch.fallbackModels, ["gpt-5.5"]);
+
+    // A codex-task route is never hook-gated (only claude-subagent: is), so
+    // no ledger stamp is written regardless of fallback configuration.
+    const steps = await readActiveSteps(root);
+    assert.equal(Object.hasOwn(steps, ticketId), false);
+  });
+});
+
 test("CLI gate-complete records gate:<stage>:<executor>, appends a Run Log line, and supports route and route@model executor forms", async () => {
   await withBoard(async (root) => {
     assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
@@ -1483,6 +1665,216 @@ test("CLI design-review-check performs no dispatch and stamps nothing in the act
     const after = await readActiveSteps(root);
     assert.deepEqual(after, before);
     assert.equal(Object.hasOwn(after, ticketId), false);
+  });
+});
+
+test("CLI design-review-check (T20260710T1532Z, D6/D7): a fallback-free payload is byte-identical to the legacy shape on every route; no stamp is written on the default codex-task:read-only route or on a claude-subagent route without fallbackModels (known limitation)", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    // Default (codex-task:read-only, no fallbackModels).
+    const create1 = await runCli([
+      "--root", root, "create", "task", "Design-review legacy shape default",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create1.code, 0, create1.stderr);
+    const ticketId1 = path.basename(create1.stdout.trim()).split("_", 1)[0];
+    const result1 = await runCli(["--root", root, "design-review-check", ticketId1, "--json"]);
+    assert.equal(result1.code, 0, result1.stderr);
+    const out1 = JSON.parse(result1.stdout);
+    assert.deepEqual(Object.keys(out1).sort(), [
+      "agent", "effort", "model", "prompt", "ticket", "ticketContext", "ticketPath",
+    ].sort());
+    assert.equal(Object.hasOwn(out1, "fallbackModels"), false);
+    assert.equal(Object.hasOwn(out1, "codexDispatch"), false);
+    assert.equal(Object.hasOwn(await readActiveSteps(root), ticketId1), false);
+
+    // claude-subagent route, no fallbackModels: hook-gated but no stamp is
+    // written (D7 known limitation, explicitly out of scope for this ticket).
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({
+        routing: { requireDesignReview: true },
+        agents: {
+          "design-review": { route: "claude-subagent:local-board-reviewer", model: "sonnet" },
+        },
+      }),
+      "utf8",
+    );
+    const create2 = await runCli([
+      "--root", root, "create", "task", "Design-review legacy shape claude-subagent no fallback",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create2.code, 0, create2.stderr);
+    const ticketId2 = path.basename(create2.stdout.trim()).split("_", 1)[0];
+    const result2 = await runCli(["--root", root, "design-review-check", ticketId2, "--json"]);
+    assert.equal(result2.code, 0, result2.stderr);
+    const out2 = JSON.parse(result2.stdout);
+    assert.equal(Object.hasOwn(out2, "fallbackModels"), false);
+    assert.equal(Object.hasOwn(out2, "codexDispatch"), false);
+    assert.equal(Object.hasOwn(await readActiveSteps(root), ticketId2), false);
+  });
+});
+
+test("CLI design-review-check (T20260710T1532Z, D5/D6): a fallback-configured claude-subagent design-review profile stamps an action/design-review ledger record and gains fallbackModels + codexDispatch in the payload", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({
+        routing: { requireDesignReview: true },
+        agents: {
+          "design-review": {
+            route: "claude-subagent:local-board-reviewer",
+            model: "sonnet",
+            fallbackModels: ["gpt-5.5-fallback"],
+          },
+        },
+      }),
+      "utf8",
+    );
+    const create = await runCli([
+      "--root", root, "create", "task", "Design-review fallback bundle",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const result = await runCli(["--root", root, "design-review-check", ticketId, "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.deepEqual(out.fallbackModels, ["gpt-5.5-fallback"]);
+    assert.deepEqual(out.codexDispatch.fallbackModels, ["gpt-5.5-fallback"]);
+
+    const steps = await readActiveSteps(root);
+    assert.equal(steps[ticketId].kind, "action");
+    assert.equal(steps[ticketId].action, "design-review");
+    assert.equal(steps[ticketId].route, "claude-subagent:local-board-reviewer");
+    assert.equal(steps[ticketId].model, "sonnet");
+    assert.deepEqual(steps[ticketId].fallbackModels, ["gpt-5.5-fallback"]);
+  });
+});
+
+test("CLI design-review-check (T20260710T1532Z, finding 5): a fallback-configured codex-task design-review route gains the fallback bundle with a non-null codexDispatch.promptPath, but writes no stamp (not hook-gated)", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({
+        routing: { requireDesignReview: true },
+        agents: {
+          "design-review": {
+            route: "codex-task:read-only",
+            model: "gpt-5.6-sol",
+            effort: "xhigh",
+            fallbackModels: ["gpt-5.5"],
+          },
+        },
+      }),
+      "utf8",
+    );
+    const create = await runCli([
+      "--root", root, "create", "task", "Design-review codex-task fallback prompt path",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const result = await runCli(["--root", root, "design-review-check", ticketId, "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.codexDispatch.promptPath, out.prompt);
+    assert.deepEqual(out.codexDispatch.fallbackModels, ["gpt-5.5"]);
+    assert.equal(Object.hasOwn(await readActiveSteps(root), ticketId), false);
+  });
+});
+
+test("CLI full sequence (T20260710T1532Z, D5-finding-1 primary): specialty-run (claude-subagent design specialty) -> its own complete-step clears the specialty stamp -> design-review-check stamps design-review with no conflict -> check-dispatch accepts the pinned and configured-fallback model, rejects an unlisted model", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({
+        routing: { requireDesignReview: true },
+        agents: {
+          "design-review": {
+            route: "claude-subagent:local-board-reviewer",
+            model: "sonnet",
+            fallbackModels: ["gpt-5.5-fallback"],
+          },
+        },
+        optionalSteps: {
+          design: [
+            {
+              name: "security_threat_model",
+              prompt: "plans/prompts/optional-steps/design/security_threat_model.md",
+              triggers: "Auth, crypto, PII.",
+              agent: { route: "claude-subagent:local-board-gatecheck", model: "haiku" },
+            },
+          ],
+        },
+      }),
+      "utf8",
+    );
+
+    const create = await runCli([
+      "--root", root, "create", "task", "Full sequence design-review after delegated specialty",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    // 1. specialty-run leaves a kind:"specialty" ledger stamp.
+    const specialtyRun = await runCli(["--root", root, "specialty-run", ticketId, "security_threat_model", "--json"]);
+    assert.equal(specialtyRun.code, 0, specialtyRun.stderr);
+    let steps = await readActiveSteps(root);
+    assert.equal(steps[ticketId].kind, "specialty");
+    assert.equal(steps[ticketId].action, "security_threat_model");
+
+    // Companion precondition: without the D5-finding-1 clear, the specialty
+    // stamp would still be live here and design-review-check's
+    // stampActiveStepNoClobber below would conflict.
+    assert.equal(steps[ticketId].kind, "specialty", "precondition: specialty stamp is live before its own complete-step");
+
+    // 2. The specialty's own complete-step clears its ledger stamp
+    // (D5-finding-1, isSpecialtyLedgerEntry).
+    const specialtyComplete = await runCli([
+      "--root", root, "complete-step", ticketId, "security_threat_model",
+      "--executor", "claude-subagent:local-board-gatecheck", "--model", "haiku",
+      "--evidence", "Threat model reviewed.",
+    ]);
+    assert.equal(specialtyComplete.code, 0, specialtyComplete.stderr);
+    steps = await readActiveSteps(root);
+    assert.equal(Object.hasOwn(steps, ticketId), false, "specialty stamp must be cleared by its own complete-step");
+
+    // 3. design-review-check now reaches a clean slot: the action/design-review
+    // stamp lands with no conflict.
+    const reviewCheck = await runCli(["--root", root, "design-review-check", ticketId, "--json"]);
+    assert.equal(reviewCheck.code, 0, reviewCheck.stderr);
+    steps = await readActiveSteps(root);
+    assert.equal(steps[ticketId].kind, "action");
+    assert.equal(steps[ticketId].action, "design-review");
+    assert.deepEqual(steps[ticketId].fallbackModels, ["gpt-5.5-fallback"]);
+
+    // 4. check-dispatch accepts the pin and the configured fallback, rejects
+    // an unlisted model.
+    const pinned = await runCli([
+      "--root", root, "check-dispatch", "--agent", "local-board-reviewer", "--model", "sonnet", "--ticket", ticketId,
+    ]);
+    assert.equal(pinned.code, 0, pinned.stderr);
+    assert.equal(JSON.parse(pinned.stdout).reason, "match");
+
+    const fallback = await runCli([
+      "--root", root, "check-dispatch", "--agent", "local-board-reviewer", "--model", "gpt-5.5-fallback", "--ticket", ticketId,
+    ]);
+    assert.equal(fallback.code, 0, fallback.stderr);
+    assert.equal(JSON.parse(fallback.stdout).reason, "match");
+
+    const unlisted = await runCli([
+      "--root", root, "check-dispatch", "--agent", "local-board-reviewer", "--model", "gpt-4o", "--ticket", ticketId,
+    ]);
+    assert.equal(unlisted.code, 1);
+    assert.equal(JSON.parse(unlisted.stdout).reason, "model-mismatch");
   });
 });
 
@@ -2164,6 +2556,141 @@ test("CLI specialty-run returns model/effort pins for an object-form optionalSte
       plain.stdout.split("\n")[0],
       /^specialty-run .* step=security_audit stage=implement agent=codex-task:read-only@gpt-5\.6-sol$/,
     );
+  });
+});
+
+test("CLI specialty-run (T20260710T1532Z, D6): a fallback-free specialty payload/stamp are byte-identical to the legacy shape (no fallbackModels, no codexDispatch)", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({
+        version: 1,
+        optionalSteps: {
+          design: [],
+          implement: [
+            {
+              name: "security_audit",
+              prompt: "plans/prompts/optional-steps/impl/security_audit.md",
+              triggers: "Anything touched by the security audit.",
+              agent: { route: "codex-task:read-only", model: "gpt-5.6-sol", effort: "xhigh" },
+            },
+          ],
+          test: [],
+        },
+      }),
+      "utf8",
+    );
+
+    const create = await runCli([
+      "--root", root, "create", "task", "Specialty legacy shape",
+      "--status", "implementing", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const result = await runCli(["--root", root, "specialty-run", ticketId, "security_audit", "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.deepEqual(Object.keys(out).sort(), [
+      "agent", "effort", "model", "prompt", "stage", "step", "ticket", "ticketContext", "ticketPath",
+    ].sort());
+    assert.equal(Object.hasOwn(out, "fallbackModels"), false);
+    assert.equal(Object.hasOwn(out, "codexDispatch"), false);
+    // codex-task:read-only is not hook-gated, so no ledger stamp is written.
+    const steps = await readActiveSteps(root);
+    assert.equal(Object.hasOwn(steps, ticketId), false);
+  });
+});
+
+test("CLI specialty-run (T20260710T1532Z, D5/D6): a fallback-configured claude-subagent specialty gains raw fallbackModels + a codexDispatch sub-block (resolved effort and promptPath preserved); the specialty stamp carries fallbackModels", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({
+        version: 1,
+        optionalSteps: {
+          design: [],
+          implement: [
+            {
+              name: "security_audit",
+              prompt: "plans/prompts/optional-steps/impl/security_audit.md",
+              triggers: "Anything touched by the security audit.",
+              agent: {
+                route: "claude-subagent:local-board-gatecheck",
+                model: "haiku",
+                effort: "xhigh",
+                fallbackModels: ["gpt-5.5-fallback"],
+              },
+            },
+          ],
+          test: [],
+        },
+      }),
+      "utf8",
+    );
+
+    const create = await runCli([
+      "--root", root, "create", "task", "Specialty fallback bundle",
+      "--status", "implementing", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const result = await runCli(["--root", root, "specialty-run", ticketId, "security_audit", "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.deepEqual(out.fallbackModels, ["gpt-5.5-fallback"]);
+    assert.equal(out.codexDispatch.effort, "xhigh");
+    assert.deepEqual(out.codexDispatch.fallbackModels, ["gpt-5.5-fallback"]);
+
+    const steps = await readActiveSteps(root);
+    assert.equal(steps[ticketId].kind, "specialty");
+    assert.deepEqual(steps[ticketId].fallbackModels, ["gpt-5.5-fallback"]);
+  });
+});
+
+test("CLI specialty-run (T20260710T1532Z, finding 5): a fallback-configured codex-task specialty's codexDispatch.promptPath equals the entry's resolved prompt path", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({
+        version: 1,
+        optionalSteps: {
+          design: [],
+          implement: [
+            {
+              name: "security_audit",
+              prompt: "plans/prompts/optional-steps/impl/security_audit.md",
+              triggers: "Anything touched by the security audit.",
+              agent: {
+                route: "codex-task:read-only",
+                model: "gpt-5.6-sol",
+                effort: "xhigh",
+                fallbackModels: ["gpt-5.5"],
+              },
+            },
+          ],
+          test: [],
+        },
+      }),
+      "utf8",
+    );
+
+    const create = await runCli([
+      "--root", root, "create", "task", "Specialty codex-task fallback prompt path",
+      "--status", "implementing", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const result = await runCli(["--root", root, "specialty-run", ticketId, "security_audit", "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    const out = JSON.parse(result.stdout);
+    assert.equal(out.codexDispatch.promptPath, out.prompt);
+    assert.deepEqual(out.codexDispatch.fallbackModels, ["gpt-5.5"]);
   });
 });
 

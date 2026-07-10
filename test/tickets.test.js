@@ -24,6 +24,7 @@ import {
   isDesignReviewGatedMove,
   isTransitionAllowed,
   linkParent,
+  modelAccepted,
   moveTicket,
   nextTicket,
   parseFrontMatter,
@@ -47,7 +48,7 @@ import {
 } from "../src/tickets.js";
 import { initProject } from "../src/scaffold.js";
 import { defaultConfigJsonc, loadConfig } from "../src/config.js";
-import { readActiveSteps } from "../src/active-steps.js";
+import { readActiveSteps, stampActiveStepNoClobber } from "../src/active-steps.js";
 import { removeFixtureDir } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
@@ -935,6 +936,18 @@ test("queryTicket returns action bundle for a specific ticket", async () => {
   });
 });
 
+test("modelAccepted (T20260710T1532Z, D4): pin, codex-default, and a listed fallback are accepted; an unlisted model is refused; null fallbacks degenerate to modelSatisfies", () => {
+  assert.equal(modelAccepted("gpt-5.6-terra", ["gpt-5.5", "gpt-5.6-sol"], "gpt-5.6-terra"), true);
+  assert.equal(modelAccepted("gpt-5.6-terra", ["gpt-5.5", "gpt-5.6-sol"], "codex-default"), true);
+  assert.equal(modelAccepted("gpt-5.6-terra", ["gpt-5.5", "gpt-5.6-sol"], "gpt-5.5"), true);
+  assert.equal(modelAccepted("gpt-5.6-terra", ["gpt-5.5", "gpt-5.6-sol"], "gpt-5.6-sol"), true);
+  assert.equal(modelAccepted("gpt-5.6-terra", ["gpt-5.5", "gpt-5.6-sol"], "gpt-4o"), false);
+  // null fallbackModels (fallback-free board) degenerates exactly to modelSatisfies.
+  assert.equal(modelAccepted("gpt-5.6-terra", null, "gpt-5.6-terra"), true);
+  assert.equal(modelAccepted("gpt-5.6-terra", null, "codex-default"), true);
+  assert.equal(modelAccepted("gpt-5.6-terra", null, "gpt-5.5"), false);
+});
+
 test("beginStep reports strict configured routing for a ticket action", async () => {
   await withBoard(async (root) => {
     const ticketPath = await createTicket(root, "task", "Needs review", {
@@ -1098,6 +1111,225 @@ test("beginStep on an implementing-status ticket is idempotent when re-run (ledg
     const steps = await readActiveSteps(root);
     assert.equal(Object.keys(steps).length, 1);
     assert.equal(steps[ticketId].action, "implement");
+  });
+});
+
+test("beginStep (T20260710T1532Z, D6): configuredFallbackModels and the active-step stamp's fallbackModels are present only when the resolved profile carries a non-empty fallbackModels list; absent (byte-identical) otherwise", async () => {
+  await withBoard(async (root) => {
+    // Fallback-free (default review profile has no fallbackModels): the
+    // result key is entirely absent, not null, and the ledger stamp is
+    // byte-identical to the pre-feature shape.
+    const noFallbackPath = await createTicket(root, "task", "No fallback configured", {
+      status: "ready_for_review",
+      now: new Date("2026-07-10T20:00:00Z"),
+    });
+    const noFallbackId = path.basename(noFallbackPath).split("_", 1)[0];
+    const noFallbackResult = await beginStep(root, noFallbackId);
+    assert.equal(Object.hasOwn(noFallbackResult, "configuredFallbackModels"), false);
+    const noFallbackSteps = await readActiveSteps(root);
+    assert.deepEqual(Object.keys(noFallbackSteps[noFallbackId]).sort(), [
+      "action", "kind", "model", "root", "route", "ticket", "ts",
+    ]);
+    assert.equal(Object.hasOwn(noFallbackSteps[noFallbackId], "fallbackModels"), false);
+
+    // Fallback-configured: both the result and the ledger stamp carry the
+    // ordered fallbackModels list.
+    await writeConfig(root, JSON.stringify({
+      agents: {
+        review: {
+          route: "codex-task:read-only",
+          model: "gpt-5.6-terra",
+          effort: "high",
+          fallbackModels: ["gpt-5.5"],
+        },
+      },
+    }));
+    const fallbackPath = await createTicket(root, "task", "Fallback configured", {
+      status: "ready_for_review",
+      now: new Date("2026-07-10T20:01:00Z"),
+    });
+    const fallbackId = path.basename(fallbackPath).split("_", 1)[0];
+    const fallbackResult = await beginStep(root, fallbackId);
+    assert.deepEqual(fallbackResult.configuredFallbackModels, ["gpt-5.5"]);
+    const fallbackSteps = await readActiveSteps(root);
+    assert.deepEqual(fallbackSteps[fallbackId].fallbackModels, ["gpt-5.5"]);
+  });
+});
+
+test("completeStep (T20260710T1532Z): accepts a configured fallback model under strict routing, refuses an unlisted model, and still accepts the pin and codex-default", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      agents: {
+        review: {
+          route: "codex-task:read-only",
+          model: "gpt-5.6-terra",
+          effort: "high",
+          fallbackModels: ["gpt-5.5"],
+        },
+      },
+    }));
+    const ticketPath = await createTicket(root, "task", "Fallback model review", {
+      status: "ready_for_review",
+      now: new Date("2026-07-10T20:05:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    // Unlisted model is refused, and the error names the configured fallback.
+    await assert.rejects(
+      completeStep(root, ticketId, "review", "codex-task:read-only@gpt-4o", "Unlisted model."),
+      /configured model is gpt-5\.6-terra.*configured fallback model: gpt-5\.5/s,
+    );
+
+    await completeStep(root, ticketId, "review", "codex-task:read-only@gpt-5.5", "Fallback model evidence.");
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /^completedSteps: \["review:codex-task:read-only@gpt-5\.5"\]$/m);
+    assert.deepEqual(validate(await discover(root), await loadConfig(root)), []);
+  });
+
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      agents: {
+        review: {
+          route: "codex-task:read-only",
+          model: "gpt-5.6-terra",
+          effort: "high",
+          fallbackModels: ["gpt-5.5"],
+        },
+      },
+    }));
+
+    // Pin still accepted alongside a configured fallback list.
+    const pinPath = await createTicket(root, "task", "Pinned model still accepted", {
+      status: "ready_for_review",
+      now: new Date("2026-07-10T20:06:00Z"),
+    });
+    const pinId = path.basename(pinPath).split("_", 1)[0];
+    await completeStep(root, pinId, "review", "codex-task:read-only@gpt-5.6-terra", "Pinned evidence.");
+    assert.match(await readFile(pinPath, "utf8"), /^completedSteps: \["review:codex-task:read-only@gpt-5\.6-terra"\]$/m);
+
+    // codex-default still accepted alongside a configured fallback list.
+    const defaultPath = await createTicket(root, "task", "codex-default still accepted", {
+      status: "ready_for_review",
+      now: new Date("2026-07-10T20:07:00Z"),
+    });
+    const defaultId = path.basename(defaultPath).split("_", 1)[0];
+    await completeStep(root, defaultId, "review", "codex-task:read-only@codex-default", "codex-default evidence.");
+    assert.match(await readFile(defaultPath, "utf8"), /^completedSteps: \["review:codex-task:read-only@codex-default"\]$/m);
+  });
+});
+
+test("moveTicket done-time re-validation stays route-only: fallback-model review evidence passes move done unchanged", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      agents: {
+        review: {
+          route: "codex-task:read-only",
+          model: "gpt-5.6-terra",
+          effort: "high",
+          fallbackModels: ["gpt-5.5"],
+        },
+      },
+    }));
+    const ticketPath = await createTicket(root, "task", "Fallback evidence survives done", {
+      status: "ready_for_docs",
+      now: new Date("2026-07-10T20:08:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Design evidence.");
+    await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer@sonnet", "Implementation evidence.");
+    // review recorded on the fallback model, not the pin.
+    await completeStep(root, ticketId, "review", "codex-task:read-only@gpt-5.5", "Fallback review evidence.");
+    await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester@sonnet", "Test evidence.");
+    await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
+
+    await moveTicket(root, ticketId, "done", { now: new Date("2026-07-10T20:08:03Z") });
+    const board = await discover(root);
+    const ticket = board.tickets.find((t) => t.id === ticketId);
+    assert.equal(ticket.frontMatter.status, "done");
+    assert.deepEqual(validate(board, await loadConfig(root)), []);
+  });
+});
+
+test("recordDesignReview (T20260710T1532Z): accepts a configured fallback model, refuses an unlisted model", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      routing: { requireDesignReview: true },
+      agents: {
+        "design-review": {
+          route: "codex-task:read-only",
+          model: "gpt-5.6-sol",
+          effort: "xhigh",
+          fallbackModels: ["gpt-5.5"],
+        },
+      },
+    }));
+    const ticketPath = await createTicket(root, "task", "Design review fallback", {
+      status: "ready_for_design",
+      now: new Date("2026-07-10T20:09:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await assert.rejects(
+      recordDesignReview(root, ticketId, "codex-task:read-only@gpt-4o", "Unlisted model."),
+      /configured model is gpt-5\.6-sol/,
+    );
+
+    await recordDesignReview(root, ticketId, "codex-task:read-only@gpt-5.5", "Fallback design review evidence.");
+    const text = await readFile(ticketPath, "utf8");
+    assert.match(text, /design-review:codex-task:read-only@gpt-5\.5/);
+  });
+});
+
+test("completeStep (T20260710T1532Z, D5-finding-1): clears a completed specialty's own kind:\"specialty\" ledger stamp; a different action's complete-step leaves it intact", async () => {
+  await withBoard(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      // Route "implement" to inline so the "different action" complete-step
+      // below succeeds trivially, isolating the specialty-clear identity
+      // scoping this test is actually about.
+      agents: { implement: { route: "inline" } },
+      optionalSteps: {
+        implement: [
+          {
+            name: "security_audit",
+            prompt: "p.md",
+            triggers: "t",
+            agent: { route: "codex-task:read-only", model: "gpt-5.6-sol" },
+          },
+        ],
+      },
+    }));
+    const ticketPath = await createTicket(root, "task", "Specialty stamp clear", {
+      status: "implementing",
+      now: new Date("2026-07-10T20:10:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    await stampActiveStepNoClobber(root, ticketId, {
+      ticket: ticketId,
+      kind: "specialty",
+      action: "security_audit",
+      stage: "implement",
+      route: "codex-task:read-only",
+      model: "gpt-5.6-sol",
+      root: path.resolve(root),
+      ts: "2026-07-10T20:10:01Z",
+    });
+
+    // A complete-step for a DIFFERENT action must leave the specialty stamp
+    // intact (identity scoping, mirroring isActionLedgerEntry).
+    await completeStep(root, ticketId, "implement", "inline", "Implementation evidence.", {
+      now: new Date("2026-07-10T20:10:02Z"),
+    });
+    let steps = await readActiveSteps(root);
+    assert.equal(steps[ticketId].kind, "specialty");
+    assert.equal(steps[ticketId].action, "security_audit");
+
+    // complete-step for the SAME action (the specialty's own name) clears it.
+    await completeStep(root, ticketId, "security_audit", "codex-task:read-only@gpt-5.6-sol", "Audit evidence.", {
+      now: new Date("2026-07-10T20:10:03Z"),
+    });
+    steps = await readActiveSteps(root);
+    assert.equal(Object.hasOwn(steps, ticketId), false);
   });
 });
 

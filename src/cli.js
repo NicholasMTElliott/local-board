@@ -619,6 +619,9 @@ async function commandBeginStep(root, args) {
       model: result.configuredModel,
       prompt: result.configuredPrompt,
       effort: result.configuredEffort,
+      // `undefined` when absent (result.configuredFallbackModels is only set
+      // when non-null, D6), so translateCodexDispatch omits the key too.
+      fallbackModels: result.configuredFallbackModels,
       agentsDir,
     });
   }
@@ -1189,6 +1192,12 @@ async function commandGateCheck(root, args, allowMainRoot) {
         stage,
         route: gateProfile.route,
         model: gateProfile.model ?? null,
+        // T20260710T1532Z, D5/D6: only when the resolved gate profile lists a
+        // non-empty fallbackModels, so a fallback-free stamp stays
+        // byte-identical to before this feature.
+        ...(Array.isArray(gateProfile.fallbackModels) && gateProfile.fallbackModels.length > 0
+          ? { fallbackModels: gateProfile.fallbackModels }
+          : {}),
         root: path.resolve(root),
         ts: formatIsoSeconds(new Date()),
       });
@@ -1222,6 +1231,32 @@ async function commandGateCheck(root, args, allowMainRoot) {
     acceptanceCriteria: getSectionText(ticket.body, "Acceptance Criteria") ?? "",
   };
 
+  // T20260710T1532Z, D5/D6: only when the resolved gate profile lists a
+  // non-empty fallbackModels, add together (as a bundle) the `effort` field
+  // (the gate-check payload otherwise has no `effort` key), the raw
+  // `fallbackModels` list (native harness walk), and a sanitized
+  // `codexDispatch` sub-block (Codex harness walk) carrying the same
+  // carried-over effort and this command's already-resolved `promptPath`.
+  // A fallback-free gate profile adds none of these keys, so the payload
+  // stays byte-identical to before this feature.
+  const gateFallbackModels = Array.isArray(gateProfile.fallbackModels) && gateProfile.fallbackModels.length > 0
+    ? gateProfile.fallbackModels
+    : null;
+  const fallbackBundle = gateFallbackModels
+    ? {
+        effort: gateProfile.effort ?? null,
+        fallbackModels: gateFallbackModels,
+        codexDispatch: translateCodexDispatch({
+          route: gateProfile.route,
+          model: gateProfile.model,
+          prompt: promptPath,
+          effort: gateProfile.effort ?? null,
+          fallbackModels: gateFallbackModels,
+          agentsDir: agentsDirFor(selfPackageRoot()),
+        }),
+      }
+    : {};
+
   const payload = {
     ticket: ticket.id,
     stage,
@@ -1233,6 +1268,7 @@ async function commandGateCheck(root, args, allowMainRoot) {
     catalog,
     skip,
     recorded,
+    ...fallbackBundle,
   };
 
   if (asJson) {
@@ -1315,6 +1351,39 @@ async function commandDesignReviewCheck(root, args, allowMainRoot) {
   const promptPath = path.resolve(root, "plans", "prompts", "steps", "design_review.md");
   await assertPromptExists(promptPath, "design-review");
 
+  // T20260710T1532Z, D5/D7: only when BOTH the route is claude-subagent: AND
+  // the profile lists a non-empty fallbackModels, stamp a design-review
+  // `action` ledger record so check-dispatch authorizes the reviewer dispatch
+  // (and any configured fallback). A claude-subagent route with NO
+  // fallbackModels writes no stamp (D7 known limitation, carried out of
+  // scope: check-dispatch falls back to the status action and rejects the
+  // reviewer as agent-mismatch -- pre-existing, not fixed here). No-clobber,
+  // mirroring gate-check/specialty-run: a conflict is a non-fatal warning.
+  // The existing `recordDesignReview` completion clear
+  // (isActionLedgerEntry(record, "design-review")) already clears this exact
+  // stamp, so no new clear code is needed.
+  const designReviewFallbackModels =
+    Array.isArray(profile.fallbackModels) && profile.fallbackModels.length > 0 ? profile.fallbackModels : null;
+  if (
+    typeof profile.route === "string"
+    && profile.route.startsWith("claude-subagent:")
+    && designReviewFallbackModels
+  ) {
+    const stampResult = await stampActiveStepNoClobber(root, ticket.id, {
+      ticket: ticket.id,
+      kind: "action",
+      action: "design-review",
+      route: profile.route,
+      model: profile.model ?? null,
+      fallbackModels: designReviewFallbackModels,
+      root: path.resolve(root),
+      ts: formatIsoSeconds(new Date()),
+    });
+    if (!stampResult.stamped) {
+      console.warn(describeLedgerStampConflict("design-review-check", ticket.id, stampResult.conflict));
+    }
+  }
+
   const baseRecord = ticketRecord(root, ticket);
   const currentAction = config.workflow?.statusActions?.[ticket.status] ?? null;
   const ticketContext = {
@@ -1329,6 +1398,25 @@ async function commandDesignReviewCheck(root, args, allowMainRoot) {
     acceptanceCriteria: getSectionText(ticket.body, "Acceptance Criteria") ?? "",
   };
 
+  // T20260710T1532Z, D5/D6: only when the profile lists a non-empty
+  // fallbackModels, add the raw list plus a sanitized codexDispatch sub-block
+  // (configured effort and this command's resolved promptPath carried over).
+  // A fallback-free design-review-check payload, on every route, stays
+  // byte-identical.
+  const designReviewFallbackBundle = designReviewFallbackModels
+    ? {
+        fallbackModels: designReviewFallbackModels,
+        codexDispatch: translateCodexDispatch({
+          route: profile.route,
+          model: profile.model,
+          prompt: promptPath,
+          effort: profile.effort ?? null,
+          fallbackModels: designReviewFallbackModels,
+          agentsDir: agentsDirFor(selfPackageRoot()),
+        }),
+      }
+    : {};
+
   const payload = {
     ticket: ticket.id,
     prompt: promptPath,
@@ -1337,6 +1425,7 @@ async function commandDesignReviewCheck(root, args, allowMainRoot) {
     effort: profile.effort ?? null,
     ticketPath: ticket.path,
     ticketContext,
+    ...designReviewFallbackBundle,
   };
 
   if (asJson) {
@@ -1415,16 +1504,21 @@ async function commandSpecialtyRun(root, args) {
   // pure resolver with no configured-vs-actual ledger duality, and an
   // existing test asserts out.agent is the plain route string. See
   // docs/specialty-steps.md.
-  const { route: agent, model, effort } = resolveOptionalStepAgent(entry.agent);
+  const { route: agent, model, effort, fallbackModels } = resolveOptionalStepAgent(entry.agent);
+  const specialtyFallbackModels = Array.isArray(fallbackModels) && fallbackModels.length > 0
+    ? fallbackModels
+    : null;
 
   // Stamp a scoped consultation entry in the ledger, mirroring gate-check's
   // non-skip stamp (B20260710T1225Z), so `check-dispatch` authorizes the
   // upcoming specialty agent dispatch instead of falling back to the stage's
-  // action route. Only for a Task-dispatched route; `gate-complete`'s clear
-  // covers this entry too (there is no separate specialty-completion verb).
-  // No-clobber (review finding 1): a second specialty-run (or a gate-check)
-  // already in flight for this ticket must not be silently overwritten;
-  // conflicts are reported as a non-fatal warning instead.
+  // action route. Only for a Task-dispatched route. This entry's own
+  // `complete-step` (via the specialty's step name as `action`) now clears it
+  // (T20260710T1532Z, D5-finding-1, isSpecialtyLedgerEntry); `moveTicket`'s
+  // broader abandonment sweep remains the catch-all for a specialty run that
+  // is never completed. No-clobber (review finding 1): a second specialty-run
+  // (or a gate-check) already in flight for this ticket must not be silently
+  // overwritten; conflicts are reported as a non-fatal warning instead.
   if (typeof agent === "string" && agent.startsWith("claude-subagent:")) {
     const stampResult = await stampActiveStepNoClobber(root, ticket.id, {
       ticket: ticket.id,
@@ -1433,6 +1527,9 @@ async function commandSpecialtyRun(root, args) {
       stage,
       route: agent,
       model: model ?? null,
+      // T20260710T1532Z, D5/D6: only when non-empty (byte-identical stamp
+      // otherwise).
+      ...(specialtyFallbackModels ? { fallbackModels: specialtyFallbackModels } : {}),
       root: path.resolve(root),
       ts: formatIsoSeconds(new Date()),
     });
@@ -1455,6 +1552,24 @@ async function commandSpecialtyRun(root, args) {
     acceptanceCriteria: getSectionText(ticket.body, "Acceptance Criteria") ?? "",
   };
 
+  // T20260710T1532Z, D5/D6: only when the resolved specialty agent lists a
+  // non-empty fallbackModels, add the raw list plus a sanitized codexDispatch
+  // sub-block (resolved effort and this command's resolved promptPath
+  // preserved); a fallback-free specialty payload stays byte-identical.
+  const specialtyFallbackBundle = specialtyFallbackModels
+    ? {
+        fallbackModels: specialtyFallbackModels,
+        codexDispatch: translateCodexDispatch({
+          route: agent,
+          model,
+          prompt: promptPath,
+          effort,
+          fallbackModels: specialtyFallbackModels,
+          agentsDir: agentsDirFor(selfPackageRoot()),
+        }),
+      }
+    : {};
+
   const payload = {
     ticket: ticket.id,
     stage,
@@ -1465,6 +1580,7 @@ async function commandSpecialtyRun(root, args) {
     effort,
     ticketPath: ticket.path,
     ticketContext,
+    ...specialtyFallbackBundle,
   };
 
   if (asJson) {

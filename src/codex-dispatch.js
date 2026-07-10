@@ -53,24 +53,52 @@ function evidenceExecutorFor(route, sanitizedModel) {
   return sanitizedModel ? `${route}@${sanitizedModel}` : `${route}@codex-default`;
 }
 
-// translateCodexDispatch({ route, model, prompt, effort, agentsDir }) -> codexDispatch
+// translateCodexDispatch({ route, model, prompt, effort, fallbackModels, agentsDir }) -> codexDispatch
+//
+// This is the single shared seam used by begin-step (commandBeginStep) AND
+// the three consultation commands (commandGateCheck, commandSpecialtyRun,
+// commandDesignReviewCheck; T20260710T1532Z) to translate a resolved logical
+// local-board profile into a Codex dispatch.
 //
 // - `route`: the configured logical route (begin-step's `configuredAgent`),
 //   e.g. "inline", "codex-task:workspace-write", "claude-subagent:local-board-designer".
 // - `model`: the configured logical model (begin-step's `configuredModel`),
 //   a Claude alias, a real id, or null.
-// - `prompt`: the configured project prompt (begin-step's `configuredPrompt`),
-//   may be null.
+// - `prompt`: the configured project prompt (begin-step's `configuredPrompt`,
+//   or a consultation command's already-resolved prompt file path). Each
+//   consultation command passes its own resolved `promptPath` here as
+//   `prompt: promptPath` (T20260710T1532Z) so the returned `promptPath`
+//   below is populated on the codex-task/passthrough branch and the fallback
+//   walk is directly dispatchable from `codexDispatch`. May be null.
 // - `effort`: the configured reasoning-effort token (begin-step's
-//   `configuredEffort`), or null. Passed through verbatim -- unlike `model`,
-//   effort is not Claude/Codex-partitioned, so there is no sanitization
-//   denylist. Config already rejects effort on inline routes, so the inline
-//   branch's effort is null in practice; the field is still included on
-//   every branch for shape uniformity.
+//   `configuredEffort`, or a consultation command's own profile effort), or
+//   null. Passed through verbatim -- unlike `model`, effort is not
+//   Claude/Codex-partitioned, so there is no sanitization denylist. Config
+//   already rejects effort on inline routes, so the inline branch's effort is
+//   null in practice; the field is still included on every branch for shape
+//   uniformity. This carried-over effort applies to the fallback walk too
+//   (T20260710T1532Z, D8): each caller passes its own profile's `effort`,
+//   never a hardcoded `null`.
+// - `fallbackModels`: the resolved profile's raw ordered fallbackModels list,
+//   or null/undefined when none is configured (T20260710T1532Z, D6). When a
+//   non-empty array, each entry is sanitized with the same `sanitizeModel`
+//   rule as `model` (Claude aliases / `claude*` / empty -> dropped) and a
+//   `fallbackModels` array (the SANITIZED list the Codex harness walks,
+//   possibly `[]` if every entry was an alias) is added to the returned
+//   object. When `fallbackModels` is null/undefined, the key is OMITTED
+//   entirely from the returned object -- not set to `null` -- so a
+//   fallback-free profile's translated dispatch is byte-identical to before
+//   this feature. The raw (un-sanitized) list is what the native Claude
+//   harness walks (surfaced separately by each caller, not here).
 // - `agentsDir`: absolute directory containing the Codex executor prompt
 //   fragments (one file per known claude-subagent role), resolved by the
 //   caller (CLI layer) via the same seam `where` uses. Never resolved here.
-export function translateCodexDispatch({ route, model, prompt, effort, agentsDir }) {
+export function translateCodexDispatch({ route, model, prompt, effort, fallbackModels, agentsDir }) {
+  const fallbackModelsField =
+    Array.isArray(fallbackModels) && fallbackModels.length > 0
+      ? { fallbackModels: fallbackModels.map((entry) => sanitizeModel(entry)).filter((entry) => entry !== null) }
+      : {};
+
   if (route === "inline") {
     // inline runs on the orchestrator's own model and cannot pin one
     // (consistent with composeExecutor/isValidAgentValue).
@@ -82,6 +110,7 @@ export function translateCodexDispatch({ route, model, prompt, effort, agentsDir
       effort: effort ?? null,
       evidenceExecutor: "inline",
       known: true,
+      ...fallbackModelsField,
     };
   }
 
@@ -101,6 +130,7 @@ export function translateCodexDispatch({ route, model, prompt, effort, agentsDir
         effort: effort ?? null,
         evidenceExecutor: evidenceExecutorFor(route, sanitizedModel),
         known: true,
+        ...fallbackModelsField,
       };
     }
 
@@ -115,6 +145,7 @@ export function translateCodexDispatch({ route, model, prompt, effort, agentsDir
       evidenceExecutor: evidenceExecutorFor(route, sanitizedModel),
       known: false,
       note: `unknown claude-subagent route "${route}"; ask the user for approval before falling back to inline, or move the ticket to questions`,
+      ...fallbackModelsField,
     };
   }
 
@@ -134,6 +165,7 @@ export function translateCodexDispatch({ route, model, prompt, effort, agentsDir
       known: true,
       passthrough: true,
       note: "native Codex route; not table-translated",
+      ...fallbackModelsField,
     };
   }
 
@@ -149,5 +181,6 @@ export function translateCodexDispatch({ route, model, prompt, effort, agentsDir
     evidenceExecutor: evidenceExecutorFor(route, sanitizedModel),
     known: false,
     note: `unrecognized route "${route}"; ask the user for approval before falling back to inline, or move the ticket to questions`,
+    ...fallbackModelsField,
   };
 }
