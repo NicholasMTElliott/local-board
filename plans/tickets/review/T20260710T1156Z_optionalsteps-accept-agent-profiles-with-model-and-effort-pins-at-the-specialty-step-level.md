@@ -13,7 +13,7 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:14:10Z
 workCompletedAt: null
 created: 2026-07-10T11:56:26Z
-updated: 2026-07-10T12:42:45Z
+updated: 2026-07-10T12:48:28Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -212,6 +212,20 @@ None blocking. The one genuine decision — `specialty-run` field naming — is 
 ## Implementation Notes
 
 ## Review Findings
+
+verdict: changes_requested; target: implementation
+
+(codex-task:read-only, gpt-5.6-terra @ reasoning-effort high, 177s — reviewed commit 683a4d3)
+
+1. High — src/config.js:655; src/tickets.js:2240: a specialty name may collide with a custom workflow.statusActions value. The schema rejects only the fixed built-in mandatory names, so a config with statusActions.ready_for_implementation = "custom_gate" plus an optionalSteps entry named "custom_gate" validates; specialty-run resolves the specialty pin, but profileForAction classifies the name as mandatory first and applies agents.default — rejecting the specialty pin or accepting the wrong one. Fix: reject optional-step names that collide with any effective statusActions value after merge; add a collision regression test.
+
+2. Low — src/config.js:439: a specialty profile with prompt: null is accepted (null treated as absent), bypassing the allowPrompt: false rejection. Fix: when allowPrompt is false, reject any owned prompt key including null, same actionable message; add a null-valued test.
+
+3. Medium — docs/Workflow.md:275, 402: main workflow doc still describes optionalSteps[].agent as route-string-only and omits model/effort from the specialty-run contract. Fix: document the profile form, extend the JSON example, note dispatch/record-model + exclude-effort rules.
+
+Verified clean by the reviewer: mandatory-agent error labels byte-identical; scanner handles raw and normalized shapes; specialty-run returns agent/model/effort; specialty completion reaches the existing modelSatisfies gate without serializing effort; CLI Commands blocks untouched; npm run check passed. (Reviewer sandbox could not spawn test workers — suite verification deferred to the test stage as usual.)
+
+Disposition: all three findings accepted; loop-back to ready_for_implementation for the fix pass.
 
 ## Test Evidence
 
