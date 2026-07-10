@@ -7,13 +7,13 @@ parent: S20260710T1206Z
 children: []
 blockedBy: [T20260710T1222Z]
 blocks: []
-branch: null
+branch: local-board/T20260710T1223Z-design-review-skill-and-docs-updates-for-both-flows
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T12:20:26Z
-updated: 2026-07-10T13:53:38Z
+updated: 2026-07-10T14:16:03Z
 completedSteps: []
 routingApprovals: []
 ---
