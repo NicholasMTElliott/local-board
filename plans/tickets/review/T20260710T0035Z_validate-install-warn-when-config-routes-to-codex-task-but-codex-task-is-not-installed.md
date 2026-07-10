@@ -13,7 +13,7 @@ estimateBasis: T20260709T1119Z
 workStartedAt: 2026-07-10T01:05:09Z
 workCompletedAt: null
 created: 2026-07-10T00:35:52Z
-updated: 2026-07-10T01:24:22Z
+updated: 2026-07-10T01:34:51Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -288,6 +288,16 @@ churn).
 ## Implementation Notes
 
 ## Review Findings
+
+Verdict: CONCERNS (codex-task:read-only, gpt-5.5, 212s) — resolved to non-blocking after orchestrator verification; no loop-back required.
+
+Reviewed commit ba06bf3 (branch local-board/T20260710T0035Z-... vs mainline).
+
+1. [major — REFUTED] src/config.js:448: reviewer flagged that codexTaskRoutedActions misses the object form optionalSteps[].agent = { route: "codex-task:..." }. Orchestrator verification: config validation at src/config.js:601-607 rejects any non-string optionalSteps[].agent with "invalid agent" at load time, so an object form can never reach the scanner. The string-only check is aligned with the schema. False positive (induced by review-prompt wording that presumed an object form exists). No change needed; if a future ticket widens optionalSteps[].agent to profile objects, the scanner must be updated in the same change.
+
+2. [minor — accepted, non-blocking] test/cli.test.js:28: the child-process integration tests sanitize PATH but retain the Node executable directory (plus /usr/bin, /bin), and on machines where the codex shim is colocated with node (true on this dev machine) the missing-binary clause cannot be exercised; the tests assert only the generic warning. Suggested hardening: assert the specific missing-clause text under a fully test-controlled PATH or injected resolver. Recorded as a follow-up candidate; does not undermine the acceptance criteria (hermeticity of pass/fail was verified — 458 pass on a machine with codex present).
+
+Reviewer's other checks (all clean): stderr-only warning keeps --json stdout parseable; validate exit code remains ticket-driven; readCwdConfigForHint fails open on absent/unreadable/malformed config; src/ files allowlist already covers the new module; node --check passed on changed sources.
 
 ## Test Evidence
 
