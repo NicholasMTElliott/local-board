@@ -13,8 +13,8 @@ estimateBasis: T20260710T1222Z
 workStartedAt: 2026-07-10T14:16:04Z
 workCompletedAt: null
 created: 2026-07-10T12:20:26Z
-updated: 2026-07-10T14:20:40Z
-completedSteps: []
+updated: 2026-07-10T14:21:09Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
 # design-review: skill and docs updates for both flows
@@ -317,3 +317,5 @@ surface parity.
 - 2026-07-10T13:53:38Z: Deferred review finding from T20260710T1222Z (terra@high): the curated CLI Commands blocks in SKILL.md and skills/codex/local-board/SKILL.md must gain design-review-check and design-review-complete (byte-identical), and consider the reviewer's suggestion to extend test/skill-usage-sync.test.js to require the intended command surface rather than only block identity.
 
 - 2026-07-10T14:16:04Z: Ensured git branch local-board/T20260710T1223Z-design-review-skill-and-docs-updates-for-both-flows (already-current).
+
+- 2026-07-10T14:21:09Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design: prose+test-only; Design Review narrative in all four skill files with exact insertion points, byte-identical CLI Commands lines after specialty-run, REQUIRED_COMMANDS sync-test extension, docs/Workflow.md narrative; first-line TEXT verdict, FAIL loop-back semantics, flag-off skip documented. Estimate 2 (basis T20260710T1222Z, designer-recorded).
