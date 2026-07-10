@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T14:16:04Z
 workCompletedAt: null
 created: 2026-07-10T12:20:26Z
 updated: 2026-07-10T14:51:29Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # design-review: skill and docs updates for both flows
@@ -436,3 +436,5 @@ Validation: prose-only change (this ticket's own code commits already carried th
 - 2026-07-10T14:49:07Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. 511/514 at pre-merge baseline; sync 5/5 incl. REQUIRED_COMMANDS; content verification with hash-identical blocks; guardrail honored.
 
 - 2026-07-10T14:49:08Z: Ensured git branch local-board/T20260710T1223Z-design-review-skill-and-docs-updates-for-both-flows (already-current).
+
+- 2026-07-10T14:51:29Z: Completed document via codex-task:workspace-write: systemPatterns facts synced (four-flow documentation, REQUIRED_COMMANDS, block count 27->29); committed on branch.
