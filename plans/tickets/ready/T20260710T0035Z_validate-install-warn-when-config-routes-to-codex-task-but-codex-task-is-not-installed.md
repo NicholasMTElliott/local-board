@@ -10,10 +10,10 @@ blocks: []
 branch: local-board/T20260710T0035Z-validate-install-warn-when-config-routes-to-codex-task-but-codex-task-is-not-installed
 estimate: null
 estimateBasis: null
-workStartedAt: null
+workStartedAt: 2026-07-10T01:05:09Z
 workCompletedAt: null
 created: 2026-07-10T00:35:52Z
-updated: 2026-07-10T01:04:34Z
+updated: 2026-07-10T01:05:09Z
 completedSteps: []
 routingApprovals: []
 ---
@@ -65,3 +65,5 @@ Add codex-task availability detection to `validate` (and surface the same check 
 ## Questions
 
 ## Run Log
+
+- 2026-07-10T01:05:09Z: Ensured git branch local-board/T20260710T0035Z-validate-install-warn-when-config-routes-to-codex-task-but-codex-task-is-not-installed (already-current).
