@@ -1,7 +1,7 @@
 ---
 id: T20260710T0037Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: null
 children: []
@@ -183,3 +183,5 @@ None blocking. One design decision is recorded rather than asked: effort is deli
 - 2026-07-10T01:37:00Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design written by opus designer: effort mirrors model field (same shape regex, inline rejection, no harness denylist), configuredEffort on begin-step, codexDispatch threading, effort excluded from evidence/ledger by design, additive low-collision edits vs T0035Z. Estimate 2 (basis T20260710T0036Z, designer-recorded).
 
 - 2026-07-10T01:37:42Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none - config schema field + JSON surface, no auth/UI/UX
+
+- 2026-07-10T01:37:43Z: Ensured git branch local-board/T20260710T0037Z-config-add-effort-to-agent-profiles-and-thread-it-through-begin-step-and-codex-dispatch (already-current).
