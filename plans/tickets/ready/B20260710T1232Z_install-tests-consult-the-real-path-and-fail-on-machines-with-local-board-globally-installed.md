@@ -13,8 +13,8 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T13:48:46Z
 workCompletedAt: null
 created: 2026-07-10T12:32:28Z
-updated: 2026-07-10T14:19:51Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+updated: 2026-07-10T14:19:52Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # install tests consult the real PATH and fail on machines with local-board globally installed
@@ -366,3 +366,5 @@ Validation: git diff --check clean; prose-only change.
 - 2026-07-10T14:08:17Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. 496/497 x2 runs, 0 fail; with-install condition verified on this machine; assertion strength confirmed preserved; guardrail honored.
 
 - 2026-07-10T14:08:18Z: Ensured git branch local-board/B20260710T1232Z-install-tests-consult-the-real-path-and-fail-on-machines-with-local-board-globally-installed (already-current).
+
+- 2026-07-10T14:19:52Z: Completed document via codex-task:workspace-write: techContext hermeticity fact added; no narrative changes needed; committed on branch.
