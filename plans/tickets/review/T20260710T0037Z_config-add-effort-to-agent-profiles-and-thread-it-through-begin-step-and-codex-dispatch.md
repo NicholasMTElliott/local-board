@@ -13,8 +13,8 @@ estimateBasis: T20260710T0036Z
 workStartedAt: 2026-07-10T01:31:18Z
 workCompletedAt: null
 created: 2026-07-10T00:36:10Z
-updated: 2026-07-10T01:54:04Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-10T01:54:05Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only]
 routingApprovals: []
 ---
 # config: add effort to agent profiles and thread it through begin-step and codex dispatch
@@ -211,3 +211,5 @@ Re-review: PASS (codex-task:read-only, gpt-5.6-luna @ reasoning-effort medium, 3
 - 2026-07-10T01:51:53Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Original d3c425d (effort field end-to-end, 7 new tests) + review-fix 75b4116 (docs shape-validation wording; unknown-branch effort assertions). 466 pass/1 skip; check + validate green.
 
 - 2026-07-10T01:52:33Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - docs wording + test assertions only
+
+- 2026-07-10T01:54:05Z: Completed review via codex-task:read-only: Initial CONCERNS (2 minors, terra@high) fixed in 75b4116; focused re-review PASS (luna@medium). No open findings.
