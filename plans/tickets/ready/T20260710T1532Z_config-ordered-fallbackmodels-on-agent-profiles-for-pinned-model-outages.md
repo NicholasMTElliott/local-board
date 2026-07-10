@@ -13,7 +13,7 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T16:11:23Z
+updated: 2026-07-10T16:18:32Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -699,3 +699,5 @@ override) is intentionally out of scope and forward-compatible.
 - 2026-07-10T15:50:48Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none requested (config-driven policy enforcement, borderline security trigger weighed and omitted per uncertainty rule; no UI/UX)
 
 - 2026-07-10T16:05:05Z: Design review (codex-task:read-only gpt-5.6-sol@xhigh): FAIL. [High] configuredFallbackModels:null / fallbackModels:null on fallback-free outputs contradicts byte-identical back-compat criterion - emit keys only when configured, test exact legacy shapes. [High] fallbacks threaded only through begin-step; specialty-run, gate-check, design-review-check ledger records and payloads omit them, so fallback dispatches on those paths would be hook-rejected - thread through every profile resolver + consultation stamp or explicitly exclude with schema. [Medium] codex skill prose should walk codexDispatch.fallbackModels (sanitized), not raw configuredFallbackModels; test alias-containing list. Disposition: design returns for revision; token withheld until re-review passes.
+
+- 2026-07-10T16:18:32Z: Design re-review (sol@xhigh): FAIL. [High] Superseded design still present after revised text (stray H2 blocks from first design write terminated the section - same defect class as B20260710T1532Z); delete duplicate. [High] Consultation fallbacks not operational: gate-check/specialty-run/design-review-check payloads get raw fallbackModels but neither documented workflow walks them, no sanitized codex list for those paths, and empty-sanitized-list falling back to codex-default bypasses exhaustion-to-approval/questions. [Medium] No exact legacy-shape tests for consultation payloads/stamps, no no-ledger check-dispatch fallback test. Disposition: designer repairs body + revises; review round 3 to follow.
