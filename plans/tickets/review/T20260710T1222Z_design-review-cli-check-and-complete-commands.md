@@ -13,7 +13,7 @@ estimateBasis: T20260710T1220Z
 workStartedAt: 2026-07-10T13:25:24Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T13:49:52Z
+updated: 2026-07-10T13:53:37Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -416,6 +416,22 @@ design-review coverage. `npm run check` clean. `node ./bin/local-board.js
 validate` → "Ticket validation OK".
 
 ## Review Findings
+
+verdict: changes_requested; target: implementation
+
+(codex-task:read-only, gpt-5.6-terra @ reasoning-effort high, 135s — reviewed commit 7b2dd91; peer merge excluded)
+
+1. Medium — src/tickets.js:773 [ACCEPTED]: the missing-design-review move refusal instructs users to run "design-review", a command that does not exist; the valid recovery is design-review-check then design-review-complete. Fix the diagnostic to name the two real commands and their required arguments; strengthen the E2E assertion beyond the refusal prefix.
+
+2. Medium — SKILL.md:338 + skills/codex/local-board/SKILL.md:253 [ACCEPTED, DEFERRED to T20260710T1223Z]: the curated CLI Commands blocks omit the two new commands. This is explicitly the sibling docs ticket's scope ("Add both commands to each skill's command reference") per the story decomposition; recorded here so T1223Z's designer also considers the reviewer's suggestion to extend the sync test to require the intended command surface.
+
+3. Low — src/cli.js:1338 [ACCEPTED]: missing-argument usage for design-review-complete omits [--json] though the handler accepts it and USAGE_TEXT advertises it. Add to the thrown usage string; assert in the argument-validation test.
+
+4. Low — test coverage [ACCEPTED]: add focused CLI tests for the no-ledger-stamp property of design-review-check, check's wrong-root/--allow-main-root behavior, complete's --allow-main-root override, and the combined-executor path (--executor codex-task:read-only@codex-default, no --model).
+
+Reviewer-verified clean: flag-off refusal exit codes; assertInvocationRootForTicket ordering before lock/commit; no ledger write in check (and no hook-dispatch reason for one — checkDispatch short-circuits non-local-board agents; the merged B1225Z stamping is claude-subagent-scoped); JSON/plain parity; ticketContext parity with gate-check. Reviewer sandbox could not run the suite; verification stays with the test stage.
+
+Disposition: findings 1, 3, 4 loop back for a fix pass; finding 2 deferred to T20260710T1223Z.
 
 ## Test Evidence
 
