@@ -1,7 +1,7 @@
 ---
 id: B20260710T1225Z
 type: bug
-status: ready_for_review
+status: ready_for_implementation
 priority: P1
 parent: null
 children: []
@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:25:41Z
 updated: 2026-07-10T14:00:01Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # check-dispatch denies legitimate gate-check consultation dispatches when hooks are enabled
@@ -395,3 +395,5 @@ Re-review (terra@medium, 42s): verdict: changes_requested — identity semantics
 - 2026-07-10T13:57:44Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Original 8fd5831 + review-fix cbf3527: clearActiveStepIf + stampActiveStepNoClobber, kind:action stamps in beginStep, kind-conditional clears in completeStep/approveInline/recordGateConsultation, moveTicket clears abandoned consultation stamps, worktree directory-existence check. Suite green vs branch baseline; check + validate pass.
 
 - 2026-07-10T13:58:46Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - ledger lifecycle tightening; no auth/UI surface
+
+- 2026-07-10T14:00:01Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
