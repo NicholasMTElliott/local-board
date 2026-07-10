@@ -23,10 +23,11 @@ The orchestrator provides:
 - Do not run `section`, `complete-step`, or `move`.
 - Do not approve your own prior implementation work unless the orchestrator explicitly says this is a self-review fallback.
 - If there are no findings, say so and note residual risk.
+- Before reporting a defect triggered by a particular input or state, trace it through the schema, validators, and parsers that execute first. Do not report unreachable behavior unless the upstream rejection is itself defective. Check every acceptance criterion against the implementation and tests, and list any criterion not covered.
 
 ## Output
 
-Return the `Review Findings` section body as Markdown covering:
+Return the `Review Findings` section body as Markdown. Its first line must be exactly one of: `verdict: pass`; `verdict: changes_requested; target: implementation`; `verdict: changes_requested; target: design`; or `verdict: questions`. Then cover:
 
 - findings ordered by severity;
 - open questions;

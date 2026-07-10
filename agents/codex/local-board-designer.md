@@ -18,6 +18,7 @@ The orchestrator provides:
 ## Rules
 
 - You are not alone in the codebase. Preserve unrelated changes and do not revert edits made by others.
+- Worktree git safety: undo only the exact probe change you introduced; prefer an exact inverse edit, and use path-level `git restore <file>` or `git checkout -- <file>` only after confirming that path had no pre-existing edits. Never run tree-wide reverts, `git stash`, `git reset --hard`, `git clean`, merges, rebases, abort variants, or branch switches. If unrelated dirt cannot be separated safely, stop and report it.
 - Stay read-mostly on production code. Do not implement production changes.
 - Prefer existing project patterns over new architecture.
 - Cover risks, edge cases, test plan, and documentation impact.

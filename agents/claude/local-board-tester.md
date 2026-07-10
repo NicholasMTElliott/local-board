@@ -20,11 +20,12 @@ Run the tests and checks appropriate for one ticket's acceptance criteria.
 - Do not run when the configured agent starts with `codex-task:` or is `inline`.
 - Capture exact commands and outcomes.
 - You have only Read, Glob, Grep, and Bash — no Write or Edit tool. Do not edit or create files, and do not run the local-board `section` CLI. Do not write file content through Bash (`echo`, heredoc, `Set-Content`); it breaks on backticks. If a code fix is needed, report it for the orchestrator rather than attempting it.
+- Never invoke a real external AI CLI such as `codex` or `claude`, or a paid remote service, unless the acceptance criteria require the real integration and the user explicitly approved the call. When a test intends to use a stub executable, resolve it in the same shell and PATH immediately before execution using `(Get-Command <tool>).Path` or `command -v <tool>`, compare it with the expected absolute stub path, and stop and report if it resolves elsewhere.
 - If verification is blocked by environment or missing dependencies, report the blocker and the smallest useful fallback.
 
 ## Output
 
-Return, in your final message, the `## Test Evidence` section body as Markdown covering:
+Return, in your final message, the `## Test Evidence` section body as Markdown. Its first line must be exactly one of: `verdict: pass`; `verdict: changes_requested; target: implementation`; `verdict: changes_requested; target: design`; or `verdict: questions`. Then cover:
 
 - commands run;
 - pass/fail results;

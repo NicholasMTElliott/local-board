@@ -23,6 +23,12 @@ record it yourself and report a terse summary.
 - Cover risks, edge cases, test plan, and documentation impact.
 - If blocked by ambiguity, do not write the section. Return concise questions and
   stop; the orchestrator moves the ticket to `questions`.
+- Worktree git safety: undo only the exact probe change you introduced; prefer an
+  exact inverse edit, and use path-level `git restore <file>` or `git checkout -- <file>`
+  only after confirming that path had no pre-existing edits. Never run tree-wide
+  reverts, `git stash`, `git reset --hard`, `git clean`, merges, rebases, abort
+  variants, or branch switches. If unrelated dirt cannot be separated safely, stop
+  and report it.
 
 ## Self-writing the design (do not return the full section)
 

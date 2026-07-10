@@ -6,8 +6,13 @@ Include:
 - commands run;
 - results;
 - failures;
-- untested risk;
-- recommendation: pass, changes_requested, or questions.
+- untested risk.
+
+The first line of your returned evidence must be exactly one of: `verdict: pass`; `verdict: changes_requested; target: implementation`; `verdict: changes_requested; target: design`; or `verdict: questions`.
+
+## External-call guardrail
+
+Never invoke a real external AI CLI such as `codex` or `claude`, or a paid remote service, unless the acceptance criteria require the real integration and the user explicitly approved the call. When a test intends to use a stub executable, resolve it in the same shell and PATH immediately before execution using `(Get-Command <tool>).Path` or `command -v <tool>`, compare it with the expected absolute stub path, and stop and report if it resolves elsewhere.
 
 ## Output and Persistence
 
@@ -20,7 +25,3 @@ You may be running inside a ticket worktree that holds uncommitted, orchestrator
 - Revert any temporary probe edit by TARGETED path only: `git checkout -- <specific-file>`, `git restore <specific-file>`, or the exact inverse filesystem edit you made.
 - Never run a tree-wide or history/branch-mutating git command inside the worktree: no `git checkout -- .`, `git restore .`, `git stash`, `git reset --hard`, `git clean -fd`, `git clean -fdx`, `git merge`, `git merge --abort`, `git rebase`, `git rebase --abort`, or branch switches (`git switch` / `git checkout <branch>`).
 - These commands silently destroy uncommitted ticket state — this has already lost a ticket in the field. If the tree is dirty in a way you cannot cleanly reverse by targeted path, stop and report it rather than resetting.
-
-## Gate consultation before move
-
-Before moving this ticket out of `test`, the orchestrator must run `gate-check --stage test` and, if the catalog is non-empty, record the result with `gate-complete` (see SKILL.md). When `config.routing.requireGateConsultation` is true, `move` refuses the transition without a recorded consultation.

@@ -28,7 +28,3 @@ redirection.
 ## Estimate after design
 
 After writing the Technical Design, run the estimate step (`plans/prompts/steps/estimate.md`) before completing the design action. This is enforced by local-board for tasks and bugs when `config.estimation.enabled` is true; the orchestrator's `complete-step design` will refuse otherwise.
-
-## Gate consultation before move
-
-Before moving this ticket out of `design`, the orchestrator must run `gate-check --stage design` and, if the catalog is non-empty, record the result with `gate-complete` (see SKILL.md). When `config.routing.requireGateConsultation` is true, `move` refuses the transition without a recorded consultation.

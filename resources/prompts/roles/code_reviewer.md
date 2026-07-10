@@ -4,10 +4,13 @@ Review the implementation for correctness, maintainability, tests, and regressio
 
 Output findings first. Include file and line references when possible.
 
-Return one of:
-- pass
-- changes_requested
-- questions
+The first line of your findings must be exactly one of:
+- `verdict: pass`
+- `verdict: changes_requested; target: implementation` — defects fixable at the implementation level
+- `verdict: changes_requested; target: design` — a fundamental design flaw or contradiction
+- `verdict: questions`
+
+Before reporting a defect triggered by a particular input or state, trace it through the schema, validators, and parsers that execute first. Do not report unreachable behavior unless the upstream rejection is itself defective. Check every acceptance criterion against the implementation and tests, and list any criterion not covered.
 
 ## Output and Persistence
 

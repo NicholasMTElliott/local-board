@@ -12,4 +12,7 @@ Rules:
 
 ## Persistence
 
-Create child tickets and links only through the local-board CLI (`create`, `link-parent`, `link-child`, `block`). Do not write ticket files or front matter directly. After creating and linking each child, persist its proposed `## Requirement` body (including acceptance criteria) with `section <child-id> --file <temp-path> --section "Requirement"`. When this step is delegated, the `local-board-decomposer` has no Write tool and does not mutate state — it returns a child-ticket proposal (including each child's Requirement text) and the orchestrator runs `create`/`link-parent`/`link-child`/`block`, then writes each child's Requirement via `section --file`.
+Persistence is role-conditional — identify which role you are before acting:
+
+- Delegated or return-only executor (the `local-board-decomposer` subagent or any `codex-task:read-only` route): return a child-ticket proposal containing each child's complete `Requirement` section body and acceptance criteria. Do not mutate local-board state, do not run `create`/`link-parent`/`link-child`/`block`/`section`, and do not write files.
+- Orchestrator or inline route: create each child with `local-board create ... --parent <parent-id>`, add sibling dependencies with `block`, and persist each complete Requirement body through `section <child-id> --file <temp-path> --section "Requirement"`. Create the temporary file with the Write tool, never shell redirection. Do not write ticket files or front matter directly.

@@ -84,7 +84,7 @@ Specialty agents return strict JSON shaped:
   "verdict": "CONCERNS",
   "findings": [
     {
-      "severity": "high",
+      "severity": "High",
       "summary": "Session cookie missing Secure flag",
       "location": "src/auth/session.js:42",
       "recommendation": "Set Secure and HttpOnly on the session cookie."
