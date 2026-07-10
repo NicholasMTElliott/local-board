@@ -13,7 +13,7 @@ estimateBasis: null
 workStartedAt: 2026-07-10T13:48:46Z
 workCompletedAt: null
 created: 2026-07-10T12:32:28Z
-updated: 2026-07-10T13:48:46Z
+updated: 2026-07-10T13:53:51Z
 completedSteps: []
 routingApprovals: []
 ---
@@ -46,6 +46,213 @@ Make the PATH-resolution outcome injectable in these two tests the same way sibl
 ## Related Tickets
 
 ## Technical Design
+
+Make the two PATH-verification failure tests hermetic by forcing the
+not-on-PATH branch through the existing injected `resolvesOnPath` seam
+instead of a subprocess that consults the real machine PATH. Test-only
+change; `src/install.js` is unchanged.
+
+## Root cause (confirmed on this machine)
+
+`performInstall` gates the install on
+`checkResolvesOnPath("local-board")` (src/install.js:199-207). In a
+subprocess, `home` is not overridden, so `checkResolvesOnPath` is the
+real `resolvesOnPath` (src/install.js:761-769), which shells out to
+`where local-board` (win32) / `command -v local-board` (posix).
+
+The two failing tests try to make that probe miss by passing
+`{ includeLocalBoardStub: false, sanitizePath: true }`, which replaces
+the child PATH with `sanitizedSystemPath()` (test/install.test.js:33-49).
+That function lists `path.dirname(process.execPath)` (nodeDir) first,
+because `node`/`where` must resolve. On any Node setup where the npm
+global prefix equals nodeDir, the global `local-board` shim lives inside
+nodeDir and is therefore still on the sanitized PATH.
+
+Verified here: `npm prefix -g` = `C:\nvm4w\nodejs` = nodeDir, and
+`where local-board` returns `C:\nvm4w\nodejs\local-board.cmd`. So the
+sanitized subprocess still resolves `local-board`, the precheck passes,
+no error is thrown, and both `assert.rejects` calls fail. This is exactly
+the reported "466 -> 464 + 2 fail" regression after a global install
+(nvm-windows, volta, and other node-managers that colocate the global
+prefix with nodeDir all trigger it). PATH sanitization cannot fix this:
+nodeDir is mandatory for `node`, and the shim is inside it, so no
+constructed PATH can both run node and hide `local-board`.
+
+The correct fix is to stop consulting the real PATH in these two tests
+and instead inject the resolution outcome, exactly as the sibling
+in-process tests already do (test/install.test.js:854-885): the
+`options.resolvesOnPath` predicate seam exported since T20260710T0035Z.
+
+## Why production code needs no change
+
+`runInstall` already accepts `options.resolvesOnPath`
+(src/install.js:120, 199): when supplied it overrides the real probe
+regardless of `homeOverridden`. Both tests can be rewritten to call the
+in-process `runInstall` (imported as `runInstallInProcess`) with an
+injected predicate, so no seam widening and no behavior change to
+`src/install.js` are required. The non-goal (no change to the
+user-facing guidance text) is honored — the same `fromClone` branch and
+messages at src/install.js:200-206 are exercised, just with a
+deterministic probe outcome.
+
+### Predicate shape
+
+Use `(command) => command !== "local-board"` rather than `() => false`.
+The injected predicate is the single function that feeds BOTH the
+installer's own `local-board` precheck AND, on a claude-target install,
+the codex-task hint's `codex` probe (src/install.js:272 passes
+`checkResolvesOnPath` into `codexTaskWarning`). Returning `false` only
+for `"local-board"` forces the precheck miss while leaving every other
+lookup (notably `"codex"`) resolving true. For these two tests the
+target is `codex`, so the precheck throws (src/install.js:201-207)
+before the claude-only codex hint is reached; the codex branch is never
+evaluated. The `command !== "local-board"` form is nonetheless the
+correct seam contract: it isolates the miss to the one lookup under test
+and stays correct if the target or ordering ever changes. This matches
+the T0035Z lesson recorded for that seam.
+
+## The clone-vs-packaged distinction
+
+The guidance text branches on `fromClone = existsSync(join(SCRIPT_DIR,
+".git"))` (src/install.js:200):
+
+- clone/checkout (`.git` present) -> "npm install -g . (or: npm link)"
+- packaged (`.git` absent)        -> "npm install -g local-board" (no npm link)
+
+The clone test runs in-process against `../src/install.js`, whose
+`SCRIPT_DIR` is the repo/worktree root. A git worktree exposes `.git`
+as a FILE (confirmed here), and `existsSync` is true for a file, so
+`fromClone` is true and the npm-link guidance is produced. (Assumption:
+the suite is always run from a checkout that has `.git`; the existing
+`createPackagedCopy` helper already relies on the same fact.)
+
+The packaged test needs `fromClone === false`, which the repo's own
+`SCRIPT_DIR` cannot give. It is solved test-only by dynamically
+importing the packaged copy's OWN `src/install.js`: in that module
+instance `SCRIPT_DIR` resolves to the packaged temp dir, which has no
+`.git`, so `fromClone` is false and the no-npm-link guidance is
+produced. The same `options.resolvesOnPath` seam is injected into that
+module's `runInstall`. `createPackagedCopy` already copies `package.json`
+and `src/` (test/install.test.js:151-173), and `performInstall` reads
+`package.json` (src/install.js:191) before the precheck throws, so the
+packaged module loads and runs to the precheck without any other files.
+No `options.fromClone`/`options.scriptDir` seam is needed.
+
+## Affected files
+
+- `test/install.test.js` — rewrite the two tests (~887, ~902); add one
+  import (`pathToFileURL` from `node:url`). No other files change.
+- `src/install.js` — unchanged.
+
+## Exact test rewrites
+
+Add near the existing `node:url` usage at the top of
+`test/install.test.js`:
+
+```js
+import { pathToFileURL } from "node:url";
+```
+
+Replace the clone-mode test (currently ~887) with an in-process call
+that throws synchronously (`assert.throws`, matching the sibling test at
+878-884, not `assert.rejects`):
+
+```js
+test("PATH verification failure (injected PATH miss, clone/git-checkout mode): guidance recommends npm link", async () => {
+  await withHome(async (home) => {
+    assert.throws(
+      () =>
+        runInstallInProcess(["--target=codex"], {
+          home,
+          resolvesOnPath: (command) => command !== "local-board",
+        }),
+      (error) => {
+        assert.match(error.message, /local-board is not on PATH/);
+        assert.match(error.message, /npm install -g \./);
+        assert.match(error.message, /npm link/);
+        return true;
+      },
+    );
+  });
+});
+```
+
+Replace the packaged-tree test (currently ~902) with a dynamic import of
+the packaged copy's own installer, injecting the same predicate:
+
+```js
+test("PATH verification failure (injected PATH miss, packaged/no-.git tree): guidance omits npm link", async () => {
+  await withHome(async (home) => {
+    const packagedDir = createPackagedCopy();
+    try {
+      assert.equal(existsSync(path.join(packagedDir, ".git")), false);
+      const packaged = await import(
+        pathToFileURL(path.join(packagedDir, "src", "install.js")).href
+      );
+      assert.throws(
+        () =>
+          packaged.runInstall(["--target=codex"], {
+            home,
+            resolvesOnPath: (command) => command !== "local-board",
+          }),
+        (error) => {
+          assert.match(error.message, /local-board is not on PATH/);
+          assert.match(error.message, /npm install -g local-board/);
+          assert.doesNotMatch(error.message, /npm link/);
+          return true;
+        },
+      );
+    } finally {
+      await removeFixtureDir(packagedDir);
+    }
+  });
+});
+```
+
+Notes:
+- Each `createPackagedCopy()` mints a fresh unique temp dir, so the
+  dynamic-import URL is unique per run and never hits a stale module
+  cache. The imported module is evaluated before the `finally` cleanup.
+- Renaming the tests (dropping the now-false "real PATH" phrasing) is
+  recommended for honesty but optional; the acceptance is that both pass
+  regardless of machine state.
+- The `{ includeLocalBoardStub, sanitizePath }` env plumbing is no longer
+  used by these two tests. Leave `installEnv`/`sanitizedSystemPath`
+  intact — other tests (e.g. the PATH-success test at ~927) still use the
+  stub-bin path, and `sanitizePath` may still be referenced elsewhere.
+
+## Risks and edge cases
+
+- Low blast radius: two tests, one import. No production change.
+- The clone test depends on the ambient `.git` at the repo root. This is
+  already an established suite assumption; if tests were ever run from a
+  packaged tarball the clone test would misbehave, but that is not a
+  supported test-run mode.
+- Dynamic import evaluates the packaged module once; a subsequent import
+  of the same path would be cached, but paths are unique per test run.
+- Node/`where`/`command -v` still run for real inside the packaged
+  `getVersion("node")` and `nodeVersion` checks, which is fine and
+  machine-independent.
+
+## Test strategy / acceptance
+
+- Both tests must pass with `local-board` globally installed AND without
+  it. The injected predicate makes the outcome independent of machine
+  PATH, so both machine states are simulated by construction: the
+  predicate returns `false` for `local-board` regardless of what `where`
+  would find. To demonstrate the "with global install" case, note this
+  machine already has the global shim (`C:\nvm4w\nodejs\local-board.cmd`);
+  under the old tests it fails, under the rewrite it passes.
+- Regression guard: run `npm run check` and `node --test` — full suite
+  must return to green (466 pass) with no new failures.
+- Sanity: temporarily flip the predicate to `() => true` locally and
+  confirm the tests then fail (proving they still assert the not-on-PATH
+  branch, not a vacuous pass). Do not commit the flip.
+
+## Open questions
+
+None. The seam exists, the root cause is confirmed, and the fix is
+test-only.
 
 ## Implementation Notes
 
