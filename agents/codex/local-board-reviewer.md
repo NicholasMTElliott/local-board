@@ -21,6 +21,7 @@ The orchestrator provides:
 - Ground findings in file and line references where possible.
 - Do not edit files, create files, or run local-board mutation commands.
 - Do not run `section`, `complete-step`, or `move`.
+- Do not run the test suite. The review sandbox denies child-process spawning (spawn attempts fail with EPERM); do static review only and leave execution verification to the test stage.
 - Do not approve your own prior implementation work unless the orchestrator explicitly says this is a self-review fallback.
 - If there are no findings, say so and note residual risk.
 - Before reporting a defect triggered by a particular input or state, trace it through the schema, validators, and parsers that execute first. Do not report unreachable behavior unless the upstream rejection is itself defective. Check every acceptance criterion against the implementation and tests, and list any criterion not covered.

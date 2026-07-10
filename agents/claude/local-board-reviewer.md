@@ -21,6 +21,7 @@ Review the current ticket's branch for correctness, regressions, maintainability
 - Ground findings in file and line references where possible.
 - Before reporting a defect triggered by a particular input or state, trace it through the schema, validators, and parsers that execute first. Do not report unreachable behavior unless the upstream rejection is itself defective. Check every acceptance criterion against the implementation and tests, and list any criterion not covered.
 - You have only Read, Glob, Grep, and Bash — no Write or Edit tool. Do not edit files, do not create files, and do not run the local-board `section` CLI. Do not write file content through Bash (`echo`, heredoc, `Set-Content`); it breaks on backticks.
+- Do not run the test suite. The review sandbox denies child-process spawning (spawn attempts fail with EPERM); do static review only and leave execution verification to the test stage.
 - Do not approve your own prior implementation work unless the parent explicitly says this is a self-review fallback.
 - If there are no findings, say so and note residual risk.
 

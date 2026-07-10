@@ -39,3 +39,9 @@ Tickets live under `plans/tickets/`.
 Ticket front matter is canonical. Folder location is a human convenience and must match ticket status.
 
 Do not let agents transition tickets by narrative text alone. Status changes must update front matter.
+
+Prompt files under `plans/prompts/` and agent definitions under `agents/` are production
+artifacts: content-assertion tests run against their text (e.g. `test/cli.test.js`'s
+estimate-prompt assertions, `test/resources-sync.test.js`). After editing any of them, run
+the FULL test suite (`node --test`), not just the guard suites, and remember that any
+`plans/prompts` edit also needs `npm run sync-resources` to refresh `resources/prompts`.
