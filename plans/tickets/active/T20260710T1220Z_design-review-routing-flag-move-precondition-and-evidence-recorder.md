@@ -1,7 +1,7 @@
 ---
 id: T20260710T1220Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: S20260710T1206Z
 children: []
@@ -396,3 +396,5 @@ Disposition: both findings accepted; loop-back to ready_for_implementation for t
 - 2026-07-10T12:55:27Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - internal workflow state machinery
 
 - 2026-07-10T13:00:06Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
+
+- 2026-07-10T13:00:06Z: Ensured git branch local-board/T20260710T1220Z-design-review-routing-flag-move-precondition-and-evidence-recorder (already-current).
