@@ -13,7 +13,7 @@ estimateBasis: T20260709T1119Z
 workStartedAt: 2026-07-10T01:05:10Z
 workCompletedAt: null
 created: 2026-07-10T00:36:09Z
-updated: 2026-07-10T01:23:38Z
+updated: 2026-07-10T01:30:19Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -225,6 +225,20 @@ Prior stage corroboration: orchestrator ran a real-codex Windows smoke from the 
 Anomaly (tester self-reported): one inadvertent real codex exec occurred during the repeated-flag probe (PATH narrowing failed to hide the codex shim colocated with node). Prompt "noop", default model, ~8s, completed, zero file changes, tree clean afterward. Counts against ChatGPT quota; no test validity impact.
 
 ## Documentation Updates
+
+Documentation step executed by codex-task:workspace-write (gpt-5.5, 275s) in the codex-task repo; edits committed by the orchestrator as 05f6588 on codex-task/T20260710T0036Z-reasoning-effort.
+
+Changed:
+
+- README.md: documented --reasoning-effort and the reasoningEffort output field, refreshed model guidance with the GPT-5.6 tiers, updated the model example, added a troubleshooting note for rejected effort values.
+- memory-bank/projectBrief.md, productContext.md, systemPatterns.md, techContext.md: terse current-state facts updated for the new pass-through flag, output field, spawn-arg composition, failure hints, and GPT-5.6 model hints. No history appended.
+
+Checked and deliberately left alone:
+
+- SKILL.md (already updated in the implementation commit; used as the consistency source).
+- codex-task.mjs, tests/cli-smoke.test.mjs, install.mjs (out of scope for the doc step).
+
+Validation: git diff --check clean; prose-only change, no test rerun needed (tests last ran green at the test stage on the same branch).
 
 ## Questions
 
