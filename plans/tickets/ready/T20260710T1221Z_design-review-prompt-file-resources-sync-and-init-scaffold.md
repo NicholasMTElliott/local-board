@@ -7,13 +7,13 @@ parent: S20260710T1206Z
 children: []
 blockedBy: []
 blocks: [T20260710T1222Z]
-branch: null
+branch: local-board/T20260710T1221Z-design-review-prompt-file-resources-sync-and-init-scaffold
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T12:21:31Z
+updated: 2026-07-10T12:22:11Z
 completedSteps: []
 routingApprovals: []
 ---
