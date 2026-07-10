@@ -13,8 +13,8 @@ estimateBasis: T20260709T1119Z
 workStartedAt: 2026-07-10T01:05:10Z
 workCompletedAt: null
 created: 2026-07-10T00:36:09Z
-updated: 2026-07-10T01:09:48Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-10T01:10:46Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # codex-task: add --reasoning-effort passthrough and GPT-5.6 model guidance (../codex-task repo)
@@ -195,3 +195,5 @@ None blocking. The two verification items (Windows real-codex smoke, exact 400 w
 - 2026-07-10T01:05:10Z: Ensured git branch local-board/T20260710T0036Z-codex-task-add-reasoning-effort-passthrough-and-gpt-5-6-model-guidance-codex-task-repo (already-current).
 
 - 2026-07-10T01:09:36Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design written by opus designer: --reasoning-effort flag parse->spawn->emit threading, cross-platform TOML quoting, reasoningEffort echo at all emit sites, SKILL.md GPT-5.6 tier guidance, 4 smoke tests via FAKE_CODEX_ARGV_OUT argv capture. Estimate 2.
+
+- 2026-07-10T01:10:46Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none - CLI flag passthrough, no auth/UI/UX surface
