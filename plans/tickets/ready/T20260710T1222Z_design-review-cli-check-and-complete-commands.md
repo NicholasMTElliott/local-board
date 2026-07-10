@@ -13,7 +13,7 @@ estimateBasis: null
 workStartedAt: 2026-07-10T13:25:24Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T13:25:24Z
+updated: 2026-07-10T13:31:48Z
 completedSteps: []
 routingApprovals: []
 ---
@@ -45,6 +45,326 @@ No core-logic changes (they land in T20260710T1220Z). No skill/docs prose (sibli
 ## Related Tickets
 
 ## Technical Design
+
+## Overview
+
+Expose the two design-review CLI verbs the orchestrator needs, both thin wrappers
+over machinery that already shipped in the blockers:
+
+- `design-review-check <ticket-id> [--json] [--allow-main-root]` — a pure
+  resolver (no dispatch, no ticket write) that returns the resolved reviewer
+  route/model/effort, the resolved prompt path (validated with
+  `assertPromptExists`), and a narrow `ticketContext`. Modeled on
+  `commandGateCheck` (src/cli.js:1101) and `commandSpecialtyRun` (:1230).
+- `design-review-complete <ticket-id> --executor <executor> [--model <model>] --evidence <text> [--allow-main-root] [--json]`
+  — records the reviewer's verdict as design-review evidence via the shipped
+  `recordDesignReview` recorder, then commits the planning transition. Modeled on
+  `commandGateComplete` (:1199) / `commandCompleteStep` (:631).
+
+No core-logic changes: route recognition, the `requireDesignReview` precondition
+on the design->implementation move, and `recordDesignReview` all landed in
+T20260710T1220Z; the `design_review.md` prompt landed in T20260710T1221Z. This
+task is CLI wiring plus an end-to-end test only.
+
+## Related Tickets
+
+- **T20260710T1220Z (done, blocker, merged into base):** shipped
+  `recordDesignReview(root, ticketId, executor, evidence, options)`
+  (src/tickets.js:1395), flag-gated action recognition
+  (`isKnownAction`/`profileForAction` gate on `routing.requireDesignReview === true`),
+  the `agents["design-review"]` default profile (`codex-task:read-only`,
+  `gpt-5.6-sol`, `xhigh`) in both `DEFAULT_CONFIG` and `defaultConfigJsonc()`, and
+  the `moveTicket` precondition that refuses ready_for_design/designing ->
+  ready_for_implementation without a `design-review:<executor>` token. This task
+  calls that recorder and relies on that precondition.
+- **T20260710T1221Z (done, blocker, merged):** shipped
+  `plans/prompts/steps/design_review.md` (and its `resources/` mirror), whose
+  reviewer returns a **first-line TEXT verdict** (PASS/CONCERNS/FAIL), not JSON.
+- **T20260710T1223Z (blocked by this):** skill/docs prose for both flows — a
+  non-goal here.
+- **B20260710T1225Z (concurrent, same file):** consultation-stamping fix in
+  src/active-steps.js + src/cli.js. See Peer coordination.
+
+## Design decisions
+
+### 1. Both commands refuse when `routing.requireDesignReview` is off
+
+`design-review-check` refuses early — before resolving anything — when
+`config.routing?.requireDesignReview !== true`, with the same message shape the
+recorder already uses (naming the flag). Justification:
+
+- **Consistency with the recorder.** `recordDesignReview` already refuses on
+  flag-off boards (src/tickets.js:1404), so `design-review-complete` inherits the
+  refusal for free; making `design-review-check` refuse too keeps the pair
+  coherent — you cannot resolve a review you are forbidden to record.
+- **Resolution is meaningless off-flag.** T1220Z deliberately made
+  `profileForAction`/`isKnownAction` treat `design-review` as an *unknown* action
+  while the flag is off, and made `codexTaskRoutedActions` skip the profile, so
+  the whole feature is inert. Emitting a codex-task reviewer route from a board
+  that will not gate the move (and would warn on `validate`) is misleading.
+- **Cheap, well-known error.** The refusal is a hard error naming
+  `routing.requireDesignReview`, parallel to the recorder's message, so the
+  orchestrator gets one actionable diagnostic on a misconfigured board.
+
+### 2. `design-review-check` performs no dispatch and stamps nothing
+
+Like `specialty-run`, it is a pure resolver. It does **not** stamp a consultation
+ledger entry (see Peer coordination for the justification tied to B1225Z).
+
+### 3. Prompt-path resolution: fixed path + `assertPromptExists`
+
+`promptForAction(config, "design-review")` returns `null` today: the
+`agents["design-review"]` profile carries no `prompt` field, and there is no
+`workflow.actionPrompts["design-review"]` entry (src/config.js:74-81). Adding one
+would be a config change owned by T1220Z (a non-goal here). So `design-review-check`
+resolves the fixed path exactly as `commandGateCheck` resolves `gate-check.md`:
+
+```js
+const promptPath = path.resolve(root, "plans", "prompts", "steps", "design_review.md");
+await assertPromptExists(promptPath, "design-review");
+```
+
+`assertPromptExists` (src/cli.js:1088) already produces the required actionable
+error naming `local-board init` on ENOENT, satisfying the missing-prompt AC with
+no new code. (Forward-compatible note: if a future ticket adds a prompt entry,
+switch to `promptForAction(config, "design-review") ?? <fixed path>`.)
+
+### 4. Route/model/effort resolution: read the profile directly
+
+Mirror `commandGateCheck`'s `config.agents?.["gate-check"]` read:
+
+```js
+const profile = config.agents?.["design-review"];
+if (profile === undefined || profile.route === undefined) {
+  throw new Error(
+    "design-review-check: routing.requireDesignReview is true but no agents[\"design-review\"] profile is configured. Run \"local-board init\" or restore the default profile (codex-task:read-only, gpt-5.6-sol, xhigh).",
+  );
+}
+```
+
+Both shipped defaults (`DEFAULT_CONFIG` and the scaffold) always contain the
+profile, so on a normally-configured on-flag board this yields
+`route=codex-task:read-only`, `model=gpt-5.6-sol`, `effort=xhigh`. Reading the
+profile directly (rather than exporting `profileForAction`/`agentForAction` from
+tickets.js) keeps tickets.js untouched, honoring the no-core-changes non-goal. A
+missing profile while the flag is on is a misconfiguration and errors clearly
+rather than falling back to `inline` (which would be wrong for a reviewer).
+
+## Affected files / modules
+
+- **src/cli.js** (only production file touched):
+  - Import `recordDesignReview` from `./tickets.js` (add to the existing import
+    block; `composeExecutor`, `getSectionText`, `assertInvocationRootForTicket`,
+    `assertPromptExists`, `ticketRecord`, `loadConfig` are already imported/available).
+  - Add `commandDesignReviewCheck(root, args, allowMainRoot)` and
+    `commandDesignReviewComplete(root, args, allowMainRoot)`, placed adjacent to
+    `commandSpecialtyRun`/`commandGateComplete`.
+  - Add two dispatch branches in `main()` in the gate-check/gate-complete/
+    specialty-run cluster (src/cli.js:165-173).
+  - Add two lines to `printUsage()` beside the gate-check/gate-complete/
+    specialty-run usage lines (src/cli.js:1466-1468).
+- **test/cli.test.js**: new end-to-end coverage (see Test plan).
+- No changes to src/tickets.js, src/config.js, src/active-steps.js, or any prompt/
+  resource file.
+
+## Command shapes
+
+### `commandDesignReviewCheck(root, args, allowMainRoot)`
+
+```
+asJson       = takeFlag(args, "--json")
+ticketId     = args.shift(); ensureNoArgs(args)
+if ticketId undefined -> throw "design-review-check requires: <ticket-id> [--allow-main-root] [--json]"
+
+await assertInvocationRootForTicket(root, ticketId, { allowMainRoot })  // parity + honors the flag in the requested signature
+config = await loadConfig(root)
+if config.routing?.requireDesignReview !== true ->
+  throw "design-review-check: design review is disabled: set routing.requireDesignReview to true in the board config"
+profile = config.agents?.["design-review"]  (guard as in decision 4)
+{ ticket } = await findTicket(root, ticketId)
+
+promptPath = path.resolve(root, "plans","prompts","steps","design_review.md")
+await assertPromptExists(promptPath, "design-review")
+
+baseRecord    = ticketRecord(root, ticket)
+currentAction = config.workflow?.statusActions?.[ticket.status] ?? null
+ticketContext = { id, type, status, priority, path, title, currentAction,
+                  requirement: getSectionText(ticket.body,"Requirement") ?? "",
+                  acceptanceCriteria: getSectionText(ticket.body,"Acceptance Criteria") ?? "" }
+
+payload = { ticket: ticket.id, prompt: promptPath,
+            agent: profile.route, model: profile.model ?? null, effort: profile.effort ?? null,
+            ticketPath: ticket.path, ticketContext }
+--json -> JSON.stringify(payload,2); else two-line human form
+          ("design-review-check <id> agent=<route>@<model> effort=<effort>" + promptPath)
+return 0
+```
+
+Notes:
+- No dispatch, no write. `assertInvocationRootForTicket` is called for parity with
+  `commandGateCheck` and because the requested signature includes `--allow-main-root`;
+  since the command stamps nothing, root enforcement here is defensive/consistency,
+  not a correctness requirement. Its presence lets the orchestrator relax it with
+  `--allow-main-root` exactly as for gate-check.
+- Status-agnostic: it resolves regardless of the ticket's status (like gate-check,
+  which never cross-checks status against stage). Premature recording is caught
+  later by the recorder's `guardPrematureEvidence`, not here.
+
+### `commandDesignReviewComplete(root, args, allowMainRoot)`
+
+```
+asJson   = takeFlag(args, "--json")
+executor = takeOption(args, "--executor")
+model    = takeOption(args, "--model")
+evidence = takeOption(args, "--evidence")
+ticketId = args.shift(); ensureNoArgs(args)
+if ticketId|executor|evidence undefined ->
+  throw "design-review-complete requires: <ticket-id> --executor <executor> [--model <model>] --evidence <text> [--allow-main-root]"
+
+await assertInvocationRootForTicket(root, ticketId, { allowMainRoot })   // BEFORE any write
+composed = composeExecutor(executor, model)
+result   = await recordDesignReview(root, ticketId, composed, evidence)  // recorder enforces flag/empty-evidence/model-pin/premature guard
+await maybeCommitPlanning(root, { ticketId: result.ticket, command: "design-review-complete", detail: "design-review" })
+--json -> JSON.stringify(result,2); else `${result.ticket} design-review ${result.executor} ${result.path}`
+return 0
+```
+
+Notes:
+- All validation lives in the recorder (empty evidence, flag-off refusal, executor
+  validity, model-pin via `validateStepRouting({enforceModel:true})`, premature-evidence
+  guard). The command only composes the executor and wires the commit — mirroring
+  `commandGateComplete`/`commandCompleteStep`.
+- `assertInvocationRootForTicket` runs first, so a wrong-root invocation throws
+  before `recordDesignReview` acquires the lock or writes — satisfying the
+  "refused before any write" AC (the recorder's `withTicketLock`/`writeTicketFile`
+  is never reached).
+- **Verdict-agnostic.** The reviewer's first-line PASS/CONCERNS/FAIL token is parsed
+  by the *orchestrator*, not by this command. `design-review-complete` records
+  whatever `--evidence` string it is given (the orchestrator passes the verdict +
+  summary). The orchestrator only calls this on PASS/CONCERNS; on FAIL it instead
+  `move`s the ticket back to ready_for_design, which strips the token (T1220Z
+  loop-back). This command never inspects or branches on the verdict, so it must
+  not `JSON.parse` anything.
+- `--model` is optional; the orchestrator should pass `--model gpt-5.6-sol` (or the
+  model that actually ran) so the recorded token pins the model. Omitting it records
+  a route-only executor, subject to the recorder's existing model-enforcement
+  semantics (codex-default wildcard accepted).
+- `--override`/`--reason` are intentionally **not** exposed (outside the required
+  signature). The recorder supports them; a follow-up can surface them if a
+  premature-recording override is ever needed. Design review is recorded at
+  ready_for_design/designing, where the premature guard does not fire, so the
+  override is not needed for the normal flow.
+
+## main() dispatch + usage
+
+Dispatch (additive, in the gate cluster near src/cli.js:171):
+```js
+if (command === "design-review-check") {
+  return await commandDesignReviewCheck(root, args, allowMainRoot);
+}
+if (command === "design-review-complete") {
+  return await commandDesignReviewComplete(root, args, allowMainRoot);
+}
+```
+Usage (beside src/cli.js:1466-1468):
+```
+local-board [--root <path>] design-review-check <ticket-id> [--allow-main-root] [--json]
+local-board [--root <path>] design-review-complete <ticket-id> --executor <executor> [--model <model>] --evidence <text> [--allow-main-root] [--json]
+```
+
+## Peer coordination (B20260710T1225Z)
+
+B1225Z fixes the routing-validator hook denying legitimate gate-check/specialty
+dispatches by having `gate-check`/`specialty-run` stamp a scoped consultation
+entry in the active-steps ledger that `check-dispatch` consumes. It edits
+src/active-steps.js and src/cli.js — the same file this task edits.
+
+**Decision: `design-review-check` does NOT stamp a consultation entry, and this
+task has no sequencing dependency on B1225Z.** Justification, verified in code:
+`checkDispatch` (src/active-steps.js:121-124) short-circuits to
+`{ ok: true, reason: "not-local-board-agent" }` for any agent whose name does not
+start with `local-board-`. The design reviewer routes to `codex-task:read-only`,
+which is not a `local-board-*` claude-subagent, so the routing-validator hook
+never evaluates — and never denies — a design-review dispatch. B1225Z's bug is
+structurally specific to `claude-subagent:local-board-*` routes (gate-check,
+specialty); the codex reviewer route is out of the hook's scope by construction.
+Adding a consultation stamp here would be dead weight (nothing consumes it) and
+would needlessly couple this task to B1225Z's ledger-entry shape.
+
+**Merge mechanics:** both tasks add code to src/cli.js. This task adds two *new*
+command functions and two *new* `main()` dispatch branches; B1225Z modifies the
+existing `commandGateCheck`/`commandSpecialtyRun` bodies (to stamp) and imports
+from active-steps.js. The only likely textual overlap is the `main()` dispatch
+cluster and the import block — additive in both cases, resolved by keeping both
+sets of lines. No behavioral dependency either way.
+
+## Risks and edge cases
+
+- **Flag-off boards:** both commands refuse with a flag-naming error; no move,
+  evidence, or resolution path is exercised. Byte-identical behavior to today for
+  boards without the feature.
+- **Missing prompt file:** `assertPromptExists` throws the `local-board init`
+  message; covered by an explicit test paralleling the gate-check missing-prompt
+  test.
+- **Missing profile while flag on:** custom config that removed
+  `agents["design-review"]` errors clearly (decision 4) rather than emitting an
+  `inline` reviewer route.
+- **Wrong root on complete:** `assertInvocationRootForTicket` throws before the
+  recorder writes; asserted by re-reading the ticket and confirming no
+  `design-review` token was added.
+- **Skipping complete:** the T1220Z `moveTicket` precondition refuses
+  ready_for_design/designing -> ready_for_implementation; this task does not
+  re-implement that guard, it depends on it. Covered by an E2E "skip is refused"
+  assertion.
+- **Model pin:** enforced entirely inside the recorder; a mismatched `--model`
+  is refused with the existing "completed on model X ... configured model is
+  gpt-5.6-sol" shape. No duplicate enforcement in the CLI.
+- **Double-JSON confusion:** `design-review-complete` must not attempt to parse
+  `--evidence` as a verdict; it is opaque text. Documented above.
+
+## Test plan (test/cli.test.js, requireDesignReview: true board)
+
+End-to-end happy path and refusals, all through the CLI entrypoint on a scaffolded
+board (or a fixture with `routing.requireDesignReview: true` and the default
+`agents["design-review"]`):
+
+1. **AC: resolution shape.** `design-review-check <id> --json` on a
+   ready_for_design ticket returns `agent === "codex-task:read-only"`,
+   `model === "gpt-5.6-sol"`, `effort === "xhigh"`, `prompt` ending
+   `plans/prompts/steps/design_review.md`, and a `ticketContext` with the narrow
+   field set (id/type/status/priority/path/title/currentAction/requirement/
+   acceptanceCriteria).
+2. **AC: missing prompt.** Delete `plans/prompts/steps/design_review.md`, run
+   `design-review-check`, assert the error names `local-board init` (parallel to
+   the gate-check missing-prompt test).
+3. **AC: full pipeline.** design (record design evidence) ->
+   `design-review-check` -> `design-review-complete <id> --executor
+   codex-task:read-only --model gpt-5.6-sol --evidence "PASS ..."` -> `move <id>
+   ready_for_implementation` succeeds and the ticket lands
+   `status: ready_for_implementation`; the recorded token is
+   `design-review:codex-task:read-only@gpt-5.6-sol` and a Run Log line is present.
+4. **AC: skip refused.** Same pipeline but omit `design-review-complete`; the
+   `move ... ready_for_implementation` is refused with the "no recorded design
+   review" error.
+5. **AC: wrong root refused before write.** Invoke `design-review-complete`
+   against a root that is not the ticket's registered worktree (no
+   `--allow-main-root`); assert it throws the invocation-root error and that the
+   ticket file gained no `design-review` token (re-read `completedSteps`).
+6. **Model pin.** `design-review-complete ... --model wrong-model` is refused with
+   the model-mismatch message; `--model gpt-5.6-sol` and `codex-default` succeed.
+7. **Flag off.** On a board with `requireDesignReview` omitted/false, both
+   `design-review-check` and `design-review-complete` refuse with a
+   flag-naming error.
+8. **Green.** `npm run check` and `node --test` pass (modulo the tracked
+   B20260710T1232Z install.test.js baseline).
+
+## Open questions
+
+None blocking. One resolved design choice worth flagging for the reviewer: the
+prompt path is resolved as a fixed `plans/prompts/steps/design_review.md`
+(mirroring gate-check) rather than through `promptForAction`, because no
+`actionPrompts["design-review"]` entry exists and adding one is a T1220Z-scoped
+config change (a non-goal here).
 
 ## Implementation Notes
 
