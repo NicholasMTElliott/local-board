@@ -13,8 +13,8 @@ estimateBasis: T20260710T1222Z
 workStartedAt: 2026-07-10T14:16:04Z
 workCompletedAt: null
 created: 2026-07-10T12:20:26Z
-updated: 2026-07-10T14:21:09Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-10T14:21:53Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # design-review: skill and docs updates for both flows
@@ -319,3 +319,5 @@ surface parity.
 - 2026-07-10T14:16:04Z: Ensured git branch local-board/T20260710T1223Z-design-review-skill-and-docs-updates-for-both-flows (already-current).
 
 - 2026-07-10T14:21:09Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design: prose+test-only; Design Review narrative in all four skill files with exact insertion points, byte-identical CLI Commands lines after specialty-run, REQUIRED_COMMANDS sync-test extension, docs/Workflow.md narrative; first-line TEXT verdict, FAIL loop-back semantics, flag-off skip documented. Estimate 2 (basis T20260710T1222Z, designer-recorded).
+
+- 2026-07-10T14:21:53Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none - skill prose, docs narrative, sync test
