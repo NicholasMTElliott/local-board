@@ -227,7 +227,9 @@ test("validate: config with zero codex-task routes prints no codex-task warning"
     const configPath = path.join(root, "plans", "local-board.config.jsonc");
     await writeFile(
       configPath,
-      JSON.stringify({ agents: { review: "inline", document: "inline" } }),
+      // DEFAULT_CONFIG/the scaffold also route design-review -> codex-task:read-only
+      // by default; override it to inline too so this config has zero codex-task routes.
+      JSON.stringify({ agents: { review: "inline", document: "inline", "design-review": "inline" } }),
       "utf8",
     );
 

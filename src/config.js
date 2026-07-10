@@ -50,6 +50,9 @@ const MANDATORY_ACTION_NAMES = new Set([
 //   - git.commitPlanningOnTransition: false here (vs true in the scaffold) so
 //     a pre-existing board that omits the key does not silently start
 //     committing planning-only changes after every mutating command.
+//   - routing.requireDesignReview: false here (vs true in the scaffold) so a
+//     pre-existing config that omits the key does not silently start
+//     refusing the design->implementation forward move.
 // These differences are pinned by tests in test/config.test.js (search
 // "backward-compat disabled" and "empty optionalSteps catalog"). Do NOT
 // converge them to match the scaffold — see the guard test
@@ -283,6 +286,7 @@ export const DEFAULT_CONFIG = {
     review: { route: "codex-task:read-only" },
     test: { route: "claude-subagent:local-board-tester", model: "sonnet" },
     document: { route: "codex-task:workspace-write" },
+    "design-review": { route: "codex-task:read-only", model: "gpt-5.6-sol", effort: "xhigh" },
   },
   routing: {
     strict: true,
@@ -296,6 +300,7 @@ export const DEFAULT_CONFIG = {
     invalidateOnLoopBack: false,
     enforceTransitions: false,
     guardPrematureEvidence: false,
+    requireDesignReview: false,
   },
   retention: {
     archiveDoneAfterDays: 30,
@@ -945,7 +950,8 @@ export function defaultConfigJsonc() {
     "implement": { "route": "claude-subagent:local-board-implementer", "model": "sonnet" },
     "review": { "route": "codex-task:read-only" },
     "test": { "route": "claude-subagent:local-board-tester", "model": "sonnet" },
-    "document": { "route": "codex-task:workspace-write" }
+    "document": { "route": "codex-task:workspace-write" },
+    "design-review": { "route": "codex-task:read-only", "model": "gpt-5.6-sol", "effort": "xhigh" }
   },
 
   // Routing policy is enforced by validate, complete-step, and move-to-done.
@@ -1011,7 +1017,12 @@ export function defaultConfigJsonc() {
     // --reason <text> to record anyway (appended to the Run Log), or set to
     // false to disable (pre-existing boards that omit this key keep that
     // behavior via DEFAULT_CONFIG's fallback).
-    "guardPrematureEvidence": true
+    "guardPrematureEvidence": true,
+    // requireDesignReview: true refuses "move" out of ready_for_design/designing
+    // toward ready_for_implementation unless a design-review:<executor> token is
+    // recorded in completedSteps (via the design-review recorder). Backward,
+    // lateral, and archive/done moves are never gated. Set to false to opt out.
+    "requireDesignReview": true
   },
 
   // Done tickets are recent closeout history. Older done tickets are retained

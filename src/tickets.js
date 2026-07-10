@@ -73,6 +73,13 @@ const CLOSED_STATUSES = new Set(["done", "archived"]);
 const GATE_TOKEN_RE = /^gate:(design|implement|test):(.+)$/;
 const GATE_SKIPPED_EMPTY_CATALOG_EXECUTOR = "skipped-empty-catalog";
 
+// The design-review action: a requireGateConsultation-style stage-scoped
+// required step gated on the design -> ready_for_implementation forward move,
+// recognized via config.agents["design-review"] even though it is absent
+// from workflow.statusActions. See isKnownAction/configuredRouteForAction/
+// profileForAction below.
+const DESIGN_REVIEW_ACTION = "design-review";
+
 // The three forward transitions that require a recorded gate consultation for
 // the stage just completed (when config.routing.requireGateConsultation is
 // true). Backward, lateral (questions/blocked), and archive/done moves are
@@ -116,6 +123,21 @@ export function gateStageForForwardMove(fromStatus, toStatus) {
     }
   }
   return null;
+}
+
+// The design -> implementation forward move that requires a recorded
+// design-review token when config.routing.requireDesignReview is true.
+// Backward, lateral, and archive/done moves are never gated: only this exact
+// from/to pair returns true.
+const DESIGN_REVIEW_FROM = new Set(["ready_for_design", "designing"]);
+export function isDesignReviewGatedMove(fromStatus, toStatus) {
+  return DESIGN_REVIEW_FROM.has(fromStatus) && toStatus === "ready_for_implementation";
+}
+
+function hasDesignReviewToken(ticket) {
+  return asList(ticket.frontMatter.completedSteps).some(
+    (token) => token === DESIGN_REVIEW_ACTION || token.startsWith(`${DESIGN_REVIEW_ACTION}:`),
+  );
 }
 
 // Fixed structural mapping from a gate/optional-step "stage" name to the
@@ -277,6 +299,14 @@ function producingStatusForToken(token, config, actionToStatus) {
 
   const separator = token.indexOf(":");
   const action = separator === -1 ? token : token.slice(0, separator);
+
+  // A design-review token is design-stage evidence: place it at
+  // ready_for_design so invalidateDownstreamEvidence (loop-back) and
+  // evidenceStrippedByPendingForwardMove (premature-evidence guard) treat it
+  // identically to a design token.
+  if (action === DESIGN_REVIEW_ACTION) {
+    return STAGE_TO_STATUS.design;
+  }
 
   if (Object.hasOwn(actionToStatus, action)) {
     return actionToStatus[action];
@@ -717,6 +747,21 @@ export async function moveTicket(root, ticketId, status, options = {}) {
               `Run "gate-check ${ticket.id} --stage ${gateStage}" first; if the catalog is non-empty, dispatch the gate agent ` +
               `and record the result with "gate-complete ${ticket.id} --stage ${gateStage} --executor <route> --evidence <summary>" ` +
               `before moving to ${status}.`,
+          );
+        }
+      }
+
+      // Same "no side effects on refusal" window as the gate-consultation
+      // block above: a scoped hard precondition on the design -> implementation
+      // forward move only, active only when config.routing.requireDesignReview
+      // is true. Never gates backward/lateral/archive moves (isDesignReviewGatedMove
+      // returns true only for the two forward pairs).
+      if (isDesignReviewGatedMove(ticket.status, status) && config.routing?.requireDesignReview === true) {
+        if (!hasDesignReviewToken(ticket)) {
+          throw new Error(
+            `${ticket.path}: move refused: ticket ${ticket.id} has no recorded design review. ` +
+              `Run the design-review step and record it with ` +
+              `"design-review ${ticket.id} --executor <route> --evidence <summary>" before moving to ${status}.`,
           );
         }
       }
@@ -1324,6 +1369,91 @@ export async function completeStep(root, ticketId, action, executor, evidence, o
       }
       await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
       return { ticket: ticket.id, action, executor, path: ticket.path };
+    },
+    options.lock,
+  );
+  await clearActiveStep(root, result.ticket).catch(() => {});
+  return result;
+}
+
+// Records a design-review consultation, modeled on completeStep (not
+// recordGateConsultation): it must run validateStepRouting with model
+// enforcement (the configured model pin, e.g. gpt-5.6-sol, is enforced
+// exactly like a mandatory action's model gate) and the premature-evidence
+// guard. Effort is a dispatch-time hint only and is never read here, so it
+// cannot leak into the token or evidence.
+export async function recordDesignReview(root, ticketId, executor, evidence, options = {}) {
+  if (evidence.trim() === "") {
+    throw new Error("design-review requires non-empty evidence");
+  }
+  if (options.override === true && (options.overrideReason ?? "").trim() === "") {
+    throw new Error("design-review --override requires a non-empty overrideReason");
+  }
+
+  const config = await loadConfig(root);
+  if (!isValidAgentValue(executor)) {
+    throw new Error(`executor must be one of ${schemaAgentValues().join(", ")}`);
+  }
+
+  const result = await withTicketLock(
+    root,
+    ticketId,
+    async () => {
+      const { ticket } = await findTicket(root, ticketId);
+      if (options.__afterRead) {
+        await options.__afterRead();
+      }
+      const token = stepToken(DESIGN_REVIEW_ACTION, executor);
+      const routingIssues = validateStepRouting(ticket, config, DESIGN_REVIEW_ACTION, executor, {
+        enforceModel: true,
+      });
+      if (routingIssues.length > 0) {
+        throw new Error(`routing validation failed:\n${routingIssues.join("\n")}`);
+      }
+
+      let overrideNote = null;
+      if (config.routing?.guardPrematureEvidence === true) {
+        const check = evidenceStrippedByPendingForwardMove(ticket, config, token);
+        if (check.stripped) {
+          if (options.override === true) {
+            overrideNote = check.producingStatus
+              ? ` ahead of its producing status ${check.producingStatus}`
+              : "";
+          } else {
+            throw new Error(
+              `design-review refused: recording it now at status ${ticket.status} would ` +
+                `be stripped by the forward move into ${check.producingStatus} (routing.invalidateOnLoopBack). ` +
+                `Record design-review evidence at ${check.producingStatus} or later (the earliest status where ` +
+                `it survives). Re-run with --override --reason <text> to record anyway (the reason ` +
+                `is appended to the Run Log), or set routing.guardPrematureEvidence to false to disable this guard.`,
+            );
+          }
+        }
+      }
+
+      const now = options.now ?? new Date();
+      const frontMatter = withUpdated(
+        {
+          ...ticket.frontMatter,
+          completedSteps: addUnique(asList(ticket.frontMatter.completedSteps), token),
+        },
+        now,
+      );
+      let body = appendToSection(
+        ticket.body,
+        "Run Log",
+        `- ${formatIsoSeconds(now)}: Recorded design review via ${executor}: ${evidence.trim()}`,
+      );
+      if (options.override === true && overrideNote !== null) {
+        body = appendToSection(
+          body,
+          "Run Log",
+          `- ${formatIsoSeconds(now)}: Premature-evidence override: recorded design-review at ${ticket.status}` +
+            `${overrideNote}: ${(options.overrideReason ?? "").trim()}`,
+        );
+      }
+      await writeTicketFile(ticket.path, renderMarkdownTicket(frontMatter, body));
+      return { ticket: ticket.id, executor, path: ticket.path };
     },
     options.lock,
   );
@@ -2216,6 +2346,7 @@ function optionalStepEntry(config, name) {
 }
 
 function isKnownAction(config, action) {
+  if (action === DESIGN_REVIEW_ACTION) return true;
   const actions = new Set(Object.values(config.workflow.statusActions));
   return actions.has(action) || optionalStepEntry(config, action) !== null;
 }
@@ -2239,7 +2370,10 @@ function configuredRouteForAction(config, action) {
 // enforces mandatory-action pins.
 function profileForAction(config, action) {
   const mandatory = new Set(Object.values(config.workflow.statusActions));
-  if (mandatory.has(action)) {
+  // design-review is absent from workflow.statusActions but resolves through
+  // the agents map exactly like a mandatory action (config.agents["design-review"]),
+  // never through the optionalSteps catalog.
+  if (mandatory.has(action) || action === DESIGN_REVIEW_ACTION) {
     const entry = config.agents[action] ?? config.agents.default ?? { route: "inline" };
     return typeof entry === "string" ? { route: entry } : entry;
   }
