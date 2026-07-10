@@ -423,6 +423,37 @@ function normalizeAgentProfile(value, key) {
   return profile;
 }
 
+// Pure config scan (no fs/PATH): returns a human label for every action
+// routed to a codex-task:* route. Handles both the normalized profile-object
+// shape (from loadConfig) and the raw string/object shape (from a sync
+// parseJsonc read, e.g. install's config hint). Shared by validate and
+// install so both use one authority for "does this config reference
+// codex-task" — see src/codex-detect.js.
+export function codexTaskRoutedActions(config) {
+  const actions = [];
+  if (isObject(config?.agents)) {
+    for (const [action, value] of Object.entries(config.agents)) {
+      const route = typeof value === "string" ? value : value?.route;
+      if (typeof route === "string" && route.startsWith("codex-task:")) {
+        actions.push(action);
+      }
+    }
+  }
+  if (isObject(config?.optionalSteps)) {
+    for (const [stage, entries] of Object.entries(config.optionalSteps)) {
+      if (!Array.isArray(entries)) {
+        continue;
+      }
+      for (const entry of entries) {
+        if (isObject(entry) && typeof entry.agent === "string" && entry.agent.startsWith("codex-task:")) {
+          actions.push(`${entry.name} (${stage})`);
+        }
+      }
+    }
+  }
+  return actions;
+}
+
 export function isValidAgentRoute(value) {
   return (
     value === "inline" ||

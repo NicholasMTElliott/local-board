@@ -14,6 +14,9 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { codexTaskWarning } from "./codex-detect.js";
+import { parseJsonc } from "./config.js";
+
 // Package root (directory holding package.json, bin/, src/, agents/, skills/,
 // resources/). This module lives at <root>/src/install.js, so the root is one
 // level up from this file's directory.
@@ -108,6 +111,11 @@ export function buildTargets(home) {
  * check (a `(command: string) => boolean` predicate). This is a test seam for
  * exercising the PATH-verification failure/success paths in-process without
  * mutating the real process PATH.
+ *
+ * `options.cwd`, when supplied, overrides `process.cwd()` for the post-install
+ * codex-task hint's project-config lookup (`<cwd>/plans/local-board.config.jsonc`).
+ * Test-only seam so in-process installer tests can point the lookup at a temp
+ * project dir without `chdir`.
  */
 export function runInstall(argv, options = {}) {
   // ids are home-independent (only path fields vary by home), so target ids
@@ -251,6 +259,36 @@ function performInstall(args, targets, home, installDir, options = {}, homeOverr
 
   if (!hooksEnabled && selected.some((target) => target.settingsPath !== null)) {
     console.log(`Run 'local-board install --hooks' to enable Claude Code dispatch-enforcement hooks`);
+  }
+
+  // Detection-only, informational codex-task hint. Only after a claude-target
+  // install; best-effort against the project config in cwd (a config that
+  // does not exist, is unreadable, or is malformed silently skips the hint —
+  // this is not a project-required config, just a courtesy check).
+  if (selected.some((target) => target.id === "claude")) {
+    const cwd = options.cwd ?? process.cwd();
+    const cfg = readCwdConfigForHint(cwd);
+    if (cfg) {
+      const warning = codexTaskWarning(cfg, { home, resolvesOnPath: checkResolvesOnPath, buildTargets });
+      if (warning) {
+        console.log(warning);
+      }
+    }
+  }
+}
+
+// Sync, best-effort read of the project config in cwd for the install-time
+// codex-task hint. Returns null (no config in cwd, unreadable, or malformed)
+// rather than throwing -- install must never fail because of this hint. The
+// raw parsed object is passed straight to codexTaskWarning; codexTaskRoutedActions
+// already tolerates the raw route-string / { route } shape, so no
+// merge/normalize against DEFAULT_CONFIG is needed here.
+function readCwdConfigForHint(cwd) {
+  try {
+    const configPath = join(cwd, "plans", "local-board.config.jsonc");
+    return parseJsonc(readFileSync(configPath, "utf8"));
+  } catch {
+    return null;
   }
 }
 
@@ -720,7 +758,7 @@ function getVersion(command) {
   }
 }
 
-function resolvesOnPath(command) {
+export function resolvesOnPath(command) {
   const resolver = process.platform === "win32" ? "where" : "command -v";
   try {
     execSync(`${resolver} ${command}`, { stdio: ["ignore", "pipe", "ignore"] });

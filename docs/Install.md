@@ -17,6 +17,13 @@ resolves to `%USERPROFILE%`, e.g. `~/.claude` is
 - `npx local-board` is not supported. A first `npx` run needs network access
   to fetch the package, which sandboxed environments (including the Codex
   sandbox) deny.
+- codex-task is a **peer install, detected but not managed**. If your config
+  routes any action to `codex-task:*` (the default `review`/`document`
+  routes do), `validate` and a `claude`-target `install` emit a `WARNING`
+  when the `codex` CLI is off `PATH` or the codex-task skill is not
+  installed. Remedy: install the codex-task skill and run `codex login`, or
+  reroute the affected action(s) to another agent. local-board never
+  installs or manages codex-task itself.
 
 ## Install methods
 
