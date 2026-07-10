@@ -528,6 +528,32 @@ test("loadConfig rejects a prompt field inside an optionalSteps[].agent profile"
   });
 });
 
+test("loadConfig rejects a null-valued prompt field inside an optionalSteps[].agent profile", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      optionalSteps: {
+        implement: [
+          {
+            name: "security_audit",
+            prompt: "plans/prompts/optional-steps/impl/security_audit.md",
+            triggers: "Anything",
+            agent: { route: "codex-task:read-only", prompt: null },
+          },
+        ],
+      },
+    }));
+    // A null prompt value still OWNS the key; allowPrompt: false must reject
+    // ownership regardless of value, not just non-null truthy prompts (a
+    // config author could otherwise "null out" the profile prompt to slip
+    // past the entry-level-prompt-only rule).
+    await assert.rejects(
+      loadConfig(root),
+      /optionalSteps\.implement entry "security_audit" agent cannot carry a prompt; set the entry-level "prompt" field instead/,
+    );
+  });
+});
+
 test("loadConfig rejects an inline route with a model or effort on optionalSteps[].agent", async () => {
   await withRoot(async (root) => {
     await writeConfig(root, JSON.stringify({
@@ -787,6 +813,37 @@ test("loadConfig rejects malformed optionalSteps entries", async () => {
       await assert.rejects(loadConfig(root), testCase.expected, `case ${testCase.label}`);
     });
   }
+});
+
+test("loadConfig rejects an optionalSteps entry name colliding with a custom statusActions value", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      workflow: {
+        statusActions: {
+          ready_for_implementation: "custom_gate",
+        },
+      },
+      optionalSteps: {
+        implement: [
+          {
+            name: "custom_gate",
+            prompt: "plans/prompts/optional-steps/impl/custom_gate.md",
+            triggers: "Anything",
+          },
+        ],
+      },
+    }));
+    // "custom_gate" is not a built-in mandatory action name, but it IS the
+    // effective statusActions value for ready_for_implementation after merge;
+    // profileForAction (src/tickets.js) classifies action names as
+    // mandatory-vs-specialty purely by statusActions membership, so this
+    // collision must be rejected at load time, not just the fixed built-ins.
+    await assert.rejects(
+      loadConfig(root),
+      /collides with a mandatory action: workflow\.statusActions\.ready_for_implementation is "custom_gate"/,
+    );
+  });
 });
 
 test("loadConfig accepts valid lowercase snake_case names for optionalSteps entries", async () => {

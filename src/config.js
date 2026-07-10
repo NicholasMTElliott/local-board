@@ -4,14 +4,6 @@ import path from "node:path";
 export const CONFIG_PATH = path.join("plans", "local-board.config.jsonc");
 
 export const OPTIONAL_STEP_STAGES = ["design", "implement", "test"];
-const MANDATORY_ACTION_NAMES = new Set([
-  "decompose",
-  "design",
-  "implement",
-  "review",
-  "test",
-  "document",
-]);
 
 // DEFAULT_CONFIG plays two runtime roles — it is NOT the same thing as the
 // scaffolded config below it, minus some values:
@@ -437,7 +429,7 @@ function normalizeAgentProfile(value, label, { allowPrompt = true } = {}) {
   }
 
   if (allowPrompt === false) {
-    if (prompt !== undefined && prompt !== null) {
+    if (Object.hasOwn(value, "prompt")) {
       throw new Error(
         `${label} cannot carry a prompt; set the entry-level "prompt" field instead`,
       );
@@ -529,6 +521,24 @@ export function isValidAgentRoute(value) {
   );
 }
 
+// Maps every effective (post-merge) workflow.statusActions value to the
+// status key that produces it, e.g. "implement" -> "ready_for_implementation".
+// Used to reject optionalSteps entries whose name collides with a status
+// action name — including a custom statusActions override, not just the
+// built-in defaults — so profileForAction's mandatory-vs-specialty
+// classification (src/tickets.js) can never be ambiguous.
+function effectiveStatusActionNames(merged) {
+  const map = new Map();
+  if (isObject(merged.workflow) && isObject(merged.workflow.statusActions)) {
+    for (const [status, action] of Object.entries(merged.workflow.statusActions)) {
+      if (typeof action === "string") {
+        map.set(action, status);
+      }
+    }
+  }
+  return map;
+}
+
 function normalizeOptionalSteps(merged, configPath) {
   if (!isObject(merged.optionalSteps)) {
     merged.optionalSteps = { design: [], implement: [], test: [] };
@@ -540,6 +550,14 @@ function normalizeOptionalSteps(merged, configPath) {
   // resolves a specialty step by name across stages and uses the first match,
   // so a cross-stage duplicate would route validation to the wrong entry.
   const seenNames = new Set();
+  // A specialty name that collides with an *effective* statusActions value
+  // (after config merge, so a custom statusActions override counts too) is
+  // rejected: profileForAction (src/tickets.js) classifies action names as
+  // mandatory-vs-specialty by checking membership in this exact set, and a
+  // collision would make it resolve the specialty's own profile via the
+  // mandatory branch (agents.default) instead, silently misrouting model
+  // enforcement. See statusActionNames() below.
+  const statusActionNames = effectiveStatusActionNames(merged);
   for (const stage of OPTIONAL_STEP_STAGES) {
     const value = merged.optionalSteps[stage];
     if (value === undefined || value === null) {
@@ -549,7 +567,9 @@ function normalizeOptionalSteps(merged, configPath) {
     if (!Array.isArray(value)) {
       throw new Error(`optionalSteps.${stage} must be an array`);
     }
-    normalized[stage] = value.map((entry) => validateOptionalStepEntry(entry, stage, seenNames));
+    normalized[stage] = value.map((entry) =>
+      validateOptionalStepEntry(entry, stage, seenNames, statusActionNames),
+    );
   }
 
   for (const key of Object.keys(merged.optionalSteps)) {
@@ -635,7 +655,7 @@ function normalizeWorktrees(merged) {
   merged.worktrees = { location, guardWrongRoot };
 }
 
-function validateOptionalStepEntry(entry, stage, seenNames) {
+function validateOptionalStepEntry(entry, stage, seenNames, statusActionNames) {
   if (!isObject(entry)) {
     throw new Error(`optionalSteps.${stage} entries must be objects`);
   }
@@ -652,9 +672,10 @@ function validateOptionalStepEntry(entry, stage, seenNames) {
   if (typeof triggers !== "string" || triggers.trim() === "") {
     throw new Error(`optionalSteps.${stage} entry "${name}" is missing a non-empty triggers`);
   }
-  if (MANDATORY_ACTION_NAMES.has(name)) {
+  const collidingStatus = statusActionNames.get(name);
+  if (collidingStatus !== undefined) {
     throw new Error(
-      `optionalSteps.${stage} entry name "${name}" collides with a mandatory action`,
+      `optionalSteps.${stage} entry name "${name}" collides with a mandatory action: workflow.statusActions.${collidingStatus} is "${name}"; rename the specialty entry or change that statusActions value`,
     );
   }
   if (seenNames.has(name)) {
