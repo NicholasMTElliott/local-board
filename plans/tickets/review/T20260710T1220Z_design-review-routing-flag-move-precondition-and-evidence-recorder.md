@@ -13,8 +13,8 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:22:11Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T13:13:01Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-10T13:13:02Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
 # design-review: routing flag, move precondition, and evidence recorder
@@ -412,3 +412,5 @@ Re-review: verdict: pass (codex-task:read-only, gpt-5.6-terra @ reasoning-effort
 - 2026-07-10T13:09:47Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Original 4d54bce + review-fix 18c0580: design-review recognition/recorder/scanner all gated on requireDesignReview (flag-off byte-identical, zero-codex-routes test restored to pre-change form as proof), first-colon token parse requires non-empty executor, set-then-move bypass regression. 491 pass + 2 baseline.
 
 - 2026-07-10T13:11:04Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - internal workflow machinery + flag gating
+
+- 2026-07-10T13:13:02Z: Completed review via codex-task:read-only@gpt-5.6-terra: Initial changes_requested (2 findings, terra@high) fixed in 18c0580; focused re-review verdict: pass (terra@medium). No open findings.
