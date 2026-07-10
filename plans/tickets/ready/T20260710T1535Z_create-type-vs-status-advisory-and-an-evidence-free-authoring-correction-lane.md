@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T18:32:21Z
+updated: 2026-07-10T18:39:13Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -51,7 +51,9 @@ type-vs-status mismatch, and an adopted authoring-correction lane in the
 `enforceTransitions` validator for zero-evidence `ready_*` re-placements. Both
 default-off for existing boards; neither refuses anything that was previously
 allowed. The lane also actively clears the stale action-kind dispatch record it
-leaves behind (revision below closes a FAILED-review High finding).
+would otherwise leave behind. This revision (#2) makes that clear **atomic and
+fail-closed** inside `moveTicket`'s ticket-locked span, closing the re-review
+finding that the clear ran after the status was published and swallowed failures.
 
 ### Decision summary
 
@@ -61,25 +63,25 @@ leaves behind (revision below closes a FAILED-review High finding).
 - Part 2 (authoring-correction lane): ADOPT. Extend the `enforceTransitions`
   allow condition with a `ready_* -> ready_*/backlog` lane permitted only when the
   ticket has zero `completedSteps` AND zero `routingApprovals`, AND clear any
-  lingering `kind: "action"` active-step ledger record when (and only when) a move
-  is admitted via that lane. Justification, the provable-no-op argument, and the
-  ledger-clear seam are below.
+  lingering `kind: "action"` ledger record — the clear performed inside the
+  ticket lock, before the status is published, and fail-closed (a clear failure
+  refuses the move rather than publishing a half-corrected state).
 
 ### Related tickets and conflicts
 
 - `T20260707T1329Z` (done) introduced `isStructurallyAllowed`/`isTransitionAllowed`
   and the `enforceTransitions` hard validator. This ticket extends that exact
-  machinery; no conflict, but the design deliberately keeps `isStructurallyAllowed`
-  status-only and adds the evidence-aware lane as a separate predicate rather than
-  overloading the status-only allow-set.
+  machinery; the design keeps `isStructurallyAllowed` status-only and adds the
+  evidence-aware lane as a separate predicate rather than overloading the
+  status-only allow-set.
 - `B20260710T1225Z` (done) shaped the ledger-sweep predicates
-  (`isAnyConsultationLedgerEntry`, `isActionLedgerEntry`) that `moveTicket` and the
-  complete-step/gate paths run; Part 2 both relies on and extends that machinery
-  (a new kind-only action predicate, `isAnyActionLedgerEntry`) — see the
-  ledger-sweep interaction below.
+  (`isAnyConsultationLedgerEntry`, `isActionLedgerEntry`) and the identity-scoped
+  `clearActiveStepIf` seam that `moveTicket` and the complete-step/gate paths run;
+  Part 2 both relies on and extends that machinery (a new kind-only action
+  predicate, `isAnyActionLedgerEntry`).
 - Gate/loop-back features (`requireGateConsultation`, `requireDesignReview`,
   `invalidateOnLoopBack`, `guardPrematureEvidence`) all interact with `moveTicket`;
-  each interaction is analyzed in Part 2.
+  each interaction is analyzed below.
 - No overlapping in-flight tickets touch `createTicket`/`commandCreate` or
   `moveTicket`'s transition gate.
 
@@ -100,10 +102,10 @@ Why this single predicate captures both scoped cases exactly:
 - story/epic: `doneRequires` is `["decompose"]`. The only trigger status whose
   action is `decompose` is `ready_for_decomposition`; every other trigger status
   (`design`/`implement`/`review`/`test`/`document`) has an action not in the list,
-  so it fires. This is precisely "story/epic created at a status whose action is
-  not decompose."
+  so it fires — precisely "story/epic created at a status whose action is not
+  decompose."
 - task/bug: `doneRequires` is `["design","implement","review","test","document"]`,
-  which covers every trigger action except `decompose`. So the only trigger status
+  covering every trigger action except `decompose`. So the only trigger status
   that fires is `ready_for_decomposition` — precisely "task/bug created at
   ready_for_decomposition." `task@ready_for_design` stays silent (design is in the
   list).
@@ -123,23 +125,18 @@ Message shape (stderr, single line, `WARNING:` prefix to match the existing
     entry status is ready_for_decomposition. The ticket was created; re-place it
     with "move <id> ready_for_decomposition" if this was unintended.
 
-The message names the requested status, the type's `doneRequires`, the offending
-vs. conventional action, and the conventional status.
-
 Placement and output channel:
 
-- New pure exported helper, `typeStatusAdvisory(config, type, status) ->
-  string | null`, in `src/tickets.js` (co-located with the other config-derived
-  status/action predicates and `invertStatusActions`). Pure and deterministic —
-  the primary unit-test surface.
-- `commandCreate` (`src/cli.js`) loads config once (`loadConfig(root)`), computes
-  the advisory after `createTicket` succeeds, and emits it via `console.warn`
-  (stderr) BEFORE the existing `console.log(ticketPath)`. stdout remains exactly
-  the path, so scripts that capture stdout are unaffected. A `null` return emits
-  nothing (byte-identical to today for conventional creates).
+- New pure exported helper `typeStatusAdvisory(config, type, status) -> string |
+  null` in `src/tickets.js` (co-located with the config-derived status/action
+  predicates and `invertStatusActions`). Pure and deterministic — the primary
+  unit-test surface.
+- `commandCreate` (`src/cli.js`) loads config once, computes the advisory after
+  `createTicket` succeeds, and emits it via `console.warn` (stderr) BEFORE the
+  existing `console.log(ticketPath)`. stdout remains exactly the path; a `null`
+  return emits nothing (byte-identical to today for conventional creates).
 
-No change to `createTicket` itself — it stays free of config concerns, and its
-`wx` create + `linkParent` behavior is untouched.
+No change to `createTicket` itself — it stays free of config concerns.
 
 ### Part 2 — authoring-correction lane (ADOPTED)
 
@@ -162,11 +159,12 @@ case — a freshly created, never-worked ticket at the wrong status — has both
 so the tighter precondition costs the intended use case nothing.
 
 Wiring in `moveTicket` (`src/tickets.js`), inside the existing
-`enforceTransitions === true` block only. Compute a single `admittedViaLane` flag
-once, reuse it for both the allow-condition and the ledger clear (below):
+`enforceTransitions === true` block. Compute a single `admittedViaLane` flag once
+and reuse it for both the allow-condition and the fail-closed clear:
 
     const admittedViaLane =
       config.routing?.enforceTransitions === true
+      && !options.overrideTransition
       && !isTransitionAllowed(config, ticket.status, status)
       && isAuthoringCorrectionLane(ticket.status, status, ticket.frontMatter);
 
@@ -176,208 +174,200 @@ once, reuse it for both the allow-condition and the ledger clear (below):
       ... existing override / refusal ...
     }
 
-The lane is purely additive to the allow condition: it can only turn a would-be
-refusal into an allow, never the reverse, so no move that is allowed today becomes
-refused. It lives entirely inside the `enforceTransitions` gate, so boards with
-`enforceTransitions` false (the `DEFAULT_CONFIG` fallback for pre-existing configs)
-see no behavior change at all.
+The `!options.overrideTransition` conjunct is new in this revision and matters for
+the fail-closed contract below: an explicit `--override` takes the manual escape
+path (records the override, preserves action records like every other non-lane
+move) and is NOT treated as a lane admission, so the fail-closed clear never runs
+on a forced transition and the refusal message can honestly point the user to
+`--override` as the fallback. The lane remains purely additive — it can only turn a
+would-be refusal into an allow, never the reverse, and lives entirely inside the
+`enforceTransitions` gate, so `enforceTransitions: false` boards see no change.
 
 Because `isTransitionAllowed` short-circuits `true` for every mapped/structural
 move, the lane predicate is only ever consulted for moves not otherwise allowed —
 e.g. `ready_for_design -> ready_for_decomposition` (the exact retro gap),
 `ready_for_implementation -> ready_for_decomposition`, or any `ready_* -> backlog`.
-Mapped forward pairs (e.g. `ready_for_design -> ready_for_implementation`) are
-already allowed by the map, so `admittedViaLane` is false for them (its
-`!isTransitionAllowed` conjunct fails) and the lane never becomes the deciding
-factor — including for the ledger clear below.
+Mapped forward pairs are already allowed by the map, so `admittedViaLane` is false
+for them and the lane never becomes the deciding factor.
 
-Interaction with `requireGateConsultation` (FORWARD gate, evaluated as a separate
-`if` after the transition gate): `gateStageForForwardMove` returns non-null ONLY
-for the three exact forward stage-completion pairs (design->impl, impl->review,
-test->docs). Genuine authoring corrections target `ready_for_decomposition`,
-`backlog`, or an upstream/lateral `ready_*` that is none of those three `to`
-values, so `gateStageForForwardMove` returns null and the block is skipped. For the
-one overlap where the lane predicate would also match a gated forward pair
-(e.g. `ready_for_design -> ready_for_implementation`), that pair is already
-map-allowed, so `admittedViaLane` is false and the transition gate passes via the
-map regardless; and crucially the gate-consultation `if` runs INDEPENDENTLY of how
-the transition gate passed. The lane therefore cannot smuggle a ticket past a gate:
-with zero `completedSteps`, `gateConsultationRecords` is empty and the forward move
-still refuses. Confirmed: the gate cannot fire on a zero-evidence lateral/upstream
-correction, and cannot be bypassed on a forward pair.
+Gate interactions (unchanged from prior revision, still valid): a genuine
+zero-evidence lateral/upstream correction targets `ready_for_decomposition`,
+`backlog`, or an upstream `ready_*` — never one of the three gated forward `to`
+values — so `gateStageForForwardMove`/`isDesignReviewGatedMove` return null/false
+and those blocks are skipped. For the one overlap (`ready_for_design ->
+ready_for_implementation`) the move is map-allowed anyway, the gate/design-review
+`if`s run independently of how the transition gate passed, and with zero evidence
+they still refuse — the lane cannot smuggle a ticket past a gate.
 
-Interaction with `requireDesignReview` (FORWARD gate): `isDesignReviewGatedMove`
-returns true only for `{ready_for_design,designing} -> ready_for_implementation`.
-No lateral/upstream authoring correction matches (`to !== ready_for_implementation`),
-so the block is skipped. For the `ready_for_design -> ready_for_implementation`
-overlap, same reasoning as above — that move is map-allowed anyway, the design-
-review `if` runs independently, and `hasDesignReviewToken` is false on a
-zero-`completedSteps` ticket, so it still refuses. No bypass.
+Loop-back no-op (provable): the `invalidateOnLoopBack` block runs only when
+`TRIGGER_STATUSES.has(status)`. For `-> backlog` it is skipped; for `-> ready_*` it
+calls `invalidateDownstreamEvidence` with both input lists empty by the lane
+precondition, so nothing is removed, `nextFrontMatter` is unchanged, and no Run Log
+line is appended. No-op by construction.
 
-Interaction with `invalidateOnLoopBack` (the provable no-op): the loop-back block
-runs only when `TRIGGER_STATUSES.has(status)`. For a `-> backlog` correction the
-block is skipped entirely (backlog is not a trigger). For a `-> ready_*` correction
-it calls `invalidateDownstreamEvidence(ticket.frontMatter, config, status)`; with
-`completedSteps` and `routingApprovals` both empty by the lane precondition, both
-input lists are empty, so `removed.completedSteps` and `removed.routingApprovals`
-are empty, `nextFrontMatter` is unchanged, and no Run Log line is appended. Provable
-no-op by construction — nothing to invalidate exists.
+### Part 2 — atomic, fail-closed clear of the stale action record
 
-### Part 2 — closing the stale-authorization gap (review-fix amendment)
+The finding this revision closes: `beginStep` (`src/tickets.js:1330`) stamps a
+`kind: "action"` ledger record (route = the stage's agent, e.g.
+`claude-subagent:local-board-designer`) at dispatch time. Front-matter
+`completedSteps` is not written until `complete-step`, so a ticket that was
+dispatched but not yet completed has EMPTY front-matter lists AND a live
+`kind: "action"` record — and is lane-eligible. If that record survives a lane
+correction (e.g. `ready_for_design -> ready_for_decomposition`), `checkDispatch`
+(`src/active-steps.js:231-234`) prioritizes the record's route/model over
+`resolveExpectedStep` and would still authorize the OLD-stage agent.
 
-The FAILED design review raised one High finding: empty `completedSteps` +
-`routingApprovals` proves nothing has been *recorded as complete*, but it does NOT
-prove the ticket was never *dispatched*. `beginStep` (`src/tickets.js:1330-1333`)
-stamps a `kind: "action"` active-step ledger record (route = the stage's agent,
-e.g. `claude-subagent:local-board-designer`) at dispatch time; that record is only
-removed by the matching `completeStep`/`approveInline` (via
-`clearActiveStepIf(..., isActionLedgerEntry(record, action))`). Front-matter
-`completedSteps` is not written until `complete-step`. So a ticket dispatched but
-not yet completed has EMPTY front-matter lists AND a live `kind: "action"` ledger
-record. Such a ticket is lane-eligible.
+The prior revision cleared the record in the post-publish sweep block
+(`src/tickets.js:915-917`), best-effort (`.catch(() => {})`). Re-review found three
+interleavings that let stale authorization survive: (a) the clear ran AFTER
+`writeTicketFile` published the new status, (b) a failed clear was swallowed so the
+ticket published its new status with the stale record intact, and (c) — out of
+scope, see Known limitations. This revision fixes (a) and (b) by relocating the
+action clear to BEFORE publish and making it fail-closed.
 
-`moveTicket`'s abandonment sweep (`src/tickets.js:915-917`) runs
-`clearActiveStepIf(root, ticketId, isAnyConsultationLedgerEntry)`, which is
-kind-only for `gate`/`specialty` and *deliberately* preserves `kind: "action"`
-records (a move is not, in general, evidence that an in-flight action dispatch was
-abandoned — see the sweep comment). Consequently, after a lane correction such as
-`ready_for_design -> ready_for_decomposition`, the stale `design` action record
-survives. `checkDispatch` (`src/active-steps.js:231-234`) then prioritizes that
-ledger record's `route`/`model` over `resolveExpectedStep`, so it would still
-authorize `local-board-designer` for a ticket that now sits at
-`ready_for_decomposition` — dispatching the WRONG (old-stage) agent. That is the
-finding.
+Predicate (kind-only action-record analogue of `isAnyConsultationLedgerEntry`):
 
-Fix (chosen option — clear the action record on lane admission): when, and only
-when, a move is `admittedViaLane`, `moveTicket` additionally clears any
-`kind: "action"` ledger record for the ticket, using a new kind-only predicate that
-matches ANY action name (mirroring `isAnyConsultationLedgerEntry` on the
-consultation side):
-
-    // Kind-only action-record predicate — the action-side analogue of
-    // isAnyConsultationLedgerEntry. Matches any kind:"action" entry regardless of
-    // action name (a legacy record with no `kind` reads as "action").
+    // Matches any kind:"action" entry regardless of action name. A legacy
+    // record with no `kind` reads as "action".
     function isAnyActionLedgerEntry(record) {
       return (record.kind ?? "action") === "action";
     }
 
-Wiring, folded into the existing sweep block (`src/tickets.js`), gated on a real
-status change AND `admittedViaLane` — leaving the general sweep's deliberate
-action-preservation intact for every other move:
+Exact placement: inside `moveTicket`'s `withTicketLock` callback, AFTER all refusal
+gates (transition gate, gate consultation, design review, loop-back invalidation —
+all no-ops for a lane move) and AFTER `content`/`targetFolder`/`targetPath` are
+computed, but BEFORE the first filesystem mutation of the ticket, i.e. immediately
+before `await mkdir(targetFolder, { recursive: true });` (currently line 872). At
+that point nothing about the ticket has been written or renamed, so a throw leaves
+the ticket entirely unchanged:
 
-    if (ticket.status !== status) {
-      await clearActiveStepIf(root, ticketId, isAnyConsultationLedgerEntry).catch(() => {});
-      if (admittedViaLane) {
-        // Authoring re-placement: the old stage's begin-step dispatch is
-        // abandoned by construction (zero recorded evidence, new status),
-        // so its stale action record must not keep authorizing that agent.
-        await clearActiveStepIf(root, ticketId, isAnyActionLedgerEntry).catch(() => {});
+    if (admittedViaLane) {
+      // Fail-closed: clear the abandoned in-flight action-dispatch record BEFORE
+      // the new status is published (the mkdir/rename/write below). This runs
+      // inside the ticket lock, so the corrected status and the ledger clear are
+      // published as one unit from the ticket writer's perspective. If the clear
+      // throws, the move REFUSES with the ticket untouched -- no half-corrected
+      // ticket whose folder/front matter say ready_for_decomposition while the
+      // ledger still authorizes the designer. Deliberately NOT best-effort,
+      // unlike the post-publish consultation sweep below.
+      try {
+        await clearActiveStepIf(
+          root, ticketId, isAnyActionLedgerEntry, options.__laneClearLedgerOptions,
+        );
+      } catch (error) {
+        throw new Error(
+          `${ticket.path}: move refused: could not clear the in-flight ` +
+            `action-dispatch record for ${ticket.id} before re-placing it to ` +
+            `${status} (${error.message}); the ticket was NOT moved. Re-run with ` +
+            `--override --reason <text> to force ${ticket.status} -> ${status}, ` +
+            `or resolve the active-steps ledger and retry.`,
+        );
       }
     }
 
-Scoping decision (lane-only, and the general sweep MUST stay action-preserving):
-the extra action clear is guarded by `admittedViaLane`, never the broad
-`ticket.status !== status`. Every non-lane real status change — mapped forward
-moves, structural moves, `--override` forced transitions, loop-backs, moves to
-`questions`/`blocked` — must continue to preserve `kind: "action"` records, exactly
-as today: those moves can legitimately coexist with a live in-flight action
-dispatch, and erasing it would deny a legitimate dispatch. Only the
-authoring-correction lane carries the by-construction guarantee that there is
-nothing worth preserving: zero recorded evidence plus a status change that is a
-pure re-placement means the old stage's dispatch is being abandoned. The clear is
-best-effort (`.catch(() => {})`), consistent with the existing sweep — a clear
-failure never undoes the already-successful move; the residual record would at
-worst require a re-`begin-step` overwrite (idempotent self-heal).
+Fail-closed error shape: a `move refused:` prefix consistent with the transition
+and gate refusals, naming the ticket, the intended target, the underlying cause
+(`error.message`), an explicit "the ticket was NOT moved", and the `--override`
+fallback path (which is why `admittedViaLane` excludes `overrideTransition` — the
+override path does not run this clear).
 
-Why clear-on-lane-move beats the finding's alternative (lane requires no active
-record):
+Ordering constraint with the existing post-publish consultation sweep: the two
+clears stay SEPARATE and are not merged.
 
-- Front-matter-only eligibility stays pure and deterministic. Making
-  `isAuthoringCorrectionLane` depend on the ledger would couple transition
-  admission to a runtime cache (`.local-board/active-steps.json`) that is a
-  DIFFERENT store from the ticket file, force the predicate async, and make lane
-  eligibility non-deterministic w.r.t. the ticket the user is looking at.
-- That cache is intentionally self-healing: the write paths read it via
-  `readLedgerSelfHeal`, which returns `{}` on a corrupt/unreadable ledger. A
-  require-no-record lane would therefore silently *re-open* on a corrupt ledger
-  (reads as empty -> "no record" -> eligible) — the opposite of the safe default.
-- Require-no-record REFUSES a legitimate authoring correction whenever any stray or
-  in-flight action record happens to exist, bouncing the user back to the
-  `--override` ceremony the lane exists to remove — defeating the feature for the
-  exact retro case (a freshly dispatched-then-mis-placed ticket).
-- Clear-on-lane-move is the correct abandonment semantic and reuses the existing
-  `clearActiveStepIf` seam and the sweep's own best-effort pattern — the same
-  shape B20260710T1225Z already established for consultation stamps. No concrete
-  reason to prefer require-no-record was found.
+- The lane action clear runs pre-publish and fail-closed, and is lane-scoped.
+- The consultation sweep (`clearActiveStepIf(root, ticketId,
+  isAnyConsultationLedgerEntry)` at lines 915-917) stays exactly where it is —
+  post-publish, best-effort (`.catch(() => {})`), on every real status change. It
+  targets disjoint kinds (`gate`/`specialty`), so removing the action record early
+  cannot affect it. It MUST stay best-effort and post-publish: it handles
+  abandonment for ALL moves, and making an unrelated gate/specialty cleanup able to
+  fail a move would change behavior for every status transition. Only the lane's
+  own action clear carries a by-construction guarantee strong enough to justify
+  fail-closed semantics.
 
-After the clear, `checkDispatch` for the moved ticket falls through the
-no-ledger-record branch (`src/active-steps.js:236-254`) and resolves the expected
-step from the ticket's NEW status via `resolveExpectedStep` — e.g.
-`ready_for_decomposition` resolves to `claude-subagent:local-board-decomposer`, so
-the stale designer authorization is gone and the correct next agent resolves from
-ticket state.
+Ledger/ticket consistency if the write fails AFTER a successful clear: the clear is
+the first side effect; if the subsequent rename/write throws, the ledger entry is
+already gone but the ticket stays at its ORIGINAL status. `checkDispatch` then falls
+through to `resolveExpectedStep` for that original status, which resolves the
+correct original-stage agent — so no wrong-agent authorization results, and a
+re-`begin-step` idempotently re-stamps. This is strictly safer than the reverse
+ordering and is the intended fail-closed direction.
 
-Interaction with the general dispatch-verification ledger sweep (updated): the
-kind-only consultation sweep is unchanged and still runs on every real status
-change. The new action clear is strictly additional and lane-scoped. For a
-freshly-created, truly never-dispatched ticket the action clear simply matches
-nothing (best-effort no-op). For a dispatched-but-not-completed ticket it removes
-exactly the stale authorization the finding identified. Harmless in both cases.
+Why clear-on-lane-move (not "lane requires no active record"): front-matter-only
+eligibility stays pure and deterministic; coupling admission to the runtime
+`.local-board/active-steps.json` cache would make the predicate async and
+non-deterministic, and — because that cache self-heals to `{}` on corruption — a
+require-no-record lane would silently re-open on a corrupt ledger (the opposite of
+the safe default) and would bounce legitimate corrections back to `--override`. The
+chosen approach reuses the existing `clearActiveStepIf` seam.
 
-Interaction with `guardPrematureEvidence`: out of scope — that guard lives in
-`complete-step`, not `moveTicket`, and the lane precondition is precisely zero
-recorded evidence.
+### Known limitations (interleaving explicitly out of scope)
 
-`allowedTargetsFor` (refusal message): no change. When evidence exists the lane
-predicate is false, so a disallowed `ready_* -> ready_*` move still refuses with the
-standard allowed-targets list; the lane targets are correctly NOT advertised,
-because with evidence present they are genuinely disallowed. When evidence is zero
-the move is allowed and no refusal message is produced.
+Interleaving (c) from the finding — a concurrent `beginStep` re-stamping an action
+record after the clear — is NOT addressed and is documented as a pre-existing
+systemic property, not a regression this ticket introduces:
+
+- `beginStep` (`src/tickets.js:1298`) takes only the ledger file lock (via
+  `stampActiveStep` -> `withFileLock` on `<ledger>.lock`); it does NOT take the
+  per-ticket `withTicketLock`. So no `moveTicket` clear — the new lane clear
+  included — can exclude a concurrent `beginStep` re-stamp under a shared lock.
+- This exposure is IDENTICAL for the existing consultation sweep and for every
+  other status change today: any `moveTicket` can be raced by a concurrent
+  `begin-step`/`gate-check`/`specialty-run` that re-stamps immediately after the
+  sweep. Nothing about the authoring-correction lane is uniquely affected.
+- The dispatch layer is advisory/fail-open by design: `checkDispatch` is a
+  verification query behind a fail-open PreToolUse hook, and the ledger stamp is a
+  best-effort authorization cache (systemPatterns: "the active-steps ledger stamp
+  always records the configured logical route/model"; self-healing reads return
+  `{}` on corruption). A stray re-stamp at worst re-authorizes a stage the user is
+  about to re-dispatch anyway, and self-heals on the next `begin-step`.
+- Engineering cross-process generation counters / ticket-lock sharing into
+  `beginStep` is a systemic change far beyond a 2-point QoL ticket and would touch
+  every dispatch path, not just this lane. Out of scope here; if it is ever wanted
+  it belongs in its own ticket covering the whole `beginStep`/sweep family.
+
+I read `beginStep`, the sweep, and the hook rationale and concur with scoping this
+out; the fix genuinely belongs to the shared dispatch machinery, not this lane.
 
 ### Affected files
 
 - `src/tickets.js`: add exported `typeStatusAdvisory(config, type, status)` and
-  `isAuthoringCorrectionLane(fromStatus, toStatus, frontMatter)`; add the
-  kind-only `isAnyActionLedgerEntry(record)` predicate; in `moveTicket` compute the
-  `admittedViaLane` flag, add the `&& !admittedViaLane` clause to the
-  `enforceTransitions` gate, and add the lane-scoped
-  `clearActiveStepIf(root, ticketId, isAnyActionLedgerEntry)` inside the existing
-  status-change sweep block.
+  `isAuthoringCorrectionLane(fromStatus, toStatus, frontMatter)`; add the kind-only
+  `isAnyActionLedgerEntry(record)` predicate; in `moveTicket` compute
+  `admittedViaLane` (now also gated on `!options.overrideTransition`), add the
+  `&& !admittedViaLane` clause to the `enforceTransitions` gate, and add the
+  pre-publish, fail-closed lane action clear immediately before the mkdir/rename
+  block. The post-publish consultation sweep is unchanged.
 - `src/cli.js`: `commandCreate` loads config and emits the advisory on stderr
   before printing the path.
 - `docs/Workflow.md`: extend the "Hard transition validation" allow-set list with
   the authoring-correction lane bullet and its zero-evidence precondition; note
-  that admitting a move via the lane also abandons any in-flight action dispatch
-  record (so a stale designer/implementer dispatch cannot survive the correction);
-  add a short note (statuses/eligibility area) about the create-time advisory.
+  that admitting a move via the lane also clears any in-flight action-dispatch
+  record (fail-closed: a clear failure refuses the move and directs the user to
+  `--override`); add a short note about the create-time advisory.
 - `test/tickets.test.js`: unit tests for the new predicates and the
-  begin-step-then-lane-correction dispatch-authorization test.
-- `test/cli.test.js`: create-advisory integration test (stderr + stdout) and
-  lane end-to-end move tests.
+  begin-step-then-lane-correction dispatch-authorization tests (sequential success
+  plus the clear-failure regression).
+- `test/cli.test.js`: create-advisory integration test (stderr + stdout) and lane
+  end-to-end move tests.
 
 ### Risks and edge cases
 
 - stderr capture in tests: the in-process `runCli` helper patches `console.log`
-  and `console.error` but NOT `console.warn`. Emitting the advisory via
-  `console.warn` (matching `codexTaskWarning`) means the CLI integration test must
-  use the child-process `runCliChild` harness (as the codex-task warning tests
-  already do) to observe stderr. Alternatively emit via `console.error` to use the
-  lighter in-process `runCli`. Recommend `console.warn` + `runCliChild` for
-  convention-consistency; the pure-helper unit tests carry the fires/silent
-  coverage regardless.
-- Custom-config robustness: the advisory reads `doneRequires[type]` and inverts
-  `statusActions`; guard against a missing `doneRequires[type]` (no advisory) and a
-  `doneRequires[type][0]` action with no producing status (name the action only).
+  and `console.error` but NOT `console.warn`. Emitting via `console.warn` (matching
+  `codexTaskWarning`) means the CLI integration test uses the child-process
+  `runCliChild` harness (as the codex-task warning tests already do); the pure
+  `typeStatusAdvisory` unit tests carry the fires/silent coverage regardless.
+- Custom-config robustness: guard against a missing `doneRequires[type]` (no
+  advisory) and a `doneRequires[type][0]` action with no producing status (name the
+  action only).
 - Lane breadth: the lane permits any zero-evidence `ready_* -> ready_*/backlog`,
-  including lateral re-placements that are normally map-blocked (e.g.
-  `ready_for_review -> ready_for_test`). This is intentional and safe: zero evidence
-  means no stage work has been recorded, so nothing is lost and no gate is
-  bypassed; and the lane's action-record clear guarantees no stale in-flight
-  dispatch survives the re-placement.
-- Action-clear scoping: the action clear is strictly `admittedViaLane`-gated. A
-  regression test pins that a NON-lane real status change still preserves a
-  `kind: "action"` record — the general sweep's deliberate action-preservation is
-  unchanged for every move except the authoring-correction lane.
+  including lateral re-placements normally map-blocked. Intentional and safe: zero
+  evidence means no stage work is recorded, nothing is lost, no gate is bypassed,
+  and the fail-closed action clear guarantees no stale in-flight dispatch survives.
+- Action-clear scoping: the clear is strictly `admittedViaLane`-gated (and thus
+  never on an `--override` forced move). A regression test pins that a NON-lane real
+  status change still PRESERVES a `kind: "action"` record.
 - No schema change: statuses remain schema-legal at create; `enforceTransitions`
   defaults unchanged. Existing boards and scripts are unaffected.
 
@@ -399,79 +389,99 @@ Advisory (CLI integration, `runCliChild`):
   ticket path, stderr matches the advisory naming `ready_for_decomposition`.
 - `create task ... --status ready_for_design`: exit 0, stderr contains no advisory.
 
-Lane eligibility (unit, `isAuthoringCorrectionLane`): true for
-`ready_for_design -> ready_for_decomposition` with empty lists; false once
-`completedSteps` has any token; false once `routingApprovals` has any token; false
-for a non-`ready_*` source; true for `ready_* -> backlog` with empty lists; false
-for `ready_* -> designing` (active target, not covered).
+Predicate units:
 
-Action predicate (unit, `isAnyActionLedgerEntry`): true for `{kind:"action",...}`
-and for a legacy record with no `kind`; false for `{kind:"gate"}` and
-`{kind:"specialty"}`.
+- `isAuthoringCorrectionLane`: true for `ready_for_design ->
+  ready_for_decomposition` with empty lists; false once `completedSteps` has any
+  token; false once `routingApprovals` has any token; false for a non-`ready_*`
+  source; true for `ready_* -> backlog` with empty lists; false for `ready_* ->
+  designing`.
+- `isAnyActionLedgerEntry`: true for `{kind:"action",...}` and for a legacy record
+  with no `kind`; false for `{kind:"gate"}` and `{kind:"specialty"}`.
 
 Lane (end-to-end `moveTicket` with `enforceTransitions: true`):
 
 - zero-evidence `ready_for_design -> ready_for_decomposition` succeeds with NO
-  `--override`, no Run Log override/invalidation line, file relocated to the
-  `ready` folder.
-- the same move on a ticket carrying one `completedSteps` token refuses with the
-  standard allowed-targets error (proving the evidence guard).
-- a ticket with only a `routingApprovals` token also refuses (proving the
-  both-lists precondition).
+  `--override`, no override/invalidation Run Log line, file relocated to `ready`.
+- the same move with one `completedSteps` token refuses with the standard
+  allowed-targets error; a ticket with only a `routingApprovals` token also refuses
+  (proving the both-lists precondition).
 - regression: an existing mapped move and an existing structural move
-  (`backlog -> ready_*`) still behave identically; `enforceTransitions: false`
-  boards are unaffected.
+  (`backlog -> ready_*`) behave identically; `enforceTransitions: false` boards are
+  unaffected.
 - provable-no-op check: zero-evidence lane move to a `ready_*` target with
   `invalidateOnLoopBack: true` produces no invalidation Run Log line and leaves
   `completedSteps`/`routingApprovals` untouched.
 
-Stale-authorization test (the review-fix regression, end-to-end,
-`enforceTransitions: true`, on a freshly-created never-completed ticket at
-`ready_for_design` with empty `completedSteps`/`routingApprovals`):
+Stale-authorization sequential test (RETAINED), `enforceTransitions: true`, on a
+freshly-created never-completed ticket at `ready_for_design`:
 
-1. `beginStep(root, id)` stamps the `kind: "action"`, `action: "design"` ledger
-   record (route `claude-subagent:local-board-designer`).
+1. `beginStep(root, id)` stamps the `kind: "action"`, `action: "design"` record.
 2. Baseline: `checkDispatch(root, { agent: "local-board-designer", ticketId: id })`
-   returns allow (code 0, reason `match`) via the ledger record — the stale
-   authorization exists.
+   returns allow (code 0, reason `match`) via the record.
 3. `moveTicket(root, id, "ready_for_decomposition")` (no `--override`) succeeds via
    the lane.
-4. Assert the ledger has NO entry for the ticket (`readActiveSteps` -> key absent):
-   the action record was cleared on lane admission.
-5. Assert `checkDispatch(root, { agent: "local-board-designer", ticketId: id })`
-   now DENIES (code 1, reason `agent-mismatch`): the OLD stage's agent is no longer
-   authorized.
-6. Assert `checkDispatch(root, { agent: "local-board-decomposer", ticketId: id })`
-   ALLOWS (code 0) — the new status resolves via the no-ledger `resolveExpectedStep`
-   path to `local-board-decomposer`.
-7. Scoping regression: repeat begin-step then a NON-lane move (e.g. a ticket with a
-   `completedSteps` token forced via `--override`, or a mapped forward move) and
-   assert the `kind: "action"` ledger record is PRESERVED — the action clear is
-   lane-only.
+4. Assert the ledger has NO entry for the ticket — the action record was cleared.
+5. Assert `checkDispatch(... local-board-designer ...)` now DENIES (code 1, reason
+   `agent-mismatch`): the old-stage agent is no longer authorized.
+6. Assert `checkDispatch(... local-board-decomposer ...)` ALLOWS (code 0) via the
+   no-ledger `resolveExpectedStep` path for the new status.
+
+Non-lane preservation assertion (RETAINED): begin-step, then a NON-lane real status
+change (a ticket carrying a `completedSteps` token forced via `--override`, or a
+mapped forward move) — assert the `kind: "action"` record is PRESERVED (the action
+clear is lane-only; the general sweep still preserves action kinds).
+
+Clear-failure regression (NEW — proves fail-closed atomicity):
+
+- Test seam: the lane clear is `clearActiveStepIf(root, ticketId,
+  isAnyActionLedgerEntry, options.__laneClearLedgerOptions)`. `moveTicket` threads
+  an (undefined-in-production) `options.__laneClearLedgerOptions` bag straight
+  through to `clearActiveStepIf`, whose existing `__afterRead` hook — invoked under
+  the ledger lock AFTER the predicate matches and BEFORE the delete
+  (`src/active-steps.js:139-141`) — is the injection point. This is the same
+  `__afterRead` seam pattern the ledger-race tests already use, and is chosen over
+  a filesystem-permission approach because it is deterministic and cross-platform
+  (a read-only ledger file fails a rename-over on Windows but not on POSIX, where
+  rename permission derives from the directory).
+- Steps: `beginStep(root, id)` stamps the action record (so the predicate matches
+  and `__afterRead` is reached), then call `moveTicket(root, id,
+  "ready_for_decomposition", { __laneClearLedgerOptions: { __afterRead: () => {
+  throw new Error("simulated ledger write failure"); } } })`.
+- Assert the move REJECTS with the `move refused: could not clear the in-flight
+  action-dispatch record ... the ticket was NOT moved` error.
+- Assert the ticket file still lives in the ORIGINAL (`ready_for_design`) folder
+  and its front matter `status` is still `ready_for_design` — no publish happened.
+- Assert the ledger STILL holds the `kind: "action"` record (the throw fired before
+  the delete), i.e. no partial ledger mutation either.
 
 `npm run check` and `node --test` must pass.
 
 ### Documentation updates
 
 `docs/Workflow.md` "Hard transition validation": add a bullet to the structural
-allow-set list for the authoring-correction lane — "a `ready_*` status -> any
-`ready_*` status or `backlog`, permitted only while the ticket has zero
-`completedSteps` and zero `routingApprovals` (a pure authoring re-placement with no
-recorded evidence to invalidate); admitting a move via this lane also abandons any
-in-flight action-dispatch ledger record, so a stale stage agent (e.g. the designer)
-can never keep being authorized after the correction" — and one sentence noting the
-create-time advisory (a warning, not a refusal) for a type-vs-status mismatch. No
-README index change (no new doc file).
+allow-set for the authoring-correction lane — "a `ready_*` status -> any `ready_*`
+status or `backlog`, permitted only while the ticket has zero `completedSteps` and
+zero `routingApprovals` (a pure authoring re-placement with no recorded evidence to
+invalidate); admitting a move via this lane first clears any in-flight
+action-dispatch ledger record, inside the same lock and before the new status is
+published, so a stale stage agent (e.g. the designer) can never keep being
+authorized — and if that clear fails the move is refused (use `--override --reason`
+to force the transition instead)" — plus one sentence noting the create-time
+advisory (a warning, not a refusal) for a type-vs-status mismatch. No README index
+change (no new doc file).
 
 ### Open questions
 
-None blocking. Two design choices already resolved in favor of the stronger
-invariant: (1) the lane precondition requires zero `routingApprovals` in addition
-to the Requirement's zero `completedSteps`, so the loop-back no-op is provable
-rather than merely likely; (2) the lane actively clears the abandoned `kind:
-"action"` ledger record on admission (chosen over making lane eligibility depend on
-runtime cache state), so a stale in-flight dispatch cannot survive an authoring
-correction.
+None blocking. Design choices resolved in favor of the stronger invariant: (1) the
+lane precondition requires zero `routingApprovals` in addition to zero
+`completedSteps`, so the loop-back no-op is provable; (2) the abandoned
+`kind: "action"` record is cleared inside the ticket lock, before publish, and
+fail-closed, so a stale in-flight dispatch can neither survive an authoring
+correction nor leave a half-corrected ticket on a clear failure; (3) the
+unlocked-`beginStep` re-stamp interleaving is a pre-existing systemic property of
+the shared dispatch machinery (fail-open hook, best-effort ledger) and is scoped
+out with rationale rather than expanded into this 2-point ticket.
 
 ## Implementation Notes
 
