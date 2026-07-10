@@ -4,7 +4,7 @@ type: story
 status: ready_for_decomposition
 priority: P2
 parent: null
-children: [T20260710T1220Z, T20260710T1221Z]
+children: [T20260710T1220Z, T20260710T1221Z, T20260710T1222Z]
 blockedBy: []
 blocks: []
 branch: local-board/S20260710T1206Z-design-review-step-codex-reviews-the-technical-design-before-implementation
