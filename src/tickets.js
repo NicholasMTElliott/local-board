@@ -1557,7 +1557,11 @@ export async function recordDesignReview(root, ticketId, executor, evidence, opt
     },
     options.lock,
   );
-  await clearActiveStep(root, result.ticket).catch(() => {});
+  // Identity-scoped clear (see clearActiveStepIf): only the design-review
+  // action entry this recorder corresponds to, never a newer stamp.
+  await clearActiveStepIf(root, result.ticket, (record) => isActionLedgerEntry(record, "design-review")).catch(
+    () => {},
+  );
   return result;
 }
 
