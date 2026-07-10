@@ -30,7 +30,7 @@ It defines:
 - `optionalSteps`: per-stage specialty review catalogs (`design`/`implement`/`test`)
 - `estimation`: relative-sized story points config (`enabled`, `scale`, `bootstrapDefault`, `splitThreshold`)
 
-Optional-step `agent` values remain route strings or accept `{ route, model?, effort? }` profiles. `specialty-run` returns the resolved pins; specialty evidence enforces a pinned model (`codex-default` is a wildcard), while effort is dispatch-only and never enters evidence. Specialty names must not collide with effective `workflow.statusActions` values.
+Optional-step `agent` values remain route strings or accept `{ route, model?, effort?, fallbackModels? }` profiles. `specialty-run` returns the resolved pins and configured fallbacks; specialty evidence accepts the pinned model, `codex-default`, or a listed fallback, while effort is dispatch-only and never enters evidence. Fallback fields are emitted only when configured. Specialty names must not collide with effective `workflow.statusActions` values.
 
 The `init` scaffold pins `agents.review` to `codex-task:read-only` / `gpt-5.6-terra` / `high` and the `design/security_threat_model` plus `implement/security_audit` entries to `codex-task:read-only` / `gpt-5.6-sol` / `xhigh`. Delete the pins or reroute when unavailable. `DEFAULT_CONFIG` stays unpinned.
 
@@ -132,7 +132,7 @@ Fresh `init` scaffolds the full packaged prompt tree into `plans/prompts/`:
 Skills should be orchestration entrypoints. Step behavior should live in prompt files and deterministic scripts where possible.
 
 The installable `local-board` skill is the portable entrypoint. Project-local prompts are runtime inputs; missing configured prompts are loud CLI errors, not silent fallback behavior.
-Agent profiles are route strings or `{ route, model?, effort?, prompt? }` objects; `effort` is shape-validated like `model` and rejected on `inline` routes.
+Agent profiles are route strings or `{ route, model?, effort?, fallbackModels?, prompt? }` objects; `fallbackModels` is an ordered string array for pinned-model outages, requires `model`, and is rejected on `inline` routes; `effort` is shape-validated like `model` and rejected on `inline` routes.
 The `## CLI Commands` blocks in root `SKILL.md` and `skills/codex/local-board/SKILL.md` are curated to 29 commands, byte-identical, and enforced by `test/skill-usage-sync.test.js`; root `SKILL.md` is canonical.
 The four skill flows (single-ticket/team for Claude/Codex) document the design-review step; `skill-usage-sync` enforces a `REQUIRED_COMMANDS` surface containing `design-review-check` and `design-review-complete`.
 `init` restores missing packaged prompts/templates but never overwrites existing prompt files, even with `--overwrite`.
@@ -177,8 +177,9 @@ translation server-side (`src/codex-dispatch.js`, the single authority) and
 returns an additive `codexDispatch` block: `dispatchKind`, `agentType`,
 absolute `promptPath`, sanitized `model` (`null` = no Codex override),
 configured `effort` (`null` when unset; otherwise passed through verbatim),
-`evidenceExecutor` (`@codex-default` when no valid Codex model id exists), and
-`known` (`false` = ask before inline fallback or move to `questions`).
+sanitized `fallbackModels` only when configured, `evidenceExecutor`
+(`@codex-default` when no valid Codex model id exists), and `known` (`false` =
+ask before inline fallback or move to `questions`).
 Default `--harness claude` (or no flag) leaves begin-step's output unchanged.
 begin-step also surfaces the profile's `configuredEffort`;
 the active-steps ledger stamp always records the configured logical route/model
@@ -196,15 +197,16 @@ Strict routing enforces the per-step pinned model at `complete-step` write time:
 use `--executor <route> --model <model>` to compose evidence server-side; the
 older `--executor <route>@<model>` form remains accepted. When the executor route
 matches the configured route and the action's profile pins a model, the recorded
-model must equal `configuredModel`, equal `codex-default`, or be covered by a
-`routingApprovals` entry for the full `route@model` token (`approve-inline
---executor <route>@<model>`). Done-time re-validation (`validateRouting`) stays
-route-only for back-compat with evidence recorded before this rule.
+model must equal `configuredModel`, equal `codex-default`, match a configured
+`fallbackModels` entry, or be covered by a `routingApprovals` entry for the full
+`route@model` token (`approve-inline --executor <route>@<model>`). Done-time
+re-validation (`validateRouting`) stays route-only for back-compat with evidence
+recorded before this rule.
 
 The same model/evidence rule applies to delegated optional specialties resolved by
 specialty-run; effort remains excluded from evidence.
 
-Dispatch verification uses `.local-board/active-steps.json` as the deterministic in-flight ledger, anchored at the main checkout's git common dir so linked worktrees share one record. `begin-step` stamps the ticket's resolved action/route/model there; gate-check (non-empty catalog) and `specialty-run` stamp scoped consultation entries (`kind: gate|specialty` with stage/action/route/model identity) using no-clobber semantics. Configured effort is deliberately excluded because it is a dispatch hint, not routed-work identity. `complete-step`/`approve-inline` clear the matching action identity, and specialty completion clears its matching specialty identity; gate completion clears only the matching gate-kind stage. A real status change sweeps abandoned consultation stamps, while same-status re-saves do not. `check-dispatch --agent [--model] [--ticket]` reads the ledger for hook use; with no ledger entry it resolves the ticket's registered, existence-verified worktree before falling back to the invocation root. It always emits JSON on stdout and exits 0 allow / 1 deny / 2 error while passing through non-local-board agents and unverifiable models. Claude Code enforcement hooks are opt-in via `local-board install --hooks`: routing-validator, dispatch-ledger, evidence-gate, and approve-inline-consent. Hooks fail open on errors/timeouts; CLI strict routing remains the backstop.
+Dispatch verification uses `.local-board/active-steps.json` as the deterministic in-flight ledger, anchored at the main checkout's git common dir so linked worktrees share one record. `begin-step` stamps the ticket's resolved action/route/model there; gate-check (non-empty catalog) and `specialty-run` stamp scoped consultation entries (`kind: gate|specialty` with stage/action/route/model identity) using no-clobber semantics. Stamps include fallback models only when configured, and dispatch checks accept the pin or a listed fallback. Configured effort is deliberately excluded because it is a dispatch hint, not routed-work identity. `complete-step`/`approve-inline` clear the matching action identity, and specialty completion clears its matching specialty identity; gate completion clears only the matching gate-kind stage. A real status change sweeps abandoned consultation stamps, while same-status re-saves do not. `check-dispatch --agent [--model] [--ticket]` reads the ledger for hook use; with no ledger entry it resolves the ticket's registered, existence-verified worktree before falling back to the invocation root. It always emits JSON on stdout and exits 0 allow / 1 deny / 2 error while passing through non-local-board agents and unverifiable models. Claude Code enforcement hooks are opt-in via `local-board install --hooks`: routing-validator, dispatch-ledger, evidence-gate, and approve-inline-consent. Hooks fail open on errors/timeouts; CLI strict routing remains the backstop.
 
 Return-only subagents (reviewer, tester, decomposer, gatecheck) have no Write or Edit tool. They return section body content (Review Findings, Test Evidence) or JSON as Markdown in their final message; the orchestrator writes the temp file with the Write tool and runs `section --file`. Payloads must omit the target `## Heading`; literal top-level `## ` sample lines must be fenced. Never instruct a return-only subagent to create a file — it falls back to Bash redirection (`echo`, heredoc, `Set-Content`), which breaks on backticks and code fences. The same return-only contract applies to `codex-task:read-only` routes. The designer is the exception: it has a scoped Write tool and self-writes its `Technical Design` section, returning only a terse summary, because that payload is the largest and the Write tool avoids the redirection bug.
 

@@ -13,7 +13,7 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T18:21:16Z
+updated: 2026-07-10T18:36:51Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -805,6 +805,18 @@ Live black-box probe (orchestrator, throwaway init board in scratchpad using thi
 Note: the tester's own live probe was blocked by its return-only toolset (cannot edit config files); the orchestrator ran it instead.
 
 ## Documentation Updates
+
+Updated remaining human-readable docs for ordered `fallbackModels` on agent profiles.
+
+Files changed:
+- `docs/Workflow.md`: extended agent-profile and optional-step prose to include `fallbackModels`; noted strict routing accepts the pinned model, a listed fallback, `codex-default`, or approval.
+- `docs/PerStepOrchestration.md`: added `fallbackModels` to the per-step profile field list and evidence acceptance prose.
+- `memory-bank/systemPatterns.md`: recorded current-state facts that profiles may carry fallback lists, evidence accepts pin or listed fallback, and fallback fields emit only when configured.
+- `memory-bank/techContext.md`: updated the profile key enumeration with `fallbackModels` and the conditional emission/enforcement summary.
+
+Verification: `node --test --test-isolation=none test/skill-usage-sync.test.js test/resources-sync.test.js` passed, 9/9 tests.
+
+Commit: attempted `T20260710T1532Z: docs document fallbackModels routing`, but the sandbox blocked Git from creating the common worktree `index.lock`; changes are left uncommitted.
 
 ## Questions
 
