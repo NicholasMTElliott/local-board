@@ -13,7 +13,7 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:22:11Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T13:13:02Z
+updated: 2026-07-10T13:18:16Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -386,6 +386,29 @@ Disposition: both findings accepted; looped back, fixed in commit 18c0580, re-re
 Re-review: verdict: pass (codex-task:read-only, gpt-5.6-terra @ reasoning-effort medium, 48s). Verified: recognition/recorder/scanner all flag-gated with the zero-codex-routes test restored as inertness proof and omitted/false/on regression coverage; token parse requires a non-whitespace executor after the first colon with a public set-then-move regression plus well-formed control; commit scope limited to the two fixes, no plans/ changes.
 
 ## Test Evidence
+
+verdict: pass
+
+Environment: worktree (code commits 4d54bce + 18c0580, peer merge bdcbf96), node --test. Tester: claude-subagent:local-board-tester (sonnet). Tree clean before and after; no external AI CLI invoked.
+
+Commands and results:
+
+- npm run check — pass.
+- npm test — 494 tests: 491 pass, 2 fail (exact B20260710T1232Z baseline, names verified against the bug ticket), 1 skip.
+- validate — Ticket validation OK.
+
+Live probes (in-memory, no fixtures):
+
+- codexTaskRoutedActions: flag false/omitted -> design-review absent; flag true -> present (inertness flip confirmed).
+- isKnownAction/profileForAction gate on requireDesignReview === true (source-verified; unexported).
+- evidenceStrippedByPendingForwardMove maps design-review tokens to producing status ready_for_design.
+- isDesignReviewGatedMove: true for both forward source statuses; false for reverse and archive.
+
+Named-test verification (green in suite run, assertions read): malformed-token rejection (bare/empty/whitespace executors) with well-formed control; refuse-then-allow; loop-back strip + Run Log enumeration + fresh re-record; zero-codex-routes CLI test restored to pre-change form.
+
+AC coverage: AC1-AC6 all pass (AC6 modulo the declared baseline).
+
+Anomalies: none beyond the tracked baseline.
 
 ## Documentation Updates
 
