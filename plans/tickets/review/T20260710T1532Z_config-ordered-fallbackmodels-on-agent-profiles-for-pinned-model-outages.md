@@ -13,7 +13,7 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T18:10:07Z
+updated: 2026-07-10T18:16:15Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -837,3 +837,5 @@ Verified clean by static inspection: routing and schema validation, fallback thr
 - 2026-07-10T18:09:31Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Review fix: deep-equal legacy-shape assertions at all six cited locations (39dac82, test-only); suite 565/0/1; production commits b981ff4+a70165a+1905cb0 unchanged
 
 - 2026-07-10T18:10:07Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none requested (test-only delta)
+
+- 2026-07-10T18:16:15Z: Focused re-review of 39dac82 (terra@medium): pass. Deep-equal shapes concrete for all fallbackModels-relevant fields; scaffold boilerplate sourced from fixture config; nothing weakened.
