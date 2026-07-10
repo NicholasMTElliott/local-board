@@ -1,20 +1,20 @@
 ---
 id: S20260710T1206Z
 type: story
-status: ready_for_decomposition
+status: done
 priority: P2
 parent: null
-children: []
+children: [T20260710T1220Z, T20260710T1221Z, T20260710T1222Z, T20260710T1223Z]
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/S20260710T1206Z-design-review-step-codex-reviews-the-technical-design-before-implementation
 estimate: null
 estimateBasis: null
-workStartedAt: null
-workCompletedAt: null
+workStartedAt: 2026-07-10T12:14:10Z
+workCompletedAt: 2026-07-10T12:21:44Z
 created: 2026-07-10T12:06:56Z
-updated: 2026-07-10T12:07:33Z
-completedSteps: []
+updated: 2026-07-10T12:21:44Z
+completedSteps: ["decompose:claude-subagent:local-board-decomposer@opus"]
 routingApprovals: []
 ---
 # design-review step: codex reviews the technical design before implementation
@@ -71,3 +71,7 @@ Candidate shapes, with tradeoffs the Technical Design must weigh:
 ## Run Log
 
 - 2026-07-10T12:07:33Z: Transition override: ready_for_design -> ready_for_decomposition: authoring correction: story was created with the wrong initial ready status; stories enter at decomposition
+
+- 2026-07-10T12:14:10Z: Ensured git branch local-board/S20260710T1206Z-design-review-step-codex-reviews-the-technical-design-before-implementation (already-current).
+
+- 2026-07-10T12:21:31Z: Completed decompose via claude-subagent:local-board-decomposer@opus: 4 children created (T1220Z core flag+recorder, T1221Z prompt+scaffold, T1222Z CLI commands, T1223Z skills+docs) with deps (1||2)->3->4. Mechanism committed: requireGateConsultation-style precondition (b), not a new pipeline status; design-review excluded from doneRequires deliberately.
