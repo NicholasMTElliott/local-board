@@ -1,7 +1,7 @@
 ---
 id: B20260710T1225Z
 type: bug
-status: ready_for_design
+status: ready_for_implementation
 priority: P1
 parent: null
 children: []
