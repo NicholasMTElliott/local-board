@@ -46,7 +46,7 @@ Ticket authoring ends committed. With `git.commitPlanningOnTransition` on
 run `git add plans && git commit` yourself before dispatching further work or
 running `worktree-add`.
 
-Use `section --file <path>` for generated or multi-line Markdown. Create the file with Codex file-editing tools, not shell redirection.
+Use `section --file <path>` for generated or multi-line Markdown. Create the file with Codex file-editing tools, not shell redirection. The payload is the section body only — do not include the section's own `## Heading`; fence any literal `## ` sample lines.
 
 ## Single-Ticket Loop
 

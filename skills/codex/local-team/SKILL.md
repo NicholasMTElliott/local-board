@@ -79,7 +79,7 @@ You own:
 
 - `worktree-add`, `worktree-remove`, and `fast-forward`;
 - `begin-step`, `start-work`, `complete-step`, `approve-inline`, and `move`;
-- return-only section persistence with `section --file`;
+- return-only section persistence with `section --file` (the payload is the section body only — do not include the section's own `## Heading`; fence any literal `## ` sample lines);
 - gate-check and specialty dispatch;
 - conflict decisions and closeout.
 

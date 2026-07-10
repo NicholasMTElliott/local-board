@@ -639,6 +639,145 @@ test("a genuine non-fenced heading still boundaries sections correctly (regressi
   });
 });
 
+test("setTicketSection rejects a payload that begins with the section's own heading", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Reject own heading target", {
+      status: "backlog",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    const before = await readFile(ticketPath, "utf8");
+
+    await assert.rejects(
+      () =>
+        setTicketSection(root, ticketId, "Implementation Notes", "## Implementation Notes\n\nDone.", {
+          now: new Date("2026-05-14T21:06:00Z"),
+        }),
+      /must not contain a Markdown "## " heading line/,
+    );
+
+    const after = await readFile(ticketPath, "utf8");
+    assert.equal(after, before);
+    assert.equal((after.match(/^## Implementation Notes$/gm) ?? []).length, 1);
+  });
+});
+
+test("setTicketSection rejects a payload that begins with a foreign section heading", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Reject foreign heading target", {
+      status: "backlog",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    const before = await readFile(ticketPath, "utf8");
+
+    await assert.rejects(
+      () =>
+        setTicketSection(root, ticketId, "Implementation Notes", "## Test Evidence\n\nLeaked heading.", {
+          now: new Date("2026-05-14T21:06:00Z"),
+        }),
+      /must not contain a Markdown "## " heading line/,
+    );
+
+    const after = await readFile(ticketPath, "utf8");
+    assert.equal(after, before);
+  });
+});
+
+test("setTicketSection rejects a payload with a trailing foreign section heading", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Reject trailing heading target", {
+      status: "backlog",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    const before = await readFile(ticketPath, "utf8");
+
+    await assert.rejects(
+      () =>
+        setTicketSection(
+          root,
+          ticketId,
+          "Implementation Notes",
+          "Real body.\n\n## Documentation Updates\nleak",
+          { now: new Date("2026-05-14T21:06:00Z") },
+        ),
+      /must not contain a Markdown "## " heading line/,
+    );
+
+    const after = await readFile(ticketPath, "utf8");
+    assert.equal(after, before);
+  });
+});
+
+test("setTicketSection accepts an unfenced H3 subheading in the payload", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "H3 subheading target", {
+      status: "backlog",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    const payload = "Body text.\n\n### Subsection\n\nMore detail.";
+
+    await setTicketSection(root, ticketId, "Implementation Notes", payload, {
+      now: new Date("2026-05-14T21:06:00Z"),
+    });
+
+    const text = await readFile(ticketPath, "utf8");
+    assert.equal(getSectionText(text, "Implementation Notes"), payload);
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+test("setTicketSection is idempotent across a double round-trip for plain content", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Idempotent plain target", {
+      status: "backlog",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    const payload = "Plain, valid body.";
+
+    await setTicketSection(root, ticketId, "Implementation Notes", payload, {
+      now: new Date("2026-05-14T21:06:00Z"),
+    });
+    const firstRead = getSectionText(await readFile(ticketPath, "utf8"), "Implementation Notes");
+
+    await setTicketSection(root, ticketId, "Implementation Notes", firstRead, {
+      now: new Date("2026-05-14T21:07:00Z"),
+    });
+    const secondText = await readFile(ticketPath, "utf8");
+    const secondRead = getSectionText(secondText, "Implementation Notes");
+
+    assert.equal(firstRead, payload);
+    assert.equal(secondRead, payload);
+    assert.equal((secondText.match(/^## Implementation Notes$/gm) ?? []).length, 1);
+    assert.deepEqual(validate(await discover(root)), []);
+  });
+});
+
+test("validate flags a ticket with two identical section headings", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Duplicate heading target", {
+      status: "backlog",
+      now: new Date("2026-05-14T20:56:00Z"),
+    });
+    // Bypass the reject guard by writing the corrupted body directly, to
+    // simulate a legacy ticket produced before the guard existed.
+    await replaceText(
+      ticketPath,
+      "## Implementation Notes\n",
+      "## Implementation Notes\n\nFirst.\n\n## Implementation Notes\n\nDuplicate.\n",
+    );
+
+    const issues = validate(await discover(root));
+    assert.ok(
+      issues.some((issue) => issue.includes("duplicate ## Implementation Notes section")),
+      `expected a duplicate-heading issue, got: ${JSON.stringify(issues)}`,
+    );
+  });
+});
+
 test("appendTicketComment into a non-last section preserves the blank-line separator before the next heading", async () => {
   await withBoard(async (root) => {
     const ticketPath = await createTicket(root, "task", "Non-last append target", {
