@@ -13,8 +13,8 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:14:10Z
 workCompletedAt: null
 created: 2026-07-10T11:56:26Z
-updated: 2026-07-10T12:53:46Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-10T12:54:13Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet"]
 routingApprovals: []
 ---
 # optionalSteps: accept agent profiles with model and effort pins at the specialty-step level
@@ -293,3 +293,5 @@ Disposition: all three findings accepted; loop-back to ready_for_implementation 
 - 2026-07-10T12:48:28Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
 
 - 2026-07-10T12:48:29Z: Ensured git branch local-board/T20260710T1156Z-optionalsteps-accept-agent-profiles-with-model-and-effort-pins-at-the-specialty-step-level (already-current).
+
+- 2026-07-10T12:54:13Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Original 683a4d3 + review-fix c4ed945: dynamic effectiveStatusActionNames collision check, Object.hasOwn prompt-null rejection, docs/Workflow.md profile form + specialty-run contract. 477 pass + 2 baseline; check + validate green.
