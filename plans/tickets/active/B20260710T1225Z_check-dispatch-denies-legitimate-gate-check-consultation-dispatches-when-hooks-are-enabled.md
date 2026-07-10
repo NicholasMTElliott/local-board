@@ -1,7 +1,7 @@
 ---
 id: B20260710T1225Z
 type: bug
-status: ready_for_implementation
+status: implementing
 priority: P1
 parent: null
 children: []
@@ -433,3 +433,5 @@ Second re-review (terra@medium, 42s, of cbf3527): verdict: changes_requested —
 - 2026-07-10T14:10:49Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - ledger identity semantics completion
 
 - 2026-07-10T14:15:46Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
+
+- 2026-07-10T14:15:46Z: Ensured git branch local-board/B20260710T1225Z-check-dispatch-denies-legitimate-gate-check-consultation-dispatches-when-hooks-are-enabled (already-current).
