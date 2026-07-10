@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:06:56Z
 updated: 2026-07-10T13:32:20Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
 # config: scaffold defaults ship GPT-5.6 pins for review and security specialty steps
@@ -334,3 +334,5 @@ Residual risk: acceptance coverage is distributed across config/CLI tests rather
 - 2026-07-10T13:27:53Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Commits (peer merge clean) + dce310c: scaffold agents.review terra@high, both security specialties sol@xhigh, escape-hatch comments, DEFAULT_CONFIG unpinned, guard allowlist combined with sibling insert, init-in-temp-repo test, executor-suffix test updates (necessary consequence of pin enforcement). 493 pass + branch baseline (3rd failure is the estimate-prompt assertion already fixed on mainline post-branch).
 
 - 2026-07-10T13:29:13Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - config default values/comments/tests/docs; no execution-gating surface
+
+- 2026-07-10T13:32:20Z: Completed review via codex-task:read-only@gpt-5.6-terra: verdict: pass, no findings. Allowlist exact, merge-leak impossibility traced, escape hatch accurate.
