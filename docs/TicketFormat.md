@@ -120,6 +120,8 @@ The CLI validator checks:
 - dependency-blocked tickets are not placed in `status: blocked`;
 - ISO-8601 `created`, `updated`, and non-null work timestamp values with timezone offsets or `Z`.
 
+For duplicated standard-section headings, `validate` reports the issue only for tickets whose status is neither `done` nor `archived`; closed history is exempt.
+
 ## Rewriting Front Matter
 
 Use the CLI for state changes that affect canonical front matter:

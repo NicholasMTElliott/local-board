@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T16:57:51Z
+updated: 2026-07-10T17:03:09Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -182,6 +182,11 @@ Verification:
 - Direct fallback execution also passed both test files: skill usage sync 5 of 5 pass, resources sync 4 of 4 pass.
 
 Commit note: the documentation commit could not be created in this sandbox because Git needs to write the worktree index.lock under the main repository .git directory, which is outside the writable roots and failed with permission denied.
+
+Validate-scoping addendum:
+
+- TicketFormat and Workflow now document that validate reports duplicated standard-section headings only for tickets whose status is not done or archived, exempting closed history.
+- This addendum is scoped to the validator; the section --file reject guard remains unchanged.
 
 ## Questions
 
