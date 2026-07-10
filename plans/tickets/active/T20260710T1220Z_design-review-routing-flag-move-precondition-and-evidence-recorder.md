@@ -13,8 +13,8 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:22:11Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T13:09:47Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet"]
+updated: 2026-07-10T13:11:04Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # design-review: routing flag, move precondition, and evidence recorder
@@ -408,3 +408,5 @@ Disposition: both findings accepted; loop-back to ready_for_implementation for t
 - 2026-07-10T13:00:06Z: Ensured git branch local-board/T20260710T1220Z-design-review-routing-flag-move-precondition-and-evidence-recorder (already-current).
 
 - 2026-07-10T13:09:47Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Original 4d54bce + review-fix 18c0580: design-review recognition/recorder/scanner all gated on requireDesignReview (flag-off byte-identical, zero-codex-routes test restored to pre-change form as proof), first-colon token parse requires non-empty executor, set-then-move bypass regression. 491 pass + 2 baseline.
+
+- 2026-07-10T13:11:04Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - internal workflow machinery + flag gating
