@@ -8,12 +8,12 @@ children: []
 blockedBy: []
 blocks: []
 branch: local-board/T20260710T0035Z-validate-install-warn-when-config-routes-to-codex-task-but-codex-task-is-not-installed
-estimate: null
-estimateBasis: null
+estimate: 2
+estimateBasis: T20260709T1119Z
 workStartedAt: 2026-07-10T01:05:09Z
 workCompletedAt: null
 created: 2026-07-10T00:35:52Z
-updated: 2026-07-10T01:11:43Z
+updated: 2026-07-10T01:12:11Z
 completedSteps: []
 routingApprovals: []
 ---
