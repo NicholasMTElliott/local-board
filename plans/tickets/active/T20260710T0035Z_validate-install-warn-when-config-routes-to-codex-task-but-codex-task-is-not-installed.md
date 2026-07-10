@@ -1,7 +1,7 @@
 ---
 id: T20260710T0035Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: null
 children: []
@@ -302,3 +302,5 @@ churn).
 - 2026-07-10T01:12:11Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design written by opus designer: new src/codex-detect.js with injected probes (no import cycle), fail-open stderr warning in validate + install hint, install-seam skill-dir probe, hermetic test plan, docs notes. Estimate 2.
 
 - 2026-07-10T01:12:57Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none - fail-open CLI warning, no auth/UI/UX surface
+
+- 2026-07-10T01:12:58Z: Ensured git branch local-board/T20260710T0035Z-validate-install-warn-when-config-routes-to-codex-task-but-codex-task-is-not-installed (already-current).
