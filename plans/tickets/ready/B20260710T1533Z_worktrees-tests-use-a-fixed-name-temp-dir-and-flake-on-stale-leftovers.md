@@ -1,7 +1,7 @@
 ---
 id: B20260710T1533Z
 type: bug
-status: ready_for_design
+status: ready_for_implementation
 priority: P3
 parent: null
 children: []
@@ -13,7 +13,7 @@ estimateBasis: B20260710T1532Z
 workStartedAt: 2026-07-10T17:07:08Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T17:25:28Z
+updated: 2026-07-10T17:25:29Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
