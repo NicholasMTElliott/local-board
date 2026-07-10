@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:25:41Z
-updated: 2026-07-10T14:34:14Z
+updated: 2026-07-10T14:39:01Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -433,6 +433,20 @@ Acceptance criteria: all five PASS (zero-denial documented flow; misroute denied
 Anomalies: the real globally-installed evidence-gate hook fired during the probe and correctly denied a manual complete-step lacking a Task-dispatch ledger entry — expected enforcement, worked around with approve-inline for the unrelated setup step. Not a bug.
 
 ## Documentation Updates
+
+Documentation step executed by codex-task:workspace-write (gpt-5.6-luna @ reasoning-effort medium, 232s); edits committed by the orchestrator on the ticket branch.
+
+Changed:
+
+- memory-bank/systemPatterns.md: dispatch-verification facts updated — gate/specialty consultation stamps with full identity (kind/stage/route/model), no-clobber semantics, identity-scoped clears, abandonment sweep on real status changes (same-status re-saves exempt), worktree-aware check-dispatch fallback.
+- docs/EnforcementHooks.md: ledger expectations brought current.
+
+Checked and deliberately left alone:
+
+- README.md, memory-bank/techContext.md — no changes needed.
+- docs/specialty-steps.md — already corrected in the implementation commits.
+
+Validation: git diff --check clean; prose-only change.
 
 ## Questions
 
