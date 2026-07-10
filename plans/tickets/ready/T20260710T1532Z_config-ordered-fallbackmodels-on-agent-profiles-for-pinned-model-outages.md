@@ -13,7 +13,7 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T16:41:10Z
+updated: 2026-07-10T16:51:04Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -695,3 +695,5 @@ worth flagging if the consultation-payload tests balloon.
 - 2026-07-10T16:18:32Z: Design re-review (sol@xhigh): FAIL. [High] Superseded design still present after revised text (stray H2 blocks from first design write terminated the section - same defect class as B20260710T1532Z); delete duplicate. [High] Consultation fallbacks not operational: gate-check/specialty-run/design-review-check payloads get raw fallbackModels but neither documented workflow walks them, no sanitized codex list for those paths, and empty-sanitized-list falling back to codex-default bypasses exhaustion-to-approval/questions. [Medium] No exact legacy-shape tests for consultation payloads/stamps, no no-ledger check-dispatch fallback test. Disposition: designer repairs body + revises; review round 3 to follow.
 
 - 2026-07-10T16:33:47Z: Design review #3 (sol@xhigh): FAIL, narrower. [High] design-review dispatch IS hook-gated when agents[design-review] routes to a claude-subagent: commandDesignReviewCheck stamps nothing, so check-dispatch falls back to status action and rejects the reviewer; stamp a design-review action record (with conditional fallbackModels) or require begin-step --action design-review in both harnesses; add hook-dispatch test. [Medium] gate-check translation passes effort:null, losing configured effort on the fallback walk; pass gateProfile.effort through payload + translateCodexDispatch, test effort preservation. Disposition: revision #3 (findings mechanical).
+
+- 2026-07-10T16:51:04Z: Design review #4 (sol@xhigh): FAIL. [High] DR stamp unreachable after a delegated design specialty: specialty-run leaves kind:specialty record, completeStep clears only action records, sweep happens post-move, so stampActiveStepNoClobber conflicts and the hook rejects the reviewer; clear the matching specialty entry on its complete-step + sequence test. [High] Byte-identical criterion violated: gate-check unconditionally emits effort; DR stamp created for every claude-subagent route even without fallbacks. Disposition: revision #4 - conditional-on-fallbacks everywhere; pre-existing fallback-free claude-subagent DR hook rejection carved out to follow-up ticket. Round-5 FAIL on new blockers escalates to questions.
