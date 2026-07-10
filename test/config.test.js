@@ -4,7 +4,14 @@ import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { DEFAULT_CONFIG, codexTaskRoutedActions, defaultConfigJsonc, loadConfig, parseJsonc } from "../src/config.js";
+import {
+  DEFAULT_CONFIG,
+  codexTaskRoutedActions,
+  defaultConfigJsonc,
+  loadConfig,
+  parseJsonc,
+  writeDefaultConfig,
+} from "../src/config.js";
 import { removeFixtureDir } from "./helpers/fixtures.js";
 
 async function withRoot(fn) {
@@ -56,7 +63,11 @@ test("loadConfig reads the commented default config", async () => {
       route: "claude-subagent:local-board-implementer",
       model: "sonnet",
     });
-    assert.deepEqual(config.agents.review, { route: "codex-task:read-only" });
+    assert.deepEqual(config.agents.review, {
+      route: "codex-task:read-only",
+      model: "gpt-5.6-terra",
+      effort: "high",
+    });
     assert.deepEqual(config.agents.document, { route: "codex-task:workspace-write" });
     assert.equal(config.routing.strict, true);
     assert.deepEqual(config.routing.doneRequires.task, ["design", "implement", "review", "test", "document"]);
@@ -268,12 +279,68 @@ test("loadConfig parses the v1 optionalSteps catalog from the default config", a
 
     assert.deepEqual(config.optionalSteps.test, []);
 
-    // None of the v1 entries set agent.
+    // The two security_* entries ship pinned to gpt-5.6-sol/xhigh; the other
+    // v1 entries do not set agent.
+    const pinnedByStageAndName = {
+      design: "security_threat_model",
+      implement: "security_audit",
+    };
     for (const stage of ["design", "implement", "test"]) {
       for (const entry of config.optionalSteps[stage]) {
+        if (entry.name === pinnedByStageAndName[stage]) {
+          assert.deepEqual(entry.agent, {
+            route: "codex-task:read-only",
+            model: "gpt-5.6-sol",
+            effort: "xhigh",
+          });
+        } else {
+          assert.equal(Object.hasOwn(entry, "agent"), false);
+        }
+      }
+    }
+  });
+});
+
+test("init scaffold in a temp repo ships the GPT-5.6 pins and loads without error", async () => {
+  await withRoot(async (root) => {
+    await mkdir(path.join(root, "plans"), { recursive: true });
+    await writeDefaultConfig(root);
+
+    const config = await loadConfig(root);
+
+    assert.deepEqual(config.agents.review, {
+      route: "codex-task:read-only",
+      model: "gpt-5.6-terra",
+      effort: "high",
+    });
+
+    const securityThreatModel = config.optionalSteps.design.find(
+      (entry) => entry.name === "security_threat_model",
+    );
+    const securityAudit = config.optionalSteps.implement.find((entry) => entry.name === "security_audit");
+    assert.deepEqual(securityThreatModel.agent, {
+      route: "codex-task:read-only",
+      model: "gpt-5.6-sol",
+      effort: "xhigh",
+    });
+    assert.deepEqual(securityAudit.agent, {
+      route: "codex-task:read-only",
+      model: "gpt-5.6-sol",
+      effort: "xhigh",
+    });
+
+    for (const entry of config.optionalSteps.design) {
+      if (entry.name !== "security_threat_model") {
         assert.equal(Object.hasOwn(entry, "agent"), false);
       }
     }
+    for (const entry of config.optionalSteps.implement) {
+      if (entry.name !== "security_audit") {
+        assert.equal(Object.hasOwn(entry, "agent"), false);
+      }
+    }
+    // loadConfig not throwing on the scaffolded profiles is equivalent to
+    // `local-board validate` passing on a freshly-scaffolded board.
   });
 });
 
@@ -340,6 +407,10 @@ test("defaultConfigJsonc matches DEFAULT_CONFIG except for documented difference
   //   - routing.requireDesignReview: DEFAULT_CONFIG keeps it off for backward
   //     compat with configs that omit the key; the scaffold enables it for
   //     new repos.
+  //   - agents.review: DEFAULT_CONFIG stays unpinned (route only) so
+  //     ENOENT/omitted-block boards never inherit a model their plan may not
+  //     offer; the scaffold pins it to gpt-5.6-terra/high. This is a
+  //     deliberate value divergence, not a backward-compat flag.
   // Any OTHER difference here means someone edited one copy's shared blocks
   // (workflow, agents, routing, retention, git, worktrees) without updating
   // the other. Fix by updating both DEFAULT_CONFIG and defaultConfigJsonc(),
@@ -354,16 +425,19 @@ test("defaultConfigJsonc matches DEFAULT_CONFIG except for documented difference
   expected.routing.guardPrematureEvidence = true;
   expected.git.commitPlanningOnTransition = true;
   expected.routing.requireDesignReview = true;
+  expected.agents.review = scaffolded.agents.review;
   assert.deepEqual(scaffolded, expected);
 
   // Guard against the allowlist above silently growing to mask unrelated
-  // drift: confirm these nine paths are the *only* places DEFAULT_CONFIG and
-  // the scaffold differ.
+  // drift: confirm these eleven leaf paths (ten collapsed entries) are the
+  // *only* places DEFAULT_CONFIG and the scaffold differ.
   const rawDiffs = leafDiffPaths(DEFAULT_CONFIG, parseJsonc(defaultConfigJsonc()));
   const collapsed = [...new Set(
     rawDiffs.map((diffPath) => (diffPath.startsWith("optionalSteps") ? "optionalSteps" : diffPath)),
   )].sort();
   assert.deepEqual(collapsed, [
+    "agents.review.effort",
+    "agents.review.model",
     "estimation.enabled",
     "git.commitPlanningOnTransition",
     "optionalSteps",

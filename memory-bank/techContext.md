@@ -53,6 +53,7 @@ SKILL.md              installable orchestration skill template
 - `worktrees.location` controls ticket worktree placement: sibling default, inside `.worktrees`, or explicit non-`plans/` path.
 - `package.json` `files` allowlist defines the npm package surface.
 - Agent profiles support `{ route, model?, effort?, prompt? }`; optional-step agents also accept `{ route, model?, effort? }` (string form unchanged). `effort` is shape-validated like `model`, rejected on inline routes, surfaced by `begin-step`/`specialty-run`, and passed through `codexDispatch` without sanitization. Specialty evidence enforces its model pin (`codex-default` wildcard); effort is dispatch-only and excluded from evidence tokens and the active-steps ledger. Specialty names must not collide with effective `workflow.statusActions` values.
+- The `init` scaffold pins review to `codex-task:read-only` / `gpt-5.6-terra` / `high` and `design/security_threat_model` plus `implement/security_audit` to `codex-task:read-only` / `gpt-5.6-sol` / `xhigh`; delete pins or reroute if unavailable. `DEFAULT_CONFIG` remains unpinned.
 
 ## Open Decisions
 - Agent routing refinements after real orchestration runs.

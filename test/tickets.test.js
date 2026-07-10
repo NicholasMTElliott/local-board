@@ -3854,7 +3854,8 @@ test("moveTicket enforceTransitions on (scaffold config) permits the full task/b
 
     await completeStep(root, ticketId, "design", "claude-subagent:local-board-designer@opus", "Design evidence.");
     await completeStep(root, ticketId, "implement", "claude-subagent:local-board-implementer@sonnet", "Implementation evidence.");
-    await completeStep(root, ticketId, "review", "codex-task:read-only", "Review evidence.");
+    // The scaffold pins agents.review to gpt-5.6-terra.
+    await completeStep(root, ticketId, "review", "codex-task:read-only@gpt-5.6-terra", "Review evidence.");
     await completeStep(root, ticketId, "test", "claude-subagent:local-board-tester@sonnet", "Test evidence.");
     await completeStep(root, ticketId, "document", "codex-task:workspace-write", "Documentation evidence.");
 

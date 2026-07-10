@@ -32,6 +32,8 @@ It defines:
 
 Optional-step `agent` values remain route strings or accept `{ route, model?, effort? }` profiles. `specialty-run` returns the resolved pins; specialty evidence enforces a pinned model (`codex-default` is a wildcard), while effort is dispatch-only and never enters evidence. Specialty names must not collide with effective `workflow.statusActions` values.
 
+The `init` scaffold pins `agents.review` to `codex-task:read-only` / `gpt-5.6-terra` / `high` and the `design/security_threat_model` plus `implement/security_audit` entries to `codex-task:read-only` / `gpt-5.6-sol` / `xhigh`. Delete the pins or reroute when unavailable. `DEFAULT_CONFIG` stays unpinned.
+
 V1 specialty prompts ship at `plans/prompts/optional-steps/{design,impl}/`.
 The scaffolded `security_audit` trigger is consequence-surface based: auth/session flows, cross-trust-boundary validation, external services/secrets, and permission/consent state that gates tool execution.
 

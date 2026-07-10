@@ -917,9 +917,18 @@ test("CLI gate-check resolves catalog, prompt path, and ticket context per stage
       designOut.catalog.map((entry) => entry.name),
       ["security_threat_model", "ui_component_review", "ux_interaction_review"],
     );
-    // Default catalog entries omit agent field
+    // Default catalog entries omit agent field, except security_threat_model
+    // which the scaffold pins to gpt-5.6-sol/xhigh.
     for (const entry of designOut.catalog) {
-      assert.equal(Object.hasOwn(entry, "agent"), false, `entry ${entry.name} should omit agent when absent in config`);
+      if (entry.name === "security_threat_model") {
+        assert.deepEqual(entry.agent, {
+          route: "codex-task:read-only",
+          model: "gpt-5.6-sol",
+          effort: "xhigh",
+        });
+      } else {
+        assert.equal(Object.hasOwn(entry, "agent"), false, `entry ${entry.name} should omit agent when absent in config`);
+      }
     }
 
     // Happy path: implement stage
@@ -1307,10 +1316,11 @@ test("CLI completes an optional specialty step and the board still validates", a
     assert.equal(create.code, 0, create.stderr);
     const id = path.basename(create.stdout.trim()).split("_", 1)[0];
 
-    // security_audit is in the default optionalSteps.implement catalog and routes inline.
+    // security_audit is in the default optionalSteps.implement catalog and the
+    // scaffold pins it to codex-task:read-only@gpt-5.6-sol.
     const done = await runCli([
       "--root", root, "complete-step", id, "security_audit",
-      "--executor", "inline", "--evidence", "PASS: no findings",
+      "--executor", "codex-task:read-only@gpt-5.6-sol", "--evidence", "PASS: no findings",
     ]);
     assert.equal(done.code, 0, done.stderr);
 
@@ -1442,26 +1452,26 @@ test("CLI complete-step --override --reason plumbs through and records; --overri
 
     const refused = await runCli([
       "--root", root, "complete-step", id, "review",
-      "--executor", "codex-task:read-only", "--evidence", "Review evidence.",
+      "--executor", "codex-task:read-only@gpt-5.6-terra", "--evidence", "Review evidence.",
     ]);
     assert.notEqual(refused.code, 0);
     assert.match(refused.stderr, /would be stripped by the forward move into ready_for_review/);
 
     const missingReason = await runCli([
       "--root", root, "complete-step", id, "review",
-      "--executor", "codex-task:read-only", "--evidence", "Review evidence.", "--override",
+      "--executor", "codex-task:read-only@gpt-5.6-terra", "--evidence", "Review evidence.", "--override",
     ]);
     assert.notEqual(missingReason.code, 0);
     assert.match(missingReason.stderr, /complete-step --override requires --reason/);
 
     const overridden = await runCli([
       "--root", root, "complete-step", id, "review",
-      "--executor", "codex-task:read-only", "--evidence", "Review evidence.",
+      "--executor", "codex-task:read-only@gpt-5.6-terra", "--evidence", "Review evidence.",
       "--override", "--reason", "CLI override test",
     ]);
     assert.equal(overridden.code, 0, overridden.stderr);
     const text = await readFile(create.stdout.trim(), "utf8");
-    assert.match(text, /^completedSteps: \[review:codex-task:read-only\]$/m);
+    assert.match(text, /^completedSteps: \["review:codex-task:read-only@gpt-5\.6-terra"\]$/m);
     assert.match(text, /Premature-evidence override: recorded review at ready_for_implementation ahead of its producing status ready_for_review: CLI override test/);
   });
 });
@@ -1568,7 +1578,8 @@ test("CLI specialty-run dispatches to optionalSteps catalog by status-derived st
   await withBoard(async (root) => {
     assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
 
-    // Case 1: implementing status -> implement stage, step security_audit, agent default inline.
+    // Case 1: implementing status -> implement stage, step security_audit,
+    // scaffold-pinned agent codex-task:read-only@gpt-5.6-sol/xhigh.
     const implCreate = await runCli([
       "--root",
       root,
@@ -1589,9 +1600,9 @@ test("CLI specialty-run dispatches to optionalSteps catalog by status-derived st
     assert.equal(implOut.ticket, implId);
     assert.equal(implOut.stage, "implement");
     assert.equal(implOut.step, "security_audit");
-    assert.equal(implOut.agent, "inline");
-    assert.equal(implOut.model, null);
-    assert.equal(implOut.effort, null);
+    assert.equal(implOut.agent, "codex-task:read-only");
+    assert.equal(implOut.model, "gpt-5.6-sol");
+    assert.equal(implOut.effort, "xhigh");
     assert.equal(typeof implOut.ticketPath, "string");
     assert.equal(
       implOut.prompt.endsWith(path.join("plans", "prompts", "optional-steps", "impl", "security_audit.md")),
@@ -1625,7 +1636,7 @@ test("CLI specialty-run dispatches to optionalSteps catalog by status-derived st
     const plain = await runCli(["--root", root, "specialty-run", implId, "security_audit"]);
     assert.equal(plain.code, 0, plain.stderr);
     const plainLines = plain.stdout.split("\n");
-    assert.match(plainLines[0], /^specialty-run .* step=security_audit stage=implement agent=inline$/);
+    assert.match(plainLines[0], /^specialty-run .* step=security_audit stage=implement agent=codex-task:read-only@gpt-5\.6-sol$/);
     assert.equal(
       plainLines[1].endsWith(path.join("plans", "prompts", "optional-steps", "impl", "security_audit.md")),
       true,

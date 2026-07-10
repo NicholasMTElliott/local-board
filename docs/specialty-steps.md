@@ -51,6 +51,8 @@ The v1 catalog is shipped in [`plans/local-board.config.jsonc`](../plans/local-b
 
 The `test` catalog is intentionally empty in v1. `gate-check --stage test` self-certifies the empty catalog and returns no requested specialties until entries are added.
 
+The `init` scaffold ships `security_threat_model` and `security_audit` pinned to `gpt-5.6-sol`/`xhigh` (an `agent` profile on the catalog entry in `plans/local-board.config.jsonc`). If your plan lacks GPT-5.6, delete the entry's `model`/`effort` keys (falls back to the plan's default model) or reroute the step; Codex validates the model server-side.
+
 ## Trigger guidance
 
 Concrete examples mapping work types to recommended specialties:
