@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
 updated: 2026-07-10T16:13:43Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
 # section --file can duplicate the section heading when the payload carries it
@@ -172,3 +172,5 @@ Verified clean: reject guard fence-aware and H2-only with actionable message; du
 - 2026-07-10T16:02:29Z: Completed implement via claude-subagent:local-board-implementer@sonnet: assertPayloadHasNoSectionHeading guard in setTicketSection (fence-aware, H2-only); duplicate standard-heading check in validateTicketShape; 7 regression tests; 4-skill prose contract note outside CLI fence. Full suite 531 pass/0 fail/1 skip. Commit 192d9b9.
 
 - 2026-07-10T16:03:16Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none requested (internal CLI fix; security trigger explicitly excludes CLI parsing; no UI)
+
+- 2026-07-10T16:13:43Z: Completed review via codex-task:read-only@gpt-5.6-terra: changes_requested target implementation: 1 finding - idempotence test lacks byte-identical-body assertion (test/tickets.test.js:732). Guard, validate pass, and skill notes verified clean.
