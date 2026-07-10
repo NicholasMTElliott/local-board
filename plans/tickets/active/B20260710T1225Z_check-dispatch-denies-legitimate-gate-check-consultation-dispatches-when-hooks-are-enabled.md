@@ -1,7 +1,7 @@
 ---
 id: B20260710T1225Z
 type: bug
-status: ready_for_implementation
+status: implementing
 priority: P1
 parent: null
 children: []
@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:25:41Z
-updated: 2026-07-10T14:00:01Z
+updated: 2026-07-10T14:00:02Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -397,3 +397,5 @@ Re-review (terra@medium, 42s): verdict: changes_requested — identity semantics
 - 2026-07-10T13:58:46Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - ledger lifecycle tightening; no auth/UI surface
 
 - 2026-07-10T14:00:01Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
+
+- 2026-07-10T14:00:02Z: Ensured git branch local-board/B20260710T1225Z-check-dispatch-denies-legitimate-gate-check-consultation-dispatches-when-hooks-are-enabled (already-current).
