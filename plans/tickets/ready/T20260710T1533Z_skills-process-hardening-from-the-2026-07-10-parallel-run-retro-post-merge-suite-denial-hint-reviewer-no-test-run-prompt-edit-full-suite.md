@@ -13,7 +13,7 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T17:07:23Z
+updated: 2026-07-10T17:17:34Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -543,3 +543,5 @@ issued the terminal move and its Refill preceded the separate `## Closeout` sect
 - 2026-07-10T16:45:03Z: Design review #4 (sol@xhigh): FAIL. [High] SKILL_TEAM step 4 move left generic while codex step 4 was narrowed - terminal move..done could fire in step 4 then again in Closeout (double-move; auto-merge prunes branch, second call fails pre-suite); qualify step 4 non-terminal, reserve terminal move for Closeout. [Medium] Worktrees section still says remove worktree immediately at done, Closeout opening still says move..done always auto-merges/rebases/prunes - contradict suite-before-removal and manual mode; amend both. [Medium] Manual-mode passage assumes move leaves dirty planning edit; with commitPlanningOnTransition:true it is already committed - make the commit conditional. Disposition: revision #4 (mechanical); round-5 FAIL on new findings escalates to questions.
 
 - 2026-07-10T17:00:19Z: Design review #5 (sol@xhigh): FAIL. [High] New: proposed Refill condition requires completed Closeout, but step-4 questions/blocked exits drop tickets from in-flight without Closeout - those slots could never refill; distinguish: questions/blocked exits free slots immediately, done exits free after merge+ff+green suite+fix-forward. [Low] Qualify branch pruning as only-when-configured-and-successful (pruneMergedBranches). Disposition: final revision #5 (one-sentence fix); round 6 is hard stop - non-PASS/CONCERNS goes to questions.
+
+- 2026-07-10T17:17:34Z: Design review #6 (sol@xhigh): CONCERNS - 1 Medium: SKILL_TEAM edits 4-5 preserve the absolute 'move/complete-step leave the ticket dirty' claim while the manual-mode passage is conditional; implementer must conditionalize the preserved sentence (commit only what the transition hook left uncommitted). Orchestrator disposition: proceed to implementation with the conditionalization folded into the implementer brief. Six review rounds total; verdicts FAIL x5 then CONCERNS.
