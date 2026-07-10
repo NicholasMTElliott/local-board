@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T18:01:57Z
+updated: 2026-07-10T18:08:08Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -54,268 +54,371 @@ Three codex-task dispatches failed on transient causes and all succeeded on a ma
 
 Add an opt-in `--retries <n>` flag to the `codex-task` wrapper (repo:
 `../codex-task`, all code at `C:/Users/Nicho/Documents/codex-task`). On a
-non-zero `codex exec` exit, classify the captured diagnostic tail; if the
+non-zero `codex exec` exit, classify the captured diagnostic tail. If the
 failure is a recognized **transient infrastructure** class (model capacity /
-sandbox-wrapper prep), retry the invocation in-process, serially, up to `n`
-times with a short fixed backoff. All other failures (auth, unsupported
-model/effort, quota exhaustion, JSON/contract failures, task-level
-partial/failed) are non-transient and never retried. Default `n = 0` preserves
-today's behavior byte-for-byte.
+sandbox-wrapper prep) it retries the invocation in-process, serially, up to `n`
+times with a short fixed backoff. Every other failure — auth, unsupported
+model/effort, durable quota/usage-cap exhaustion, JSON/contract failures,
+task-level partial/failed — is non-transient and never retried. Default
+`n = 0` preserves today's behavior. This revision (post design-review FAIL)
+rewrites the classifier as a two-phase, durable-exclusion-first design with
+exact ordered pattern lists, pins the byte-identical claim to a precise
+structural contract, and closes the enumerated test gaps.
 
 ### Related tickets and conflicts
 
 - Basis / sibling: `T20260710T1533Z` (done, estimate 2) — process-hardening
-  text edits from the same 2026-07-10 parallel-run retro. Item 2 there added a
-  Delegation denial-recovery hint to local-board's single-ticket SKILL. This
-  ticket is the *code* counterpart from the same retro.
+  text edits from the same 2026-07-10 parallel-run retro. This ticket is the
+  *code* counterpart from the same retro.
 - Same cross-repo pattern as `T20260710T0036Z` (sibling `../codex-task` tracked
   on this board; no board of its own).
-- No file conflicts: this ticket touches only `../codex-task`
-  (`codex-task.mjs`, `SKILL.md`, `tests/cli-smoke.test.mjs`). The local-board
-  board/evidence stay here. No overlap with in-flight local-board tickets.
-- Follow-up (OUT OF SCOPE, flag only): local-board's Delegation skill text
-  (`SKILL.md` / `SKILL_TEAM.md`) could mention `codex-task --retries` as the
-  automated path for transient hiccups instead of manual orchestrator re-runs.
-  That edits local-board files, so it belongs in a separate local-board ticket,
-  not here.
+- No file conflicts: touches only `../codex-task` (`codex-task.mjs`, `SKILL.md`,
+  `tests/cli-smoke.test.mjs`). Board/evidence stay in local-board. No overlap
+  with in-flight local-board tickets.
+- Follow-up (OUT OF SCOPE, flag only): local-board's Delegation skill text could
+  later mention `codex-task --retries` as the automated path for transient
+  hiccups. That edits local-board files, so it is a separate ticket.
 
-### How transient failures are recognized
+### Why text-pattern classification is the only signal
 
 The wrapper captures codex output as `stdoutTail` / `stderrTail` (last 4000
 chars each) in `runCodex`, and on `runResult.code !== 0` builds the diagnostic
 via `formatCodexRunFailure` -> `codexFailureHint(detail)` where
 `detail = (stderrTail || stdoutTail).trim()`. There is **no structured JSON on
-the failure path** — the JSON result is only the model's final message, written
+the failure path** — the result JSON is only the model's final message, written
 via `--output-last-message`, and only exists after a clean (code 0) exit. Exit
-codes are also uninformative: codex returns non-zero for every failure class
-(auth, bad model, capacity, sandbox) with no distinct code per class. So
-**error-text pattern matching on the diagnostic tail is the only viable signal**,
-and it is exactly the mechanism the existing `codexFailureHint` already uses.
+codes are uninformative: codex returns non-zero for every failure class with no
+distinct code. So error-text pattern matching on the diagnostic tail is the
+only viable signal, and it is exactly what `codexFailureHint`
+(`codex-task.mjs:491`) already does.
 
-Decision: add a sibling classifier `classifyTransient(detail)` next to
-`codexFailureHint`, returning a transient-class label or `null`:
+### Classifier redesign: durable-exclusion-first, two ordered phases
 
-- `model-capacity` — matches `at capacity` (e.g. "Selected model is at
-  capacity"), or short-term throttling signals `\b429\b`, `rate limit`,
-  `temporarily unavailable`, `try again`.
-- `sandbox-wrapper` — matches `failed to prepare .* sandbox wrapper`,
-  `cannot enforce split writable root sets`, `refusing to run unsandboxed`.
+The prior draft used a single exclusion set whose blanket `limit exceeded`
+swallowed transient `429 rate limit exceeded`, whose bare `try again` could
+catch durable failures, and whose effort exclusion missed codex's actual
+"reasoning effort" wording. This revision fixes all three by making the durable
+exclusion use **contextual cap phrases only**, treating **429 / rate-limit as
+transient unless an explicit durable-cap phrase co-occurs**, dropping bare
+`try again` in favor of qualified forms, and adding the reasoning-effort
+diagnostic to the exclusions.
 
-Precision guardrail (checked FIRST, wins over the transient patterns): a
-non-transient exclusion set. If the tail matches auth (`missing bearer`,
-`unauthorized`, `401`, `login`), unsupported model/effort
-(`not supported`, `\b400\b`, `model_reasoning_effort`), or **durable** quota
-exhaustion (`usage limit`, `weekly limit`, `quota`, `limit exceeded`),
-`classifyTransient` returns `null` even if a transient substring also appears.
-This deliberately separates transient "at capacity / 429 backpressure" (retry
-helps) from durable "usage/weekly cap exhausted" (retry cannot help) — the
-existing `codexFailureHint` lumps both under one "quota or rate limit" branch,
-which is fine for a human hint but too coarse for an auto-retry gate.
+Add one helper `classifyTransient(detail)` next to `codexFailureHint`. It runs
+**two ordered phases** and returns a transient-class label or `null`:
 
-Scope note / discrepancy to resolve in implementation: the retro *observed*
-string was "windows unelevated restricted-token sandbox cannot enforce split
-writable root sets directly; refusing to run unsandboxed", while Scope item 1
-names the class "failed to prepare windows sandbox wrapper". The pattern set
-above covers both phrasings so either real-world tail is caught.
+Phase 1 — DURABLE / non-transient exclusions, evaluated FIRST. If ANY matches,
+return `null` immediately (even when a transient substring co-occurs — this is
+how "exclusion-first wins" on mixed tails). Wordings anchored to what
+`codexFailureHint` already recognizes at `codex-task.mjs:491-508`:
+
+```js
+// Phase 1: durable failures — retry cannot help. Any match => classifyTransient returns null.
+const NON_TRANSIENT_PATTERNS = [
+  // auth / login expiry
+  /missing bearer|unauthoriz(?:ed|ation)|authentication|\b401\b|codex login|not logged in|invalid api key/i,
+  // unsupported model
+  /model .*not supported|not supported.*ChatGPT account|unsupported model|\b400\b/i,
+  // unsupported / rejected reasoning effort  (ADDED: covers codex's plain "reasoning effort" wording)
+  /model_reasoning_effort|reasoning[_ ]?effort/i,
+  // durable quota / usage-cap exhaustion — CONTEXTUAL phrases only.
+  // Deliberately NO bare "limit exceeded" and NO bare "rate limit" here,
+  // so transient "429 rate limit exceeded" is NOT swallowed by this phase.
+  /usage limit|weekly limit|monthly limit|usage cap|plan limit|\bquota\b|(?:hit|reached|exceeded) your[^.\n]*\blimit\b/i,
+];
+```
+
+Phase 2 — TRANSIENT classes, evaluated only if Phase 1 did not match. Return
+the label of the first list that matches, else `null`:
+
+```js
+// Phase 2: transient infrastructure — retry can help. First match wins.
+const TRANSIENT_PATTERNS = [
+  { label: 'model-capacity',
+    re: /\bat capacity\b|\b429\b|rate[ _-]?limit|too many requests|temporarily unavailable|server (?:is )?overloaded|please try again|try again (?:later|shortly|in\b)/i },
+  { label: 'sandbox-wrapper',
+    re: /failed to prepare\b[^\n]*sandbox wrapper|cannot enforce split writable root sets|refusing to run unsandboxed|restricted-token sandbox/i },
+];
+
+function classifyTransient(detail) {
+  for (const re of NON_TRANSIENT_PATTERNS) if (re.test(detail)) return null;   // exclusion-first
+  for (const { label, re } of TRANSIENT_PATTERNS) if (re.test(detail)) return label;
+  return null;
+}
+```
+
+Worked classifications proving the split (each is a named test in the plan below):
+
+- `"Selected model is at capacity"` -> Phase 1 no match; Phase 2 `at capacity` ->
+  **model-capacity** (transient).
+- `"Error: 429 rate limit exceeded, please try again later"` -> Phase 1 no match
+  (no `usage/weekly/quota` phrase, and `exceeded your ... limit` does not match
+  `rate limit exceeded`); Phase 2 `\b429\b` -> **model-capacity** (transient).
+  This is the exact case the review flagged; it now retries.
+- `"You've hit your weekly usage limit"` -> Phase 1 matches (`usage limit` and
+  `hit your ... limit`) -> **null** (durable, no retry).
+- Mixed: `"Selected model is at capacity. You've hit your weekly usage limit."`
+  -> Phase 1 matches `usage limit` -> **null**. Exclusion-first wins over the
+  co-occurring transient wording.
+- `"stream error: missing bearer token"` -> Phase 1 auth -> **null**.
+- `"model gpt-5.6-terra is not supported for this ChatGPT account"` -> Phase 1
+  unsupported-model -> **null**.
+- `"unsupported value for model_reasoning_effort"` and `"reasoning effort 'xhigh'
+  is not supported"` -> Phase 1 effort -> **null** (the wording the prior draft
+  missed).
+- `"windows unelevated restricted-token sandbox cannot enforce split writable
+  root sets directly; refusing to run unsandboxed"` (the retro's observed tail)
+  -> Phase 1 no match; Phase 2 sandbox-wrapper -> **sandbox-wrapper** (transient).
+- `"failed to prepare windows sandbox wrapper"` (Scope item 1 wording) -> Phase 2
+  sandbox-wrapper -> **sandbox-wrapper**.
+
+Design notes on the split:
+
+- The transient sandbox list is intentionally NARROW (wrapper-prep phrases only),
+  not the broad `codexFailureHint` sandbox branch (`sandbox|permission denied|
+  operation not permitted|patch rejected|read-only`). A generic permission/
+  read-only denial is a config problem, not transient, so it is NOT retried.
+- Any co-occurring durable-cap phrase (`quota`, `usage/weekly/monthly limit`,
+  `usage cap`, `plan limit`, `... your ... limit`) forces `null`. This is the
+  conservative direction: when in doubt between throttle and cap, do not retry.
+- The effort exclusion (`reasoning[_ ]?effort`) is broad by design; a capacity/
+  sandbox tail that merely mentions reasoning effort would be treated as
+  non-transient. Accepted: a false-negative (a missed retry) is cheaper than
+  retrying a durable config error, and the phrase is unlikely in a genuine
+  capacity/sandbox tail.
 
 ### Which failure path retries wrap
 
-Retries wrap **only** the `runCodex` + `runResult.code !== 0` branch in
-`main()`. They explicitly do NOT cover:
+Retries wrap **only** the `runCodex` + `runResult.code !== 0` branch in `main()`
+(`codex-task.mjs:758`). They explicitly do NOT cover:
 
-- Spawn errors (`child.on('error')` -> "failed to spawn codex"): environmental
-  and already gated by the preflight `checkCodexAvailable`; not transient here.
-- `readResult` failures (empty / non-JSON final message): contract failures —
-  Non-goal, needs a prompt fix not a repeat.
+- Spawn errors (`child.on('error')` -> "failed to spawn codex",
+  `codex-task.mjs:746`): environmental, already gated by the `checkCodexAvailable`
+  preflight; not transient.
+- `readResult` failures on a code-0 exit (empty / non-JSON / malformed final
+  message, `codex-task.mjs:770`): contract failures — Non-goal; they need a
+  prompt fix, not a repeat. Because this branch is structurally *after* the
+  retry loop and only reached on a clean exit, it can never trigger a retry.
+  This is asserted by a dedicated test (exit-0 malformed JSON, below).
 - Task-level `taskResult` of `partial` / `blocked` / `failed`: substantive
   outcomes on a clean exit; never retried.
 
 ### Implementation approach (codex-task.mjs)
 
 1. Arg parsing (`parseArgs`): add `--retries`. Parse `next` as a non-negative
-   integer; reject negatives / non-numbers via `usageErr('--retries must be a
-   non-negative integer')`. Store `retries` (number, default 0). Also derive
-   `retriesEnabled = retries > 0` for output gating (see JSON section).
+   integer; reject negatives / non-numbers / missing value via
+   `usageErr('--retries must be a non-negative integer')`. Store `retries`
+   (number, default 0). Derive `retriesEnabled = retries > 0` for output gating.
 2. Retry loop in `main()`: replace the single `runCodex` call + `code !== 0`
-   emit with a bounded loop. Pseudocode:
+   emit with a bounded loop:
    - `let attempt = 0; let runResult;`
-   - loop: `attempt++`; `runResult = await runCodex(...)`; if
-     `runResult.code === 0` break; classify the tail; if a transient class AND
-     `attempt <= retries` (i.e. retries remain): push a warning
-     (`codex attempt N/${retries+1} failed (<class>): <first line of tail>;
-     retrying`), stream nothing new, sleep `backoffMs`, continue; else break.
-   - Keep `attempt` for the JSON `attempts` field.
-   - The existing spawn-error `try/catch` stays around each `runCodex` call; a
-     spawn throw is non-transient and emits immediately (its own emit gets the
-     `attempts` field too when enabled).
-3. Backoff: **short fixed** delay between attempts (no exponential — capacity
-   recovered on immediate manual retry in the retro; exponential adds latency
-   for no evidence of benefit). Constant `RETRY_BACKOFF_MS` (proposal 2000 ms),
-   overridable via env `CODEX_TASK_RETRY_DELAY_MS` so tests run without real
-   sleeps (set to `0`). No backoff after the final (failed) attempt.
-4. Emit paths: every `emit(...)` call in `main()` that can carry a completed or
-   run-failed result includes `attempts` in its object **when `retriesEnabled`**
-   (see gating). The final success `emit` and the `code !== 0` failure `emit`
-   both read the loop's `attempt` counter.
+   - loop: `attempt++`; run `runCodex(...)` inside the existing spawn-error
+     try/catch; if `runResult.code === 0` break; else
+     `const cls = classifyTransient(tailOf(runResult))`; if `cls` AND
+     `attempt <= retries` (retries remain): push a warning
+     (`codex attempt ${attempt}/${retries + 1} failed (${cls}): <first line of
+     tail>; retrying`), optionally `rmSync(lastMessagePath, {force:true})`, sleep
+     `backoffMs` unless it is the final attempt, continue; else break.
+   - `tailOf` derives the same `(stderrTail || stdoutTail).trim()` string that
+     `formatCodexRunFailure` uses, so classification sees exactly the diagnostic.
+   - Keep `attempt` for the `attempts` field. A spawn throw is non-transient and
+     emits immediately (with `attempts` when enabled).
+3. Backoff: **short fixed** delay (no exponential — capacity recovered on the
+   immediate manual retry in the retro). Constant `RETRY_BACKOFF_MS` (2000 ms),
+   overridable via env `CODEX_TASK_RETRY_DELAY_MS` so tests set `0` and never
+   sleep. No backoff after the final failed attempt.
+4. Emit paths: the final success `emit` and the `code !== 0` failure `emit` read
+   the loop's `attempt` counter and include `attempts` **only when
+   `retriesEnabled`** (see gating). Insert `attempts` in a fixed position in the
+   object literal so the shape is stable when present.
 
 Serial discipline: the loop `await`s each `runCodex` before the next; retries
-are strictly sequential within the single process. No new concurrency, no
-`CODEX_HOME` isolation — the serial-by-design contract (and the codex#11435
-note in the file header) is unchanged.
+are strictly sequential in the single process. No new concurrency, no
+`CODEX_HOME` isolation — the serial-by-design contract is unchanged.
 
-### JSON result reporting
+### JSON result reporting and the byte-identical contract
 
-- `attempts`: integer = number of `codex exec` invocations made
-  (1 = no retry needed; 2 = one retry; etc.).
+- `attempts`: integer = number of `codex exec` invocations (1 = no retry;
+  2 = one retry; ...). Present only when `--retries > 0`.
 - Warnings: one entry per retried failure, naming the transient class and
-  attempt index, appended to the existing `warnings` array (so `--out` and
-  stdout both carry them, and `ok`/`warnings` inspection already documented in
-  SKILL surfaces them).
+  attempt index, appended to the existing `warnings` array.
 
-Byte-identical gate (acceptance criterion "Omitting the flag is byte-identical
-to today"): adding `attempts` unconditionally would change the shape of every
-result and break that criterion. Decision: **include `attempts` only when
-`--retries` was given with a value > 0** (`retriesEnabled`). Consequences,
-which satisfy all three stated acceptance rows:
+`emit` (`codex-task.mjs:637`) serializes with `JSON.stringify(r, null, 2)` in
+object-literal insertion order. Two fields are already non-deterministic across
+any two real runs today: `durationMs` (wall clock) and `sessionDir` (a
+`Date.now()-pid` path on the failure/`--debug` paths; `null` on cleaned success).
+Literal byte-identity was therefore never achievable between two live runs.
 
-- `--retries 2`, shim fails once on capacity -> success, `attempts: 2`, one
-  warning. (field present)
-- `--retries 2`, auth failure -> fail immediately, `attempts: 1`. (field
-  present)
-- Flag omitted (or `--retries 0`) -> no `attempts` key; output byte-identical
-  to today.
+**Byte-identical contract — CHOICE: option (b), the precise structural
+contract** (not option (a) fixed-clock/session-injection + stdout fixture). The
+acceptance line "Omitting the flag is byte-identical to today" is pinned to:
 
-Open question flagged below: whether the maintainer prefers `attempts` always
-present (cleaner for consumers) over strict byte-identical omission.
+> With `--retries` omitted (or `--retries 0`), for a given input the result
+> object contains **no `attempts` key** and **no retry-related warning entries**,
+> and — after deleting the enumerated dynamic fields `durationMs` and
+> `sessionDir` — is **deep-equal** to the result the same input produces with the
+> flag entirely absent.
+
+Rationale for (b): option (a) would force a fixed-clock / injected-session-path
+seam into production purely for a test, adding surface area the wrapper does not
+otherwise need; (b) tests exactly the real guarantee (the flag at its default is
+inert) against the only two fields that legitimately vary. Enumerated dynamic
+fields: **`durationMs`, `sessionDir`** — nothing else on the success or failure
+emit is nondeterministic given a fixed diagnostic tail (`error` is deterministic
+from the fixed tail via `formatCodexRunFailure`).
+
+Open question (non-blocking): whether the maintainer prefers `attempts` always
+present (cleaner for consumers) over the gated omission. Default chosen: gated,
+to honor this contract.
 
 ### Interaction with other flags
 
-- `--quiet`: unchanged semantics. It gates live streaming
-  (`streamThinking && !quiet`), not warnings. Retry warnings follow the
-  existing warning convention (into `warnings[]`; mirrored to stderr like the
-  install-check warning). Each retried attempt re-streams codex chatter only if
-  `--stream-thinking` is set and `--quiet` is not.
-- `--out`: unchanged. The single final JSON (now possibly carrying `attempts` +
-  retry warnings) is written once at the end, exactly as today.
-- `--debug`: `sessionDir` is preserved on failure / with `--debug` as today.
-  All attempts reuse the one `sessionDir` and `lastMessagePath`; safe because
-  `lastMessagePath` is only read after a code-0 exit and codex overwrites it via
-  `--output-last-message`. Implementation nicety: `rmSync(lastMessagePath,
-  {force:true})` before each retry attempt to avoid any chance of reading a
-  stale prior message (defensive; not strictly required).
-- `--reasoning-effort` / `--model` / `--permissions` / `--profile`: spawn args
-  are identical on every attempt (same `buildSpawnArgs` output).
+- `--quiet`: unchanged; gates live streaming, not warnings. Retry warnings go to
+  `warnings[]` and mirror to stderr like the install-check warning.
+- `--out`: unchanged; the single final JSON (now possibly carrying `attempts` +
+  retry warnings) is written once at the end.
+- `--debug`: `sessionDir` preserved as today. All attempts reuse one
+  `sessionDir` / `lastMessagePath`; safe because `lastMessagePath` is read only
+  after a code-0 exit and codex overwrites it via `--output-last-message`.
+  Optional pre-attempt `rmSync(lastMessagePath, {force:true})` guards against any
+  stale prior message.
+- `--reasoning-effort` / `--model` / `--permissions` / `--profile`: identical
+  spawn args on every attempt (same `buildSpawnArgs`).
 
 ### Affected files
 
 - `codex-task.mjs` — arg parse (`--retries`), retry loop in `main()`,
-  `classifyTransient()` helper, backoff constant + env override, `attempts`
-  field on emits, and `printUsage` text (add `--retries` under Wrapper options
-  and to the usage synopsis).
+  `classifyTransient()` (+ `NON_TRANSIENT_PATTERNS` / `TRANSIENT_PATTERNS`),
+  backoff constant + env override, gated `attempts` field, `printUsage` text.
 - `SKILL.md` — see docs section.
 - `tests/cli-smoke.test.mjs` — extend fake-codex shim + new tests.
 - No changes to `install.mjs` or `scripts/permission-matrix.mjs`.
 
-### Test strategy (existing seams)
+### Test strategy and seams
 
-Test seams available today: `makeFakeCodex()` builds a per-call temp dir with a
-`codex.cmd`/`codex` shim delegating to `fake-codex.mjs`; env
-`FAKE_CODEX_ARGV_OUT` dumps the spawn argv; PATH is prepended so the fake wins.
-Because each `codex exec` is a fresh process, cross-attempt "fail N times then
-succeed" state must live on disk, not in memory.
+`makeFakeCodex()` (`tests/cli-smoke.test.mjs:204`) builds a per-call temp dir
+with a `codex.cmd`/`codex` shim delegating to `fake-codex.mjs`; PATH is
+prepended so the fake wins. The shim answers `--version` and exits BEFORE any
+other logic (`fakeCodexJs`, line 233), so the `checkCodexAvailable` preflight
+never touches per-run state — a disk counter therefore equals the number of
+`codex exec` invocations, i.e. the true attempt count.
 
-Extend the shim (`fakeCodexJs`) with an env-driven fail-then-succeed mode:
+Extend `fakeCodexJs` with an env-driven, on-disk fail-then-succeed mode (state
+must live on disk because each `codex exec` is a fresh process):
 
+- `FAKE_CODEX_STATE` — path to a counter file. On every non-`--version`
+  invocation the shim reads the integer (default 0), increments, writes it back.
+  `makeFakeCodex` returns this path (inside `fake.dir`, per-test isolated).
 - `FAKE_CODEX_FAIL_TIMES` (int, default 0) — number of leading invocations that
-  should fail.
-- `FAKE_CODEX_FAIL_MESSAGE` — text emitted to stderr on a failing invocation
-  (e.g. "Selected model is at capacity").
-- `FAKE_CODEX_STATE` — path to a counter file the shim reads/increments/writes
-  each non-`--version` invocation. If `count <= FAIL_TIMES`: write
-  `FAKE_CODEX_FAIL_MESSAGE` to stderr and `process.exit(1)`; else behave as the
-  current success shim (write result JSON, exit 0). `makeFakeCodex` returns the
-  state path (inside `fake.dir`, so it is per-test isolated).
+  fail: if `count <= FAIL_TIMES`, write `FAKE_CODEX_FAIL_MESSAGE` to stderr and
+  `process.exit(1)`.
+- `FAKE_CODEX_FAIL_MESSAGE` — the stderr text on a failing invocation.
+- `FAKE_CODEX_BAD_FINAL` (flag) — on the SUCCESS branch, write non-JSON garbage
+  to the `--output-last-message` path and exit 0 (drives the code-0 malformed
+  path).
 
-All retry tests set `CODEX_TASK_RETRY_DELAY_MS=0` for determinism (no sleeping).
+All retry tests set `CODEX_TASK_RETRY_DELAY_MS=0` (no real sleeps) and, per the
+review, **assert the state-file counter (true invocation count) alongside the
+reported `attempts` field** — they must agree.
 
-New tests:
+Tests (existing ones retained, renumbered; NEW marks review-mandated additions):
 
-1. transient-retry-success: `FAKE_CODEX_FAIL_TIMES=1`, message "Selected model
-   is at capacity", `--retries 2` -> status 0, `ok:true`, `attempts:2`, exactly
-   one warning matching /at capacity/i.
-2. non-transient-no-retry (auth): `FAKE_CODEX_FAIL_TIMES=1`, message contains
-   "stream error: missing bearer token" (or "401"), `--retries 2`. The shim
-   *would* succeed on attempt 2, but the wrapper must NOT retry -> status 1,
-   `ok:false`, `attempts:1`.
-3. retries-exhausted: `FAKE_CODEX_FAIL_TIMES=5`, capacity message,
-   `--retries 2` -> status 1, `ok:false`, `attempts:3` (1 initial + 2 retries),
-   two retry warnings present, `error` carries the capacity tail.
-4. sandbox-wrapper transient class: message "failed to prepare windows sandbox
-   wrapper" (and/or "cannot enforce split writable root sets"),
-   `FAKE_CODEX_FAIL_TIMES=1`, `--retries 1` -> status 0, `attempts:2`.
-5. byte-identical / field-gating: run the plain success fake WITHOUT `--retries`
-   -> parsed JSON has NO `attempts` key. Same with `--retries 0`.
-6. durable-quota exclusion (precision guard): `FAKE_CODEX_FAIL_TIMES=1`, message
-   "You've hit your weekly usage limit", `--retries 2` -> NOT retried, status 1,
-   `attempts:1`. Guards against retrying real quota exhaustion.
-7. `--help` documents `--retries` (extend the existing help-contract test with a
-   `/--retries/` assertion).
-8. invalid value: `--retries -1` (and `--retries abc`) -> status 2, stderr
-   `/--retries must be a non-negative integer/`.
+1. transient-retry-success (capacity): `FAKE_CODEX_FAIL_TIMES=1`, message
+   "Selected model is at capacity", `--retries 2` -> status 0, `ok:true`,
+   `attempts:2`, exactly one warning `/at capacity/i`; state counter == 2.
+2. **NEW 429-rate-limit transient class**: `FAKE_CODEX_FAIL_TIMES=1`, message
+   "Error: 429 rate limit exceeded, please try again later", `--retries 1` ->
+   status 0, `ok:true`, `attempts:2`, one warning `/429|rate limit/i`; state
+   counter == 2. Proves 429 is transient and NOT excluded.
+3. non-transient-no-retry (auth): `FAKE_CODEX_FAIL_TIMES=1`, message
+   "stream error: missing bearer token", `--retries 2` -> the shim *would*
+   succeed on attempt 2, but the wrapper must NOT retry: status 1, `ok:false`,
+   `attempts:1`; state counter == 1.
+4. **NEW unsupported-model exclusion (non-transient)**: message "model
+   gpt-5.6-terra is not supported for this ChatGPT account",
+   `FAKE_CODEX_FAIL_TIMES=1`, `--retries 2` -> not retried, status 1, `ok:false`,
+   `attempts:1`; state counter == 1.
+5. **NEW unsupported reasoning-effort exclusion (non-transient)**: message
+   "reasoning effort 'xhigh' is not supported for this model",
+   `FAKE_CODEX_FAIL_TIMES=1`, `--retries 2` -> not retried, status 1,
+   `attempts:1`; state counter == 1. Guards the wording the prior draft missed.
+6. **NEW mixed durable+transient tail (exclusion-first wins)**: message
+   "Selected model is at capacity. You've hit your weekly usage limit.",
+   `FAKE_CODEX_FAIL_TIMES=1`, `--retries 2` -> not retried, status 1,
+   `attempts:1`; state counter == 1. Proves durable exclusion beats co-occurring
+   transient wording.
+7. retries-exhausted: `FAKE_CODEX_FAIL_TIMES=5`, capacity message, `--retries 2`
+   -> status 1, `ok:false`, `attempts:3` (1 initial + 2 retries), two retry
+   warnings, `error` carries the capacity tail; state counter == 3.
+8. sandbox-wrapper transient class: message "windows unelevated restricted-token
+   sandbox cannot enforce split writable root sets directly; refusing to run
+   unsandboxed", `FAKE_CODEX_FAIL_TIMES=1`, `--retries 1` -> status 0,
+   `attempts:2`; state counter == 2.
+9. **NEW exit-0 malformed-final-message-JSON (must NOT retry)**:
+   `FAKE_CODEX_BAD_FINAL=1` (exit 0, garbage final message), `--retries 2` ->
+   status 1, `ok:false`, error `/not valid JSON|no extractable JSON/`, and
+   **state counter == 1** (a single invocation — proves the readResult contract
+   failure never re-enters the retry loop). `attempts:1` present (retriesEnabled).
+10. byte-identical / field-gating (contract option b): run the plain success
+    fake once with the flag OMITTED and once with `--retries 0`. Parse both
+    JSONs; assert neither has an `attempts` key and neither warning matches
+    `/attempt|retry/i`; delete `durationMs` and `sessionDir` from both and
+    `assert.deepEqual` them. Also run the plain FAILURE fake (capacity message,
+    large `FAIL_TIMES`) with flag omitted vs `--retries 0` and assert the same
+    (attempts absent, deep-equal modulo the two dynamic fields).
+11. `--help` documents `--retries` (extend the help-contract test with a
+    `/--retries/` assertion).
+12. invalid value: `--retries -1` and `--retries abc` -> status 2, stderr
+    `/--retries must be a non-negative integer/`.
 
-`npm run check` (node --check) and `npm test` (node --test) must pass; both are
-the acceptance gate.
+`npm run check` (node --check) and `npm test` (node --test) are the acceptance
+gate; both must pass in `../codex-task`.
 
 ### Documentation updates
 
 - `SKILL.md` "How to invoke" synopsis: add `[--retries N]`.
 - `SKILL.md` Wrapper options: new `--retries` bullet — default 0 preserves
-  current behavior; retries only the transient infrastructure classes
-  (model-capacity: "at capacity" / 429 backpressure; sandbox-wrapper prep
-  failures); explicitly NOT auth, unsupported model/effort, durable quota, or
-  JSON/contract failures; short fixed backoff; serial (never parallel).
+  current behavior; retries only transient infrastructure classes (model-capacity
+  incl. "at capacity" and 429/rate-limit backpressure; sandbox-wrapper prep
+  failures); explicitly NOT auth, unsupported model/effort, durable quota/usage
+  cap, or JSON/contract failures; short fixed backoff; serial (never parallel).
 - `SKILL.md` Output / Field semantics: document `attempts` (present only when
   `--retries > 0`) and the per-retry warning entries.
-- `SKILL.md` "After invoking" step 4 and Failure modes: point the "re-run only
-  if it looks like a transient codex hiccup" guidance at `--retries` as the
-  built-in automated path.
-- `codex-task.mjs` `printUsage`: mirror the flag doc (production text edit, in
-  scope — a help-contract test asserts on it).
-- No README index change (README not in scope; SKILL is the wrapper's doc
-  surface).
+- `SKILL.md` "After invoking" / Failure modes: point "re-run only if it looks
+  like a transient codex hiccup" at `--retries` as the built-in automated path.
+- `codex-task.mjs` `printUsage`: mirror the flag doc (a help-contract test
+  asserts on it).
+- No README index change (README not in scope).
 
 ### Risks and edge cases
 
-- Misclassification (primary risk). A non-transient tail that coincidentally
-  contains a transient substring would waste up to `n` retries; bounded and
-  low-cost. The higher-stakes direction — retrying durable quota/auth — is
-  guarded by the non-transient exclusion checked first. The riskiest boundary is
-  429 / "rate limit": treated as transient backpressure, while "usage/weekly
-  limit exceeded" is excluded. This split is the key judgement call.
-- Wall-clock cost. Failed attempts on capacity happened after 180s+ of work in
-  the retro; `n` retries multiply worst-case latency. `n` bounds it; default 0
-  means opt-in only; SKILL notes the cost.
+- Misclassification (primary risk). A non-transient tail containing a transient
+  substring wastes up to `n` bounded retries; the higher-stakes direction
+  (retrying durable quota/auth) is blocked by the Phase-1 exclusion checked
+  first. The key judgement call is the 429/"rate limit" boundary: transient
+  unless an explicit durable-cap phrase co-occurs. Both directions are covered by
+  named tests (2, 6).
+- Wall-clock cost. Failed capacity attempts happened after 180s+ of work; `n`
+  retries multiply worst-case latency. `n` bounds it; default 0 is opt-in; SKILL
+  notes the cost.
 - Idempotency of write tasks. Both observed transient classes fail *before* a
-  successful write (capacity = pre-work; sandbox-wrapper = apply_patch refused,
-  so nothing was written), and codex runs `--ephemeral` (fresh read each
-  attempt), so retry is as safe as the manual re-run it replaces. A transient
-  failure *after* a partial write is theoretically possible; the risk is
-  identical to today's human manual retry and is noted, not solved here.
+  successful write (capacity = pre-work; sandbox-wrapper = apply_patch refused),
+  and codex runs `--ephemeral` (fresh read each attempt), so retry is as safe as
+  the manual re-run it replaces. A transient failure *after* a partial write is
+  theoretically possible; risk is identical to today's human manual retry, noted
+  not solved.
 - Stale `lastMessagePath` across attempts: mitigated (read only after code 0;
   codex overwrites) plus optional pre-attempt unlink.
 - Test flakiness from real sleeps: eliminated by `CODEX_TASK_RETRY_DELAY_MS=0`.
 
-### Open questions (non-blocking; sensible defaults chosen)
+### Open questions (non-blocking; defaults chosen)
 
-1. `attempts` field presence: gated to `--retries > 0` to honor the
-   byte-identical acceptance criterion. Confirm the maintainer prefers that over
-   an always-present field.
-2. Backoff magnitude: proposed fixed 2000 ms (env-overridable). Acceptable, or
-   prefer 0/1000 ms?
-3. 429 / "rate limit" as transient vs the durable-quota exclusion — confirm the
-   split (retry short-term throttle, do not retry usage-cap exhaustion).
+1. `attempts` presence gated to `--retries > 0` (honors the structural
+   byte-identical contract). Confirm vs always-present.
+2. Backoff magnitude: fixed 2000 ms (env-overridable). Acceptable, or 0/1000 ms?
+3. 429 / "rate limit" transient vs durable-quota exclusion — confirm the split
+   (retry short-term throttle; do not retry usage-cap exhaustion).
 
-None of these block implementation; defaults above are ready to build.
+None block implementation.
 
 ## Implementation Notes
 
