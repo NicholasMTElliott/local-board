@@ -156,13 +156,30 @@ test("translateCodexDispatch passes through native codex-task routes with a pass
 
 test("translateCodexDispatch flags an unknown claude-subagent role as known:false without fabricating a path", () => {
   const dispatch = translateCodexDispatch({
-    route: "claude-subagent:foo",
+    route: "claude-subagent:local-board-nonexistent",
     model: null,
     prompt: null,
+    effort: "high",
     agentsDir: AGENTS_DIR,
   });
   assert.equal(dispatch.known, false);
   assert.equal(dispatch.promptPath, null);
   assert.equal(typeof dispatch.note, "string");
   assert.ok(dispatch.note.length > 0);
+  assert.equal(dispatch.effort, "high");
+});
+
+test("translateCodexDispatch threads effort unchanged onto the unrecognized-route fallback", () => {
+  const dispatch = translateCodexDispatch({
+    route: "some-unrecognized-route",
+    model: null,
+    prompt: null,
+    effort: "medium",
+    agentsDir: AGENTS_DIR,
+  });
+  assert.equal(dispatch.known, false);
+  assert.equal(dispatch.promptPath, null);
+  assert.equal(typeof dispatch.note, "string");
+  assert.ok(dispatch.note.length > 0);
+  assert.equal(dispatch.effort, "medium");
 });
