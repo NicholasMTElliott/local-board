@@ -460,3 +460,5 @@ Second re-review (terra@medium, 42s, of cbf3527): verdict: changes_requested —
 - 2026-07-10T14:25:24Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - ledger lifecycle mechanics
 
 - 2026-07-10T14:26:37Z: Completed review via codex-task:read-only@gpt-5.6-terra: Four-pass review loop closed (3 -> 2 -> 1 -> 0 findings): stamping lifecycle, identity semantics, gate-only clears, re-save exemption all verified. verdict: pass.
+
+- 2026-07-10T14:26:37Z: Ensured git branch local-board/B20260710T1225Z-check-dispatch-denies-legitimate-gate-check-consultation-dispatches-when-hooks-are-enabled (already-current).
