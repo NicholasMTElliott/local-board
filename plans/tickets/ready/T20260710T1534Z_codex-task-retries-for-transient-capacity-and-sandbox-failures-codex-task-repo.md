@@ -13,8 +13,8 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T17:50:36Z
-completedSteps: []
+updated: 2026-07-10T17:51:05Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
 # codex-task: --retries for transient capacity and sandbox failures (../codex-task repo)
@@ -330,3 +330,5 @@ None of these block implementation; defaults above are ready to build.
 ## Run Log
 
 - 2026-07-10T17:45:37Z: Ensured git branch local-board/T20260710T1534Z-codex-task-retries-for-transient-capacity-and-sandbox-failures-codex-task-repo (already-current).
+
+- 2026-07-10T17:51:05Z: Completed design via claude-subagent:local-board-designer@opus: Opt-in --retries (default 0, byte-identical omitted); classifyTransient text-pattern classifier (capacity/sandbox-wrapper) with non-transient exclusions checked first; fixed 2s backoff env-overridable; attempts field gated; fake-codex fail-N-then-succeed seam; SKILL/usage docs; local-board guidance = follow-up. Estimate 4pts basis T20260710T1533Z.
