@@ -1,7 +1,7 @@
 ---
 id: T20260710T0036Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: null
 children: []
@@ -197,3 +197,5 @@ None blocking. The two verification items (Windows real-codex smoke, exact 400 w
 - 2026-07-10T01:09:36Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design written by opus designer: --reasoning-effort flag parse->spawn->emit threading, cross-platform TOML quoting, reasoningEffort echo at all emit sites, SKILL.md GPT-5.6 tier guidance, 4 smoke tests via FAKE_CODEX_ARGV_OUT argv capture. Estimate 2.
 
 - 2026-07-10T01:10:46Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none - CLI flag passthrough, no auth/UI/UX surface
+
+- 2026-07-10T01:10:46Z: Ensured git branch local-board/T20260710T0036Z-codex-task-add-reasoning-effort-passthrough-and-gpt-5-6-model-guidance-codex-task-repo (already-current).
