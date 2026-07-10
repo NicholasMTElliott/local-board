@@ -13,8 +13,8 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:22:12Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T12:25:27Z
-completedSteps: []
+updated: 2026-07-10T12:26:04Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
 # design-review: prompt file, resources sync, and init scaffold
@@ -254,3 +254,5 @@ under Risks.
 ## Run Log
 
 - 2026-07-10T12:22:12Z: Ensured git branch local-board/T20260710T1221Z-design-review-prompt-file-resources-sync-and-init-scaffold (already-current).
+
+- 2026-07-10T12:26:04Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design with ship-ready embedded rubric (5 dimensions, first-line PASS/CONCERNS/FAIL, return-only clause, reachability guard); no code change needed for scaffold. Estimate 1 (basis T20260710T0037Z, designer-recorded).
