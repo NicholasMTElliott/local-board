@@ -13,7 +13,7 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T18:16:15Z
+updated: 2026-07-10T18:21:15Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -795,6 +795,14 @@ Verdict: changes_requested; target: implementation (codex-task:read-only, gpt-5.
 Verified clean by static inspection: routing and schema validation, fallback threading through all consultation paths, specialty-stamp clearing, sanitization, prompt forwarding, and the D7 carve-out.
 
 ## Test Evidence
+
+Verdict: pass (claude-subagent:local-board-tester@sonnet + orchestrator live probe, 2026-07-10)
+
+Automated (tester): npm run check clean; full suite 566 tests - 565 pass, 0 fail, 1 skip; skill-usage-sync + resources-sync 9/9. Board-level live byte-identical check: local-board validate on this real board (no fallbackModels configured anywhere) exits 0. Diff scope matches the declared files exactly. schema --json parses (no per-key profile enumeration exists, so nothing to assert there). Acceptance criteria covered literally by unit tests: modelAccepted matrix (tickets.test.js:939-949) and completeStep gpt-4o-refused / gpt-5.5-accepted with recorded token review:codex-task:read-only@gpt-5.5 (tickets.test.js:1227-1236).
+
+Live black-box probe (orchestrator, throwaway init board in scratchpad using this worktree's bin): review profile edited to add "fallbackModels": ["gpt-5.5"]; probe ticket at ready_for_review; begin-step surfaced configuredAgent codex-task:read-only, configuredModel gpt-5.6-terra, configuredEffort high, configuredFallbackModels ["gpt-5.5"]; complete-step --model gpt-4o refused with the actionable message naming the configured fallback ("...or a configured fallback model: gpt-5.5..."); complete-step --model gpt-5.5 accepted and recorded executor codex-task:read-only@gpt-5.5. Probe directory deleted afterward.
+
+Note: the tester's own live probe was blocked by its return-only toolset (cannot edit config files); the orchestrator ran it instead.
 
 ## Documentation Updates
 
