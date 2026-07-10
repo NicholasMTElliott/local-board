@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T01:05:10Z
 workCompletedAt: null
 created: 2026-07-10T00:36:09Z
 updated: 2026-07-10T01:09:36Z
-completedSteps: []
+completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
 # codex-task: add --reasoning-effort passthrough and GPT-5.6 model guidance (../codex-task repo)
@@ -193,3 +193,5 @@ None blocking. The two verification items (Windows real-codex smoke, exact 400 w
 - 2026-07-10T00:38:52Z: Probe evidence (2026-07-09, codex-cli 0.144.1): gpt-5.6-{sol,terra,luna} accepted via --model; -c model_reasoning_effort enum on terra = none|minimal|low|medium|high|xhigh (server 400 enumerates); sol additionally accepts max and ultra (both exit 0). Effort sets are model-dependent; do not validate client-side.
 
 - 2026-07-10T01:05:10Z: Ensured git branch local-board/T20260710T0036Z-codex-task-add-reasoning-effort-passthrough-and-gpt-5-6-model-guidance-codex-task-repo (already-current).
+
+- 2026-07-10T01:09:36Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design written by opus designer: --reasoning-effort flag parse->spawn->emit threading, cross-platform TOML quoting, reasoningEffort echo at all emit sites, SKILL.md GPT-5.6 tier guidance, 4 smoke tests via FAKE_CODEX_ARGV_OUT argv capture. Estimate 2.
