@@ -13,8 +13,8 @@ estimateBasis: T20260710T1156Z
 workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:06:56Z
-updated: 2026-07-10T13:15:59Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-10T13:16:46Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # config: scaffold defaults ship GPT-5.6 pins for review and security specialty steps
@@ -299,3 +299,5 @@ either satisfies the criterion.
 - 2026-07-10T13:11:07Z: Ensured git branch local-board/T20260710T1206Z-config-scaffold-defaults-ship-gpt-5-6-pins-for-review-and-security-specialty-steps (already-current).
 
 - 2026-07-10T13:15:59Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design: scaffold-only pins (review terra@high, security specialties sol@xhigh), DEFAULT_CONFIG unpinned, exact guard-test allowlist mechanics (agents.review line + 2 collapsed paths) with 2 pre-existing assertions flagged for update, escape-hatch comment, init-in-temp-repo test plan, T1220Z merge points enumerated. Estimate 2 (basis T20260710T1156Z, designer-recorded).
+
+- 2026-07-10T13:16:46Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none - config default values, comments, tests, docs
