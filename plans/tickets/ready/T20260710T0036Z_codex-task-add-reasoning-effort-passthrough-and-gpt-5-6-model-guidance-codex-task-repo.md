@@ -7,13 +7,13 @@ parent: null
 children: []
 blockedBy: []
 blocks: [T20260710T0037Z]
-branch: null
+branch: local-board/T20260710T0036Z-codex-task-add-reasoning-effort-passthrough-and-gpt-5-6-model-guidance-codex-task-repo
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T00:36:09Z
-updated: 2026-07-10T00:38:52Z
+updated: 2026-07-10T01:04:35Z
 completedSteps: []
 routingApprovals: []
 ---
