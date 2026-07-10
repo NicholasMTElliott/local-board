@@ -13,7 +13,7 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T17:21:39Z
+updated: 2026-07-10T17:50:33Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -748,6 +748,43 @@ from its `codexDispatch` block. Work is mechanical and reuses existing seams (no
 new architecture), realistically near the top of a 4-point band.
 
 ## Implementation Notes
+
+Implemented the Technical Design exactly as approved (six review rounds).
+
+Merge: `git merge mainline` (commit `5ed49f4`) picked up the section-payload H2 reject guard and scoped duplicate-heading validate in `src/tickets.js`, the four skill payload-note edits, and doc updates, with no conflicts. `node --test test/tickets.test.js` confirmed the merged base sound (170/170 pass, 1 skip) before starting.
+
+D6 uniform-scope rule (fallback-related field present iff the resolved profile carries a non-empty `fallbackModels`) is implemented via conditional spread at every layer: `normalizeAgentProfile`/`resolveOptionalStepAgent` (config), `fallbackModelsForAction` (`?? null`), `beginStep`/`resolveExpectedStep` results, all four ledger stamps (action/gate/specialty/design-review), `translateCodexDispatch`'s `fallbackModels` key, and the three consultation payloads' `effort`+`fallbackModels`+`codexDispatch` bundle (gate-check's `effort` field is part of the bundle, not a standalone addition). No `null` placeholders anywhere; absence is the fallback-free signal.
+
+D4 shared predicate `modelAccepted(pin, fallbackModels, actual)` (`src/tickets.js`) wired at both enforcement seams: `validateStepRouting`'s `enforceModel` branch (replacing the bare `modelSatisfies` call) and `checkDispatchForTicket`/`checkDispatchByScan` (`src/active-steps.js`), including the no-ledger `resolveExpectedStep` path. `modelSatisfies` itself is untouched (still exported, still governs the `codex-default` wildcard and its other callers).
+
+D5-finding-1: added `isSpecialtyLedgerEntry(record, action)` and extended `completeStep`'s final `clearActiveStepIf` predicate to `isActionLedgerEntry(record, action) || isSpecialtyLedgerEntry(record, action)`, so a completed specialty clears its own lingering `kind: "specialty"` stamp before `design-review-check` runs. Verified end-to-end by the full-sequence CLI test (specialty-run stamps `kind: "specialty"` -> its own `complete-step` clears it -> `design-review-check` stamps `action`/`design-review` with no conflict -> `check-dispatch` accepts the pinned model and the configured fallback, rejects an unlisted model).
+
+D7 carve-out preserved as designed and NOT fixed: a fallback-free `claude-subagent:` `agents["design-review"]` route still writes no ledger stamp (asserted by a dedicated legacy-shape test documenting the limitation), and the no-ledger `check-dispatch` path still resolves only the ticket's status action, not the specific pending specialty/gate/design-review action.
+
+`translateCodexDispatch` (`src/codex-dispatch.js`) gained a `fallbackModels` parameter: sanitized (same `sanitizeModel` rule as `model`) and added to the returned object only when the input is a non-empty array; omitted entirely when null/undefined. Every consultation command (`commandGateCheck`, `commandSpecialtyRun`, `commandDesignReviewCheck` in `src/cli.js`) now routes through this shared seam, passing its own resolved `effort` (never hardcoded `null`) and its already-resolved `prompt: promptPath`, closing finding 5 (a fallback-configured codex-task consultation's `codexDispatch.promptPath` was previously `null`).
+
+Deviation from the literal config-normalization test-message text: adding `fallbackModels?` to the two grammar-string error messages in `src/config.js` required updating one pre-existing exact-regex assertion in `test/config.test.js` (`loadConfig rejects a malformed optionalSteps[].agent object`) to match the extended message. No behavior change, message text only.
+
+No changes to `plans/prompts/**`, so `npm run sync-resources` was not required; the CLI Commands fenced blocks (`## CLI Commands` headings) in both skills are untouched (no new command/flag).
+
+**Verification**
+
+- `npm run check`: clean (no output = pass).
+- `node --test` (full suite): 566 tests, 565 pass, 1 skip (pre-existing slow smoke test, unaffected), 0 fail.
+- `node --test test/skill-usage-sync.test.js test/resources-sync.test.js`: 9/9 pass.
+- `node ./bin/local-board.js validate --root <worktree>`: exit 0 ("Ticket validation OK").
+
+**Commits (on this branch, in order)**
+
+- `5ed49f4` — merge mainline (instructed, pre-existing base check).
+- `b981ff4` — `T20260710T1532Z: config schema for ordered fallbackModels on agent profiles` (`src/config.js`, `test/config.test.js`).
+- `a70165a` — `T20260710T1532Z: thread fallbackModels through routing, dispatch, and CLI` (`src/tickets.js`, `src/active-steps.js`, `src/codex-dispatch.js`, `src/cli.js`, and their four test files).
+- `1905cb0` — `T20260710T1532Z: document the fallback model walk in skills and CodexSupport` (`SKILL.md`, `skills/codex/local-board/SKILL.md`, `docs/CodexSupport.md`).
+
+**Remaining risks**
+
+- D7's two carved-out pre-existing gaps (fallback-free `claude-subagent:` design-review hook rejection; no-ledger `check-dispatch` narrowing to the status action) remain open, as scoped — follow-up tickets are the orchestrator's call per the design.
+- `docs/Workflow.md`'s "Agent Routing" section still documents the pre-`effort`-era `{ route, model?, prompt? }` grammar (missing `effort` too, predating this ticket) and was left untouched — out of this ticket's explicit doc scope (`docs/CodexSupport.md` only), but worth a follow-up doc-accuracy pass.
 
 ## Review Findings
 
