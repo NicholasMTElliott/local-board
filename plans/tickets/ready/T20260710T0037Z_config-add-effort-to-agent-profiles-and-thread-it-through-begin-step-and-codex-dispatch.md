@@ -5,19 +5,18 @@ status: ready_for_design
 priority: P2
 parent: null
 children: []
-blockedBy: []
+blockedBy: [T20260710T0036Z]
 blocks: []
 branch: null
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
+created: 2026-07-10T00:36:10Z
+updated: 2026-07-10T00:36:18Z
 completedSteps: []
 routingApprovals: []
-created: 2026-07-10T00:36:10Z
-updated: 2026-07-10T00:36:10Z
 ---
-
 # config: add effort to agent profiles and thread it through begin-step and codex dispatch
 
 ## Requirement
