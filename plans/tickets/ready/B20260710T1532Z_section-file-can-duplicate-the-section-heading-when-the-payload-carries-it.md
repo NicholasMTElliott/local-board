@@ -13,8 +13,8 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T16:44:53Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
+updated: 2026-07-10T16:45:40Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet"]
 routingApprovals: []
 ---
 # section --file can duplicate the section heading when the payload carries it
@@ -226,3 +226,5 @@ Commit note: the documentation commit could not be created in this sandbox becau
 - 2026-07-10T16:40:06Z: Docs stage exposed an operational defect: the new validate duplicate-heading check hard-fails ~40 legacy done/archived tickets on this board (exit 1), breaking every preflight/closeout validate once merged. Probe-board test could not see this. Design amendment (within the design's own 'or design justifies why not' latitude): enforce the duplicate check only for tickets whose status is not done/archived - immutable closed history must not force history rewrites; live tickets keep the hard guard. Looping back to implementation for the scoped fix.
 
 - 2026-07-10T16:40:06Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku, review:codex-task:read-only@gpt-5.6-terra, test:claude-subagent:local-board-tester@sonnet, gate:test:skipped-empty-catalog].
+
+- 2026-07-10T16:45:40Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Scoped validate duplicate-heading pass to non-done/non-archived statuses via existing isClosedStatus (b03c0bf); parametrized exemption tests; reject guard untouched; board validate now exit 0; full suite 533/0/1. Prior work 192d9b9+137620a+013f3ea.
