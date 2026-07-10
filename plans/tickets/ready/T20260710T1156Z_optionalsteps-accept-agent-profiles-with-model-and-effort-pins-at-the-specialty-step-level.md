@@ -13,7 +13,7 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:14:10Z
 workCompletedAt: null
 created: 2026-07-10T11:56:26Z
-updated: 2026-07-10T13:02:06Z
+updated: 2026-07-10T13:02:07Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -301,3 +301,5 @@ Re-review: verdict: pass (codex-task:read-only, gpt-5.6-terra @ reasoning-effort
 - 2026-07-10T12:56:23Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - config schema fixes + docs
 
 - 2026-07-10T13:02:06Z: Completed review via codex-task:read-only@gpt-5.6-terra: Initial changes_requested (3 findings, terra@high) fixed in c4ed945; focused re-review verdict: pass (terra@medium). No open findings.
+
+- 2026-07-10T13:02:07Z: Ensured git branch local-board/T20260710T1156Z-optionalsteps-accept-agent-profiles-with-model-and-effort-pins-at-the-specialty-step-level (already-current).
