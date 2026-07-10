@@ -13,7 +13,7 @@ estimateBasis: T20260710T1222Z
 workStartedAt: 2026-07-10T14:16:04Z
 workCompletedAt: null
 created: 2026-07-10T12:20:26Z
-updated: 2026-07-10T14:28:05Z
+updated: 2026-07-10T14:31:37Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -325,6 +325,20 @@ All four skill files state: first-line TEXT verdict (`PASS`/`CONCERNS`/`FAIL`, n
 - `node ./bin/local-board.js validate --root <worktree>`: "Ticket validation OK".
 
 ## Review Findings
+
+verdict: changes_requested; target: implementation
+
+(codex-task:read-only, gpt-5.6-terra @ reasoning-effort high, 161s — reviewed commit 61812c2)
+
+1. Medium — skills/codex/local-board/SKILL.md:261, skills/codex/local-team/SKILL.md:46 [ACCEPTED]: the Codex flows tell orchestrators to translate a claude-subagent:* design reviewer through codexDispatch, but design-review-check returns no codexDispatch object. Fix: instruct Codex orchestrators to run begin-step <ticket-id> --action design-review --harness codex --json for the sanitized dispatch model and evidenceExecutor (@codex-default when appropriate).
+
+2. Medium — SKILL_TEAM.md:139 [ACCEPTED]: "pass effort" is stated without the mechanism; the scaffolded codex-task:read-only reviewer could be dispatched without --reasoning-effort. Fix: state the codex-task rule explicitly, conditional on non-null effort.
+
+3. Low — SKILL_TEAM.md:137, skills/codex/local-team/SKILL.md:46 [ACCEPTED]: team flows say the step is skipped on flag-off but omit the shipped refusal behavior of design-review-check (rejects naming routing.requireDesignReview). Fix: add the refusal sentence to both team flows.
+
+Reviewer-verified clean: command signatures match usage; CLI blocks byte-identical; REQUIRED_COMMANDS test fails if either line is dropped; verdict + loop-back semantics match the shipped recorder and precondition. (Reviewer sandbox could not spawn test workers; suite verification with the test stage.)
+
+Disposition: all three accepted; loop-back for a prose fix pass.
 
 ## Test Evidence
 
