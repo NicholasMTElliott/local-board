@@ -264,3 +264,5 @@ under Risks.
 - 2026-07-10T12:30:38Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Commit 6f31997: design_review.md prompt + byte-identical resources mirror (sync-resources). resources-sync and prompt-scaffold suites pass; 2 install.test.js failures flagged pre-existing/environment (PATH-detection), not caused by this change - to be verified at test stage.
 
 - 2026-07-10T12:33:40Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - prompt markdown + mirror only
+
+- 2026-07-10T12:33:40Z: Ensured git branch local-board/T20260710T1221Z-design-review-prompt-file-resources-sync-and-init-scaffold (already-current).
