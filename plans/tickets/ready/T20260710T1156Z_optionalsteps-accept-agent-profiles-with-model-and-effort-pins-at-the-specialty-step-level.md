@@ -13,8 +13,8 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:14:10Z
 workCompletedAt: null
 created: 2026-07-10T11:56:26Z
-updated: 2026-07-10T12:20:43Z
-completedSteps: []
+updated: 2026-07-10T12:22:09Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
 # optionalSteps: accept agent profiles with model and effort pins at the specialty-step level
@@ -222,3 +222,5 @@ None blocking. The one genuine decision — `specialty-run` field naming — is 
 ## Run Log
 
 - 2026-07-10T12:14:10Z: Ensured git branch local-board/T20260710T1156Z-optionalsteps-accept-agent-profiles-with-model-and-effort-pins-at-the-specialty-step-level (already-current).
+
+- 2026-07-10T12:22:09Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design written by opus designer: shared normalizeAgentProfile via label+allowPrompt param, normalizeOptionalStepAgent (string stays string), specialty-aware profileForAction as the single enforcement seam, scanner reads entry.agent.route. Estimate 2 (basis T20260710T0037Z, designer-recorded).
