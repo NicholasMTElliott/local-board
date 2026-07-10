@@ -1,7 +1,7 @@
 ---
 id: T20260710T1223Z
 type: task
-status: ready_for_review
+status: ready_for_implementation
 priority: P2
 parent: S20260710T1206Z
 children: []
@@ -13,8 +13,8 @@ estimateBasis: T20260710T1222Z
 workStartedAt: 2026-07-10T14:16:04Z
 workCompletedAt: null
 created: 2026-07-10T12:20:26Z
-updated: 2026-07-10T14:31:37Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-10T14:31:38Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # design-review: skill and docs updates for both flows
@@ -361,3 +361,5 @@ Disposition: all three accepted; loop-back for a prose fix pass.
 - 2026-07-10T14:26:38Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Commit 61812c2: Design Review narrative in all four skill files, byte-identical CLI Commands additions, REQUIRED_COMMANDS sync test, docs/Workflow.md section. 511 pass + 2 known-pre-merge PATH failures; skill-sync 5/5; validate OK.
 
 - 2026-07-10T14:28:05Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - prose and sync-test only
+
+- 2026-07-10T14:31:38Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
