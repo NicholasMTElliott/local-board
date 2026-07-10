@@ -13,7 +13,7 @@ estimateBasis: T20260710T1220Z
 workStartedAt: 2026-07-10T13:25:24Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T14:01:38Z
+updated: 2026-07-10T14:03:10Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -448,7 +448,9 @@ verdict: changes_requested; target: implementation
 
 Reviewer-verified clean: flag-off refusal exit codes; assertInvocationRootForTicket ordering before lock/commit; no ledger write in check (and no hook-dispatch reason for one — checkDispatch short-circuits non-local-board agents; the merged B1225Z stamping is claude-subagent-scoped); JSON/plain parity; ticketContext parity with gate-check. Reviewer sandbox could not run the suite; verification stays with the test stage.
 
-Disposition: findings 1, 3, 4 loop back for a fix pass; finding 2 deferred to T20260710T1223Z.
+Disposition: findings 1, 3, 4 fixed in e535c63; finding 2 deferred to T20260710T1223Z.
+
+Re-review: verdict: pass (terra@medium, 36s). Refusal text gives the real two-command recovery with arguments and the E2E asserts both clauses; regex updates strengthen coverage; [--json] usage asserted; all four coverage paths genuinely tested; scope clean, SKILL files untouched.
 
 ## Test Evidence
 
