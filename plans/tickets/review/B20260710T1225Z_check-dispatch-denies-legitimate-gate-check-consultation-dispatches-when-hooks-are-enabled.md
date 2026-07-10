@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:25:41Z
-updated: 2026-07-10T14:10:49Z
+updated: 2026-07-10T14:15:46Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -390,7 +390,9 @@ Reviewer-verified clean: ESM cycle load-safe (deferred-function references only;
 
 Disposition: all three findings accepted; fixed in cbf3527; re-reviewed.
 
-Re-review (terra@medium, 42s): verdict: changes_requested — identity semantics incomplete. (a) stampActiveStepNoClobber's idempotent match compares only kind/route/model, ignoring action and stage: two specialties sharing a route/model, or gates for different stages, wrongly overwrite each other. (b) Same-kind clears remain too broad: a stale completion can erase a NEWER record of the same kind; predicates must compare the full stamped identity (action/stage/route/model or a unique id) under the lock. Verified fixed: worktree existence check + fallback (with test); lock discipline of the new primitives; scope. Second fix pass dispatched for (a) and (b).
+Third review (terra@medium, 55s, of identity pass 02e3dac): verdict: changes_requested — ONE residual: recordGateConsultation clears any gate OR specialty record with the same stage (no kind/action identity), so a stale gate-complete --stage design can erase a newer specialty stamp in design. Verified fixed: full idempotent-match identity with both collision tests (would fail pre-fix); action-identity clears with the stale-different-stage test; scope clean. Judgment recorded: moveTicket's broad consultation cleanup is CORRECT for real moves (a move abandons the pending dispatch); same-status re-saves clearing stamps is a minor edge to decide in the fix.
+
+Second re-review (terra@medium, 42s, of cbf3527): verdict: changes_requested — identity semantics incomplete. (a) stampActiveStepNoClobber's idempotent match compares only kind/route/model, ignoring action and stage: two specialties sharing a route/model, or gates for different stages, wrongly overwrite each other. (b) Same-kind clears remain too broad: a stale completion can erase a NEWER record of the same kind; predicates must compare the full stamped identity (action/stage/route/model or a unique id) under the lock. Verified fixed: worktree existence check + fallback (with test); lock discipline of the new primitives; scope. Second fix pass dispatched for (a) and (b).
 
 ## Test Evidence
 
