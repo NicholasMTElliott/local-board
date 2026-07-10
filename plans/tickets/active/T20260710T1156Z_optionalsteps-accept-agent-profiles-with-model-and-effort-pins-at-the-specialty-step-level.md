@@ -13,7 +13,7 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:14:10Z
 workCompletedAt: null
 created: 2026-07-10T11:56:26Z
-updated: 2026-07-10T12:48:29Z
+updated: 2026-07-10T12:53:46Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -210,6 +210,47 @@ Update the Specialty Steps prose (not the `## CLI Commands` fenced block — tha
 None blocking. The one genuine decision — `specialty-run` field naming — is settled above (keep `agent`/`model`/`effort`; document the divergence from begin-step).
 
 ## Implementation Notes
+
+Review-fix pass (commit c4ed945) addressing the three accepted Review Findings:
+
+1. High — specialty/statusActions collision: `normalizeOptionalSteps` (src/config.js)
+   now computes `effectiveStatusActionNames` from the merged `workflow.statusActions`
+   map (status -> action) and rejects any optionalSteps entry name found there,
+   replacing the fixed `MANDATORY_ACTION_NAMES` set (removed). The error names
+   both sites: `optionalSteps.<stage> entry name "<name>" collides with a
+   mandatory action: workflow.statusActions.<status> is "<name>"; rename the
+   specialty entry or change that statusActions value`. This closes the gap
+   where a custom `statusActions` override (e.g. `ready_for_implementation:
+   "custom_gate"`) plus a same-named specialty entry validated but would have
+   been misclassified as mandatory by `profileForAction` (src/tickets.js),
+   which classifies purely by `statusActions` value membership. Regression
+   test: "loadConfig rejects an optionalSteps entry name colliding with a
+   custom statusActions value" (test/config.test.js).
+
+2. Low — prompt: null bypass: `normalizeAgentProfile`'s `allowPrompt: false`
+   branch now checks `Object.hasOwn(value, "prompt")` instead of
+   `prompt !== undefined && prompt !== null`, so a specialty agent profile
+   that owns a `prompt` key with a `null` value is rejected with the same
+   actionable message, closing the bypass. Regression test: "loadConfig
+   rejects a null-valued prompt field inside an optionalSteps[].agent
+   profile" (test/config.test.js).
+
+3. Medium — docs/Workflow.md: documented the `{ route, model?, effort? }`
+   optionalSteps agent profile form (alongside the existing bare-route-string
+   sugar) in the Optional Steps section, including the load-time
+   name-collision rule and the profile-prompt rejection (including null).
+   Added `model`/`effort` (null when unset) to the `specialty-run --json`
+   example payload and documented the dispatch rule: pin the resolved model
+   at dispatch and record it in completion evidence the same way mandatory
+   steps do; effort is a dispatch hint only and never enters
+   `completedSteps` evidence.
+
+Verification: `npm run check` green; `npm test` — 477 pass, 2 known-baseline
+`install.test.js` PATH-verification failures (B20260710T1232Z), 1 skip, 0
+other failures; `node ./bin/local-board.js validate --root <worktree>` —
+"Ticket validation OK".
+
+Files changed: src/config.js, test/config.test.js, docs/Workflow.md.
 
 ## Review Findings
 
