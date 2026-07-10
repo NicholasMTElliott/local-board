@@ -27,6 +27,7 @@ import {
   moveTicket,
   nextTicket,
   parseFrontMatter,
+  parseMarkdownTicket,
   queryNext,
   queryTicket,
   recordDesignReview,
@@ -741,16 +742,23 @@ test("setTicketSection is idempotent across a double round-trip for plain conten
     await setTicketSection(root, ticketId, "Implementation Notes", payload, {
       now: new Date("2026-05-14T21:06:00Z"),
     });
-    const firstRead = getSectionText(await readFile(ticketPath, "utf8"), "Implementation Notes");
+    const firstText = await readFile(ticketPath, "utf8");
+    const firstRead = getSectionText(firstText, "Implementation Notes");
+    // Isolate the body (post-front-matter markdown) so the byte-for-byte
+    // comparison below is not tripped up by the front matter `updated`
+    // timestamp, which legitimately differs between the two writes.
+    const firstBody = parseMarkdownTicket(firstText).body;
 
     await setTicketSection(root, ticketId, "Implementation Notes", firstRead, {
       now: new Date("2026-05-14T21:07:00Z"),
     });
     const secondText = await readFile(ticketPath, "utf8");
     const secondRead = getSectionText(secondText, "Implementation Notes");
+    const secondBody = parseMarkdownTicket(secondText).body;
 
     assert.equal(firstRead, payload);
     assert.equal(secondRead, payload);
+    assert.equal(secondBody, firstBody);
     assert.equal((secondText.match(/^## Implementation Notes$/gm) ?? []).length, 1);
     assert.deepEqual(validate(await discover(root)), []);
   });
