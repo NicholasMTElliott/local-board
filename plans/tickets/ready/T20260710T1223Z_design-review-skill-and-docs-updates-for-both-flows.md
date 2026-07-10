@@ -13,7 +13,7 @@ estimateBasis: T20260710T1222Z
 workStartedAt: 2026-07-10T14:16:04Z
 workCompletedAt: null
 created: 2026-07-10T12:20:26Z
-updated: 2026-07-10T14:49:08Z
+updated: 2026-07-10T14:51:29Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -390,6 +390,18 @@ Acceptance criteria: all three PASS.
 Anomalies: none.
 
 ## Documentation Updates
+
+Documentation step executed by codex-task:workspace-write (gpt-5.6-luna @ reasoning-effort medium, 104s); edit committed by the orchestrator on the ticket branch.
+
+Changed:
+
+- memory-bank/systemPatterns.md: four-flow design-review documentation fact (single-ticket + team, Claude + Codex voices); REQUIRED_COMMANDS enforcement fact for the design-review command pair; curated CLI Commands block count corrected 27 -> 29.
+
+Checked and deliberately left alone:
+
+- memory-bank/techContext.md, README.md — no changes needed; CLI blocks verified still byte-identical.
+
+Validation: prose-only change (this ticket's own code commits already carried the skill/docs/test edits).
 
 ## Questions
 
