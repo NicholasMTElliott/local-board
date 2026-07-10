@@ -13,8 +13,8 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T13:48:46Z
 workCompletedAt: null
 created: 2026-07-10T12:32:28Z
-updated: 2026-07-10T13:59:20Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-10T14:00:49Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet"]
 routingApprovals: []
 ---
 # install tests consult the real PATH and fail on machines with local-board globally installed
@@ -315,3 +315,5 @@ No production code changed; no new test dependencies.
 - 2026-07-10T13:55:18Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none - test-only hermeticity fix
 
 - 2026-07-10T13:55:18Z: Ensured git branch local-board/B20260710T1232Z-install-tests-consult-the-real-path-and-fail-on-machines-with-local-board-globally-installed (already-current).
+
+- 2026-07-10T14:00:49Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Commit 400a400: both PATH-verification tests rewritten onto the resolvesOnPath seam (predicate spares codex), packaged copy via pathToFileURL, sanity flip verified then reverted. Full suite 496 pass / 0 fail / 1 pre-existing skip (x2 runs). Noted separate pre-existing worktrees.test.js flake (stale fixed-name temp dir).
