@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T12:22:11Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
 updated: 2026-07-10T13:18:16Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet"]
 routingApprovals: []
 ---
 # design-review: routing flag, move precondition, and evidence recorder
@@ -439,3 +439,5 @@ Anomalies: none beyond the tracked baseline.
 - 2026-07-10T13:13:02Z: Completed review via codex-task:read-only@gpt-5.6-terra: Initial changes_requested (2 findings, terra@high) fixed in 18c0580; focused re-review verdict: pass (terra@medium). No open findings.
 
 - 2026-07-10T13:13:02Z: Ensured git branch local-board/T20260710T1220Z-design-review-routing-flag-move-precondition-and-evidence-recorder (already-current).
+
+- 2026-07-10T13:18:16Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. 491/494 (2 = exact B1232Z baseline); AC1-AC6 all pass; inertness flip and token strictness probed live; guardrail honored.
