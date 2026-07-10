@@ -258,7 +258,7 @@ local-board design-review-check <ticket-id> --json
 
 It returns `agent` (route, default `codex-task:read-only`), `model` (`gpt-5.6-sol`), `effort` (`xhigh`), the resolved `prompt` (`plans/prompts/steps/design_review.md`), and a narrow `ticketContext`. It performs no dispatch and stamps nothing.
 
-Dispatch the reviewer through the returned route: for `codex-task:read-only`, pass `--model <model>` and `--reasoning-effort <effort>`; for a `claude-subagent:*` reviewer route, translate it through `codexDispatch` the same as any other subagent route. The reviewer is read-only and return-only.
+Dispatch the reviewer through the returned route: for `codex-task:read-only`, pass `--model <model>` and `--reasoning-effort <effort>`. For a `claude-subagent:*` reviewer route, `design-review-check` alone does not return a `codexDispatch` block — instead run `begin-step <ticket-id> --action design-review --harness codex --json` to obtain the sanitized `codexDispatch` block (its `model`, already `null` when no valid Codex model id exists, and `evidenceExecutor`, `@codex-default` in that case) and dispatch from that. The reviewer is read-only and return-only.
 
 Parse the **first line** of the reviewer's reply — exactly one verdict token, `PASS` / `CONCERNS` / `FAIL`, followed by any numbered findings. Do not `JSON.parse`; the verdict contract is first-line TEXT, unlike gate-check's JSON.
 

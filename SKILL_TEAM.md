@@ -136,12 +136,17 @@ scheduling cache and is cheap to rebuild after a compaction.
      classify.
    - For the `design` stage specifically, after gate-check and before moving to
      `ready_for_implementation`, when `routing.requireDesignReview` is on:
-     resolve `design-review-check`, dispatch the returned reviewer route (pin
-     `model`, pass `effort`), parse the first-line `PASS`/`CONCERNS`/`FAIL`
+     resolve `design-review-check`, dispatch the returned reviewer route pinning
+     `model` at dispatch, and passing `effort`: for a `codex-task:*` route pass
+     `--reasoning-effort <effort>` when `effort` is non-null (a `claude-subagent:*`
+     route's effort remains frontmatter-static, not passed at dispatch) — parse
+     the first-line `PASS`/`CONCERNS`/`FAIL`
      verdict (never JSON), record it via `design-review-complete` with the
      resolved executor/model, and on `FAIL` move to `ready_for_design` with the
      findings as input — the loop-back strips both `design` and `design-review`
-     evidence. Skipped on boards where the flag is off.
+     evidence. Skipped on boards where the flag is off; `design-review-check`
+     refuses (naming `routing.requireDesignReview`) if run on a flag-off board
+     anyway.
    - Choose the next status from the returned `transitions` and `move`. If the
      ticket continues, dispatch its next step. If it hits `questions`/`blocked`,
      surface it and drop it from in-flight (keep in `assignedLog`).
