@@ -10,7 +10,7 @@ blocks: []
 branch: local-board/B20260710T1225Z-check-dispatch-denies-legitimate-gate-check-consultation-dispatches-when-hooks-are-enabled
 estimate: null
 estimateBasis: null
-workStartedAt: null
+workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:25:41Z
 updated: 2026-07-10T13:11:07Z
@@ -72,3 +72,5 @@ Dispatching the gate agent without the "Ticket: <id>" first line — the hook's 
 ## Run Log
 
 - 2026-07-10T12:42:29Z: Second facet observed: when no ledger entry exists, checkDispatchForTicket resolves expected route from the ticket file under the HOOK'S cwd (main checkout), not the ticket's registered worktree - so a worktree-local status advance (ready_for_design -> ready_for_implementation) is invisible and the fallback denies a correctly-routed dispatch against stale status. Fix should resolve the ticket via its registered worktree root (worktrees registry) or treat main-root staleness as unverifiable (fail open).
+
+- 2026-07-10T13:11:07Z: Ensured git branch local-board/B20260710T1225Z-check-dispatch-denies-legitimate-gate-check-consultation-dispatches-when-hooks-are-enabled (already-current).
