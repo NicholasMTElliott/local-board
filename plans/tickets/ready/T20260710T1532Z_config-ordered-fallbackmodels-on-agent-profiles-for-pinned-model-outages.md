@@ -13,7 +13,7 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T16:59:17Z
+updated: 2026-07-10T17:10:18Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -722,3 +722,5 @@ seams (no new architecture), realistically near the top of a 4-point band.
 - 2026-07-10T16:33:47Z: Design review #3 (sol@xhigh): FAIL, narrower. [High] design-review dispatch IS hook-gated when agents[design-review] routes to a claude-subagent: commandDesignReviewCheck stamps nothing, so check-dispatch falls back to status action and rejects the reviewer; stamp a design-review action record (with conditional fallbackModels) or require begin-step --action design-review in both harnesses; add hook-dispatch test. [Medium] gate-check translation passes effort:null, losing configured effort on the fallback walk; pass gateProfile.effort through payload + translateCodexDispatch, test effort preservation. Disposition: revision #3 (findings mechanical).
 
 - 2026-07-10T16:51:04Z: Design review #4 (sol@xhigh): FAIL. [High] DR stamp unreachable after a delegated design specialty: specialty-run leaves kind:specialty record, completeStep clears only action records, sweep happens post-move, so stampActiveStepNoClobber conflicts and the hook rejects the reviewer; clear the matching specialty entry on its complete-step + sequence test. [High] Byte-identical criterion violated: gate-check unconditionally emits effort; DR stamp created for every claude-subagent route even without fallbacks. Disposition: revision #4 - conditional-on-fallbacks everywhere; pre-existing fallback-free claude-subagent DR hook rejection carved out to follow-up ticket. Round-5 FAIL on new blockers escalates to questions.
+
+- 2026-07-10T17:10:18Z: Design review #5 (sol@xhigh): FAIL, single finding. [High] All three consultation translateCodexDispatch calls omit prompt: promptPath, so fallback-configured codex payloads carry promptPath:null and cannot dispatch from their codexDispatch blocks; pass prompt through all three + retention test (block still absent without fallbacks). All prior resolutions verified holding. Disposition: minimal revision #5; round 6 hard stop.
