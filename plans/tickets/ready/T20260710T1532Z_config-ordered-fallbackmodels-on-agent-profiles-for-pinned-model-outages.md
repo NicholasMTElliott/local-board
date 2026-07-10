@@ -13,8 +13,8 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T18:36:51Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+updated: 2026-07-10T18:37:49Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # config: ordered fallbackModels on agent profiles for pinned-model outages
@@ -863,3 +863,5 @@ Commit: attempted `T20260710T1532Z: docs document fallbackModels routing`, but t
 - 2026-07-10T18:16:15Z: Completed review via codex-task:read-only@gpt-5.6-terra: pass on focused re-review (39dac82); prior full review (terra@high) verified all functional invariants clean
 
 - 2026-07-10T18:21:16Z: Completed test via claude-subagent:local-board-tester@sonnet: pass: suite 565/0/1, sync 9/9, real-board validate exit 0 (live byte-identical check); orchestrator live probe on throwaway board verified begin-step fallback surface, gpt-4o refusal naming the fallback, gpt-5.5 acceptance token
+
+- 2026-07-10T18:37:49Z: Completed document via codex-task:workspace-write: Workflow.md profile prose + strict-routing acceptance sentence, PerStepOrchestration.md per-step pin note, systemPatterns + techContext current-state facts; CodexSupport + skills done at implement. Sync tests 9/9.
