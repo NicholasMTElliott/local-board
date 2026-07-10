@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T18:58:08Z
+updated: 2026-07-10T19:02:02Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -261,3 +261,5 @@ unchanged.
 - 2026-07-10T18:32:21Z: Design re-review (sol@xhigh): FAIL. [High] Lane clear not atomic: moveTicket publishes status before clearing and swallows clear failures; unlocked beginStep can re-stamp after the clear; sequential test misses all interleavings. Disposition: revision #2 - clear moves INSIDE moveTicket's locked span BEFORE publish, lane move fails closed (falls back to --override path) if the clear errors; the beginStep-no-shared-lock interleaving is pre-existing systemic (identical for the gate/specialty sweep) and will be documented as out of scope with a rationale. Round 3 = hard stop.
 
 - 2026-07-10T18:55:42Z: Design review #3 (sol@xhigh): FAIL. [High] clearActiveStepIf reads via readLedgerSelfHeal which converts corrupt/unreadable ledgers to {} - the lane clear silently no-ops instead of throwing, so fail-closed does not hold on transient read failures. Orchestrator hard-stop decision: DESCOPE per the Requirement's own latitude (lane adoption was design-optional). Part 1 advisory ships; Part 2 lane is REJECTED with rationale - three review rounds surfaced stale-authorization, publish-ordering, and self-heal-vs-fail-closed edges, disproportionate to removing --override ceremony for a rare authoring mistake. --override remains the correction path.
+
+- 2026-07-10T19:02:02Z: Design review #4 (sol@xhigh): CONCERNS - 2 Medium wording fixes for the implementer: (1) opening says defaults-off but invocation is unconditional - phrase as warning-only for existing boards; (2) warning's suggested correction must use the working form move <id> <status> --override --reason <text> (plain move is refused under enforceTransitions). Disposition: proceed to implementation with both folded in.
