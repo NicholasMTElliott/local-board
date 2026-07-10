@@ -1,7 +1,7 @@
 ---
 id: B20260710T1232Z
 type: bug
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: null
 children: []
@@ -271,3 +271,5 @@ test-only.
 - 2026-07-10T13:54:26Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design: test-only fix via existing options.resolvesOnPath seam with predicate (command) => command !== 'local-board' (T0035Z contract preserved); root cause = nvm-windows nodeDir == npm global prefix defeats PATH sanitization; clone-mode in-process + packaged-copy dynamic import, no seam widening. Estimate 1 (basis B20260708T0459Z, designer-recorded).
 
 - 2026-07-10T13:55:18Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none - test-only hermeticity fix
+
+- 2026-07-10T13:55:18Z: Ensured git branch local-board/B20260710T1232Z-install-tests-consult-the-real-path-and-fail-on-machines-with-local-board-globally-installed (already-current).
