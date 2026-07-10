@@ -13,7 +13,7 @@ estimateBasis: T20260710T1222Z
 workStartedAt: 2026-07-10T14:16:04Z
 workCompletedAt: null
 created: 2026-07-10T12:20:26Z
-updated: 2026-07-10T14:21:54Z
+updated: 2026-07-10T14:25:32Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -303,6 +303,26 @@ either way); an implementer may include it if a later reviewer prefers full
 surface parity.
 
 ## Implementation Notes
+
+## Implementation Notes
+
+Prose-and-test-only change, implemented exactly per Technical Design; no source changes.
+
+- `SKILL.md`: added `## Design Review` narrative section between `## Specialty Steps` and `## Delegation` (8-point description condensed to skill voice); added the two byte-identical `design-review-check` / `design-review-complete` lines to the `## CLI Commands` block, immediately after `specialty-run` (`--allow-main-root` omitted, matching the block's existing `gate-check`/`gate-complete`/`specialty-run` convention).
+- `skills/codex/local-board/SKILL.md`: added `## Design Review` narrative section between `## Gate-Check and Specialty Steps` and `## Done and Auto-Merge`, Codex voice (`codex-task:read-only` `--model`/`--reasoning-effort`, or `codexDispatch` translation for a `claude-subagent:` reviewer route); added the same two byte-identical CLI Commands lines after `specialty-run`.
+- `SKILL_TEAM.md`: extended Control-loop step 4 ("On completion") with an adjacent bullet describing the design-stage design-review step (resolve, dispatch with model/effort pins, parse first-line verdict, record, FAIL loop-back). No CLI Commands block in this file (by design).
+- `skills/codex/local-team/SKILL.md`: extended Wave-Barrier Scheduling step 4 with the same design-review description in Codex voice. No CLI Commands block here either.
+- `test/skill-usage-sync.test.js`: added `REQUIRED_COMMANDS = ["design-review-check", "design-review-complete"]` and a new test asserting both files' CLI Commands blocks contain the required design-review command surface (additive; reuses existing `extractSkillBlock`/`extractSkillBlockCommandNames` helpers).
+- `docs/Workflow.md`: added a `## Design Review` narrative section between `## Optional Steps` (ends at the `specialty-run` JSON block) and `## Estimation`, covering the `requireDesignReview` flag semantics, step order, the first-line TEXT verdict contract, and the loop-back/`invalidateOnLoopBack` interaction with the `design` token. No README change needed (no new doc file); no memory-bank change needed (already current per design).
+
+All four skill files state: first-line TEXT verdict (`PASS`/`CONCERNS`/`FAIL`, never JSON), FAIL loop-back strips both `design-review` and `design` evidence, and the step is skipped (and `design-review-check` refuses) on `routing.requireDesignReview`-off boards.
+
+### Test Evidence
+
+- `npm run check`: clean (no output, zero exit).
+- `npm test`: 514 tests, 511 pass, 2 fail, 1 skipped. The 2 failures are the pre-existing `test/install.test.js` PATH-verification tests (`PATH verification failure (real PATH, clone/git-checkout mode): guidance recommends npm link` and `PATH verification failure (packaged/no-.git tree): guidance omits npm link`), predating the B20260710T1232Z merge on mainline — expected per the dispatch brief, nothing else failed.
+- `node --test test/skill-usage-sync.test.js`: 5/5 pass, including the new required-command-surface test.
+- `node ./bin/local-board.js validate --root <worktree>`: "Ticket validation OK".
 
 ## Review Findings
 
