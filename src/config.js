@@ -369,9 +369,9 @@ export async function loadConfig(root = ".") {
 }
 
 // Normalize the agents map so every entry is a profile object
-// { route, model?, effort?, prompt? }. A bare string is sugar for { route },
-// so legacy configs and DEFAULT_CONFIG (which use route strings) load
-// unchanged.
+// { route, model?, effort?, prompt?, fallbackModels? }. A bare string is sugar
+// for { route }, so legacy configs and DEFAULT_CONFIG (which use route
+// strings) load unchanged.
 function normalizeAgents(merged) {
   if (!isObject(merged.agents)) {
     throw new Error("agents must be an object");
@@ -400,11 +400,11 @@ function normalizeAgentProfile(value, label, { allowPrompt = true } = {}) {
   }
   if (!isObject(value)) {
     throw new Error(
-      `${label} must be a route string or a { route, model?, effort?, prompt? } object`,
+      `${label} must be a route string or a { route, model?, effort?, prompt?, fallbackModels? } object`,
     );
   }
 
-  const { route, model, effort, prompt } = value;
+  const { route, model, effort, prompt, fallbackModels } = value;
   if (typeof route !== "string" || !isValidAgentRoute(route)) {
     throw new Error(
       `${label} requires a valid route string; got ${JSON.stringify(route)}`,
@@ -424,6 +424,37 @@ function normalizeAgentProfile(value, label, { allowPrompt = true } = {}) {
       );
     }
     profile.model = model;
+  }
+
+  if (fallbackModels !== undefined && fallbackModels !== null) {
+    if (!Array.isArray(fallbackModels)) {
+      throw new Error(
+        `${label} fallbackModels must be an array of model aliases or ids; got ${JSON.stringify(fallbackModels)}`,
+      );
+    }
+    if (fallbackModels.length === 0) {
+      throw new Error(
+        `${label} fallbackModels must not be empty; omit the key instead of providing an empty array`,
+      );
+    }
+    for (const entry of fallbackModels) {
+      if (typeof entry !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(entry)) {
+        throw new Error(
+          `${label} fallbackModels entries must be model aliases or ids; got ${JSON.stringify(entry)}`,
+        );
+      }
+    }
+    if (route === "inline") {
+      throw new Error(
+        `${label} route "inline" cannot carry fallbackModels; route the step to a subagent to pin a model`,
+      );
+    }
+    if (model === undefined || model === null) {
+      throw new Error(
+        `${label} fallbackModels requires a pinned model; add a model to enforce fallbacks against`,
+      );
+    }
+    profile.fallbackModels = [...fallbackModels];
   }
 
   if (effort !== undefined && effort !== null) {
@@ -471,7 +502,7 @@ function normalizeOptionalStepAgent(agent, stage, name) {
   }
   if (!isObject(agent)) {
     throw new Error(
-      `optionalSteps.${stage} entry "${name}" agent must be a route string or a { route, model?, effort? } object`,
+      `optionalSteps.${stage} entry "${name}" agent must be a route string or a { route, model?, effort?, fallbackModels? } object`,
     );
   }
   return normalizeAgentProfile(agent, label, { allowPrompt: false });
@@ -487,7 +518,14 @@ export function resolveOptionalStepAgent(agentValue) {
   if (typeof value === "string") {
     return { route: value, model: null, effort: null };
   }
-  return { route: value.route, model: value.model ?? null, effort: value.effort ?? null };
+  return {
+    route: value.route,
+    model: value.model ?? null,
+    effort: value.effort ?? null,
+    ...(Array.isArray(value.fallbackModels) && value.fallbackModels.length > 0
+      ? { fallbackModels: value.fallbackModels }
+      : {}),
+  };
 }
 
 // Pure config scan (no fs/PATH): returns a human label for every action
@@ -971,13 +1009,18 @@ export function defaultConfigJsonc() {
   },
 
   // Agent routing is enforced by strict routing commands and validation.
-  // Each entry is a route string or a { route, model?, effort?, prompt? }
-  // profile. A bare string is sugar for { route }. route values: inline,
+  // Each entry is a route string or a
+  // { route, model?, effort?, prompt?, fallbackModels? } profile. A bare
+  // string is sugar for { route }. route values: inline,
   // claude-subagent:<agent-name>, codex-task:<mode>. model pins the per-step
   // model for subagent/codex routes (alias like opus/sonnet/haiku or a full id);
   // it is rejected on inline routes. effort pins a reasoning-effort token
   // (shape-checked only, not enumerated; also rejected on inline routes).
-  // prompt overrides workflow.actionPrompts.
+  // prompt overrides workflow.actionPrompts. fallbackModels is an optional
+  // ordered array of sanctioned alternate model ids/aliases to record when the
+  // pinned model is unavailable (e.g. at capacity); it requires a pinned model,
+  // must be non-empty when present, and is rejected on inline routes. Strict
+  // routing accepts evidence recorded against the pin or any listed fallback.
   // Codex examples: codex-task:read-only, codex-task:workspace-write.
   // New boards ship "review" pinned to gpt-5.6-terra/high and the two
   // security specialty steps below pinned to gpt-5.6-sol/xhigh. If your plan
@@ -1099,12 +1142,14 @@ export function defaultConfigJsonc() {
   // entries from the relevant stage catalog based on the work just completed.
   // Per-entry agent overrides the default routing for that specialty;
   // when omitted the specialty runs inline. agent accepts a route string
-  // (sugar for inline vs. delegated) or a { route, model?, effort? } profile
-  // object to pin a model/reasoning-effort for that specialty, same grammar
-  // as agents.<action> above except the entry's own top-level "prompt" is
+  // (sugar for inline vs. delegated) or a
+  // { route, model?, effort?, fallbackModels? } profile object to pin a
+  // model/reasoning-effort for that specialty, same grammar as
+  // agents.<action> above except the entry's own top-level "prompt" is
   // used instead (an agent-profile prompt field is rejected). A pinned model
   // is enforced on that specialty's completion evidence; effort is a dispatch
-  // hint only and never appears in completedSteps. Setting a stage to an
+  // hint only and never appears in completedSteps. fallbackModels lists
+  // sanctioned alternate models accepted in place of the pin. Setting a stage to an
   // empty array wipes the default catalog for that stage; the loader's array
   // merge is wholesale.
   // The two security_* entries below ship pinned to gpt-5.6-sol/xhigh. Same
