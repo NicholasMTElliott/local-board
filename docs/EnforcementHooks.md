@@ -79,9 +79,17 @@ done-time validation remain the backstop.
 ## Ledgers
 
 The CLI owns `.local-board/active-steps.json`. `begin-step` records the active
-ticket action, configured route, and configured model there. `check-dispatch`
-reads that file for hook decisions. `complete-step` and `approve-inline` clear
-the active entry. Stamps and clears are lock-serialized by the CLI.
+ticket action, configured route, and configured model there. A non-empty
+`gate-check` or `specialty-run` records a scoped consultation stamp with
+`kind` (`gate` or `specialty`) and stage/action/route/model identity; these
+stamps use no-clobber semantics. `check-dispatch` reads the ledger for hook
+decisions. `complete-step`/`approve-inline` clear the matching action identity;
+specialty completion clears its matching specialty identity; gate completion
+clears only the matching gate-kind stage. A real status change sweeps abandoned
+consultation stamps, while a same-status re-save leaves them alone. If no
+ledger entry exists, the fallback first uses the ticket's
+existence-verified registered worktree, then the invocation root. Stamps and
+clears are lock-serialized by the CLI.
 
 The hooks own `.local-board/dispatch-ledger.jsonl`. It is append-only JSONL in
 v1. Entries are small and there is no rotation. The dispatch ledger is
