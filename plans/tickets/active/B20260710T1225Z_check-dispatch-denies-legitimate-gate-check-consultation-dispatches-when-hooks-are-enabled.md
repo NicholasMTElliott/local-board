@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:25:41Z
-updated: 2026-07-10T13:19:55Z
+updated: 2026-07-10T13:32:44Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -313,6 +313,26 @@ the clear inside `recordGateConsultation` (mirrors `completeStep`) or in the
 for symmetry with `completeStep`.
 
 ## Implementation Notes
+
+Implemented per Technical Design, both decisions:
+
+**Decision 1 (consultation stamping):**
+- `src/cli.js` `commandGateCheck`: on the non-skip branch (`catalog.length > 0`), stamps `{ ticket, kind: "gate", action: "gate-check", stage, route, model, root, ts }` into the active-steps ledger via `stampActiveStep`, gated on `gateProfile.route.startsWith("claude-subagent:")`. Moved `gateProfile` resolution earlier in the function (was previously computed only for the payload) so it's available before the skip/non-skip branch.
+- `src/cli.js` `commandSpecialtyRun`: after resolving `{ route: agent, model }` via `resolveOptionalStepAgent`, stamps `{ ticket, kind: "specialty", action: entry.name, stage, route, model, root, ts }`, gated on `agent.startsWith("claude-subagent:")`.
+- `src/tickets.js` `recordGateConsultation`: added `await clearActiveStep(root, ticketId).catch(() => {})` after the token/Run Log write, mirroring `completeStep`'s clear. This is the single clear point for both a gate-check stamp and any lingering specialty-run stamp (no separate specialty-completion verb exists).
+- No change needed to `checkDispatch`/`checkDispatchForTicket`'s ledger-record branch: it already compares `bareRoute(record.route)`/`record.model` generically, so a `kind: "gate"`/`"specialty"` record is consumed identically to an action record.
+
+**Decision 2 (stale-root fallback):**
+- `src/worktrees.js`: added exported `resolveTicketWorktreeRoot(root, ticketId)` — resolves `resolveMainRoot` -> `loadConfig` -> `ticketWorktreePath` -> `findRegisteredWorktree`; returns the registered worktree path or `null`; swallows all errors (fail-safe).
+- `src/active-steps.js` `checkDispatchForTicket`: in the no-ledger-record branch, calls `resolveTicketWorktreeRoot(root, ticketId)` before `resolveExpectedStep`; uses the resolved worktree root when non-null, else `root` unchanged.
+
+**Import-cycle check:** `active-steps.js` now imports `worktrees.js`, which imports `tickets.js`, which already imports `active-steps.js` (pre-existing cycle). Verified at implementation time by `node -e "import('./src/active-steps.js')"`, `import('./src/cli.js')`, `import('./src/tickets.js')`, `import('./src/worktrees.js')` — all load cleanly, no `ReferenceError`/TDZ issue. No structural change needed; the existing cycle already tolerates this extension since all cross-references are used inside function bodies, not at module-eval time.
+
+**Docs:** `docs/specialty-steps.md` line reworded — "gate-check mutates only for the empty-catalog...path" was inaccurate once the non-skip branch also stamps the ledger; clarified the distinction between ticket evidence (`completedSteps`, unchanged) and the internal active-steps dispatch ledger (new stamp/clear). `test/cli.test.js`'s "does not stamp a gate token on a non-empty catalog (pure read)" test renamed and extended to assert the ledger IS stamped (kind/action/stage/route/model) while ticket evidence remains untouched — the two concepts (ticket evidence vs. dispatch ledger) were conflated in the old title.
+
+**Tests added** (`test/active-steps.test.js`): stage-boundary allow for design/implement/test (test-stage catalog seeded non-empty via config override for this test only), misrouted-and-unstamped-denies, gate-complete-clears-then-denies, specialty-run stamp + model-unverifiable variant, stale-main-root fallback via a registered worktree (with a no-worktree control). `test/cli.test.js`: extended two existing gate-check tests with ledger assertions (stamped on non-empty branch, not stamped on empty-catalog branch).
+
+**Deviation/pre-existing issue noted, not fixed (out of scope):** `npm test` full run shows a 3rd failure beyond the 2 documented install.test.js baseline failures (B20260710T1232Z): `test/cli.test.js` "estimation prompts are present and reference the estimate pipeline" — `plans/prompts/steps/estimate.md` contains `local-board --root <worktreePath> calibration suggest` (the ticket's `--root` mandate) but the test asserts the literal contiguous substring `"local-board calibration suggest"`. Untouched by this ticket's file set; unrelated to gate/specialty dispatch. Confirmed via `git log` that both the prompt and its wording predate this ticket.
 
 ## Review Findings
 
