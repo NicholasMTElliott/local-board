@@ -13,8 +13,8 @@ estimateBasis: T20260710T1156Z
 workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:06:56Z
-updated: 2026-07-10T13:47:50Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+updated: 2026-07-10T13:47:51Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # config: scaffold defaults ship GPT-5.6 pins for review and security specialty steps
@@ -370,3 +370,5 @@ Validation: git diff --check clean; prose-only change.
 - 2026-07-10T13:36:49Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. 493/497 at declared branch baseline; real init-in-temp-dir verified pins + validate end-to-end; deep-merge no-leak probed; guardrail honored.
 
 - 2026-07-10T13:36:50Z: Ensured git branch local-board/T20260710T1206Z-config-scaffold-defaults-ship-gpt-5-6-pins-for-review-and-security-specialty-steps (already-current).
+
+- 2026-07-10T13:47:51Z: Completed document via codex-task:workspace-write: memory-bank scaffold-pin facts synced; docs verified; committed on branch.
