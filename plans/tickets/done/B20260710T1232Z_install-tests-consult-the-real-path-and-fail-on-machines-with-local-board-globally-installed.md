@@ -1,7 +1,7 @@
 ---
 id: B20260710T1232Z
 type: bug
-status: ready_for_docs
+status: done
 priority: P2
 parent: null
 children: []
@@ -11,7 +11,7 @@ branch: local-board/B20260710T1232Z-install-tests-consult-the-real-path-and-fail
 estimate: 1
 estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T13:48:46Z
-workCompletedAt: null
+workCompletedAt: 2026-07-10T14:19:52Z
 created: 2026-07-10T12:32:28Z
 updated: 2026-07-10T14:19:52Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
