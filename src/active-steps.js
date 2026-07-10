@@ -109,17 +109,22 @@ export async function clearActiveStep(root, ticketId, options = {}) {
   );
 }
 
-// Identity-aware clear (B20260710T1225Z review fix): deletes this ticket's
-// ledger entry only when `predicate(existingRecord)` returns true, evaluated
-// on a fresh read taken under the SAME lock as the delete -- the read and the
-// delete are atomic, so there is no read-then-write race window where a
-// concurrent stamp could be identity-swapped out from under an unconditional
-// clear. This is what lets `completeStep`/`approveInline` (predicate: kind is
-// "action") and `recordGateConsultation` (predicate: kind is "gate" or
-// "specialty") each clear only the entry they correspond to, never a newer
-// entry of a different kind stamped in the gap between their own write and
-// their clear call. Missing entry or a predicate that returns false is a
-// no-op, matching `clearActiveStep`'s best-effort semantics.
+// Identity-aware clear (B20260710T1225Z review fix, re-review 2): deletes
+// this ticket's ledger entry only when `predicate(existingRecord)` returns
+// true, evaluated on a fresh read taken under the SAME lock as the delete --
+// the read and the delete are atomic, so there is no read-then-write race
+// window where a concurrent stamp could be identity-swapped out from under an
+// unconditional clear. This is what lets `completeStep`/`approveInline`
+// (predicate: kind is "action" AND `action` matches the step just completed)
+// and `recordGateConsultation` (predicate: kind is "gate"/"specialty" AND
+// `stage` matches the stage just consulted) each clear only the SPECIFIC
+// entry they correspond to -- not just a same-kind entry, but the same
+// action/stage identity -- so a stale completion can never erase a NEWER
+// stamp of the same kind for a *different* action/stage (e.g. a `design`
+// complete-step clearing a `implement` begin-step stamp already in flight, or
+// a stale `design` gate-complete clearing a fresh `implement` gate-check
+// stamp). Missing entry or a predicate that returns false is a no-op,
+// matching `clearActiveStep`'s best-effort semantics.
 export async function clearActiveStepIf(root, ticketId, predicate, options = {}) {
   const filePath = await ledgerPath(root);
   let cleared = false;
@@ -144,19 +149,25 @@ export async function clearActiveStepIf(root, ticketId, predicate, options = {})
   return cleared;
 }
 
-// Consultation-only, no-clobber stamp (B20260710T1225Z review fix): used by
-// `gate-check`/`specialty-run` instead of `stampActiveStep`. The ledger holds
-// one record per ticket, and `gate-check`/`specialty-run` are expected to run
-// only after the stage's action entry has already been cleared -- but a
-// misuse of that ordering (a gate-check run before complete-step, or two
-// specialty-run calls racing) would otherwise silently clobber a still-live
-// entry and deny the legitimate in-flight dispatch. Stamps only when the
-// ticket has no entry yet, or the existing entry is an idempotent match for
-// this exact stamp (same kind+route+model -- a harmless re-run of the same
-// consultation, mirroring `stampActiveStep`'s self-healing re-stamp).
-// Otherwise leaves the existing entry untouched and reports it as `conflict`
-// so the caller can surface a non-fatal warning; the command itself must
-// still succeed.
+// Consultation-only, no-clobber stamp (B20260710T1225Z review fix, re-review
+// 2): used by `gate-check`/`specialty-run` instead of `stampActiveStep`. The
+// ledger holds one record per ticket, and `gate-check`/`specialty-run` are
+// expected to run only after the stage's action entry has already been
+// cleared -- but a misuse of that ordering (a gate-check run before
+// complete-step, or two specialty-run calls racing) would otherwise silently
+// clobber a still-live entry and deny the legitimate in-flight dispatch.
+// Stamps only when the ticket has no entry yet, or the existing entry is an
+// idempotent match for this exact stamp -- same kind, action, stage, route,
+// AND model (a harmless re-run of the same consultation, mirroring
+// `stampActiveStep`'s self-healing re-stamp). The full identity is required,
+// not just route+model: two different specialties can share the same route/
+// model (e.g. two `claude-subagent:local-board-reviewer@sonnet` specialty
+// steps in different stages), and two gate stamps for different stages can
+// share the same configured gate profile -- both must be treated as
+// conflicts, not idempotent matches, or the second stamp would silently
+// overwrite the first's still-live entry. Otherwise leaves the existing
+// entry untouched and reports it as `conflict` so the caller can surface a
+// non-fatal warning; the command itself must still succeed.
 export async function stampActiveStepNoClobber(root, ticketId, record, options = {}) {
   const filePath = await ledgerPath(root);
   let conflict = null;
@@ -181,7 +192,13 @@ export async function stampActiveStepNoClobber(root, ticketId, record, options =
 }
 
 function isIdempotentStampMatch(existing, next) {
-  return existing.kind === next.kind && existing.route === next.route && existing.model === next.model;
+  return (
+    existing.kind === next.kind
+    && existing.action === next.action
+    && existing.stage === next.stage
+    && existing.route === next.route
+    && existing.model === next.model
+  );
 }
 
 function bareRoute(route) {

@@ -6,17 +6,40 @@ import { loadConfig, OPTIONAL_STEP_STAGES, resolveOptionalStepAgent } from "./co
 import { withOrderedTicketLocks, withTicketLock } from "./lock.js";
 import { ticketWorktreeMintOffsetMinutes } from "./worktrees.js";
 
-// Ledger-entry kind predicates shared by the conditional clears below
-// (B20260710T1225Z review fix): `beginStep` stamps kind "action";
-// `gate-check`/`specialty-run` (src/cli.js) stamp kind "gate"/"specialty". A
-// record with no `kind` at all (pre-fix ledger data, or an external writer)
-// is treated as an action entry for backward compatibility, matching
-// `beginStep`'s pre-fix unconditional overwrite semantics.
-function isActionLedgerEntry(record) {
-  return (record.kind ?? "action") === "action";
+// Ledger-entry identity predicates shared by the conditional clears below
+// (B20260710T1225Z review fix, re-review 2): `beginStep` stamps kind
+// "action"; `gate-check`/`specialty-run` (src/cli.js) stamp kind
+// "gate"/"specialty". A record with no `kind` at all (pre-fix ledger data, or
+// an external writer) is treated as an action entry for backward
+// compatibility, matching `beginStep`'s pre-fix unconditional overwrite
+// semantics.
+//
+// Kind alone is NOT a sufficient identity: `completeStep("design")` and
+// `completeStep("implement")` both clear kind "action", so a stale
+// `completeStep("design")` call (e.g. retried after a slow write) could erase
+// a fresh `beginStep("implement")` stamp created in between if the predicate
+// only checked `kind`. Likewise a stale `recordGateConsultation("design", ...)`
+// could erase a fresh `gate-check(..., "implement")` stamp. Each predicate
+// therefore also takes the specific action/stage the caller is clearing for,
+// and only matches an existing entry with that SAME action/stage -- never a
+// same-kind entry for a different one.
+function isActionLedgerEntry(record, action) {
+  return (record.kind ?? "action") === "action" && record.action === action;
 }
 
-function isConsultationLedgerEntry(record) {
+function isConsultationLedgerEntry(record, stage) {
+  return (record.kind === "gate" || record.kind === "specialty") && record.stage === stage;
+}
+
+// Broad variant used only by `moveTicket`'s abandonment cleanup, which is not
+// clearing "the entry its own preceding write created" (unlike
+// completeStep/approveInline/recordGateConsultation above) -- it is a
+// catch-all sweep for ANY lingering consultation stamp left behind when a
+// ticket moves away from a gated stage without ever reaching gate-complete
+// (e.g. into questions/blocked, or a loop-back). There is no single "the
+// stage this move is leaving" for a non-forward move, so this intentionally
+// stays kind-only.
+function isAnyConsultationLedgerEntry(record) {
   return record.kind === "gate" || record.kind === "specialty";
 }
 
@@ -811,7 +834,7 @@ export async function moveTicket(root, ticketId, status, options = {}) {
       // are left untouched -- moving a ticket is not evidence an action
       // dispatch abandoned. Best-effort: a clear failure must never undo an
       // already-successful move.
-      await clearActiveStepIf(root, ticketId, isConsultationLedgerEntry).catch(() => {});
+      await clearActiveStepIf(root, ticketId, isAnyConsultationLedgerEntry).catch(() => {});
 
       return targetPath;
     },
@@ -1257,10 +1280,11 @@ export async function approveInline(root, ticketId, action, reason, options = {}
     },
     options.lock,
   );
-  // Conditional (B20260710T1225Z): clears only the action entry it
-  // corresponds to, never a newer gate/specialty consultation stamped in the
-  // gap between this write and this clear (see clearActiveStepIf).
-  await clearActiveStepIf(root, result.ticket, isActionLedgerEntry).catch(() => {});
+  // Conditional (B20260710T1225Z, re-review 2): clears only the action entry
+  // stamped for THIS action, never a newer gate/specialty consultation, nor a
+  // newer action stamp for a DIFFERENT action, in the gap between this write
+  // and this clear (see clearActiveStepIf / isActionLedgerEntry).
+  await clearActiveStepIf(root, result.ticket, (record) => isActionLedgerEntry(record, action)).catch(() => {});
   return result;
 }
 
@@ -1361,9 +1385,9 @@ export async function completeStep(root, ticketId, action, executor, evidence, o
     },
     options.lock,
   );
-  // Conditional (B20260710T1225Z): see the identical rationale on
-  // approveInline's clear above.
-  await clearActiveStepIf(root, result.ticket, isActionLedgerEntry).catch(() => {});
+  // Conditional (B20260710T1225Z, re-review 2): see the identical rationale
+  // on approveInline's clear above.
+  await clearActiveStepIf(root, result.ticket, (record) => isActionLedgerEntry(record, action)).catch(() => {});
   return result;
 }
 
@@ -1434,10 +1458,13 @@ export async function recordGateConsultation(root, ticketId, stage, executor, ev
   // so this is the catch-all for both, mirroring completeStep's clear).
   // Best-effort, same rationale as completeStep: a missing/already-cleared
   // entry is a no-op, and a clear failure must never block evidence recording
-  // that already succeeded. Conditional (B20260710T1225Z): only clears a
-  // gate/specialty entry, never a newer action stamp (e.g. begin-step for the
-  // NEXT stage, already running before this clear fires).
-  await clearActiveStepIf(root, ticketId, isConsultationLedgerEntry).catch(() => {});
+  // that already succeeded. Conditional (B20260710T1225Z, re-review 2): only
+  // clears a gate/specialty entry for THIS `stage`, never a newer action
+  // stamp (e.g. begin-step for the NEXT stage, already running before this
+  // clear fires), and never a newer gate/specialty stamp for a DIFFERENT
+  // stage (e.g. this call is a stale/retried gate-complete for "design" while
+  // a fresh gate-check for "implement" already stamped its own entry).
+  await clearActiveStepIf(root, ticketId, (record) => isConsultationLedgerEntry(record, stage)).catch(() => {});
   return { ticket: ticketId, stage, executor, path: writtenPath };
 }
 

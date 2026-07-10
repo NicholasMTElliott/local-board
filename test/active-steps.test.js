@@ -1200,6 +1200,137 @@ test(
   },
 );
 
+// --- Identity-complete collisions (B20260710T1225Z re-review: idempotent
+// match must compare action/stage too, not just kind+route+model) ---
+
+test(
+  "gate-check for a different stage with the SAME gate profile is a conflict, not an idempotent match",
+  async () => {
+    await withBoard(async (root) => {
+      const create = await runCli(["--root", root, "create", "task", "Same gate profile, different stage", "--status", "ready_for_design", "--priority", "P2"]);
+      assert.equal(create.code, 0, create.stderr);
+      const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+      // Default board config gives both "design" and "implement" a non-empty
+      // catalog and both stages resolve the SAME configured gate profile
+      // (agents["gate-check"]: claude-subagent:local-board-gatecheck@haiku).
+      // Before the fix, `isIdempotentStampMatch` compared only kind+route+
+      // model, so this second gate-check (a different stage) would have been
+      // wrongly treated as a harmless re-stamp of the FIRST gate-check and
+      // silently overwritten it -- losing the "design" stage's authorization.
+      const first = await runCli(["--root", root, "gate-check", ticketId, "--stage", "design", "--json"]);
+      assert.equal(first.code, 0, first.stderr);
+      const beforeSecond = (await readActiveSteps(root))[ticketId];
+      assert.equal(beforeSecond.stage, "design");
+      assert.equal(beforeSecond.route, "claude-subagent:local-board-gatecheck");
+      assert.equal(beforeSecond.model, "haiku");
+
+      const warnings = [];
+      const originalWarn = console.warn;
+      console.warn = (message = "") => warnings.push(String(message));
+      let second;
+      try {
+        second = await runCli(["--root", root, "gate-check", ticketId, "--stage", "implement", "--json"]);
+      } finally {
+        console.warn = originalWarn;
+      }
+      assert.equal(second.code, 0, second.stderr);
+      assert.ok(
+        warnings.some((message) => message.includes(ticketId) && message.includes("not stamped")),
+        `expected a not-stamped warning naming ${ticketId}, got: ${JSON.stringify(warnings)}`,
+      );
+
+      const afterSecond = (await readActiveSteps(root))[ticketId];
+      assert.deepEqual(
+        afterSecond,
+        beforeSecond,
+        "the design-stage gate stamp must survive a same-profile gate-check for a different stage",
+      );
+    });
+  },
+);
+
+test(
+  "specialty-run for a different specialty with the SAME agent route/model is a conflict, not an idempotent match",
+  async () => {
+    await withBoard(async (root) => {
+      // Two specialty entries in the same stage, deliberately configured with
+      // the identical agent (route+model). Before the fix, the second run's
+      // stamp would have matched the first on kind+route+model alone and been
+      // treated as a harmless self-heal re-stamp -- silently overwriting the
+      // still-live first specialty's authorization.
+      await writeFile(
+        path.join(root, "plans", "local-board.config.jsonc"),
+        JSON.stringify({
+          version: 1,
+          optionalSteps: {
+            design: [
+              {
+                name: "custom_review",
+                prompt: "plans/prompts/optional-steps/design/custom_review.md",
+                triggers: "Anything.",
+                agent: { route: "claude-subagent:local-board-reviewer", model: "opus" },
+              },
+              {
+                name: "second_review",
+                prompt: "plans/prompts/optional-steps/design/second_review.md",
+                triggers: "Anything else.",
+                agent: { route: "claude-subagent:local-board-reviewer", model: "opus" },
+              },
+            ],
+            implement: [],
+            test: [],
+          },
+        }),
+        "utf8",
+      );
+      await mkdir(path.join(root, "plans", "prompts", "optional-steps", "design"), { recursive: true });
+      await writeFile(
+        path.join(root, "plans", "prompts", "optional-steps", "design", "custom_review.md"),
+        "# Custom Review\n",
+        "utf8",
+      );
+      await writeFile(
+        path.join(root, "plans", "prompts", "optional-steps", "design", "second_review.md"),
+        "# Second Review\n",
+        "utf8",
+      );
+
+      const create = await runCli(["--root", root, "create", "task", "Same route/model, different specialty", "--status", "ready_for_design", "--priority", "P2"]);
+      assert.equal(create.code, 0, create.stderr);
+      const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+      assert.equal((await runCli(["--root", root, "specialty-run", ticketId, "custom_review", "--json"])).code, 0);
+      const beforeSecond = (await readActiveSteps(root))[ticketId];
+      assert.equal(beforeSecond.action, "custom_review");
+      assert.equal(beforeSecond.route, "claude-subagent:local-board-reviewer");
+      assert.equal(beforeSecond.model, "opus");
+
+      const warnings = [];
+      const originalWarn = console.warn;
+      console.warn = (message = "") => warnings.push(String(message));
+      let second;
+      try {
+        second = await runCli(["--root", root, "specialty-run", ticketId, "second_review", "--json"]);
+      } finally {
+        console.warn = originalWarn;
+      }
+      assert.equal(second.code, 0, second.stderr);
+      assert.ok(
+        warnings.some((message) => message.includes(ticketId) && message.includes("not stamped")),
+        `expected a not-stamped warning naming ${ticketId}, got: ${JSON.stringify(warnings)}`,
+      );
+
+      const afterSecond = (await readActiveSteps(root))[ticketId];
+      assert.deepEqual(
+        afterSecond,
+        beforeSecond,
+        "the custom_review stamp must survive a same-route/model specialty-run for a different specialty",
+      );
+    });
+  },
+);
+
 // --- Stamp identity + abandonment cleanup (B20260710T1225Z review finding 2) ---
 
 test(
@@ -1239,6 +1370,68 @@ test(
         steps[ticketId],
         newerStamp,
         "complete-step must not clear a gate-kind entry it doesn't correspond to",
+      );
+    });
+  },
+);
+
+test(
+  "a stale gate-complete for an earlier stage does not clear a NEWER gate stamp for a different stage (re-review 2: same-kind clears must compare full identity)",
+  async () => {
+    await withBoard(async (root) => {
+      const create = await runCli(["--root", root, "create", "task", "Stale gate-complete, newer stage stamp", "--status", "ready_for_design", "--priority", "P2"]);
+      assert.equal(create.code, 0, create.stderr);
+      const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+      assert.equal((await runCli(["--root", root, "estimate", ticketId, "2"])).code, 0);
+      assert.equal((await runCli(["--root", root, "begin-step", ticketId, "--json"])).code, 0);
+      assert.equal(
+        (
+          await runCli([
+            "--root", root, "complete-step", ticketId, "design",
+            "--executor", "claude-subagent:local-board-designer@opus",
+            "--evidence", "Designed.", "--json",
+          ])
+        ).code,
+        0,
+      );
+      assert.equal((await runCli(["--root", root, "gate-check", ticketId, "--stage", "design", "--json"])).code, 0);
+
+      // Simulate a fresh "implement" gate-check landing before this stale
+      // "design" gate-complete gets around to clearing -- e.g. the ticket
+      // looped forward and a new consultation was already stamped for the
+      // next gated stage by the time this delayed/retried gate-complete call
+      // for "design" runs. Overwriting the ledger directly (rather than a
+      // second real gate-check call, which would itself be a no-clobber
+      // conflict against the still-live "design" entry) makes the race
+      // deterministic for the test.
+      const newerStamp = {
+        ticket: ticketId,
+        kind: "gate",
+        action: "gate-check",
+        stage: "implement",
+        route: "claude-subagent:local-board-gatecheck",
+        model: "haiku",
+        root: path.resolve(root),
+        ts: "2026-07-10T13:00:00Z",
+      };
+      await stampActiveStep(root, ticketId, newerStamp);
+
+      // Before the fix, `isConsultationLedgerEntry` matched on `kind` alone,
+      // so this stale gate-complete for "design" would have cleared the
+      // newer "implement" stamp it has nothing to do with.
+      const gateComplete = await runCli([
+        "--root", root, "gate-complete", ticketId,
+        "--stage", "design",
+        "--executor", "claude-subagent:local-board-gatecheck@haiku",
+        "--evidence", "security_threat_model", "--json",
+      ]);
+      assert.equal(gateComplete.code, 0, gateComplete.stderr);
+
+      const steps = await readActiveSteps(root);
+      assert.deepEqual(
+        steps[ticketId],
+        newerStamp,
+        "gate-complete for a stale stage must not clear a newer gate stamp for a DIFFERENT stage",
       );
     });
   },
