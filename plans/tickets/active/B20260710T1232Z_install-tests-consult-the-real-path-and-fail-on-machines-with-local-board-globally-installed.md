@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T13:48:46Z
 workCompletedAt: null
 created: 2026-07-10T12:32:28Z
-updated: 2026-07-10T13:55:18Z
+updated: 2026-07-10T13:59:20Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -255,6 +255,48 @@ None. The seam exists, the root cause is confirmed, and the fix is
 test-only.
 
 ## Implementation Notes
+
+## Implementation Notes
+
+Rewrote the two non-hermetic "PATH verification failure" tests in
+`test/install.test.js` exactly per the Technical Design; `src/install.js`
+is unchanged.
+
+- Added `import { pathToFileURL } from "node:url";`.
+- Clone-mode test now calls `runInstallInProcess(["--target=codex"], { home, resolvesOnPath: (command) => command !== "local-board" })`
+  in-process and asserts with `assert.throws`, matching the sibling
+  in-process seam test.
+- Packaged-tree test now dynamically imports the packaged copy's own
+  `src/install.js` via `pathToFileURL(...).href` and calls its
+  `runInstall` with the same injected predicate, asserting with
+  `assert.throws`. `createPackagedCopy`/`removeFixtureDir` usage
+  unchanged.
+- Predicate is `(command) => command !== "local-board"` (not `() =>
+  false`) per the T0035Z seam contract, so only the `local-board` lookup
+  misses while `codex` still resolves true.
+- Ran the design's sanity check locally: temporarily flipped both
+  predicates to `() => true`, confirmed both tests then fail with
+  "Missing expected exception", then reverted the flip exactly (diff
+  confirmed clean before commit).
+
+Test evidence:
+- `npm run check`: clean, no output.
+- `npm test` (full suite, twice): 497 tests, 496 pass, 1 skip
+  (pre-existing `smoke (slow)` skip), 0 fail. One run showed a transient
+  unrelated failure in `test/worktrees.test.js` ("worktree-add supports
+  an explicit relative worktrees.location outside the repo") caused by a
+  stale/fixed-name temp dir (`...\Temp\explicit-worktrees\T20260522T1506Z`)
+  from a prior run; re-running the full suite and the file in isolation
+  both passed, confirming this is pre-existing flakiness unrelated to
+  this change (not present in `test/install.test.js`, and no file in
+  scope touches worktree fixtures).
+- Isolated run of the two rewritten tests
+  (`node --test --test-name-pattern="PATH verification failure"
+  test/install.test.js`): 2 pass, 0 fail.
+- `node ./bin/local-board.js validate --root <worktree>`: "Ticket
+  validation OK".
+
+No production code changed; no new test dependencies.
 
 ## Review Findings
 
