@@ -13,7 +13,7 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T16:32:00Z
+updated: 2026-07-10T16:45:03Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -431,3 +431,5 @@ Refill preceded the separate `## Closeout` section.
 - 2026-07-10T16:10:51Z: Design re-review (sol@xhigh): FAIL. [High] Revision payload used H2 headings - terminated Technical Design section, obsolete prior design stranded below (the very defect class B20260710T1532Z fixes). [High] Both Closeout sequences run the suite before fast-forward - tests pre-merge tree; fast-forward must precede the full suite. [High] Item 1 wording exceeds the 1-3 sentence acceptance criterion (7 and 4 sentences). Disposition: designer repairs ticket body (H3-only internal headings, remove stranded blocks) and condenses; third review round to follow.
 
 - 2026-07-10T16:25:09Z: Design review #3 (sol@xhigh): FAIL. [High] Codex team flow not structurally reordered - wave-barrier step 4 still moves, step 5 still refills, old Closeout fast-forward/worktree-remove sentence would duplicate move and remove worktree pre-suite; put Closeout in the numbered flow before Refill and replace the old terminal sentence. [High] SKILL_TEAM Closeout replacement drops stale-default rebase-retry recovery and leaves post-move planning dirt uncommitted in manual mode (rebase would refuse). [Low] autoMergeTicketBranch worktree path uses commit-tree + update-ref, not switch+merge; describe both branches. Disposition: revision #3.
+
+- 2026-07-10T16:45:03Z: Design review #4 (sol@xhigh): FAIL. [High] SKILL_TEAM step 4 move left generic while codex step 4 was narrowed - terminal move..done could fire in step 4 then again in Closeout (double-move; auto-merge prunes branch, second call fails pre-suite); qualify step 4 non-terminal, reserve terminal move for Closeout. [Medium] Worktrees section still says remove worktree immediately at done, Closeout opening still says move..done always auto-merges/rebases/prunes - contradict suite-before-removal and manual mode; amend both. [Medium] Manual-mode passage assumes move leaves dirty planning edit; with commitPlanningOnTransition:true it is already committed - make the commit conditional. Disposition: revision #4 (mechanical); round-5 FAIL on new findings escalates to questions.
