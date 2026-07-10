@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:25:41Z
-updated: 2026-07-10T13:36:20Z
+updated: 2026-07-10T13:44:38Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -335,6 +335,20 @@ Implemented per Technical Design, both decisions:
 **Deviation/pre-existing issue noted, not fixed (out of scope):** `npm test` full run shows a 3rd failure beyond the 2 documented install.test.js baseline failures (B20260710T1232Z): `test/cli.test.js` "estimation prompts are present and reference the estimate pipeline" — `plans/prompts/steps/estimate.md` contains `local-board --root <worktreePath> calibration suggest` (the ticket's `--root` mandate) but the test asserts the literal contiguous substring `"local-board calibration suggest"`. Untouched by this ticket's file set; unrelated to gate/specialty dispatch. Confirmed via `git log` that both the prompt and its wording predate this ticket.
 
 ## Review Findings
+
+verdict: changes_requested; target: implementation
+
+(codex-task:read-only, gpt-5.6-terra @ reasoning-effort high, 236s — reviewed commit 8fd5831. First attempt aborted by a model-capacity error and was retried.)
+
+1. High — src/cli.js:1155, :1296: consultation stamps unconditionally replace the ticket's single ledger record. Valid sequence: begin-step stamps the designer; a non-empty gate-check overwrites it; the still-legitimate designer dispatch is now denied. specialty-run can likewise replace another in-flight specialty. Fix: stamp only when the entry is empty or an idempotent match; reject/clear conflicting live work explicitly rather than replacing it.
+
+2. High — src/tickets.js:660, :1402, src/active-steps.js:139: no abandonment cleanup and no identity on stamps. An abandoned gate stamp (gate-check run, dispatch never made, ticket moved through questions/blocked onward) persists and later authorizes a gatecheck dispatch for a different stage; the unconditional clears in completeStep/approveInline/recordGateConsultation can erase a NEWER stamp created between ticket write and ledger clear. Fix: stamp identity/generation + conditional clear-by-identity; clear abandoned consultation stamps on status changes/loop-backs while preserving newer entries.
+
+3. Medium — src/worktrees.js:183: a manually removed but unpruned worktree still appears in git worktree list --porcelain; findRegisteredWorktree returns the missing path, resolveExpectedStep reports ticket-not-found (exit 2), and the hook fail-opens for every local-board agent instead of validating against the main checkout. Fix: verify the directory exists before returning it, or retry resolution against the invocation root on failure.
+
+Reviewer-verified clean: ESM cycle load-safe (deferred-function references only; both entry points import successfully); wrong-agent-with-live-stamp still denied; no-stamp fallback intact; tests cover happy-path stamps, wrong-agent denial, gate-complete cleanup, specialty authorization, normal worktree fallback. Coverage gaps named for each finding.
+
+Disposition: all three findings accepted; loop-back to ready_for_implementation for the fix pass.
 
 ## Test Evidence
 
