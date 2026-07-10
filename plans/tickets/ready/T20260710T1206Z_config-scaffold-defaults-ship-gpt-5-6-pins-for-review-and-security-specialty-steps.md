@@ -13,7 +13,7 @@ estimateBasis: T20260710T1156Z
 workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:06:56Z
-updated: 2026-07-10T13:36:50Z
+updated: 2026-07-10T13:47:50Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -333,6 +333,19 @@ Acceptance criteria: fresh-init pins + validate PASS (direct end-to-end); DEFAUL
 Anomalies: none.
 
 ## Documentation Updates
+
+Documentation step executed by codex-task:workspace-write (gpt-5.6-luna @ reasoning-effort medium, 94s); edits committed by the orchestrator on the ticket branch.
+
+Changed:
+
+- memory-bank/systemPatterns.md, memory-bank/techContext.md: current-state facts — init scaffold pins review to gpt-5.6-terra@high and the two security specialties to gpt-5.6-sol@xhigh; DEFAULT_CONFIG stays unpinned; escape hatch is delete-pins-or-reroute.
+
+Checked and deliberately left alone:
+
+- docs/CodexSupport.md, docs/specialty-steps.md — implementation-commit edits verified accurate.
+- README.md — no changes needed.
+
+Validation: git diff --check clean; prose-only change.
 
 ## Questions
 
