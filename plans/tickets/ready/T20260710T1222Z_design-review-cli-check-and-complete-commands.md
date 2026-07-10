@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T13:25:24Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
 updated: 2026-07-10T14:14:06Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # design-review: CLI check and complete commands
@@ -519,3 +519,5 @@ Validation: prose-only change; git diff --check clean.
 - 2026-07-10T14:06:03Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. 509/512 at declared baseline; 18/18 design-review tests; live throwaway-board probe returned sol@xhigh resolution shape; guardrail honored.
 
 - 2026-07-10T14:06:04Z: Ensured git branch local-board/T20260710T1222Z-design-review-cli-check-and-complete-commands (already-current).
+
+- 2026-07-10T14:14:06Z: Completed document via codex-task:workspace-write: CLI inventory + Workflow.md examples synced; SKILL files deferred to T1223Z by scope; committed on branch (first attempt transient sandbox failure, retry clean).
