@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T16:37:45Z
+updated: 2026-07-10T16:40:06Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -210,3 +210,5 @@ Commit note: the documentation commit could not be created in this sandbox becau
 - 2026-07-10T16:26:27Z: Completed review via codex-task:read-only@gpt-5.6-terra: pass on focused re-review (terra@medium): byte-identical-body assertion verified in 137620a, no unrelated changes; prior full review (terra@high) verified guard, validate pass, and skill notes clean
 
 - 2026-07-10T16:33:05Z: Completed test via claude-subagent:local-board-tester@sonnet: pass: full suite 531/0/1; targeted 173/0/1; live probe acceptance verified all four guard paths incl. idempotent byte-identical rewrite; probe auto-commits verified probe-only and dropped
+
+- 2026-07-10T16:40:06Z: Docs stage exposed an operational defect: the new validate duplicate-heading check hard-fails ~40 legacy done/archived tickets on this board (exit 1), breaking every preflight/closeout validate once merged. Probe-board test could not see this. Design amendment (within the design's own 'or design justifies why not' latitude): enforce the duplicate check only for tickets whose status is not done/archived - immutable closed history must not force history rewrites; live tickets keep the hard guard. Looping back to implementation for the scoped fix.
