@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
 updated: 2026-07-10T16:26:27Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
 # section --file can duplicate the section heading when the payload carries it
@@ -184,3 +184,5 @@ Verified clean: reject guard fence-aware and H2-only with actionable message; du
 - 2026-07-10T16:17:58Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none requested (re-run after loop-back; test-only fix, no new triggers)
 
 - 2026-07-10T16:26:27Z: Focused re-review (terra@medium): pass. 137620a adds the byte-identical body assertion; no unrelated changes.
+
+- 2026-07-10T16:26:27Z: Completed review via codex-task:read-only@gpt-5.6-terra: pass on focused re-review (terra@medium): byte-identical-body assertion verified in 137620a, no unrelated changes; prior full review (terra@high) verified guard, validate pass, and skill notes clean
