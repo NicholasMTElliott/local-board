@@ -401,3 +401,5 @@ Re-review: verdict: pass (terra@medium, 74s). Verified: both Codex-voice files c
 - 2026-07-10T14:37:24Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - three prose corrections
 
 - 2026-07-10T14:45:29Z: Completed review via codex-task:read-only@gpt-5.6-terra: Initial changes_requested (3 prose findings, terra@high) fixed in 57e2a4f; re-review verdict: pass (terra@medium). No open findings.
+
+- 2026-07-10T14:45:29Z: Ensured git branch local-board/T20260710T1223Z-design-review-skill-and-docs-updates-for-both-flows (already-current).
