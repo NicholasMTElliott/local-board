@@ -7,13 +7,13 @@ parent: null
 children: []
 blockedBy: []
 blocks: [T20260710T1206Z]
-branch: null
+branch: local-board/T20260710T1156Z-optionalsteps-accept-agent-profiles-with-model-and-effort-pins-at-the-specialty-step-level
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T11:56:26Z
-updated: 2026-07-10T12:07:16Z
+updated: 2026-07-10T12:14:08Z
 completedSteps: []
 routingApprovals: []
 ---
