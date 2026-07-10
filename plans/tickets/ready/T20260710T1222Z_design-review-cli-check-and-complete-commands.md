@@ -5,7 +5,7 @@ status: ready_for_design
 priority: P2
 parent: S20260710T1206Z
 children: []
-blockedBy: [T20260710T1220Z]
+blockedBy: [T20260710T1220Z, T20260710T1221Z]
 blocks: []
 branch: null
 estimate: null
