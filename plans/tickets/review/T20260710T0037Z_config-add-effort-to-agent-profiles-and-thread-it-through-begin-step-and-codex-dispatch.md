@@ -13,7 +13,7 @@ estimateBasis: T20260710T0036Z
 workStartedAt: 2026-07-10T01:31:18Z
 workCompletedAt: null
 created: 2026-07-10T00:36:10Z
-updated: 2026-07-10T01:52:33Z
+updated: 2026-07-10T01:54:04Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -180,7 +180,9 @@ Reviewed commit d3c425d (peer-merge 7fbcf15 and planning commits excluded).
 
 Verified clean by the reviewer: whitespace-only/non-string effort rejected; effort rejected on object-form inline; bare-string profiles cannot carry effort; effortForAction falls back safely; all current translateCodexDispatch branches include effort; ledger stamps carry only ticket/action/route/model/root/timestamp; completion tokens remain action:executor (effort cannot leak); CLI Commands blocks byte-identical; npm run check passed (node --test blocked by read-only sandbox spawn EPERM — environment restriction, covered by implement/test stages).
 
-Disposition: both findings accepted; ticket looped back to ready_for_implementation for the two fixes (loop-back strips implement/gate evidence per invalidateOnLoopBack; this section records the review outcome).
+Disposition: both findings accepted; ticket looped back to ready_for_implementation, fixed in commit 75b4116, and re-reviewed.
+
+Re-review: PASS (codex-task:read-only, gpt-5.6-luna @ reasoning-effort medium, 38s). Verified: docs now state shape-validation locally / model-support validation server-side with the --reasoning-effort mapping intact; new assertions cover the unknown claude-subagent branch and unrecognized-route fallback and would fail if effort were dropped; fix commit contains only the two intended changes, no plans/ files. (Re-reviewer test spawn blocked by read-only sandbox as before; execution covered by implementer's 466-pass run and the upcoming test stage.)
 
 ## Test Evidence
 
