@@ -13,8 +13,8 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T17:23:33Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
+updated: 2026-07-10T17:24:10Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet"]
 routingApprovals: []
 ---
 # skills: process hardening from the 2026-07-10 parallel-run retro (post-merge suite, denial hint, reviewer no-test-run, prompt-edit full suite)
@@ -571,3 +571,5 @@ No deviations from the Technical Design. Open question from design (single-ticke
 - 2026-07-10T17:17:34Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: CONCERNS after 6 rounds: 1 Medium (conditionalize preserved dirty-ticket claim), folded into implementation; all High findings from rounds 1-5 resolved in design
 
 - 2026-07-10T17:17:35Z: Ensured git branch local-board/T20260710T1533Z-skills-process-hardening-from-the-2026-07-10-parallel-run-retro-post-merge-suite-denial-hint-reviewer-no-test-run-prompt-edit-full-suite (already-current).
+
+- 2026-07-10T17:24:10Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Four skill/prompt items landed per 6-round design: closeout-before-refill restructure both team skills (ff-before-suite, mode-branched merge, slot rules), denial hint (Claude skills), reviewer no-test-run x3 + sync-resources, AGENTS.md note; CONCERNS conditionalization folded. Suite 533/0/1; sync tests 9/9. Commits 80f0f3a(merge)+b6487ed.
