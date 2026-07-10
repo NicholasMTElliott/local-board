@@ -13,7 +13,7 @@ estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T12:21:31Z
+updated: 2026-07-10T12:26:04Z
 completedSteps: []
 routingApprovals: []
 ---
@@ -57,3 +57,5 @@ No core-logic changes (they land in T20260710T1220Z). No skill/docs prose (sibli
 ## Questions
 
 ## Run Log
+
+- 2026-07-10T12:26:04Z: Contract note from T20260710T1221Z design: the design-review prompt returns a FIRST-LINE TEXT verdict (PASS/CONCERNS/FAIL + numbered findings), NOT JSON like the optional-steps reviewers. design-review-complete / orchestrator parsing must read the first-line token, not JSON.parse.
