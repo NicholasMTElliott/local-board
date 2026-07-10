@@ -8,12 +8,12 @@ children: []
 blockedBy: []
 blocks: [T20260710T1222Z]
 branch: local-board/T20260710T1220Z-design-review-routing-flag-move-precondition-and-evidence-recorder
-estimate: null
-estimateBasis: null
+estimate: 2
+estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:22:11Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T12:28:10Z
+updated: 2026-07-10T12:28:15Z
 completedSteps: []
 routingApprovals: []
 ---
