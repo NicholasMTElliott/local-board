@@ -352,3 +352,5 @@ Anomalies: none.
 - 2026-07-10T14:04:42Z: Ensured git branch local-board/B20260710T1232Z-install-tests-consult-the-real-path-and-fail-on-machines-with-local-board-globally-installed (already-current).
 
 - 2026-07-10T14:08:17Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. 496/497 x2 runs, 0 fail; with-install condition verified on this machine; assertion strength confirmed preserved; guardrail honored.
+
+- 2026-07-10T14:08:18Z: Ensured git branch local-board/B20260710T1232Z-install-tests-consult-the-real-path-and-fail-on-machines-with-local-board-globally-installed (already-current).
