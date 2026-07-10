@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T19:11:31Z
+updated: 2026-07-10T19:17:28Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -53,22 +53,39 @@ Three codex-task dispatches failed on transient causes and all succeeded on a ma
 ### Summary
 
 Add an opt-in `--retries <n>` flag to the `codex-task` wrapper (repo:
-`../codex-task`, all code at `C:/Users/Nicho/Documents/codex-task`). On a
-non-zero `codex exec` exit, classify the **final diagnostic line(s)** of the
-captured tail. If the failure is a recognized **transient infrastructure** class
-(model capacity / sandbox-wrapper prep) the wrapper retries the invocation
-in-process, serially, up to `n` times with a short fixed backoff. Every other
-failure — auth, unsupported model/effort, durable quota/usage-cap exhaustion,
-generic "please try again" errors, JSON/contract failures, task-level
-partial/failed — is non-transient and never retried. Default `n = 0` preserves
-today's behavior byte-for-byte.
+`../codex-task`, all code at `C:/Users/Nicho/Documents/codex-task`). The wrapper
+retries an invocation, serially and in-process, up to `n` times with a short
+fixed backoff when it observes one of **two** transient-infrastructure triggers,
+and never otherwise. Default `n = 0` preserves today's behavior byte-for-byte.
 
-This is revision #3 (post design review round 3 FAIL). It replaces the fragile
-banner-grammar stripping with a **last-lines, first-classified-line-wins** rule
-that never depends on recognizing banner text; removes the bare "please try
-again" transient pattern; and specifies a **mandatory pre-attempt delete** of the
-final-message file so a later clean exit that writes nothing can never serve a
-stale prior message.
+The two retry triggers correspond to the two motivating transient classes from
+the 2026-07-10 parallel-run retro, which surface in **structurally different**
+codex outcomes:
+
+- **Trigger A — non-zero exit.** `codex exec` exits non-zero and the diagnostic
+  tail's terminal line classifies as a recognized transient class
+  (model-capacity or sandbox-wrapper). This is the "capacity mid-run" shape.
+- **Trigger B — clean exit, blocked result, sandbox-wrapper marker.** `codex exec`
+  exits **0** with a contract-valid final message that normalizes to
+  `taskResult === 'blocked'`, AND the captured output of that attempt contains a
+  sandbox-wrapper tool-failure marker. This is the **real Windows sandbox-wrapper
+  shape**: the wrapper failure is emitted as an `apply_patch` tool-call failure
+  *inside a continuing codex turn*; codex recovers, finishes the turn, exits 0,
+  and reports the write as blocked. The exit-non-zero loop alone never sees it.
+
+Every other outcome — auth, unsupported model/effort, durable quota/usage-cap
+exhaustion, generic "please try again" errors, JSON/contract failures
+(missing/malformed final message), and task-level `partial`/`failed`, and
+`blocked` results **without** a sandbox-wrapper marker (including a blocked result
+whose tail carries only capacity text) — is non-transient and never retried.
+
+This is revision #4 (post design review round 4 FAIL, one new High). Revision #3
+delivered Trigger A (last-lines, first-classified-line-wins classification;
+removal of bare "please try again"; mandatory pre-attempt final-message delete).
+This revision adds **Trigger B** so the second motivating transient class — the
+one the incident actually produced — is retried, and adds tests that model its
+reachable shape (exit 0 + blocked + sandbox-wrapper text) rather than only a
+synthetic exit-1 shape.
 
 ### Related tickets and conflicts
 
@@ -83,36 +100,26 @@ stale prior message.
   later mention `codex-task --retries`; that edits local-board files, so it is a
   separate ticket.
 
-### Why text-pattern classification is the only signal
+### Why text-pattern classification is the only signal (Trigger A)
 
 The wrapper captures codex output as `stdoutTail` / `stderrTail` (last 4000
 chars each) in `runCodex` (`codex-task.mjs:463-478`), and on
 `runResult.code !== 0` builds the diagnostic via `formatCodexRunFailure`
 (`:484`) which sets `tail = (stderrTail || stdoutTail || '').trim()`. There is
-**no structured JSON on the failure path** — the result JSON is only the model's
+**no structured JSON on the non-zero path** — the result JSON is only the model's
 final message, written via `--output-last-message`, and only exists after a
 clean (code 0) exit. Exit codes are uninformative: codex returns non-zero for
 every failure class with no distinct code. So error-text pattern matching on the
-diagnostic tail is the only viable signal, exactly what `codexFailureHint`
-(`:491`) already does.
+diagnostic tail is the only viable signal for Trigger A, exactly what
+`codexFailureHint` (`:491`) already does.
 
-### Classification: last-lines, first-classified-line-wins (fixes review High)
+### Classification: last-lines, first-classified-line-wins (Trigger A)
 
-**Problem with the prior draft.** Revision #2 tried to *strip* a leading codex
-config banner by grammar (a `BANNER_LINE` regex) and then classify an 8-line
-trailing window. The reviewer showed this is unreliable: the real codex banner
-contains lines the grammar misses (`session id:`, `user`, ...), and codex can
-emit arbitrary streamed output *before* the terminal error, so an 8-line window
-can still contain durable-looking text that suppresses a genuine capacity retry.
-The banner-bearing test was internally inconsistent because the "first line" the
-warning quoted would be banner text, not the capacity message.
-
-**Fix — stop trying to identify the banner at all. Classify only the final error
-line(s).** There is no `isolateTerminalError` and no `BANNER_LINE` grammar. A
-single pure helper `classifyFailure(tail)` scans the **non-blank lines from the
-END** and returns the classification of the **first line (nearest the end) that
-matches any known pattern**, together with that exact matched line for the
-warning text:
+For the non-zero-exit path the operative codex terminal error is the **final
+line(s)** of the tail. A single pure helper `classifyFailure(tail)` scans the
+non-blank lines from the END and returns the classification of the first line
+(nearest the end) that matches any known pattern, together with that exact
+matched line for the warning text:
 
 ```js
 // Scan the last few non-blank lines from the END. The first line (closest to
@@ -138,7 +145,7 @@ function classifyFailure(tail) {
 }
 ```
 
-**The classification rule, stated precisely:**
+**The Trigger A classification rule, stated precisely:**
 
 > Split the diagnostic tail into non-blank, trimmed lines. Take at most the last
 > `MAX_TAIL_SCAN` (= 3) of them. Scan that window from the last line backward.
@@ -149,28 +156,15 @@ function classifyFailure(tail) {
 > retry). The retry warning quotes the exact line that matched — the real
 > diagnostic — never a window head or banner text.
 
-Why this is robust where the grammar approach was not:
-
-- It never needs to know what a banner line looks like, so it cannot be defeated
-  by unrecognized banner lines (`session id:`, `user`, ...) or by streamed model
-  output appearing before the terminal error.
-- The two cases the reviewer mandated fall out directly:
-  - **durable-looking text EARLIER, capacity line LAST** (e.g. a `usage limit`
-    line streamed mid-run, then a final `Selected model is at capacity`): the
-    final line is scanned first and matches transient -> **model-capacity**,
-    retries. The earlier durable text is never reached.
-  - **transient-looking text earlier, durable line LAST** (e.g. `... at capacity`
-    then a final `You've hit your weekly usage limit`): the final line matches
-    durable -> **null**, excluded. Correct: the operative terminal error is the
-    durable one.
-- The warning quotes `line`, which is exactly the line that drove the decision,
-  so the banner-bearing test is now self-consistent.
-
-The 4000-char cap can truncate the head of the tail mid-line, but a
-last-`N`-lines rule is always well defined regardless of head truncation, so the
-cap is a non-issue for this rule. The full raw tail is still what
-`formatCodexRunFailure` reports in the `error` field; only the *classification
-input* is the trailing window.
+Why this is robust: it never needs to know what a banner line looks like, so it
+cannot be defeated by unrecognized banner lines (`session id:`, `user`, ...) or
+by streamed model output appearing before the terminal error. Durable-looking
+text streamed earlier is never reached when the terminal line is the operative
+transient error; and a durable terminal line correctly excludes a transient line
+streamed earlier. The 4000-char cap can truncate the head mid-line, but a
+last-`N`-lines rule is always well defined regardless of head truncation. The
+full raw tail is still what `formatCodexRunFailure` reports in `error`; only the
+*classification input* is the trailing window.
 
 ### Durable and transient pattern lists
 
@@ -194,56 +188,57 @@ const NON_TRANSIENT_PATTERNS = [
 ];
 ```
 
-`TRANSIENT_PATTERNS` (Phase 2, tested only if no durable pattern matched the
-line — first list to match wins):
+The sandbox-wrapper transient markers are factored into a **single shared
+constant** so both the Trigger A classifier and the Trigger B check use one
+source of truth:
 
 ```js
-// Transient infrastructure — retry can help. First label to match wins.
+// Isolated sandbox-wrapper PREP failures — retry can help. Shared by the
+// Trigger A transient classifier and the Trigger B clean-exit-blocked check.
+// Intentionally NARROW: wrapper-prep phrases only, NOT the broad sandbox branch
+// in codexFailureHint. A generic permission / read-only denial is a config
+// problem, not transient, so it is NOT retried.
+const SANDBOX_WRAPPER_PATTERNS = [
+  /failed to prepare\b[^\n]*sandbox wrapper/i,
+  /cannot enforce split writable root sets/i,
+  /refusing to run unsandboxed/i,
+  /restricted-token sandbox/i,
+];
+
+// Transient infrastructure for Trigger A — retry can help. First label wins.
 const TRANSIENT_PATTERNS = [
   { label: 'model-capacity',
-    // Bare "please try again" / "try again later" REMOVED (fixes review Medium):
-    // a real capacity/rate/temporary signal must be present on the line itself.
+    // Bare "please try again" / "try again later" REMOVED: a real capacity /
+    // rate / temporary signal must be present on the line itself.
     re: /\bat capacity\b|\b429\b|rate[ _-]?limit|too many requests|temporarily unavailable|server (?:is )?overloaded/i },
   { label: 'sandbox-wrapper',
-    re: /failed to prepare\b[^\n]*sandbox wrapper|cannot enforce split writable root sets|refusing to run unsandboxed|restricted-token sandbox/i },
+    re: new RegExp(SANDBOX_WRAPPER_PATTERNS.map((r) => r.source).join('|'), 'i') },
 ];
 ```
 
-**"please try again" disposition (fixes review Medium).** The bare
-`please try again` / `try again later` alternation is **removed entirely** from
-the transient capacity pattern. A genuine capacity failure already carries a real
-signal (`at capacity`, `429`, `rate limit`, `temporarily unavailable`,
-`overloaded`) on the same terminal line, so nothing transient is lost. A generic
-durable error whose only "retry-ish" wording is "please try again" (e.g. `Some
-permanent failure. Please try again`) now matches neither list and is **not
-retried**. This is the "remove it" option from the finding, chosen over "require
-an accompanying signal on the same line" because removal is strictly simpler and,
-since classification is already per-line, loses no true positive.
+The bare `please try again` / `try again later` alternation is **removed
+entirely** from the capacity pattern: a genuine capacity failure already carries
+a real signal on the same terminal line, so nothing transient is lost, and a
+durable error whose only retry-ish wording is "please try again" is not retried.
+The narrowed reasoning-effort pattern matches both rejection orderings but never
+the bare banner echo `reasoning effort: high`.
 
-The narrowed reasoning-effort pattern matches both rejection orderings
-(`reasoning effort 'xhigh' is not supported` and `unsupported value for
-model_reasoning_effort`) but never the bare banner echo `reasoning effort: high`
-(no rejection token within 40 chars). Combined with the last-lines rule (the
-banner echo lives at the head, outside the trailing window), the banner cannot
-suppress a capacity retry by either mechanism.
-
-Worked classifications (each is a named test below), all via `classifyFailure`:
+Worked Trigger A classifications (each is a named test below), all via
+`classifyFailure`:
 
 - Banner frame (config lines incl. `reasoning effort: high` and `session id:`,
-  prompt echo) then a final `Selected model is at capacity` -> scan from end:
-  final line matches capacity -> **model-capacity** (transient); warning quotes
-  `Selected model is at capacity`. Retries.
-- `Error: 429 rate limit exceeded, please try again later` (single final line) ->
-  `\b429\b` -> **model-capacity**.
-- `You've hit your weekly usage limit` (final line) -> durable -> **null**.
-- Two lines `You've hit your weekly usage limit` then `Selected model is at
-  capacity` -> final line capacity -> **model-capacity** (durable earlier line
-  never reached).
-- Two lines `Selected model is at capacity` then `You've hit your weekly usage
-  limit` -> final line durable -> **null**.
-- Single line `Selected model is at capacity. You've hit your weekly usage
-  limit.` -> durable-first-within-line -> **null**.
-- `Some permanent failure. Please try again` -> matches neither list -> **null**.
+  prompt echo) then a final `Selected model is at capacity` -> **model-capacity**;
+  warning quotes `Selected model is at capacity`. Retries.
+- `Error: 429 rate limit exceeded, please try again later` -> `\b429\b` ->
+  **model-capacity**.
+- `You've hit your weekly usage limit` -> durable -> **null**.
+- `You've hit your weekly usage limit` then `Selected model is at capacity` ->
+  final line capacity -> **model-capacity**.
+- `Selected model is at capacity` then `You've hit your weekly usage limit` ->
+  final line durable -> **null**.
+- `Selected model is at capacity. You've hit your weekly usage limit.` ->
+  durable-first-within-line -> **null**.
+- `Some permanent failure. Please try again` -> matches neither -> **null**.
 - `stream error: missing bearer token` -> durable auth -> **null**.
 - `model gpt-5.6-terra is not supported for this ChatGPT account` -> durable
   unsupported-model -> **null**.
@@ -253,61 +248,140 @@ Worked classifications (each is a named test below), all via `classifyFailure`:
   sets directly; refusing to run unsandboxed` -> transient **sandbox-wrapper**.
 - `failed to prepare windows sandbox wrapper` -> transient **sandbox-wrapper**.
 
-Design notes:
+### Trigger B: clean exit + blocked + isolated sandbox-wrapper marker (fixes review High)
 
-- The transient sandbox list is intentionally NARROW (wrapper-prep phrases only),
-  not the broad `codexFailureHint` sandbox branch. A generic permission /
-  read-only denial is a config problem, not transient, so it is NOT retried.
-- Durable-first-per-line is conservative: when a single line names both a throttle
-  and a cap, treat it as a cap and do not retry.
+**The reachable shape the reviewer identified.** The motivating Windows incident
+did NOT produce a non-zero exit. codex hit the sandbox-wrapper failure while
+executing an `apply_patch` tool call *inside* a turn, surfaced it as a tool-call
+failure, continued the turn, and exited **0**. The wrapper's post-exit path
+(`:770-812`) then parsed a contract-valid final message and `normalizeResult`
+(`:581`) produced `taskResult === 'blocked'` (codex's own prompt guidance, `:356`,
+maps sandbox/auth/external blockers to `blocked`). Trigger A's
+`runResult.code !== 0` loop never fires here, so revision #3 would never retry the
+second motivating class. This revision adds Trigger B to cover it.
 
-### Which failure path retries wrap
+**The second-trigger rule, stated precisely:**
 
-Retries wrap **only** the `runCodex` + `runResult.code !== 0` branch in `main()`
-(`codex-task.mjs:758`). They explicitly do NOT cover:
+> On a clean (`code === 0`) exit whose final message is present, parses, and
+> normalizes to `taskResult === 'blocked'`, scan the **full captured output of
+> that attempt** — both `stdoutTail` and `stderrTail`, not a last-N-line window —
+> for any `SANDBOX_WRAPPER_PATTERNS` marker ("failed to prepare ... sandbox
+> wrapper", "cannot enforce split writable root sets", "refusing to run
+> unsandboxed", "restricted-token sandbox"). Retry the invocation only when such a
+> marker is present AND retries remain. Every other clean-exit result is NOT
+> retried by Trigger B: `completed`, `partial`, and `failed` regardless of tail
+> content; and `blocked` whose captured tail contains no sandbox-wrapper marker —
+> including a `blocked` result whose tail carries only capacity / rate-limit text.
+
+Implemented as a small helper distinct from `classifyFailure` because the marker
+is **mid-turn, not terminal** on this path:
+
+```js
+// Trigger B: the sandbox-wrapper tool failure is emitted DURING a turn (an
+// apply_patch failure) and codex then exits 0, so the marker is NOT the last
+// line. Scan the WHOLE captured tail (both streams), not a last-N-line window.
+// Only the sandbox-wrapper class qualifies here (see decisions below); capacity
+// text on a clean-exit blocked result does NOT retry.
+function findSandboxWrapperMarker(runResult) {
+  const hay = `${runResult.stdoutTail || ''}\n${runResult.stderrTail || ''}`;
+  for (const line of hay.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)) {
+    if (SANDBOX_WRAPPER_PATTERNS.some((re) => re.test(line))) return line;
+  }
+  return null;
+}
+```
+
+**Decision 1 — `blocked` only, NOT `partial` (conservative).** Only
+`taskResult === 'blocked'` gates Trigger B. Justification:
+
+- `blocked` is codex's designated outcome for an external blocker it could not
+  work around (prompt guidance `:356`: "sandbox, auth, missing dependency, or
+  another external" blocker). The sandbox-wrapper `apply_patch` refusal maps
+  exactly onto `blocked`, so it is the correct and sufficient gate for the
+  incident's shape.
+- `partial` means "some requested outcomes were achieved, but not all" (`:355`) —
+  it signals **real, committed progress**. Re-running a partial task is not a
+  clean transient retry: codex runs `--ephemeral` (fresh read each attempt) and
+  would redo already-completed writes, risking duplicated or conflicting edits,
+  and a partial result is a substantive task-level outcome the operator should
+  see, not silently repeat. There is no evidence the incident ever produced
+  `partial`; it produced a fully-blocked write. Admitting `partial` would widen
+  the retry surface to genuine progress with no observed benefit, so it is
+  excluded. (`failed`/`completed` are likewise excluded: `completed` succeeded;
+  `failed` is a substantive negative outcome, and a sandbox-wrapper prep failure
+  that fully failed the run surfaces on the non-zero-exit path as Trigger A, not
+  as a clean exit.)
+
+**Decision 2 — capacity text on a clean-exit blocked result does NOT retry.**
+Trigger B checks only `SANDBOX_WRAPPER_PATTERNS`, never `TRANSIENT_PATTERNS`
+capacity markers. Justification:
+
+- A clean exit with a parsed final message is **proof the model was reachable and
+  drove a turn to completion** — it produced a structured result. So a `blocked`
+  outcome here is a **task-level determination**, not an infrastructure
+  reachability failure. Capacity ("at capacity" / 429) text appearing in the tail
+  of such a run is at most stale mid-turn streamed noise; the run demonstrably was
+  not throttled off the model (it finished the turn). Retrying it would re-run a
+  task codex already adjudicated as blocked for a task-level reason, wasting a
+  full re-read for no expected change.
+- The sandbox-wrapper class is different: it is an **isolated tool-call failure**
+  (the OS refused the sandbox wrapper for one `apply_patch`) that codex could not
+  work around but which is transient at the environment level — the manual
+  immediate re-run in the retro succeeded. That single isolated, environment-level
+  failure blocking an otherwise-reachable turn is exactly what warrants an
+  automatic retry, and nothing else on the clean-exit path does.
+
+No concrete reason was found to widen either split, so both stay narrow: Trigger B
+= `blocked` AND sandbox-wrapper-marker only.
+
+### Which failure paths retry wraps
+
+Retries wrap the `runCodex` attempt loop in `main()`. The two triggers and their
+exclusions:
+
+- **Trigger A** — `runResult.code !== 0` and `classifyFailure(tailOf(runResult))`
+  returns a non-null label (model-capacity or sandbox-wrapper). Retries.
+- **Trigger B** — `runResult.code === 0`, `readResult` ok, `taskResult` normalizes
+  to `blocked`, and `findSandboxWrapperMarker(runResult)` is non-null. Retries.
+
+Explicitly NON-retryable (unchanged from revision #3 except where noted):
 
 - Spawn errors (`child.on('error')` -> "failed to spawn codex", `:746`):
-  environmental, already gated by the `checkCodexAvailable` preflight. A spawn
-  throw is part of attempt 1 and emits immediately (with `attempts` when gated).
+  environmental, already gated by the `checkCodexAvailable` preflight; part of
+  attempt 1, emitted immediately (with `attempts` when gated).
 - `readResult` failures on a code-0 exit (missing / empty / non-JSON / malformed
-  final message, `:770`): contract failures — a Non-goal; they need a prompt fix,
-  not a repeat. This branch is structurally *after* the retry loop and only
-  reached on a clean exit, so it can never trigger a retry. Asserted by dedicated
-  tests (exit-0 malformed JSON, exit-0 missing-final-message, and the stale-file
-  sentinel test below).
-- Task-level `taskResult` of `partial` / `blocked` / `failed`: substantive
-  outcomes on a clean exit; never retried.
+  final message, `:770-782`): contract failures — a Non-goal; they need a prompt
+  fix, not a repeat. Structurally these are the code-0 branch with `!read.ok`, and
+  the loop treats them as a terminal (break) outcome, never a retry — asserted by
+  dedicated tests (exit-0 malformed JSON, exit-0 missing-final-message, and the
+  stale-file sentinel test). This holds identically under Trigger B: Trigger B is
+  evaluated only when `read.ok` is true.
+- Task-level `partial` / `failed` on a clean exit: substantive outcomes; never
+  retried.
+- `blocked` on a clean exit **without** a sandbox-wrapper marker (including a
+  blocked result whose tail has only capacity text): never retried (Decisions 1-2).
 
-### Final-message file hygiene across attempts (fixes review Medium)
+### Final-message file hygiene across attempts
 
-**Problem.** All attempts reuse one `sessionDir` / `lastMessagePath`. A failed
-attempt can leave a final-message file on disk (codex may write a partial or
-sentinel message before failing). A later attempt that exits 0 but writes nothing
-would let `readResult` (`:510`) consume that **stale** file and report a false
-success instead of the missing-final-message contract failure.
-
-**Fix — CHOICE: mandatory pre-attempt delete of the reused path** (not
-attempt-specific paths). At the TOP of every retry-loop iteration, before each
-`runCodex`, run `rmSync(lastMessagePath, { force: true })`. This makes the
-invariant exact: `readResult` runs only after a code-0 exit, and the file was
-cleared immediately before that attempt's `codex exec`, so it reflects **only
-what that attempt wrote** (or its absence). `force: true` makes the first-attempt
-delete (no file yet) a no-op.
+All attempts reuse one `sessionDir` / `lastMessagePath`. At the TOP of every
+retry-loop iteration, before each `runCodex`, the loop runs
+`rmSync(lastMessagePath, { force: true })`. This makes the invariant exact:
+`readResult` runs only after a code-0 exit, and the file was cleared immediately
+before that attempt's `codex exec`, so it reflects **only what that attempt
+wrote** (or its absence). `force: true` makes the first-attempt delete a no-op.
+This single pre-attempt delete covers **both** trigger paths' re-runs identically
+(item 3 of the mandate): a Trigger B retry re-enters the loop top, deletes the
+prior attempt's blocked final message, and re-runs, so the next attempt's
+`readResult` again sees only its own write.
 
 Justification vs attempt-specific paths (`last-message.<attempt>.txt`): a single
 reused path keeps `sessionDir`, `--debug` retention, and the
 `--output-last-message` spawn arg identical to today; per-attempt paths would
-require rebuilding `buildSpawnArgs` each iteration and would complicate `--debug`
-(which path does the user inspect?) and the `sessionDir` reporting. The
-pre-delete is one line, touches no other flag semantics, and is strictly
-sufficient.
+require rebuilding `buildSpawnArgs` each iteration. The pre-delete is one line and
+strictly sufficient.
 
-Sentinel test (below, test 12): attempt 1 fails on a capacity message **after**
-writing a valid-JSON sentinel to `lastMessagePath`; attempt 2 exits 0 writing
-nothing. Expected: the pre-delete wipes the sentinel before attempt 2 runs, so
-`readResult` finds no file and returns the missing-final-message contract failure
--> status 1, `error /did not write a final message/`, `attempts: 2`,
-counter == 2, and the sentinel content never appears in the result.
+The stale-file sentinel test (test 12) still guards a Trigger A retry that clears
+a stale final message before a later clean, no-message attempt.
 
 ### Implementation approach (codex-task.mjs)
 
@@ -316,102 +390,110 @@ counter == 2, and the sentinel content never appears in the result.
    `usageErr('--retries must be a non-negative integer')` (exit 2, no result
    object). Store `retries` (number, default 0). Derive
    `retriesEnabled = retries > 0` for output gating.
-2. Attempt counter: declare `let attempt = 0;` at the top of `main()` (right
-   after `parseArgs`), BEFORE any structured emit. Every structured `emit`
-   includes attempts uniformly and gated:
+2. Attempt counter: declare `let attempt = 0;` at the top of `main()` (right after
+   `parseArgs`), BEFORE any structured emit. Every structured `emit` includes
+   attempts uniformly and gated:
    `...(retriesEnabled ? { attempts: attempt } : {})`, inserted at a fixed
    position in each object literal so the shape is stable when present. Pre-loop
-   emits therefore naturally carry `attempts: 0`; loop / post-loop emits carry the
-   incremented count.
+   emits therefore carry `attempts: 0`; loop / post-loop emits carry the
+   incremented count. Both trigger paths share this counter, so `attempts`
+   semantics are identical across them (item 3).
 3. Retry loop in `main()`: replace the single `runCodex` call + `code !== 0` emit
-   with a bounded loop:
-   - top of iteration: `attempt++`; `rmSync(lastMessagePath, { force: true })`
-     (final-message hygiene, above); `runCodex(...)` inside the existing
-     spawn-error try/catch.
-   - if `runResult.code === 0` break (fall through to `readResult`).
-   - else `const { label: cls, line: diagLine } = classifyFailure(tailOf(runResult));`
-     if `cls` AND `attempt <= retries` (retries remain): push a warning
-     ``codex attempt ${attempt}/${retries + 1} failed (${cls}): ${diagLine}; retrying``,
-     sleep `backoffMs` unless it is the final attempt, `continue`; else break.
-   - after the loop, the existing `code !== 0` emit (`:759`) reports the last
-     failure via `formatCodexRunFailure` (full raw tail); the existing code-0
-     `readResult` path (`:770`) runs unchanged on a clean exit.
+   with a bounded loop whose body is:
+   - top of iteration: `attempt++`; `rmSync(lastMessagePath, { force: true })`;
+     `runResult = runCodex(...)` inside the existing spawn-error try/catch (a spawn
+     throw stays non-retryable and emits immediately with `attempts`).
+   - **Trigger A branch** (`runResult.code !== 0`): `const { label: cls, line:
+     diagLine } = classifyFailure(tailOf(runResult));` if `cls && attempt <=
+     retries`: push warning ``codex attempt ${attempt}/${retries + 1} failed
+     (${cls}): ${diagLine}; retrying``, sleep `backoffMs` unless final attempt,
+     `continue`; else `break`.
+   - **Clean-exit branch** (`runResult.code === 0`): `const read =
+     readResult(lastMessagePath);` if `!read.ok`, `break` (contract failure —
+     never retried; falls through to the existing `:770` handling which re-derives
+     and emits it). Else compute `const peek = normalizeResult(read.value, {
+     trackReferences: args.trackReferences });` **only to read `peek.taskResult`**
+     (`normalizeResult` is pure — its warnings are pushed once by the post-loop
+     path, so this peek must NOT push `peek.warnings`). If
+     `peek.taskResult === 'blocked' && attempt <= retries` and
+     `const marker = findSandboxWrapperMarker(runResult)` is non-null: push warning
+     ``codex attempt ${attempt}/${retries + 1} exited cleanly but reported
+     taskResult=blocked with a sandbox-wrapper tool failure (${marker}); retrying``,
+     sleep `backoffMs` unless final attempt, `continue`; else `break`.
+   - after the loop, the code path is UNCHANGED: the existing `runResult.code !== 0`
+     emit (`:758`) reports the last non-zero failure via `formatCodexRunFailure`
+     (full raw tail), and the existing code-0 `readResult` -> `normalizeResult` ->
+     emit path (`:770-812`) runs on a clean exit exactly as today (re-reading the
+     last attempt's file, which is still present because `rmSync` runs only at the
+     next loop top). The loop only decides `continue` (retry) vs `break` (proceed
+     to the existing post-loop handling); no post-loop emit block changes.
    - `tailOf(runResult)` derives the same `(stderrTail || stdoutTail).trim()`
-     string `formatCodexRunFailure` uses; `classifyFailure` narrows it to the
-     trailing window for classification only. `error` still reports the full tail.
-4. Backoff: **short fixed** delay (no exponential — capacity recovered on the
-   immediate manual retry in the retro). Constant `RETRY_BACKOFF_MS` (2000 ms),
+     string `formatCodexRunFailure` uses (Trigger A input). `findSandboxWrapperMarker`
+     scans both streams combined (Trigger B input). `error` still reports the full
+     Trigger A tail.
+4. Backoff: **short fixed** delay. Constant `RETRY_BACKOFF_MS` (2000 ms),
    overridable via env `CODEX_TASK_RETRY_DELAY_MS` so tests set `0` and never
-   sleep. No backoff after the final failed attempt.
+   sleep. No backoff after the final failed/blocked attempt. Both triggers use the
+   same backoff.
 
 Serial discipline: the loop `await`s each `runCodex` before the next; retries are
 strictly sequential in the single process. No new concurrency, no `CODEX_HOME`
 isolation.
 
+Recompute note: the code-0 branch computes `peek` inside the loop only to read
+`taskResult`; the unchanged post-loop path recomputes `readResult` +
+`normalizeResult` once more on the final attempt and is the sole place that pushes
+`norm.warnings` and emits. This double-normalize is idempotent (pure function) and
+keeps the existing emit blocks verbatim, minimizing diff.
+
 ### attempts on pre-retry-loop early failures
 
-Three structured results are emitted **after** argument parsing but **before** the
-retry loop runs, at which point zero `codex exec` invocations have happened. Each
-MUST carry `attempts: 0` when `retriesEnabled` (the counter is still 0), so the
-contract reads precisely: *when `--retries > 0`, `attempts` is present on every
-structured result and equals the number of `codex exec` invocations (0 before the
-loop, >=1 once the loop runs).* The three `attempts: 0` sites:
+Three structured results are emitted after argument parsing but before the retry
+loop runs (zero `codex exec` invocations). Each MUST carry `attempts: 0` when
+`retriesEnabled`:
 
-1. Invalid working directory — `--cwd ... does not exist` emit (`:676-685`,
-   exit 2).
-2. Codex preflight failure — `checkCodexAvailable` not-ok emit (`:692-702`,
-   exit 1).
-3. Session-directory creation failure — `mkdirSync` catch emit (`:713-723`,
-   exit 1).
+1. Invalid working directory — `--cwd ... does not exist` emit (`:676-685`, exit 2).
+2. Codex preflight failure — `checkCodexAvailable` not-ok emit (`:692-702`, exit 1).
+3. Session-directory creation failure — `mkdirSync` catch emit (`:713-723`, exit 1).
 
-Argument-parse failures (`--retries -1`, unknown flag) exit via `usageErr`
-(exit 2) BEFORE any result object is built and emit no structured JSON, so they
-are outside this contract. The uniform gated-emit approach (step 2 above) covers
-all three sites automatically.
+Argument-parse failures exit via `usageErr` (exit 2) BEFORE any result object is
+built and emit no structured JSON, so they are outside this contract. The uniform
+gated-emit approach (step 2) covers all three sites automatically.
 
 ### JSON result reporting and the structural-equivalence contract
 
 - `attempts`: integer = number of `codex exec` invocations (0 = failed before the
   loop; 1 = one invocation, no retry; 2 = one retry; ...). Present only when
-  `--retries > 0`.
-- Warnings: one entry per retried failure, quoting the matched diagnostic line and
-  the transient class + attempt index, appended to the existing `warnings` array.
+  `--retries > 0`. Identical meaning for Trigger A and Trigger B retries.
+- Warnings: one entry per retried failure, quoting the matched diagnostic line (or
+  sandbox-wrapper marker) and the trigger class + attempt index, appended to the
+  existing `warnings` array.
 
 `emit` (`:637`) serializes with `JSON.stringify(r, null, 2)` in object-literal
 insertion order.
 
-**"Byte-identical" acceptance line — CHOICE: option (b), a NARROW structural
-contract** (not fixed-clock / session injection + stdout fixture). Rationale:
-option (a) would force a fixed-clock / injected-session-path seam into production
-purely for a test; (b) tests the real guarantee — that the flag at its default is
-inert — against only the fields that legitimately vary.
+The structural-equivalence acceptance line uses **option (b), a NARROW structural
+contract** (not fixed-clock / session injection + stdout fixture):
 
 > Contract scope: the two paths exercised by the structural-equivalence test —
 > (i) the clean-success emit (`:799`), and (ii) the `runResult.code !== 0`
-> failure emit (`:759`) driven by a **fixed** fake diagnostic tail. On both, the
-> ONLY nondeterministic fields are `durationMs` and `sessionDir`:
-> - path (i): `sessionDir` is `null` (cleaned up) and `error` is absent, so only
->   `durationMs` varies;
-> - path (ii): `error` is `formatCodexRunFailure` of the fixed fake tail
->   (deterministic — the fake message carries no session ID), `sessionDir` is the
->   generated path (dynamic), `durationMs` is dynamic; no cleanup warning fires
->   (cleanup runs only on the success path).
->
-> For a given input on these two paths: with `--retries` omitted (or `0`) the
-> result has **no `attempts` key** and **no retry-related warning**, and after
-> deleting `durationMs` and `sessionDir` is **deep-equal** to the result the same
-> input produces with the flag entirely absent. This is explicitly NOT a universal
-> deep-equality claim: the session-dir-failure, missing-final-message,
-> unreadable-final-message, and cleanup-failure paths additionally embed the
-> session path in `error` / `warnings` and are out of scope (their no-retry
-> behavior is asserted separately by invocation-count, not deep-equality).
+> failure emit (`:758`) driven by a **fixed** fake diagnostic tail. On both, the
+> ONLY nondeterministic fields are `durationMs` and `sessionDir`. For a given
+> input on these two paths: with `--retries` omitted (or `0`) the result has **no
+> `attempts` key** and **no retry-related warning**, and after deleting
+> `durationMs` and `sessionDir` is **deep-equal** to the result the same input
+> produces with the flag entirely absent. This is explicitly NOT a universal
+> deep-equality claim; the session-dir-failure, missing-final-message,
+> unreadable-final-message, and cleanup-failure paths embed the session path in
+> `error` / `warnings` and are out of scope (their no-retry behavior is asserted
+> separately by invocation-count).
 
-The `attempts` gating (present only when `retriesEnabled`) is what makes the
-default byte-identical to today: with the flag absent the key is never added.
+Trigger B does not perturb the default: with `retries = 0`, `attempt <= retries`
+is `1 <= 0` (false), so no clean-exit-blocked retry ever fires, and the blocked
+result emits exactly as today with no `attempts` key.
 
 Open question (non-blocking): whether the maintainer prefers `attempts` always
-present (cleaner for consumers) over the gated omission. Default chosen: gated, to
-honor this contract.
+present over the gated omission. Default chosen: gated, to honor this contract.
 
 ### Interaction with other flags
 
@@ -421,18 +503,19 @@ honor this contract.
   retry warnings) is written once at the end.
 - `--debug`: `sessionDir` preserved as today. All attempts reuse one `sessionDir`
   / `lastMessagePath`; the mandatory pre-attempt delete guarantees a code-0
-  attempt's `readResult` sees only that attempt's write. On `--debug` the
-  surviving `last-message.txt` is the LAST attempt's, matching intuition.
-- `--reasoning-effort` / `--model` / `--permissions` / `--profile`: identical
-  spawn args on every attempt (same `buildSpawnArgs`).
+  attempt's `readResult` sees only that attempt's write. On `--debug` the surviving
+  `last-message.txt` is the LAST attempt's.
+- `--reasoning-effort` / `--model` / `--permissions` / `--profile`: identical spawn
+  args on every attempt (same `buildSpawnArgs`).
 
 ### Affected files
 
 - `codex-task.mjs` — arg parse (`--retries`), attempt counter + uniform gated
-  `attempts` emit, retry loop in `main()` (with pre-attempt `rmSync`),
-  `classifyFailure()` (+ `NON_TRANSIENT_PATTERNS` / `TRANSIENT_PATTERNS` +
-  `MAX_TAIL_SCAN`), `tailOf()`, backoff constant + env override, `printUsage`
-  text.
+  `attempts` emit, retry loop in `main()` (with pre-attempt `rmSync`, Trigger A
+  and Trigger B branches), `classifyFailure()` (+ `NON_TRANSIENT_PATTERNS` /
+  `TRANSIENT_PATTERNS` + `MAX_TAIL_SCAN`), shared `SANDBOX_WRAPPER_PATTERNS`,
+  `findSandboxWrapperMarker()`, `tailOf()`, backoff constant + env override,
+  `printUsage` text.
 - `SKILL.md` — see docs section.
 - `tests/cli-smoke.test.mjs` — extend fake-codex shim + new tests.
 - No changes to `install.mjs` or `scripts/permission-matrix.mjs`.
@@ -442,111 +525,118 @@ honor this contract.
 `makeFakeCodex()` (`tests/cli-smoke.test.mjs:204`) builds a per-call temp dir with
 a `codex.cmd` / `codex` shim delegating to `fake-codex.mjs`; PATH is prepended so
 the fake wins. The shim answers `--version` and exits BEFORE any other logic
-(`fakeCodexJs`, `:233`), so the `checkCodexAvailable` preflight never touches
-per-run state — a disk counter therefore equals the number of `codex exec`
+(`fakeCodexJs`, `:233`), so a disk counter equals the number of `codex exec`
 invocations, i.e. the true attempt count.
 
-Extend `fakeCodexJs` with env-driven, on-disk modes (state lives on disk because
-each `codex exec` is a fresh process):
+Extend `fakeCodexJs` with env-driven, on-disk modes (state on disk because each
+`codex exec` is a fresh process):
 
-- `FAKE_CODEX_STATE` — path to a counter file. On every non-`--version`
-  invocation the shim reads the integer (default 0), increments, writes it back.
-  `makeFakeCodex` returns this path (inside `fake.dir`, per-test isolated).
-- `FAKE_CODEX_FAIL_TIMES` (int, default 0) — leading invocations that fail: if
-  `count <= FAIL_TIMES`, write `FAKE_CODEX_FAIL_MESSAGE` to stderr and
-  `process.exit(1)`.
-- `FAKE_CODEX_FAIL_MESSAGE` — the stderr text on a failing invocation (may be a
-  multi-line string carrying a codex banner, for the banner-bearing test).
+- `FAKE_CODEX_STATE` — path to a counter file; every non-`--version` invocation
+  reads, increments, writes it. `makeFakeCodex` returns this path.
+- `FAKE_CODEX_FAIL_TIMES` (int, default 0) — leading invocations that fail
+  non-zero: if `count <= FAIL_TIMES`, write `FAKE_CODEX_FAIL_MESSAGE` to stderr and
+  `process.exit(1)`. (Trigger A / non-transient / contract-fail cases.)
+- `FAKE_CODEX_FAIL_MESSAGE` — stderr text on a failing invocation (may be
+  multi-line, for the banner-bearing test).
 - `FAKE_CODEX_FAIL_WRITES_FINAL` (flag) — on a FAILING invocation, write a
   valid-JSON sentinel (`{"taskResult":"completed","summary":"STALE"}`) to the
-  `--output-last-message` path BEFORE exiting 1 (drives the stale-file sentinel
-  test).
-- `FAKE_CODEX_BAD_FINAL` (flag) — on the SUCCESS branch, write non-JSON garbage to
-  the `--output-last-message` path and exit 0 (code-0 malformed path).
-- `FAKE_CODEX_NO_FINAL` (flag) — on the SUCCESS branch, do NOT write the
-  `--output-last-message` file and exit 0 (code-0 missing-final-message path).
-- `FAKE_CODEX_FAIL_VERSION` (flag) — make the `--version` branch exit non-zero
-  (drives a `checkCodexAvailable` preflight failure).
+  `--output-last-message` path before exiting 1 (stale-file sentinel test).
+- `FAKE_CODEX_BAD_FINAL` (flag) — on SUCCESS, write non-JSON garbage and exit 0.
+- `FAKE_CODEX_NO_FINAL` (flag) — on SUCCESS, do NOT write the final-message file
+  and exit 0.
+- `FAKE_CODEX_FAIL_VERSION` (flag) — make the `--version` branch exit non-zero.
+- **NEW `FAKE_CODEX_BLOCK_TIMES` (int, default 0)** — leading invocations that
+  model the reachable Trigger B shape: exit **0**, write a contract-valid final
+  message `{"taskResult": FAKE_CODEX_BLOCK_RESULT, "summary": "sandbox blocked"}`
+  to the `--output-last-message` path, and write `FAKE_CODEX_BLOCK_MARKER` to
+  **stderr** to model the mid-turn tool-failure text. On `count > BLOCK_TIMES`,
+  fall through to the normal SUCCESS branch (a `completed` final message, exit 0).
+- **NEW `FAKE_CODEX_BLOCK_MARKER`** — the stderr text on a blocked invocation
+  (sandbox-wrapper text, capacity text, or empty).
+- **NEW `FAKE_CODEX_BLOCK_RESULT` (default `blocked`)** — the `taskResult` value
+  written by the blocked-mode branch, so a test can also emit `partial`.
 
-All retry tests set `CODEX_TASK_RETRY_DELAY_MS=0` (no real sleeps) and assert the
-state-file counter (true invocation count) alongside the reported `attempts` field
-— they must agree.
+All retry tests set `CODEX_TASK_RETRY_DELAY_MS=0` and assert the state-file counter
+alongside the reported `attempts` field — they must agree.
 
-Tests (existing retained/renumbered; NEW marks review-mandated additions):
+Tests (existing retained/renumbered; NEW marks additions in this revision):
 
-1. transient-retry-success (capacity): `FAIL_TIMES=1`, message "Selected model is
-   at capacity", `--retries 2` -> status 0, `ok:true`, `attempts:2`, exactly one
-   warning `/at capacity/i`; counter == 2.
-2. **banner-bearing capacity (fixes High)**: `FAIL_TIMES=1`, message = a realistic
-   multi-line codex frame — config banner including the literal line `reasoning
-   effort: high` AND a `session id: ...` line, then a prompt-echo line, then a
-   final line `Selected model is at capacity` — `--retries 2` -> status 0,
-   `ok:true`, `attempts:2`, one warning whose quoted line is `Selected model is at
-   capacity` (NOT banner text); counter == 2. Proves banner lines the old grammar
-   missed do not suppress the retry and the warning quotes the real diagnostic.
-3. **NEW multiline durable-earlier-then-capacity (first-classified-line-wins,
-   fixes High)**: `FAIL_TIMES=1`, message = two lines `You've hit your weekly
-   usage limit\nSelected model is at capacity` -> retried, status 0, `attempts:2`,
-   warning `/at capacity/i`; counter == 2. Durable text earlier must NOT block the
-   final capacity line.
-4. **NEW multiline capacity-earlier-then-durable (inverse must exclude, fixes
-   High)**: `FAIL_TIMES=1`, message = `Selected model is at capacity\nYou've hit
-   your weekly usage limit` -> NOT retried, status 1, `ok:false`, `attempts:1`;
-   counter == 1. Final durable line decides.
-5. **NEW 429-rate-limit transient class**: `FAIL_TIMES=1`, message "Error: 429
-   rate limit exceeded, please try again later", `--retries 1` -> status 0,
-   `attempts:2`, one warning `/429|rate limit/i`; counter == 2.
-6. **NEW generic please-try-again (must NOT retry, fixes Medium)**: `FAIL_TIMES=1`,
-   message "Some permanent failure. Please try again", `--retries 2` -> NOT
-   retried, status 1, `ok:false`, `attempts:1`; counter == 1.
-7. non-transient-no-retry (auth): `FAIL_TIMES=1`, "stream error: missing bearer
-   token", `--retries 2` -> shim would succeed on attempt 2, but wrapper must NOT
-   retry: status 1, `ok:false`, `attempts:1`; counter == 1.
-8. **NEW unsupported-model exclusion**: "model gpt-5.6-terra is not supported for
-   this ChatGPT account", `FAIL_TIMES=1`, `--retries 2` -> not retried, status 1,
-   `attempts:1`; counter == 1.
-9. **NEW unsupported reasoning-effort exclusion**: "reasoning effort 'xhigh' is not
-   supported for this model", `FAIL_TIMES=1`, `--retries 2` -> not retried, status
-   1, `attempts:1`; counter == 1. Guards the narrowed effort pattern's
-   true-positive side (banner echo `reasoning effort: high` alone not matching is
-   covered by test 2).
-10. **NEW mixed durable+transient single line (durable-first-per-line)**: "Selected
-    model is at capacity. You've hit your weekly usage limit.", `FAIL_TIMES=1`,
-    `--retries 2` -> not retried, status 1, `attempts:1`; counter == 1.
-11. retries-exhausted: `FAIL_TIMES=5`, capacity message, `--retries 2` -> status 1,
-    `ok:false`, `attempts:3`, two retry warnings, `error` carries the capacity
-    tail; counter == 3.
-12. **NEW stale-final-message sentinel (fixes Medium)**: `FAIL_TIMES=1` +
-    `FAKE_CODEX_FAIL_WRITES_FINAL=1` (attempt 1 fails on a capacity message after
-    writing a `{"summary":"STALE"}` final message) + `FAKE_CODEX_NO_FINAL=1`
-    (attempt 2 exits 0 writing nothing), `--retries 2` -> status 1, `ok:false`,
-    error `/did not write a final message/`, result does NOT contain `STALE`,
-    `attempts:2`; counter == 2. Proves the pre-attempt delete prevents serving the
-    stale sentinel and the contract failure is reported instead.
-13. sandbox-wrapper transient class: "windows unelevated restricted-token sandbox
-    cannot enforce split writable root sets directly; refusing to run unsandboxed",
-    `FAIL_TIMES=1`, `--retries 1` -> status 0, `attempts:2`; counter == 2.
-14. **NEW exit-0 malformed-final-message-JSON (must NOT retry)**:
-    `FAKE_CODEX_BAD_FINAL=1`, `--retries 2` -> status 1, `ok:false`, error `/not
-    valid JSON|no extractable JSON/`, `attempts:1`, counter == 1 (single
-    invocation proves the readResult contract failure never re-enters the loop).
-15. **NEW exit-0 missing-final-message-file (must NOT retry)**:
-    `FAKE_CODEX_NO_FINAL=1`, `--retries 2` -> status 1, `ok:false`, error `/did not
-    write a final message/`, `attempts:1`, counter == 1.
-16. **NEW preflight-failure-with-retries**: `FAKE_CODEX_FAIL_VERSION=1`, `--retries
-    2` -> status 1, `ok:false`, error from `formatCodexUnavailable`, `attempts:0`,
-    counter == 0 (no `codex exec` ever ran).
-17. structural-equivalence / field-gating (contract option b, narrowed to the two
-    in-scope paths): (a) run the plain SUCCESS fake once with the flag OMITTED and
-    once with `--retries 0`; assert neither JSON has an `attempts` key and no
-    warning matches `/attempt|retry/i`; delete `durationMs` and `sessionDir` from
-    both and `assert.deepEqual`. (b) Same for the plain FAILURE fake (capacity
-    message, large `FAIL_TIMES`): flag omitted vs `--retries 0`, assert attempts
-    absent, no retry warning, deep-equal modulo `durationMs` + `sessionDir`.
-18. `--help` documents `--retries` (extend the help-contract test with
-    `/--retries/`).
+1. transient-retry-success (capacity, Trigger A): `FAIL_TIMES=1`, "Selected model
+   is at capacity", `--retries 2` -> status 0, `ok:true`, `attempts:2`, one warning
+   `/at capacity/i`; counter == 2.
+2. banner-bearing capacity: `FAIL_TIMES=1`, multi-line codex frame (config banner
+   incl. `reasoning effort: high` and `session id: ...`, prompt echo, final line
+   `Selected model is at capacity`), `--retries 2` -> status 0, `attempts:2`, one
+   warning quoting `Selected model is at capacity`; counter == 2.
+3. multiline durable-earlier-then-capacity: two lines `You've hit your weekly usage
+   limit` then `Selected model is at capacity` -> retried, status 0, `attempts:2`;
+   counter == 2.
+4. multiline capacity-earlier-then-durable: `Selected model is at capacity` then
+   `You've hit your weekly usage limit` -> NOT retried, status 1, `attempts:1`;
+   counter == 1.
+5. 429 transient class: "Error: 429 rate limit exceeded, please try again later",
+   `--retries 1` -> status 0, `attempts:2`, warning `/429|rate limit/i`; counter==2.
+6. generic please-try-again (must NOT retry): "Some permanent failure. Please try
+   again", `--retries 2` -> status 1, `attempts:1`; counter == 1.
+7. non-transient auth: "stream error: missing bearer token", `FAIL_TIMES=1`,
+   `--retries 2` -> status 1, `attempts:1`; counter == 1.
+8. unsupported-model exclusion: "model gpt-5.6-terra is not supported for this
+   ChatGPT account" -> not retried, status 1, `attempts:1`; counter == 1.
+9. unsupported reasoning-effort exclusion: "reasoning effort 'xhigh' is not
+   supported for this model" -> not retried, status 1, `attempts:1`; counter == 1.
+10. mixed durable+transient single line: "Selected model is at capacity. You've hit
+    your weekly usage limit." -> not retried, status 1, `attempts:1`; counter == 1.
+11. retries-exhausted (capacity): `FAIL_TIMES=5`, `--retries 2` -> status 1,
+    `attempts:3`, two retry warnings, `error` carries the capacity tail; counter==3.
+12. stale-final-message sentinel: `FAIL_TIMES=1` + `FAKE_CODEX_FAIL_WRITES_FINAL=1`
+    (attempt 1 fails on a capacity message after writing a `STALE` final message) +
+    `FAKE_CODEX_NO_FINAL=1` (attempt 2 exits 0 writing nothing), `--retries 2` ->
+    status 1, error `/did not write a final message/`, result does NOT contain
+    `STALE`, `attempts:2`; counter == 2.
+13. sandbox-wrapper as a NON-ZERO terminal error (Trigger A): "windows unelevated
+    restricted-token sandbox cannot enforce split writable root sets directly;
+    refusing to run unsandboxed" via `FAIL_TIMES=1`, `--retries 1` -> status 0,
+    `attempts:2`; counter == 2. (Retained; models a hypothetical exit-non-zero
+    sandbox failure, distinct from the reachable clean-exit shape in tests 20-23.)
+14. exit-0 malformed-final-message-JSON (must NOT retry): `FAKE_CODEX_BAD_FINAL=1`,
+    `--retries 2` -> status 1, error `/not valid JSON|no extractable JSON/`,
+    `attempts:1`, counter == 1.
+15. exit-0 missing-final-message-file (must NOT retry): `FAKE_CODEX_NO_FINAL=1`,
+    `--retries 2` -> status 1, error `/did not write a final message/`,
+    `attempts:1`, counter == 1.
+16. preflight-failure-with-retries: `FAKE_CODEX_FAIL_VERSION=1`, `--retries 2` ->
+    status 1, error from `formatCodexUnavailable`, `attempts:0`, counter == 0.
+17. structural-equivalence / field-gating (option b, two in-scope paths): (a) plain
+    SUCCESS fake with flag OMITTED vs `--retries 0` — neither JSON has an `attempts`
+    key, no warning matches `/attempt|retry/i`, deep-equal modulo `durationMs` +
+    `sessionDir`. (b) same for the plain FAILURE fake (capacity, large FAIL_TIMES).
+18. `--help` documents `--retries` (help-contract test asserts `/--retries/`).
 19. invalid value: `--retries -1` and `--retries abc` -> status 2, stderr
     `/--retries must be a non-negative integer/`.
+20. **NEW clean-exit blocked + sandbox-wrapper -> retry then success (Trigger B,
+    the real incident shape)**: `FAKE_CODEX_BLOCK_TIMES=1`,
+    `FAKE_CODEX_BLOCK_MARKER` = "windows unelevated restricted-token sandbox cannot
+    enforce split writable root sets directly; refusing to run unsandboxed"
+    (to stderr), `--retries 2` -> attempt 1 exits 0 with `taskResult:blocked` +
+    marker, attempt 2 exits 0 `completed`. Expect status 0, `ok:true`,
+    `taskResult:'completed'`, `attempts:2`, exactly one warning matching
+    `/sandbox|blocked/i`; counter == 2. Proves Trigger B retries the reachable shape
+    and eventually succeeds.
+21. **NEW clean-exit blocked + capacity text -> NO retry (Decision 2)**:
+    `FAKE_CODEX_BLOCK_TIMES=1`, `FAKE_CODEX_BLOCK_MARKER` = "Selected model is at
+    capacity", `--retries 2` -> attempt 1 exits 0 with `taskResult:blocked` +
+    capacity text. Expect NOT retried: status 1, `ok:false`, `taskResult:'blocked'`,
+    `attempts:1`, no retry warning; counter == 1. Proves capacity on a clean-exit
+    blocked result does not trigger Trigger B.
+22. **NEW clean-exit blocked, no transient marker -> NO retry**:
+    `FAKE_CODEX_BLOCK_TIMES=1`, `FAKE_CODEX_BLOCK_MARKER` empty, `--retries 2` ->
+    status 1, `ok:false`, `taskResult:'blocked'`, `attempts:1`, no retry warning;
+    counter == 1. Proves a plain blocked result is a task-level outcome, not retried.
+23. **NEW clean-exit partial + sandbox-wrapper -> NO retry (Decision 1,
+    blocked-only)**: `FAKE_CODEX_BLOCK_TIMES=1`, `FAKE_CODEX_BLOCK_RESULT=partial`,
+    `FAKE_CODEX_BLOCK_MARKER` = a sandbox-wrapper line, `--retries 2` -> status 1,
+    `ok:false`, `taskResult:'partial'`, `attempts:1`, no retry warning; counter == 1.
+    Proves `partial` does not qualify for Trigger B even with a sandbox marker.
 
 `npm run check` (node --check) and `npm test` (node --test) are the acceptance
 gate; both must pass in `../codex-task`.
@@ -555,44 +645,61 @@ gate; both must pass in `../codex-task`.
 
 - `SKILL.md` "How to invoke" synopsis: add `[--retries N]`.
 - `SKILL.md` Wrapper options: new `--retries` bullet — default 0 preserves current
-  behavior; retries only transient infrastructure classes (model-capacity incl.
-  "at capacity" and 429/rate-limit/temporarily-unavailable/overloaded;
-  sandbox-wrapper prep failures); explicitly NOT auth, unsupported model/effort,
-  durable quota/usage cap, generic "please try again", or JSON/contract failures;
-  short fixed backoff; serial (never parallel).
+  behavior; retries only transient infrastructure, in two shapes: (a) a non-zero
+  codex exit whose terminal diagnostic is model-capacity ("at capacity",
+  429/rate-limit/temporarily-unavailable/overloaded) or a sandbox-wrapper prep
+  failure; and (b) a **clean exit that reports `taskResult: blocked` with a
+  sandbox-wrapper tool failure in the output** (the Windows apply_patch case).
+  Explicitly NOT retried: auth, unsupported model/effort, durable quota/usage cap,
+  generic "please try again", JSON/contract failures, `partial`/`failed` results,
+  and a `blocked` result whose only transient-looking text is capacity (the model
+  was reachable — blocked is task-level). Short fixed backoff; serial (never
+  parallel).
 - `SKILL.md` Output / Field semantics: document `attempts` (present only when
   `--retries > 0`; equals `codex exec` invocation count, 0 if it failed before the
   loop) and the per-retry warning entries.
 - `SKILL.md` "After invoking" / Failure modes: point "re-run only if it looks like
-  a transient codex hiccup" at `--retries` as the built-in automated path.
+  a transient codex hiccup" at `--retries` as the built-in automated path, noting
+  it now also covers the clean-exit blocked sandbox-wrapper case.
 - `codex-task.mjs` `printUsage` (`:194`): mirror the flag doc (a help-contract test
   asserts on it).
 - No README index change (README not in scope).
 
 ### Risks and edge cases
 
-- Classification window size (primary new risk). `classifyFailure` assumes the
-  operative codex terminal error is within the last `MAX_TAIL_SCAN` (= 3) non-blank
-  lines. If a future codex version emits a terminal diagnostic longer than 3 lines
-  with the classifiable phrase above the window, the tail classifies as
-  non-transient and does not retry (fail-safe: we never *wrongly* retry a durable
-  failure). `MAX_TAIL_SCAN` is a tunable constant; tests 2-4 pin the current
-  multi-line shape. The full raw tail is still reported in `error`.
+- Trigger B tail scan (primary new risk). The sandbox-wrapper marker is matched
+  anywhere in the combined 4000-char-capped `stdoutTail` + `stderrTail`. If a very
+  long turn pushes the marker out of both 4000-char windows before codex exits 0,
+  Trigger B misses it and the run reports `blocked` without retry (fail-safe: never
+  a wrong retry). The observed incident's tool failure is near the run's end, well
+  within the window. The narrowness of `SANDBOX_WRAPPER_PATTERNS` (wrapper-prep
+  phrases only) keeps false positives low; a generic permission/read-only denial in
+  a blocked tail is a config problem and does not match.
+- Whole-tail vs last-N-lines asymmetry. Trigger A uses the terminal window (the
+  operative error is last); Trigger B scans the whole tail (the marker is mid-turn).
+  This asymmetry is deliberate and reflects the two distinct codex output shapes;
+  conflating them would either miss Trigger B (last-N) or over-match Trigger A
+  (whole-tail catching earlier streamed durable text).
+- Classification window size (Trigger A). `classifyFailure` assumes the operative
+  terminal error is within the last `MAX_TAIL_SCAN` (= 3) non-blank lines; a longer
+  future terminal diagnostic with the classifiable phrase above the window
+  classifies non-transient (fail-safe). Tunable constant; tests 2-4 pin the shape.
 - Misclassification. A durable tail whose final line coincidentally matches a
   transient phrase wastes up to `n` bounded retries; the higher-stakes direction
-  (retrying durable quota/auth) is blocked because the durable phrase, when it is
-  the terminal line, matches Phase 1 first. The 429 / "rate limit" boundary is the
-  key judgement call: transient unless a durable-cap phrase is the terminal line.
-  Both directions are covered (tests 3, 4, 10).
-- Wall-clock cost. Failed capacity attempts happened after 180s+ of work; `n`
-  retries multiply worst-case latency. `n` bounds it; default 0 is opt-in.
+  (retrying durable quota/auth) is blocked because the durable phrase, when
+  terminal, matches Phase 1 first. Both directions covered (tests 3, 4, 10, 21).
+- Wall-clock cost. Failed attempts happened after 180s+ of work; `n` retries
+  multiply worst-case latency. `n` bounds it; default 0 is opt-in.
 - Idempotency of write tasks. Both observed transient classes fail *before* a
-  successful write (capacity = pre-work; sandbox-wrapper = apply_patch refused),
-  and codex runs `--ephemeral` (fresh read each attempt), so retry is as safe as
-  the manual re-run it replaces. A transient failure *after* a partial write is
-  identical in risk to today's human manual retry; noted, not solved.
+  successful write (capacity = pre-work; sandbox-wrapper = apply_patch refused), and
+  codex runs `--ephemeral` (fresh read each attempt), so retry is as safe as the
+  manual re-run it replaces. `blocked`-only (excluding `partial`) keeps Trigger B
+  from re-running a run that already committed partial progress. A transient failure
+  *after* a partial write is identical in risk to today's human manual retry; noted,
+  not solved.
 - Stale `lastMessagePath` across attempts: eliminated by the mandatory pre-attempt
-  `rmSync(lastMessagePath, { force: true })`; the sentinel test (12) guards it.
+  `rmSync(lastMessagePath, { force: true })`, covering both trigger paths; sentinel
+  test (12) guards it.
 - Test flakiness from real sleeps: eliminated by `CODEX_TASK_RETRY_DELAY_MS=0`.
 
 ### Open questions (non-blocking; defaults chosen)
@@ -600,8 +707,10 @@ gate; both must pass in `../codex-task`.
 1. `attempts` presence gated to `--retries > 0` (honors the structural contract).
    Confirm vs always-present.
 2. Backoff magnitude: fixed 2000 ms (env-overridable). Acceptable, or 0/1000 ms?
-3. `MAX_TAIL_SCAN` = 3: confirm no known codex mode emits a terminal diagnostic
-   whose classifiable phrase sits more than 3 non-blank lines above the end.
+3. `MAX_TAIL_SCAN` = 3 (Trigger A): confirm no known codex mode emits a terminal
+   diagnostic whose classifiable phrase sits more than 3 non-blank lines above end.
+4. Trigger B is `blocked`-only and sandbox-wrapper-only (Decisions 1-2). Confirm no
+   maintainer preference to also retry `partial` or capacity-on-clean-exit.
 
 ## Implementation Notes
 
