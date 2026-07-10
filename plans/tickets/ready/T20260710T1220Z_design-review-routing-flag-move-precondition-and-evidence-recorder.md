@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T12:22:11Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
 updated: 2026-07-10T13:22:01Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # design-review: routing flag, move precondition, and evidence recorder
@@ -455,3 +455,5 @@ Validation: git diff --check clean; prose-only change.
 - 2026-07-10T13:18:16Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. 491/494 (2 = exact B1232Z baseline); AC1-AC6 all pass; inertness flip and token strictness probed live; guardrail honored.
 
 - 2026-07-10T13:18:17Z: Ensured git branch local-board/T20260710T1220Z-design-review-routing-flag-move-precondition-and-evidence-recorder (already-current).
+
+- 2026-07-10T13:22:01Z: Completed document via codex-task:workspace-write: memory-bank routing-flag facts synced; docs/README verified; committed on branch.
