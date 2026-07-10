@@ -1,7 +1,7 @@
 ---
 id: T20260710T1220Z
 type: task
-status: ready_for_review
+status: ready_for_implementation
 priority: P2
 parent: S20260710T1206Z
 children: []
@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T12:22:11Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
 updated: 2026-07-10T13:00:06Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # design-review: routing flag, move precondition, and evidence recorder
@@ -394,3 +394,5 @@ Disposition: both findings accepted; loop-back to ready_for_implementation for t
 - 2026-07-10T12:54:32Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Commits bdcbf96 (peer merge, clean) + 4d54bce: requireDesignReview flag, agents design-review profile (sol@xhigh) in both defaults, moveTicket precondition after gate block, recordDesignReview recorder, producing-status mapping, AC1-AC6 tests. 487 pass + 2 baseline. One-line documented deviation (profileForAction mandatory branch).
 
 - 2026-07-10T12:55:27Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - internal workflow state machinery
+
+- 2026-07-10T13:00:06Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
