@@ -10,10 +10,10 @@ blocks: []
 branch: local-board/T20260710T0037Z-config-add-effort-to-agent-profiles-and-thread-it-through-begin-step-and-codex-dispatch
 estimate: null
 estimateBasis: null
-workStartedAt: null
+workStartedAt: 2026-07-10T01:31:18Z
 workCompletedAt: null
 created: 2026-07-10T00:36:10Z
-updated: 2026-07-10T01:30:54Z
+updated: 2026-07-10T01:31:18Z
 completedSteps: []
 routingApprovals: []
 ---
@@ -65,3 +65,5 @@ Validated 2026-07-09 against local codex-cli 0.144.1: model IDs `gpt-5.6-sol|ter
 ## Questions
 
 ## Run Log
+
+- 2026-07-10T01:31:18Z: Ensured git branch local-board/T20260710T0037Z-config-add-effort-to-agent-profiles-and-thread-it-through-begin-step-and-codex-dispatch (already-current).
