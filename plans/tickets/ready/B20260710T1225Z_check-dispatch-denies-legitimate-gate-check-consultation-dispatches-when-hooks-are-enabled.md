@@ -13,7 +13,7 @@ estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T12:25:41Z
-updated: 2026-07-10T12:26:03Z
+updated: 2026-07-10T12:42:29Z
 completedSteps: []
 routingApprovals: []
 ---
@@ -70,3 +70,5 @@ Dispatching the gate agent without the "Ticket: <id>" first line — the hook's 
 ## Questions
 
 ## Run Log
+
+- 2026-07-10T12:42:29Z: Second facet observed: when no ledger entry exists, checkDispatchForTicket resolves expected route from the ticket file under the HOOK'S cwd (main checkout), not the ticket's registered worktree - so a worktree-local status advance (ready_for_design -> ready_for_implementation) is invisible and the fallback denies a correctly-routed dispatch against stale status. Fix should resolve the ticket via its registered worktree root (worktrees registry) or treat main-root staleness as unverifiable (fail open).
