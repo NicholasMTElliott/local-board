@@ -1050,10 +1050,15 @@ test("CLI gate-check auto-stamps gate:<stage>:skipped-empty-catalog on the empty
     const plain = await runCli(["--root", root, "gate-check", ticketId, "--stage", "test"]);
     assert.equal(plain.code, 0, plain.stderr);
     assert.match(plain.stdout, /^skip: empty catalog — recorded gate:test:skipped-empty-catalog \(no dispatch\)$/m);
+
+    // The empty-catalog branch dispatches no agent, so it must not stamp the
+    // active-steps dispatch ledger either (B20260710T1225Z: the consultation
+    // stamp is scoped to the non-skip branch only).
+    assert.equal(Object.hasOwn(await readActiveSteps(root), ticketId), false);
   });
 });
 
-test("CLI gate-check does not stamp a gate token on a non-empty catalog (pure read)", async () => {
+test("CLI gate-check does not record ticket evidence on a non-empty catalog, but does stamp a scoped consultation entry in the active-steps ledger (B20260710T1225Z)", async () => {
   await withBoard(async (root) => {
     assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
 
@@ -1067,10 +1072,22 @@ test("CLI gate-check does not stamp a gate token on a non-empty catalog (pure re
 
     const result = await runCli(["--root", root, "gate-check", ticketId, "--stage", "design", "--json"]);
     assert.equal(result.code, 0, result.stderr);
+    // Ticket evidence (completedSteps) is untouched on the non-empty branch --
+    // the recorded gate token is written later by gate-complete.
     assert.match(await readFile(ticketPath, "utf8"), /^completedSteps: \[\]$/m);
     const out = JSON.parse(result.stdout);
     assert.equal(out.skip, false);
     assert.equal(out.recorded, null);
+
+    // The non-empty branch DOES stamp a scoped consultation entry in the
+    // active-steps dispatch ledger (distinct from ticket evidence) so
+    // check-dispatch authorizes the upcoming gate agent dispatch.
+    const steps = await readActiveSteps(root);
+    assert.equal(steps[ticketId].kind, "gate");
+    assert.equal(steps[ticketId].action, "gate-check");
+    assert.equal(steps[ticketId].stage, "design");
+    assert.equal(steps[ticketId].route, "claude-subagent:local-board-gatecheck");
+    assert.equal(steps[ticketId].model, "haiku");
 
     // Non-JSON mode: the skip line is absent on the non-empty-catalog branch.
     const plain = await runCli(["--root", root, "gate-check", ticketId, "--stage", "design"]);

@@ -170,6 +170,28 @@ export async function assertInvocationRootForTicket(root, ticketId, options = {}
   );
 }
 
+// Resolves a ticket's registered worktree root, if any, without throwing.
+// Used by `checkDispatchForTicket`'s (src/active-steps.js) no-ledger fallback
+// so a status read for the residual fallback path targets the worktree where
+// the ticket's status actually lives, not the hook's invocation cwd (which,
+// for a hook shelling out from a worktree, resolves to the shared main
+// checkout via `resolveMainRoot`). Mirrors the resolution
+// `assertInvocationRootForTicket` already performs for the wrong-root guard,
+// but read-only and fail-safe: any config/git error, or no worktree
+// registered for this ticket, returns `null` rather than throwing -- the
+// caller falls back to its own `root` unchanged, exactly today's behaviour.
+export async function resolveTicketWorktreeRoot(root, ticketId) {
+  try {
+    const mainRoot = await resolveMainRoot(root);
+    const config = await loadConfig(mainRoot);
+    const expected = ticketWorktreePath(mainRoot, ticketId, config.worktrees.location);
+    const registered = await findRegisteredWorktree(mainRoot, expected);
+    return registered === null ? null : registered.worktreePath;
+  } catch {
+    return null;
+  }
+}
+
 export async function removeTicketWorktree(root, ticketId, options = {}) {
   const repoRoot = await resolveMainRoot(root);
   await findTicket(repoRoot, ticketId);
