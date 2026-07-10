@@ -173,6 +173,13 @@ Default `--harness claude` (or no flag) leaves begin-step's output unchanged;
 the active-steps ledger stamp always records the configured logical route/model
 regardless of harness. `codex-default` is a wildcard that satisfies any pinned
 model in strict-routing model enforcement (see below).
+Codex-task availability is peer-install detection only: `src/config.js`
+`codexTaskRoutedActions` scans mandatory and optional routes, and
+`src/codex-detect.js` probes `codex` on PATH plus harness skill dirs.
+`validate` emits a stderr-only, fail-open `WARNING` when configured
+`codex-task:*` actions exist but the `codex` CLI or codex-task skill is
+missing; its exit code is unchanged. Claude-target `install` prints the same
+hint after install. local-board never installs or manages codex-task.
 
 Strict routing enforces the per-step pinned model at `complete-step` write time:
 use `--executor <route> --model <model>` to compose evidence server-side; the

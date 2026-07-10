@@ -24,6 +24,7 @@ plans/local-board.config.jsonc workflow and routing config
 resources/            packaged prompt/template mirror synced from plans/ via npm run sync-resources (sync writes LF; mirror comparison is line-ending-insensitive)
 src/                  parser, validator, writer, git workflow, priority picker, CLI
 src/install.js       installer behind local-board install (human-facing reference: docs/Install.md)
+src/codex-detect.js  codex-task availability helper; detection-only, fail-open
 skills/codex/         Codex skill templates and metadata
 scripts/              maintainer tooling, not packaged
 bin/                  executable CLI entrypoint
@@ -38,6 +39,9 @@ SKILL.md              installable orchestration skill template
 - Avoid external services for core workflow.
 - Preserve portability across Windows/macOS/Linux.
 - Installer requires `local-board` to resolve on PATH before rendering skills/agents.
+- codex-task is a detected-not-managed peer install; `validate` warns on stderr
+  without changing exit code when `codex-task:*` routes exist but `codex` or
+  the codex-task skill is missing.
 - Installer sandbox seam: `--home <dir>` redirects install/uninstall roots; explicit
   undefined home fails closed, and `LOCAL_BOARD_INSTALL_REQUIRE_HOME=1` requires
   an override.
