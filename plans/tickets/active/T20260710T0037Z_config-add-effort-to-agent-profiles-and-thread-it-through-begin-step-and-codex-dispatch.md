@@ -13,8 +13,8 @@ estimateBasis: T20260710T0036Z
 workStartedAt: 2026-07-10T01:31:18Z
 workCompletedAt: null
 created: 2026-07-10T00:36:10Z
-updated: 2026-07-10T01:50:05Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-10T01:51:53Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet"]
 routingApprovals: []
 ---
 # config: add effort to agent profiles and thread it through begin-step and codex dispatch
@@ -205,3 +205,5 @@ Disposition: both findings accepted; ticket looped back to ready_for_implementat
 - 2026-07-10T01:50:05Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
 
 - 2026-07-10T01:50:05Z: Ensured git branch local-board/T20260710T0037Z-config-add-effort-to-agent-profiles-and-thread-it-through-begin-step-and-codex-dispatch (already-current).
+
+- 2026-07-10T01:51:53Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Original d3c425d (effort field end-to-end, 7 new tests) + review-fix 75b4116 (docs shape-validation wording; unknown-branch effort assertions). 466 pass/1 skip; check + validate green.
