@@ -13,8 +13,8 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T17:03:09Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+updated: 2026-07-10T17:04:44Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # section --file can duplicate the section heading when the payload carries it
@@ -237,3 +237,5 @@ Validate-scoping addendum:
 - 2026-07-10T16:54:16Z: Completed review via codex-task:read-only@gpt-5.6-terra: pass: focused re-review of validate-scoping fix b03c0bf (terra@medium); prior full review terra@high passed guard+tests+skills; 137620a re-review passed earlier
 
 - 2026-07-10T16:57:50Z: Completed test via claude-subagent:local-board-tester@sonnet: pass (focused re-test): full suite 533/0/1; scoping tests pass; real-board validate exit 0; branch history clean of probe commits
+
+- 2026-07-10T17:04:44Z: Completed document via codex-task:workspace-write: Docs: section payload contract documented across README/docs/TicketFormat/Workflow/CodexSupport/PerStepOrchestration/memory-bank (013f3ea); validate duplicate-heading scoping addendum in TicketFormat+Workflow (this commit). Sync guard tests 9/9.
