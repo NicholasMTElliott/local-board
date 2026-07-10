@@ -13,7 +13,7 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:22:11Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T13:18:17Z
+updated: 2026-07-10T13:22:01Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -411,6 +411,18 @@ AC coverage: AC1-AC6 all pass (AC6 modulo the declared baseline).
 Anomalies: none beyond the tracked baseline.
 
 ## Documentation Updates
+
+Documentation step executed by codex-task:workspace-write (gpt-5.6-luna @ reasoning-effort medium, 191s); edit committed by the orchestrator on the ticket branch.
+
+Changed:
+
+- memory-bank/systemPatterns.md: routing.requireDesignReview added to the routing-flag facts — gates the design -> implementation forward move, strict design-review:<executor>@<model> token grammar, flag-off inertness (profile inert and unscanned), loop-back stripping parity.
+
+Checked and deliberately left alone:
+
+- docs/Workflow.md (no routing-flag list exists; feature narrative owned by T20260710T1223Z), README.md, memory-bank/techContext.md — no changes needed.
+
+Validation: git diff --check clean; prose-only change.
 
 ## Questions
 
