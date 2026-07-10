@@ -8,12 +8,12 @@ children: []
 blockedBy: []
 blocks: []
 branch: local-board/T20260710T1534Z-codex-task-retries-for-transient-capacity-and-sandbox-failures-codex-task-repo
-estimate: null
-estimateBasis: null
+estimate: 4
+estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T17:50:31Z
+updated: 2026-07-10T17:50:36Z
 completedSteps: []
 routingApprovals: []
 ---
