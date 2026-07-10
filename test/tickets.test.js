@@ -764,7 +764,7 @@ test("setTicketSection is idempotent across a double round-trip for plain conten
   });
 });
 
-test("validate flags a ticket with two identical section headings", async () => {
+test("validate flags a ticket with two identical section headings for a live (non-done/archived) status", async () => {
   await withBoard(async (root) => {
     const ticketPath = await createTicket(root, "task", "Duplicate heading target", {
       status: "backlog",
@@ -785,6 +785,31 @@ test("validate flags a ticket with two identical section headings", async () => 
     );
   });
 });
+
+for (const closedStatus of ["done", "archived"]) {
+  test(`validate does not flag a duplicated section heading on a ${closedStatus} ticket (immutable closed history)`, async () => {
+    await withBoard(async (root) => {
+      const ticketPath = await createTicket(root, "task", `Closed duplicate heading target ${closedStatus}`, {
+        status: closedStatus,
+        now: new Date("2026-05-14T20:56:00Z"),
+      });
+      // Same corruption shape as the live-status case above, bypassing the
+      // reject guard to simulate a pre-guard legacy ticket that has since
+      // been closed out. Closed history must not be forced to rewrite.
+      await replaceText(
+        ticketPath,
+        "## Implementation Notes\n",
+        "## Implementation Notes\n\nFirst.\n\n## Implementation Notes\n\nDuplicate.\n",
+      );
+
+      const issues = validate(await discover(root));
+      assert.ok(
+        !issues.some((issue) => issue.includes("duplicate ## Implementation Notes section")),
+        `expected no duplicate-heading issue for a ${closedStatus} ticket, got: ${JSON.stringify(issues)}`,
+      );
+    });
+  });
+}
 
 test("appendTicketComment into a non-last section preserves the blank-line separator before the next heading", async () => {
   await withBoard(async (root) => {

@@ -1893,21 +1893,33 @@ function validateTicketShape(board, ticket) {
   // getSectionText silently ambiguous -- not arbitrary repeated H2s, so a
   // body that intentionally fences a non-standard heading sample is never a
   // false positive.
-  const standardSectionCounts = new Map();
-  for (const { line } of contentLines(ticket.body)) {
-    const headingMatch = SECTION_HEADING_RE.exec(line);
-    if (headingMatch === null) {
-      continue;
+  //
+  // Scoped to non-closed statuses only (B20260710T1532Z loop-back): a done
+  // or archived ticket is immutable closed history, and this check running
+  // board-wide against ~40 real done/archived tickets predating the guard
+  // hard-failed every validate/preflight/closeout. Live tickets (any status
+  // not in CLOSED_STATUSES) keep the hard guard so new corruption is still
+  // caught before it reaches done/archived. Uses fm.status, not ticket.status
+  // (readTicket copies frontMatter.status into ticket.status, so they agree
+  // for a well-formed ticket; fm is the canonical source already used
+  // throughout this function).
+  if (!isClosedStatus(fm.status)) {
+    const standardSectionCounts = new Map();
+    for (const { line } of contentLines(ticket.body)) {
+      const headingMatch = SECTION_HEADING_RE.exec(line);
+      if (headingMatch === null) {
+        continue;
+      }
+      const name = headingMatch[1];
+      if (!STANDARD_SECTIONS.includes(name)) {
+        continue;
+      }
+      standardSectionCounts.set(name, (standardSectionCounts.get(name) ?? 0) + 1);
     }
-    const name = headingMatch[1];
-    if (!STANDARD_SECTIONS.includes(name)) {
-      continue;
-    }
-    standardSectionCounts.set(name, (standardSectionCounts.get(name) ?? 0) + 1);
-  }
-  for (const [name, count] of standardSectionCounts) {
-    if (count > 1) {
-      issues.push(`${ticket.path}: duplicate ## ${name} section`);
+    for (const [name, count] of standardSectionCounts) {
+      if (count > 1) {
+        issues.push(`${ticket.path}: duplicate ## ${name} section`);
+      }
     }
   }
 
