@@ -8,12 +8,12 @@ children: []
 blockedBy: []
 blocks: []
 branch: local-board/T20260710T1535Z-create-type-vs-status-advisory-and-an-evidence-free-authoring-correction-lane
-estimate: 2
+estimate: 1
 estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T18:58:02Z
+updated: 2026-07-10T18:58:08Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
