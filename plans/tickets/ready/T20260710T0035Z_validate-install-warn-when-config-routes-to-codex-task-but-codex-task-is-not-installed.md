@@ -1,7 +1,7 @@
 ---
 id: T20260710T0035Z
 type: task
-status: ready_for_review
+status: ready_for_test
 priority: P2
 parent: null
 children: []
@@ -13,7 +13,7 @@ estimateBasis: T20260709T1119Z
 workStartedAt: 2026-07-10T01:05:09Z
 workCompletedAt: null
 created: 2026-07-10T00:35:52Z
-updated: 2026-07-10T01:34:51Z
+updated: 2026-07-10T01:34:52Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only]
 routingApprovals: []
 ---
