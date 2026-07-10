@@ -10,10 +10,10 @@ blocks: [T20260710T0037Z]
 branch: local-board/T20260710T0036Z-codex-task-add-reasoning-effort-passthrough-and-gpt-5-6-model-guidance-codex-task-repo
 estimate: null
 estimateBasis: null
-workStartedAt: null
+workStartedAt: 2026-07-10T01:05:10Z
 workCompletedAt: null
 created: 2026-07-10T00:36:09Z
-updated: 2026-07-10T01:04:35Z
+updated: 2026-07-10T01:05:10Z
 completedSteps: []
 routingApprovals: []
 ---
@@ -71,3 +71,5 @@ The codex-task wrapper (sibling repo `../codex-task`, no board of its own — tr
 ## Run Log
 
 - 2026-07-10T00:38:52Z: Probe evidence (2026-07-09, codex-cli 0.144.1): gpt-5.6-{sol,terra,luna} accepted via --model; -c model_reasoning_effort enum on terra = none|minimal|low|medium|high|xhigh (server 400 enumerates); sol additionally accepts max and ultra (both exit 0). Effort sets are model-dependent; do not validate client-side.
+
+- 2026-07-10T01:05:10Z: Ensured git branch local-board/T20260710T0036Z-codex-task-add-reasoning-effort-passthrough-and-gpt-5-6-model-guidance-codex-task-repo (already-current).
