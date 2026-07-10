@@ -10,7 +10,7 @@ blocks: []
 branch: local-board/B20260710T1232Z-install-tests-consult-the-real-path-and-fail-on-machines-with-local-board-globally-installed
 estimate: null
 estimateBasis: null
-workStartedAt: null
+workStartedAt: 2026-07-10T13:48:46Z
 workCompletedAt: null
 created: 2026-07-10T12:32:28Z
 updated: 2026-07-10T13:48:46Z
@@ -58,3 +58,5 @@ Make the PATH-resolution outcome injectable in these two tests the same way sibl
 ## Questions
 
 ## Run Log
+
+- 2026-07-10T13:48:46Z: Ensured git branch local-board/B20260710T1232Z-install-tests-consult-the-real-path-and-fail-on-machines-with-local-board-globally-installed (already-current).
