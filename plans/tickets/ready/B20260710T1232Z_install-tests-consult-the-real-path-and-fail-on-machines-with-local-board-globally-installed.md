@@ -8,12 +8,12 @@ children: []
 blockedBy: []
 blocks: []
 branch: local-board/B20260710T1232Z-install-tests-consult-the-real-path-and-fail-on-machines-with-local-board-globally-installed
-estimate: null
-estimateBasis: null
+estimate: 1
+estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T13:48:46Z
 workCompletedAt: null
 created: 2026-07-10T12:32:28Z
-updated: 2026-07-10T13:53:51Z
+updated: 2026-07-10T13:53:57Z
 completedSteps: []
 routingApprovals: []
 ---
