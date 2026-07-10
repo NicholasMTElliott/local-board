@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
 updated: 2026-07-10T19:13:29Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
 # create: type-vs-status advisory and an evidence-free authoring-correction lane
@@ -302,3 +302,5 @@ No findings. typeStatusAdvisory implements the status-action/doneRequires predic
 - 2026-07-10T19:10:16Z: Completed implement via claude-subagent:local-board-implementer@sonnet: typeStatusAdvisory helper + unconditional console.warn in commandCreate with --override correction form; docs/Workflow.md note; unit matrix + runCliChild integration tests. Both DR CONCERNS folded. No lane code (rejected). Suite 570/0/1; sync 9/9. Commits c8f812b(merge)+eb542c8.
 
 - 2026-07-10T19:10:48Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none requested (warning-only advisory)
+
+- 2026-07-10T19:13:29Z: Completed review via codex-task:read-only@gpt-5.6-terra: pass, no findings: predicate, unconditional warn, correction form, docs, coverage all verified; no lane code
