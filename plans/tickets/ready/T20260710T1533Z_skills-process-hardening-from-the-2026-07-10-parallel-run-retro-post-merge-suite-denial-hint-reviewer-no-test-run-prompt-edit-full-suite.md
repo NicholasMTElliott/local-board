@@ -13,7 +13,7 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T17:00:19Z
+updated: 2026-07-10T17:07:23Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -74,21 +74,26 @@ once (in Closeout).
   exposure that mirrors the codex file's, since with `git.autoMerge` on the first call
   merges and prunes the branch and the second fails before the fast-forward/suite. It must
   be narrowed to non-terminal transitions (terminal move reserved to Closeout), exactly as
-  the codex step 4 is narrowed. Beyond that it also has an ordering problem (Refill
-  textually precedes Closeout). Cross-references between steps are by NAME ("See Closeout",
-  "see Dispatch"), never by number, so the steps can be reordered without dangling
-  references. Closeout already carries the stale-default recovery
+  the codex step 4 is narrowed. Step 4 also DROPS `questions`/`blocked` tickets from
+  in-flight WITHOUT any Closeout (line 151-152), so slot refill cannot be gated on Closeout
+  for those exits — only a terminal `done` exit carries a Closeout. Beyond that it also has
+  an ordering problem (Refill textually precedes Closeout). Cross-references between steps
+  are by NAME ("See Closeout", "see Dispatch"), never by number, so the steps can be
+  reordered without dangling references. Closeout already carries the stale-default recovery
   (rebase-onto-default-then-retry) and the commit-before-rebase note (move/complete-step
   leave the ticket file dirty; rebase refuses a dirty tree). The `## Worktrees` section
   (lines 67-90) currently says to "Remove the worktree right after the ticket reaches
   `done`" — pre-suite removal that must be re-gated behind a green Closeout. The Closeout
   step opening (line 167-168) presents `(auto-merge + rebase-onto-default precondition +
-  prune)` as unconditional, which is only true for `git.autoMerge: true`. Dispatch guidance
-  also lives in `## Execution profiles` (the `claude-subagent:<name>` bullet at line 61
-  introduces the dispatch-ledger/routing-validator hooks and the `Ticket: <id>` anchor).
+  prune)` as unconditional, which is only true for `git.autoMerge: true` (and the prune
+  only when `git.pruneMergedBranches` is not disabled and the `branch -d` succeeds).
+  Dispatch guidance also lives in `## Execution profiles` (the `claude-subagent:<name>`
+  bullet at line 61 introduces the dispatch-ledger/routing-validator hooks and the
+  `Ticket: <id>` anchor).
 - `skills/codex/local-team/SKILL.md` has a numbered `## Wave-Barrier Scheduling`
   (steps 1-6): step 4 runs the GENERIC `complete-step`/gate/`move` for every transition
-  INCLUDING the terminal `move … done`, **step 5 "Refill open slots"** (line 47) precedes
+  INCLUDING the terminal `move … done` and also drops `questions`/`blocked` tickets from
+  in-flight without a Closeout, **step 5 "Refill open slots"** (line 47) precedes
   the separate non-numbered `## Closeout` section (lines 92-102), which ALSO owns
   `move … done` plus a stale-default recovery and a terminal
   fast-forward-then-worktree-remove sentence. This file therefore has BOTH problems: a
@@ -118,12 +123,14 @@ merge-branch check, no-non-planning-changes, ticket-branch-up-to-date) runs firs
   (parents = old default + ticket branch) and advances the ref with
   `git update-ref refs/heads/<default>`. The project-root **checkout is never touched**,
   so it stays on the pre-merge tree until `local-board fast-forward` reconciles it —
-  which is exactly why the suite must wait for fast-forward. Merged branch is pruned
-  with `branch -d` where safe.
+  which is exactly why the suite must wait for fast-forward. The merged branch is pruned
+  with `branch -d` only when `pruneMergedBranches` is not disabled and the delete is safe
+  (`maybePruneMergedTicketBranch`, `src/git.js:110`, otherwise returns "skipped").
 - **`git.autoMerge: true`, main-checkout path** (default is NOT checked out elsewhere —
   e.g. running from the project root itself). After the same precondition, the CLI
-  `git switch <default>` then `git merge --no-ff <branch> -m "Merge <id>"`, then prunes.
-  This `switch` + `merge --no-ff` description applies ONLY to this branch.
+  `git switch <default>` then `git merge --no-ff <branch> -m "Merge <id>"`, then prunes
+  (subject to the same `pruneMergedBranches`/safety gate). This `switch` + `merge --no-ff`
+  description applies ONLY to this branch.
 - **`git.autoMerge: false`** — `move … done` performs NO merge and NO rebase precondition;
   it only moves the ticket to `done` and commits planning changes (when
   `git.commitPlanningOnTransition` is on). The ticket branch is left unmerged; the
@@ -190,12 +197,21 @@ the B20260710T1225Z merge), so a freed slot could be refilled and new work dispa
 of a broken default. The fix must make the SEQUENCE guarantee, in each skill's own numbered
 flow, that terminal Closeout performs the applicable merge, reconciles the checkout with
 `fast-forward` FIRST, runs the merged-default full suite, and completes any fix-forward
-BEFORE the slot becomes refillable — which requires editing step ordering/text, not just
-appending prose. Additionally, each skill's step 4 must be narrowed so the terminal
+BEFORE a `done` slot becomes refillable — which requires editing step ordering/text, not
+just appending prose. Additionally, each skill's step 4 must be narrowed so the terminal
 `move … done` is issued exactly once (in Closeout), never in step 4; otherwise, with
 auto-merge on, step 4 merges and prunes the branch and the Closeout call fails before the
 fast-forward/suite. Both recoveries already present (stale-default rebase-retry;
 commit-before-rebase) must be PRESERVED, not discarded.
+
+**Refill gate applies only to `done` exits.** The Closeout gate governs slots freed by a
+terminal `done`; step 4 in BOTH skills also removes `questions`/`blocked` tickets from
+in-flight WITHOUT any Closeout (a non-terminal exit has no merge/suite to run), so those
+slots must free IMMEDIATELY. A refill trigger worded as "only after Closeout completes" would
+therefore strand every slot vacated by a `questions`/`blocked` exit and stall ready work
+(the round-5 defect). Each skill's Refill wording must state both rules explicitly: a
+`questions`/`blocked` exit frees its slot at once; a `done` exit frees its slot only after
+Closeout (applicable merge + fast-forward + green merged-default full suite + any fix-forward).
 
 **Merge-mode branches (mandatory in BOTH modes).** The full test suite on the merged
 default is MANDATORY whether `git.autoMerge` is on or off; the flag changes only WHO merges
@@ -205,8 +221,9 @@ merged default:
 
 - `git.autoMerge: true` — `move … done` performs the merge into default itself (worktree
   path: `commit-tree` + `update-ref`, checkout untouched; main-checkout path: `switch` +
-  `git merge --no-ff`) and prunes the branch. The orchestrator then runs `fast-forward` in
-  the project root and runs the full suite there.
+  `git merge --no-ff`) and prunes the branch when `pruneMergedBranches` is not disabled and
+  the delete is safe. The orchestrator then runs `fast-forward` in the project root and runs
+  the full suite there.
 - `git.autoMerge: false` — `move … done` does NOT merge; it only moves and (when
   `git.commitPlanningOnTransition` is on) commits the planning edit. The orchestrator then
   commits any post-`move` planning change the transition hook left uncommitted (because
@@ -214,10 +231,10 @@ merged default:
   worktree, then FROM THE PROJECT ROOT switches to the default and `git merge --no-ff
   <branch>`, then runs `fast-forward` and the full suite.
 
-In neither mode may a slot free or new work dispatch until that full suite is green (fix
-forward first on failure, then re-run). Delete any prior "boards may enable `git.autoMerge`
-so they need not gate refill on a manual suite run" wording — it is false and was the source
-of an earlier self-contradiction.
+In neither mode may a `done` slot free or new work dispatch until that full suite is green
+(fix forward first on failure, then re-run). Delete any prior "boards may enable
+`git.autoMerge` so they need not gate refill on a manual suite run" wording — it is false and
+was the source of an earlier self-contradiction.
 
 **SKILL_TEAM.md edits (`## Control loop` + `## Worktrees`):**
 
@@ -227,7 +244,9 @@ of an earlier self-contradiction.
    NON-terminal transitions only; the terminal `move … done` is issued exclusively by
    Closeout (step 6 after the reorder). This mirrors the codex step-4 narrowing and removes
    the double-move exposure (step 4 then Closeout), which with auto-merge on would merge and
-   prune the branch in step 4 and fail the Closeout call before the fast-forward/suite.
+   prune the branch in step 4 and fail the Closeout call before the fast-forward/suite. Leave
+   the existing step-4 sentence that drops `questions`/`blocked` tickets from in-flight AS IS
+   (those are non-terminal exits with no Closeout; their slots free immediately per Refill).
 
 2. **Reorder steps 6 and 7 so Closeout precedes Refill** (structural step-reorder, exempt
    from the sentence cap). Closeout becomes step 6; Refill becomes step 7. Safe: every
@@ -239,9 +258,10 @@ of an earlier self-contradiction.
 3. **Qualify the Closeout opening parenthetical by merge mode** (structural qualification,
    cap-exempt). The current `(auto-merge + rebase-onto-default precondition + prune)` after
    the `move … done` command is unconditional; restate it so those behaviors apply only when
-   `git.autoMerge` is on, and in manual mode (`autoMerge: false`) `move … done` merely moves
-   the ticket and the orchestrator performs the merge (as detailed in the final passage
-   below).
+   `git.autoMerge` is on — and the prune specifically only when `git.pruneMergedBranches` is
+   not disabled and the `branch -d` succeeds — and in manual mode (`autoMerge: false`)
+   `move … done` merely moves the ticket and the orchestrator performs the merge (as detailed
+   in the final passage below).
 
 4. **Keep the existing Closeout recovery sentences** (the stale-default
    rebase-onto-default-then-retry sentence, the "commit any planning-change edits before
@@ -262,14 +282,22 @@ of an earlier self-contradiction.
    advance your checkout onto the merged default, and only then run the FULL test suite
    there — a textually clean merge can still break tests via a semantic conflict git cannot
    see (this masked 11 failures in the B20260710T1225Z merge). On any failure fix forward and
-   re-run the suite before `worktree-remove`; the slot is not refillable until this green
-   suite completes."
+   re-run the suite before `worktree-remove`; the `done` slot is not refillable until this
+   green suite completes."
 
-6. **Amend the (now step 7) Refill opening** to state the precondition explicitly
-   (<=1 sentence), e.g.: "When an in-flight ticket's Closeout has completed (merge +
-   fast-forward + green merged-default full suite + any fix-forward) and the ready queue is
-   non-empty and in-flight `< maxInFlight`, pull the next ready ticket …" — so the refill
-   text itself points back to the gating closeout.
+6. **Amend the (now step 7) Refill opening to distinguish exit types** (<=2 sentences,
+   within the 1-3 cap). It must free `questions`/`blocked` slots immediately and gate only
+   `done` slots on Closeout, e.g.:
+
+   "A slot vacated by a step-4 `questions`/`blocked` exit frees immediately (those tickets
+   leave in-flight without a Closeout), while a `done` ticket frees its slot only after its
+   Closeout completes — the applicable merge, `local-board fast-forward`, a green
+   merged-default full suite, and any fix-forward. When a slot is free by either rule and the
+   ready queue is non-empty and in-flight `< maxInFlight`, pull the next ready ticket
+   (`worktree-add`, then `begin-step`/`start-work` as in Dispatch) and begin dispatching it."
+
+   (Keep the existing trailing "Newly-unblocked dependents and `decompose` children appear on
+   the next `list --ready`." sentence.)
 
 7. **Amend the `## Worktrees` section removal sentence** (structural qualification,
    cap-exempt). The sentence "Remove the worktree right after the ticket reaches `done`:"
@@ -287,7 +315,9 @@ its `## Closeout` section:
    transitions (<=1 sentence added/qualified): "… run gate-check/specialty flow for
    design/implement/test, then `move` for non-terminal transitions only; terminal
    `move … done` is handled by Closeout (step 5) so the merged-default suite can gate the
-   slot." This removes the duplicate-move exposure.
+   slot." Leave the existing step-4 handling that drops `questions`/`blocked` tickets from
+   in-flight AS IS (a non-terminal exit, no Closeout; their slots free immediately). This
+   removes the duplicate-move exposure.
 
 2. **Insert a new numbered step 5 "Closeout" BEFORE Refill** (structural insertion; keep the
    step body <=3 sentences), pushing Refill to step 6 and Repeat to step 7:
@@ -295,11 +325,15 @@ its `## Closeout` section:
    terminal step, run the `## Closeout` sequence below — the terminal `move … done`
    (mode-branched merge), then `local-board fast-forward --json` FIRST, then the FULL suite
    on the merged default, then any fix-forward — and remove the worktree only after that
-   suite is green. A slot frees for refill only after this green suite completes."
+   suite is green. A `done` slot frees for refill only after this green suite completes."
 
-3. **Renumber Refill to step 6 and Repeat to step 7.** The steps carry no by-number
-   cross-references, so renumbering is safe. (Optional <=1-sentence reminder in Refill:
-   "only after the ticket's Closeout suite is green".)
+3. **Renumber Refill to step 6 and Repeat to step 7, and mirror the exit-type distinction in
+   the Refill reminder** (<=1 sentence). The steps carry no by-number cross-references, so
+   renumbering is safe; the reminder must distinguish non-terminal exits from `done`, e.g.:
+
+   "A `questions`/`blocked` exit frees its slot immediately, but a `done` exit frees its slot
+   only after its Closeout suite is green (applicable merge + `fast-forward` + merged-default
+   full suite + any fix-forward)."
 
 4. **`## Closeout` section** — KEEP its first sentence (the `move … done` command) and KEEP
    its stale-default recovery sentences ("If it refuses because the branch lacks the latest
@@ -312,23 +346,26 @@ its `## Closeout` section:
 
    "With `git.autoMerge` on, `move … done` already merged the branch into the default (via
    `commit-tree` + `update-ref` when the default is checked out at the project root, leaving
-   that checkout on the old tree) and pruned it; with it off, merge manually — commit any
-   post-`move` planning edit the transition hook left uncommitted (with
+   that checkout on the old tree) and pruned it when `git.pruneMergedBranches` is not disabled
+   and the `branch -d` is safe (otherwise the branch remains); with it off, merge manually —
+   commit any post-`move` planning edit the transition hook left uncommitted (with
    `git.commitPlanningOnTransition` on it is already committed), rebase the ticket branch
    onto the default in its worktree, then from the project root switch to the default and
    `git merge --no-ff <branch>`. Then run `local-board fast-forward --json` in the project
    root FIRST to advance your checkout onto the merged default, and only then run the FULL
    test suite there — a clean merge can still break tests via a semantic conflict git cannot
    see (this masked 11 failures in the B20260710T1225Z merge). On failure fix forward and
-   re-run before `worktree-remove`; do not free or refill the slot until that suite is green."
+   re-run before `worktree-remove`; do not free or refill the `done` slot until that suite is
+   green."
 
 Audience note: both target skills are orchestrator skills; the substantive contract
 (step 4 narrowed to non-terminal moves; terminal move issued once in Closeout; mandatory
 merged-default full suite in both merge modes, run only after `fast-forward`, gating refill
-and worktree-remove; explicit manual merge on `autoMerge: false` with a conditional planning
-commit; both existing recoveries preserved) is identical across them. The codex file
-additionally needs the numbered-flow restructure because its step 4 previously issued the
-terminal move and its Refill preceded the separate `## Closeout` section.
+and worktree-remove for `done` exits while `questions`/`blocked` exits free immediately;
+explicit manual merge on `autoMerge: false` with a conditional planning commit; prune only
+when configured and safe; both existing recoveries preserved) is identical across them. The
+codex file additionally needs the numbered-flow restructure because its step 4 previously
+issued the terminal move and its Refill preceded the separate `## Closeout` section.
 
 #### Item 2 — dispatch denial-recovery hint (orchestrator audience, Claude only)
 
@@ -395,8 +432,8 @@ terminal move and its Refill preceded the separate `## Closeout` section.
 
 | File | Item | Sync/mirror action |
 |---|---|---|
-| `SKILL_TEAM.md` | 1, 2 | none (not synced); Item 1 narrows step 4 to non-terminal moves, reorders steps 6/7, qualifies the Closeout opening by merge mode, keeps Closeout recoveries + replaces its final sentence, amends Refill opening, and re-gates the `## Worktrees` removal sentence behind a green Closeout |
-| `skills/codex/local-team/SKILL.md` | 1 | none; Item 1 narrows step 4 to non-terminal moves, inserts a numbered Closeout step 5 before Refill (Refill->6, Repeat->7), keeps Closeout recoveries + replaces the terminal fast-forward/worktree-remove sentence (conditional planning commit) |
+| `SKILL_TEAM.md` | 1, 2 | none (not synced); Item 1 narrows step 4 to non-terminal moves, reorders steps 6/7, qualifies the Closeout opening by merge mode (prune only when configured/safe), keeps Closeout recoveries + replaces its final sentence, amends Refill so `questions`/`blocked` exits free immediately and only `done` exits gate on Closeout, and re-gates the `## Worktrees` removal sentence behind a green Closeout |
+| `skills/codex/local-team/SKILL.md` | 1 | none; Item 1 narrows step 4 to non-terminal moves, inserts a numbered Closeout step 5 before Refill (Refill->6, Repeat->7) with the `questions`/`blocked`-vs-`done` refill distinction, keeps Closeout recoveries + replaces the terminal fast-forward/worktree-remove sentence (conditional planning commit; prune only when configured/safe) |
 | `SKILL.md` | 2 | none (leave `## CLI Commands` untouched) |
 | `plans/prompts/roles/code_reviewer.md` | 3 | `npm run sync-resources` -> `resources/prompts/roles/code_reviewer.md` |
 | `agents/claude/local-board-reviewer.md` | 3 | none (agents ship directly) |
@@ -405,6 +442,10 @@ terminal move and its Refill preceded the separate `## Closeout` section.
 
 ### Risks
 
+- Refill-exit stranding: gating ALL slot refills on a completed Closeout would strand slots
+  freed by step-4 `questions`/`blocked` exits (which carry no Closeout) and stall ready work.
+  Both team skills' Refill wording must free non-terminal exits immediately and gate only
+  `done` exits on the merge/fast-forward/green-suite/fix-forward sequence.
 - Forgetting `npm run sync-resources` after the `code_reviewer.md` edit -> `resources-sync`
   suite red (content/file-set mismatch, not an EOL artifact). This is the single most likely
   miss; it is exactly the class of failure item 4 documents.
@@ -420,7 +461,12 @@ terminal move and its Refill preceded the separate `## Closeout` section.
 - Codex restructure correctness: after narrowing step 4 to non-terminal moves and inserting
   the numbered Closeout step 5, confirm the terminal `move … done` is issued EXACTLY ONCE
   (only via the `## Closeout` section, referenced by step 5), that no prose still implies
-  Refill runs before Closeout, and that the worktree is removed only after the green suite.
+  Refill runs before Closeout, that the `questions`/`blocked`-vs-`done` refill distinction is
+  present, and that the worktree is removed only after the green suite.
+- Prune over-assertion: `maybePruneMergedTicketBranch` (`src/git.js:110`) skips the
+  `branch -d` when `pruneMergedBranches` is disabled, the branch is checked out elsewhere, or
+  the delete is unsafe, so both Closeout passages must qualify pruning as "only when
+  configured and successful", not as an unconditional consequence of auto-merge.
 - Conditional-commit regression: with `git.commitPlanningOnTransition: true` (scaffold and
   this board) the transition already commits the planning edit, so the manual-merge wording
   must commit only what the hook left uncommitted — an unconditional commit fails on a clean
@@ -443,9 +489,9 @@ terminal move and its Refill preceded the separate `## Closeout` section.
 
 1. Make the edits (four items; Item 1 = SKILL_TEAM step-4 non-terminal narrowing + step 6/7
    reorder + Closeout-opening merge-mode qualification + Closeout final-sentence replacement
-   + Refill amendment + `## Worktrees` removal re-gating, AND codex step-4 narrowing + inserted
-   Closeout step 5 + Refill/Repeat renumber + codex `## Closeout` terminal-sentence
-   replacement).
+   + Refill exit-type amendment + `## Worktrees` removal re-gating, AND codex step-4 narrowing
+   + inserted Closeout step 5 + Refill/Repeat renumber with exit-type reminder + codex
+   `## Closeout` terminal-sentence replacement).
 2. `npm run sync-resources` (mandatory because `plans/prompts/roles/code_reviewer.md` changed).
 3. `npm run check` (syntax gate; unaffected by md but part of the standard gate).
 4. `node --test` — the FULL suite, not just guard suites (this ticket is itself the reason).
@@ -458,8 +504,10 @@ terminal move and its Refill preceded the separate `## Closeout` section.
    eyeball SKILL_TEAM/codex Item-1 parity, confirm both step 4s are narrowed to non-terminal
    moves, the SKILL_TEAM reorder and Worktrees re-gating, the codex step-4-narrow + inserted
    step 5 + renumber, verify the terminal move fires exactly once in each skill, both existing
-   recoveries survive in both skills, the conditional planning commit phrasing is present, and
-   the fast-forward-before-suite ordering holds in every branch.
+   recoveries survive in both skills, the conditional planning commit phrasing is present, the
+   `questions`/`blocked`-vs-`done` refill distinction is present in both skills, pruning is
+   qualified as configured-and-successful in both Closeout passages, and the
+   fast-forward-before-suite ordering holds in every branch.
 
 ### Open questions
 
