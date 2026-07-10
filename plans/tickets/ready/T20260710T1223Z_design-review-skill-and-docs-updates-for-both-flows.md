@@ -8,12 +8,12 @@ children: []
 blockedBy: [T20260710T1222Z]
 blocks: []
 branch: local-board/T20260710T1223Z-design-review-skill-and-docs-updates-for-both-flows
-estimate: null
-estimateBasis: null
+estimate: 2
+estimateBasis: T20260710T1222Z
 workStartedAt: 2026-07-10T14:16:04Z
 workCompletedAt: null
 created: 2026-07-10T12:20:26Z
-updated: 2026-07-10T14:20:34Z
+updated: 2026-07-10T14:20:40Z
 completedSteps: []
 routingApprovals: []
 ---
