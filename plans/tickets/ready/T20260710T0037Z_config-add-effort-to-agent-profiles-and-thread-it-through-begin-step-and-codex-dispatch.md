@@ -8,12 +8,12 @@ children: []
 blockedBy: [T20260710T0036Z]
 blocks: []
 branch: local-board/T20260710T0037Z-config-add-effort-to-agent-profiles-and-thread-it-through-begin-step-and-codex-dispatch
-estimate: null
-estimateBasis: null
+estimate: 2
+estimateBasis: T20260710T0036Z
 workStartedAt: 2026-07-10T01:31:18Z
 workCompletedAt: null
 created: 2026-07-10T00:36:10Z
-updated: 2026-07-10T01:36:17Z
+updated: 2026-07-10T01:36:21Z
 completedSteps: []
 routingApprovals: []
 ---
