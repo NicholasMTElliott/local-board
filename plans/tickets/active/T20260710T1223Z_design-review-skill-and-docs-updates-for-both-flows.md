@@ -13,7 +13,7 @@ estimateBasis: T20260710T1222Z
 workStartedAt: 2026-07-10T14:16:04Z
 workCompletedAt: null
 created: 2026-07-10T12:20:26Z
-updated: 2026-07-10T14:31:38Z
+updated: 2026-07-10T14:35:33Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -303,6 +303,34 @@ either way); an implementer may include it if a later reviewer prefers full
 surface parity.
 
 ## Implementation Notes
+
+Prose-and-test-only change, implemented exactly per Technical Design; no source changes.
+
+- `SKILL.md`: added `## Design Review` narrative section between `## Specialty Steps` and `## Delegation` (8-point description condensed to skill voice); added the two byte-identical `design-review-check` / `design-review-complete` lines to the `## CLI Commands` block, immediately after `specialty-run` (`--allow-main-root` omitted, matching the block's existing `gate-check`/`gate-complete`/`specialty-run` convention).
+- `skills/codex/local-board/SKILL.md`: added `## Design Review` narrative section between `## Gate-Check and Specialty Steps` and `## Done and Auto-Merge`, Codex voice (`codex-task:read-only` `--model`/`--reasoning-effort`, or `codexDispatch` translation for a `claude-subagent:` reviewer route); added the same two byte-identical CLI Commands lines after `specialty-run`.
+- `SKILL_TEAM.md`: extended Control-loop step 4 ("On completion") with an adjacent bullet describing the design-stage design-review step (resolve, dispatch with model/effort pins, parse first-line verdict, record, FAIL loop-back). No CLI Commands block in this file (by design).
+- `skills/codex/local-team/SKILL.md`: extended Wave-Barrier Scheduling step 4 with the same design-review description in Codex voice. No CLI Commands block here either.
+- `test/skill-usage-sync.test.js`: added `REQUIRED_COMMANDS = ["design-review-check", "design-review-complete"]` and a new test asserting both files' CLI Commands blocks contain the required design-review command surface (additive; reuses existing `extractSkillBlock`/`extractSkillBlockCommandNames` helpers).
+- `docs/Workflow.md`: added a `## Design Review` narrative section between `## Optional Steps` (ends at the `specialty-run` JSON block) and `## Estimation`, covering the `requireDesignReview` flag semantics, step order, the first-line TEXT verdict contract, and the loop-back/`invalidateOnLoopBack` interaction with the `design` token. No README change needed (no new doc file); no memory-bank change needed (already current per design).
+
+All four skill files state: first-line TEXT verdict (`PASS`/`CONCERNS`/`FAIL`, never JSON), FAIL loop-back strips both `design-review` and `design` evidence, and the step is skipped (and `design-review-check` refuses) on `routing.requireDesignReview`-off boards.
+
+### Review-fix pass (commit 57e2a4f)
+
+Fixed the three ACCEPTED review findings, prose-only:
+
+1. `skills/codex/local-board/SKILL.md` and `skills/codex/local-team/SKILL.md`: the Codex-voice narrative previously told orchestrators to "translate a `claude-subagent:*` design reviewer through `codexDispatch`", but `design-review-check` alone returns no `codexDispatch` block. Both files now instruct running `begin-step <ticket-id> --action design-review --harness codex --json` to obtain the sanitized `codexDispatch.model` (null when no valid Codex model id exists) and `codexDispatch.evidenceExecutor` (`@codex-default` in that case) before dispatching a `claude-subagent:*` reviewer route.
+2. `SKILL_TEAM.md`: replaced the bare "pass effort" with the explicit mechanism — for `codex-task:*` routes pass `--reasoning-effort <effort>` when `effort` is non-null; a `claude-subagent:*` route's effort remains frontmatter-static and is not passed at dispatch.
+3. `SKILL_TEAM.md` and `skills/codex/local-team/SKILL.md`: added the refusal sentence — the design-review step is skipped on flag-off boards, and `design-review-check` refuses (naming `routing.requireDesignReview`) if run anyway on such a board.
+
+The two curated single-ticket CLI Commands blocks (`SKILL.md`, `skills/codex/local-board/SKILL.md`) were left untouched and byte-identical, as required.
+
+### Test Evidence
+
+- `npm run check`: clean (no output, zero exit).
+- `npm test`: 514 tests, 511 pass, 2 fail, 1 skipped. The 2 failures are the pre-existing `test/install.test.js` PATH-verification tests (`PATH verification failure (real PATH, clone/git-checkout mode): guidance recommends npm link` and `PATH verification failure (packaged/no-.git tree): guidance omits npm link`), the tracked pre-merge baseline — nothing else failed.
+- `node --test test/skill-usage-sync.test.js`: 5/5 pass, including the required-command-surface test.
+- `node ./bin/local-board.js validate --root <worktree>`: "Ticket validation OK".
 
 ## Implementation Notes
 
