@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T01:05:10Z
 workCompletedAt: null
 created: 2026-07-10T00:36:09Z
 updated: 2026-07-10T01:30:19Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # codex-task: add --reasoning-effort passthrough and GPT-5.6 model guidance (../codex-task repo)
@@ -263,3 +263,5 @@ Validation: git diff --check clean; prose-only change, no test rerun needed (tes
 - 2026-07-10T01:20:29Z: Ensured git branch local-board/T20260710T0036Z-codex-task-add-reasoning-effort-passthrough-and-gpt-5-6-model-guidance-codex-task-repo (already-current).
 
 - 2026-07-10T01:23:38Z: Completed test via claude-subagent:local-board-tester@sonnet: 9/9 pass + check; acceptance criteria all PASS; edge probes (missing/empty/repeated flag) verified; one inadvertent real-codex call self-reported by tester, no validity impact.
+
+- 2026-07-10T01:30:19Z: Completed document via codex-task:workspace-write: README + 4 memory-bank files synced with the flag, output field, and GPT-5.6 tier guidance; committed 05f6588 on the codex-task branch. SKILL.md untouched (already current).
