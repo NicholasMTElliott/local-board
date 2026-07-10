@@ -105,6 +105,22 @@ test("each skill's CLI Commands block is a subset of the authoritative CLI usage
   }
 });
 
+const REQUIRED_COMMANDS = ["design-review-check", "design-review-complete"];
+
+test("each skill's CLI Commands block documents the required design-review command surface", async () => {
+  for (const file of SKILL_FILES) {
+    const source = await readFile(file, "utf8");
+    const block = extractSkillBlock(source, file);
+    const blockNames = new Set(extractSkillBlockCommandNames(block, file));
+    for (const required of REQUIRED_COMMANDS) {
+      assert.ok(
+        blockNames.has(required),
+        `${file} CLI Commands block is missing required command "${required}"; add it to the curated CLI Commands block`,
+      );
+    }
+  }
+});
+
 test("usage names and skill block names are non-empty (guards against a silently-broken parser)", async () => {
   const usageNames = usageCommandNames();
   assert.ok(usageNames.length > 0, "usageCommandNames() should return at least one command name");

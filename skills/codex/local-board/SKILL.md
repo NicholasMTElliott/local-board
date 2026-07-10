@@ -246,6 +246,35 @@ local-board gate-complete <ticket-id> --stage <stage> --executor <logical-route>
 
 When `routing.requireGateConsultation` is `true` (the `init` scaffold default), `move` refuses the forward transition out of `design`/`implement`/`test` until this token is recorded for that stage. Backward, `questions`, `blocked`, and archive/done moves are unaffected.
 
+## Design Review
+
+When `routing.requireDesignReview` is on (the `init` scaffold default), a design-review step runs between the design-stage gate-check and the move to `ready_for_implementation`.
+
+Resolve the reviewer:
+
+```sh
+local-board design-review-check <ticket-id> --json
+```
+
+It returns `agent` (route, default `codex-task:read-only`), `model` (`gpt-5.6-sol`), `effort` (`xhigh`), the resolved `prompt` (`plans/prompts/steps/design_review.md`), and a narrow `ticketContext`. It performs no dispatch and stamps nothing.
+
+Dispatch the reviewer through the returned route: for `codex-task:read-only`, pass `--model <model>` and `--reasoning-effort <effort>`. For a `claude-subagent:*` reviewer route, `design-review-check` alone does not return a `codexDispatch` block — instead run `begin-step <ticket-id> --action design-review --harness codex --json` to obtain the sanitized `codexDispatch` block (its `model`, already `null` when no valid Codex model id exists, and `evidenceExecutor`, `@codex-default` in that case) and dispatch from that. The reviewer is read-only and return-only.
+
+Parse the **first line** of the reviewer's reply — exactly one verdict token, `PASS` / `CONCERNS` / `FAIL`, followed by any numbered findings. Do not `JSON.parse`; the verdict contract is first-line TEXT, unlike gate-check's JSON.
+
+Record the verdict with the resolved `agent`/`model` verbatim:
+
+```sh
+local-board design-review-complete <ticket-id> --executor <agent> --model <model> --evidence "<VERDICT>: <summary>" --json
+```
+
+This records `design-review:<agent>@<model>` and unblocks the forward move (omit `--model` only when the resolver returned a null model).
+
+- **PASS / CONCERNS**: proceed with `move <ticket-id> ready_for_implementation`. CONCERNS are advisory.
+- **FAIL**: `move <ticket-id> ready_for_design` and re-run the design with the findings as input. The loop-back strips the `design-review` token and, with `invalidateOnLoopBack` on (scaffold default), the `design` token too, so the redesigned ticket must re-record both `design` and `design-review` evidence before it can advance again.
+
+On a board with `routing.requireDesignReview` off, skip this step — `design-review-check` refuses with a flag-naming message and the move is not gated.
+
 ## Done and Auto-Merge
 
 Use `move <ticket-id> done --json` only after required design, implementation, review, test, and documentation evidence is recorded. If auto-merge refuses to proceed, fix the reported git state or ask the user. Do not mark the ticket done by manual front matter edits.
@@ -272,6 +301,8 @@ local-board approve-inline <ticket-id> <action> --reason "<reason>" [--executor 
 local-board gate-check <ticket-id> --stage <stage> [--json]
 local-board gate-complete <ticket-id> --stage <stage> --executor <executor> [--model <model>] [--evidence "<evidence>"] [--json]
 local-board specialty-run <ticket-id> <step-name> [--json]
+local-board design-review-check <ticket-id> [--json]
+local-board design-review-complete <ticket-id> --executor <executor> [--model <model>] --evidence "<evidence>" [--json]
 local-board calibration suggest <ticket-id> [--json]
 local-board estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]
 local-board move <ticket-id> <status> [--override] [--reason "<text>"] [--json]

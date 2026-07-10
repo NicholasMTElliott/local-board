@@ -435,6 +435,28 @@ With `--json`, the command returns:
 
 `agent` defaults to `inline` when the optional step entry has no override; when the entry's `agent` is a `{ route, model?, effort? }` profile object, `agent` is the profile's `route` and `model`/`effort` carry the pinned values (both `null` when the entry is a bare route string, or a profile that omits them). The CLI is a read-only dispatcher: it does not invoke any agent. The orchestrator hands the returned `prompt`, `agent`, `model`, `effort`, and `ticketContext` to the resolved execution route — pinning `model` at dispatch (subagent model pin or `codex-task --model`) and recording it in completion evidence the same way mandatory steps do, so a pinned specialty model is enforced by the normal step-evidence model gate; `effort` is a dispatch hint only (`codex-task --reasoning-effort`, or static frontmatter for `claude-subagent:`) and is never recorded in evidence. T20260516T1554Z (`orchestrator wiring`) will connect this resolver to the gate-check `requestedSteps` loop.
 
+## Design Review
+
+`routing.requireDesignReview` (scaffold default `true`; `false` for a config that predates the key) gates the design→implementation forward move — `ready_for_design`/`designing` → `ready_for_implementation` — on a recorded `design-review:<executor>` token, parallel to how `requireGateConsultation` gates the three stage moves. Backward, lateral (`questions`/`blocked`), and archive/done moves are never gated. On a flag-off board the step is inert: skip it entirely, and `design-review-check` refuses to resolve with a flag-naming message.
+
+Step order: after `complete-step design` records the design evidence and the design-stage gate-check runs, resolve the reviewer:
+
+```sh
+local-board design-review-check <ticket-id> --json
+```
+
+This returns the `agent` route (default `codex-task:read-only`), `model` (`gpt-5.6-sol`), `effort` (`xhigh`), the resolved `prompt` (`plans/prompts/steps/design_review.md`), and a narrow `ticketContext`. It performs no dispatch and stamps nothing. Dispatch the reviewer through the returned route, pinning `model` and passing `effort` at dispatch.
+
+The verdict contract: the reviewer (see `plans/prompts/steps/design_review.md`) returns a **first-line TEXT** verdict token — `PASS`, `CONCERNS`, or `FAIL` — followed by any numbered findings, never JSON. Record it verbatim with the resolved executor/model:
+
+```sh
+local-board design-review-complete <ticket-id> --executor <executor> --model <model> --evidence "<VERDICT>: <summary>" --json
+```
+
+This records the `design-review:<executor>@<model>` token and unblocks the forward move (omit `--model` only when the resolver returned a null model). PASS and CONCERNS both proceed with `move <ticket-id> ready_for_implementation` (CONCERNS is advisory); FAIL moves back to `ready_for_design` with the findings as input for the re-design.
+
+Loop-back interaction: a FAIL loop-back to `ready_for_design` strips the `design-review` token (its producing status is `ready_for_design`) and, with `invalidateOnLoopBack` on, the `design` token too, so the redesigned ticket must re-record both `design` and `design-review` evidence before it can advance again — see "Loop-back evidence invalidation" above.
+
 ## Estimation
 
 `plans/local-board.config.jsonc` may include an `estimation` block:
