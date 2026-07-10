@@ -13,8 +13,8 @@ estimateBasis: T20260710T0036Z
 workStartedAt: 2026-07-10T01:31:18Z
 workCompletedAt: null
 created: 2026-07-10T00:36:10Z
-updated: 2026-07-10T01:45:45Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet"]
+updated: 2026-07-10T01:46:26Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # config: add effort to agent profiles and thread it through begin-step and codex dispatch
@@ -187,3 +187,5 @@ None blocking. One design decision is recorded rather than asked: effort is deli
 - 2026-07-10T01:37:43Z: Ensured git branch local-board/T20260710T0037Z-config-add-effort-to-agent-profiles-and-thread-it-through-begin-step-and-codex-dispatch (already-current).
 
 - 2026-07-10T01:45:45Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Commits 7fbcf15 (clean peer merge of T0035Z) + d3c425d: effort field in normalizeAgentProfile, effortForAction helper, configuredEffort in begin-step, codexDispatch effort threading (null default, no sanitization), skill/docs prose, 7 net new tests. 465 pass/1 skip; check + validate green; ledger/evidence exclusion test-verified.
+
+- 2026-07-10T01:46:26Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - internal config parsing and JSON surface; ledger/evidence untouched
