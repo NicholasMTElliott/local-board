@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:25:41Z
-updated: 2026-07-10T13:58:46Z
+updated: 2026-07-10T14:00:01Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -362,7 +362,9 @@ verdict: changes_requested; target: implementation
 
 Reviewer-verified clean: ESM cycle load-safe (deferred-function references only; both entry points import successfully); wrong-agent-with-live-stamp still denied; no-stamp fallback intact; tests cover happy-path stamps, wrong-agent denial, gate-complete cleanup, specialty authorization, normal worktree fallback. Coverage gaps named for each finding.
 
-Disposition: all three findings accepted; loop-back to ready_for_implementation for the fix pass.
+Disposition: all three findings accepted; fixed in cbf3527; re-reviewed.
+
+Re-review (terra@medium, 42s): verdict: changes_requested — identity semantics incomplete. (a) stampActiveStepNoClobber's idempotent match compares only kind/route/model, ignoring action and stage: two specialties sharing a route/model, or gates for different stages, wrongly overwrite each other. (b) Same-kind clears remain too broad: a stale completion can erase a NEWER record of the same kind; predicates must compare the full stamped identity (action/stage/route/model or a unique id) under the lock. Verified fixed: worktree existence check + fallback (with test); lock discipline of the new primitives; scope. Second fix pass dispatched for (a) and (b).
 
 ## Test Evidence
 
