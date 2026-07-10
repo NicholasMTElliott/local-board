@@ -8,12 +8,12 @@ children: []
 blockedBy: [T20260710T1220Z, T20260710T1221Z]
 blocks: [T20260710T1223Z]
 branch: local-board/T20260710T1222Z-design-review-cli-check-and-complete-commands
-estimate: null
-estimateBasis: null
+estimate: 2
+estimateBasis: T20260710T1220Z
 workStartedAt: 2026-07-10T13:25:24Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T13:31:48Z
+updated: 2026-07-10T13:31:53Z
 completedSteps: []
 routingApprovals: []
 ---
