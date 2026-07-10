@@ -13,7 +13,7 @@ estimateBasis: T20260710T0036Z
 workStartedAt: 2026-07-10T01:31:18Z
 workCompletedAt: null
 created: 2026-07-10T00:36:10Z
-updated: 2026-07-10T01:57:10Z
+updated: 2026-07-10T02:01:13Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -212,6 +212,20 @@ Method note: normalizeAgentProfile is unexported (disk-based loadConfig only); w
 Gaps/anomalies: none.
 
 ## Documentation Updates
+
+Documentation step executed by codex-task:workspace-write (gpt-5.6-luna @ reasoning-effort medium, 166s) in the ticket worktree; edits committed by the orchestrator on the ticket branch.
+
+Changed:
+
+- memory-bank/systemPatterns.md, memory-bank/techContext.md: current-state facts for per-step effort routing — profile shape { route, model?, effort?, prompt? }, begin-step configuredEffort, codexDispatch.effort passthrough, and the exclusion from evidence tokens and the active-steps ledger.
+
+Checked and deliberately left alone:
+
+- README.md feature blurbs and config examples — not stale.
+- docs/CodexSupport.md Effort paragraph — already corrected during review (local shape validation, target-harness model-support validation, --reasoning-effort mapping); verified consistent.
+- SKILL.md / skills/codex/local-board/SKILL.md — updated in the implementation commits; out of scope for this pass.
+
+Validation: git diff --check clean; prose-only change.
 
 ## Questions
 
