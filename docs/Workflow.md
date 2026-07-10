@@ -575,6 +575,8 @@ Before each action, use `begin-step` to read the configured executor. After the 
 
 Auto-merge only runs after `move ... done` passes strict routing validation. It must be run from the ticket's recorded branch. It refuses uncommitted non-planning changes, because implementation work should already be committed before closeout.
 
+In parallel orchestration, a `done` slot is not refilled until the default checkout has been reconciled with `fast-forward`, the full suite has passed on the merged default branch, and any unexpected failures have been fixed forward.
+
 ## Durable Planning State (commit at each transition)
 
 `git.commitPlanningOnTransition`: when `true` (the scaffold default for new

@@ -61,6 +61,12 @@ Dispatch the step accordingly:
 - `claude-subagent:<name>`: dispatch that subagent. When `configuredModel` is non-null, pin the subagent's model to it. Run it in the background so other tickets progress concurrently. **Every dispatch prompt must begin with a first line of the exact form `Ticket: <id>`** — the machine-readable anchor the optional dispatch-ledger/routing-validator hooks (`local-board install --hooks`) parse to verify the dispatch happened.
 - `codex-task:<mode>`: shell out to codex in that mode (a Bash call, so it works without the Task tool). `codex-task` dispatches are serial-by-design: never background one with a shell `&` (concurrent `CODEX_HOME` use corrupts session state) — use the harness's own background/spawn dispatch when you need concurrency.
 
+If the routing-validator hook denies a dispatch with an agent-mismatch reason, first
+confirm you ran `begin-step` for the ticket's CURRENT stage before dispatching — the
+active begin-step ledger stamp is the hook's primary evidence, and a stale or missing
+stamp (e.g. dispatching a stage you never began, or re-dispatching after a loop-back) is
+the usual cause. Re-run `begin-step` for the current action, then retry the dispatch.
+
 Whole steps can be delegated to an external agent purely by routing the action to
 `codex-task:*` in config — no special handling here.
 
@@ -79,7 +85,9 @@ call for that ticket (`start-work`, `begin-step`, `complete-step`, `move`,
 `section`, `comment`). Each step executor you dispatch must also operate against
 that worktree (pass it the `worktreePath` and instruct it to use
 `--root <worktreePath>` and to `cd` there for edits and git). Remove the worktree
-right after the ticket reaches `done`:
+only after a green Closeout — the applicable merge, `local-board fast-forward`,
+and a passing merged-default full suite, plus any fix-forward — not immediately
+at `done`:
 
 ```sh
 local-board worktree-remove <ticket-id> --root <worktreePath>
@@ -148,9 +156,11 @@ scheduling cache and is cheap to rebuild after a compaction.
      evidence. Skipped on boards where the flag is off; `design-review-check`
      refuses (naming `routing.requireDesignReview`) if run on a flag-off board
      anyway.
-   - Choose the next status from the returned `transitions` and `move`. If the
-     ticket continues, dispatch its next step. If it hits `questions`/`blocked`,
-     surface it and drop it from in-flight (keep in `assignedLog`).
+   - Choose the next status from the returned `transitions` and `move` for
+     non-terminal transitions only — the terminal `move … done` is issued
+     exclusively by Closeout (step 6), never here. If the ticket continues,
+     dispatch its next step. If it hits `questions`/`blocked`, surface it and
+     drop it from in-flight (keep in `assignedLog`).
 5. **Conflict gate (two layers).**
    - *Layer 1, best-effort:* when a ticket enters `ready_for_review`, record its
      `git diff --name-only` in `branchReady`. Before dispatching an `implement`
@@ -160,20 +170,38 @@ scheduling cache and is cheap to rebuild after a compaction.
      `move … done` is the guarantee. See Closeout.
    - Avoid dispatching two implement steps you already know overlap (from design
      scope) concurrently — serialize those.
-6. **Refill.** When an in-flight ticket terminates and the ready queue is
-   non-empty and in-flight `< maxInFlight`, pull the next ready ticket
-   (`worktree-add`, then `begin-step`/`start-work` as in Dispatch) and
-   begin dispatching it. Newly-unblocked dependents and `decompose` children
-   appear on the next `list --ready`.
-7. **Closeout.** On a ticket's terminal step, run `move <ticket-id> done --root <worktreePath> --json`
-   (auto-merge + rebase-onto-default precondition + prune). If it refuses because
-   the branch lacks the latest default, rebase that ticket's branch onto the
-   default in its worktree, then retry. **Commit any planning-change edits in the
-   worktree before rebasing** — `move`/`complete-step` leave the ticket file
-   dirty, and `git rebase` refuses a dirty tree. On an unresolvable conflict,
-   `move` it to `questions`. After each successful `move … done`, run
-   `local-board fast-forward --json` to reconcile your own checkout, then
-   `worktree-remove`.
+6. **Closeout.** On a ticket's terminal step, run `move <ticket-id> done --root <worktreePath> --json`
+   (with `git.autoMerge` on: merges into default, gated by the rebase-onto-default
+   precondition, and prunes the branch only when `git.pruneMergedBranches` is not
+   disabled and `branch -d` succeeds; with it off, `move … done` merely moves the
+   ticket and you merge manually — see below). If it refuses because the branch
+   lacks the latest default, rebase that ticket's branch onto the default in its
+   worktree, then retry. **Commit any planning-change edits the transition hook
+   left uncommitted before rebasing** — with `git.commitPlanningOnTransition` off,
+   `move`/`complete-step` leave the ticket file dirty and `git rebase` refuses a
+   dirty tree (with it on, this may already be a no-op). On an unresolvable
+   conflict, `move` it to `questions`. After `move … done` succeeds: with
+   `git.autoMerge` on the CLI already merged the branch into the default, and
+   with it off you merge manually — commit any post-`move` planning edit the
+   transition hook left uncommitted (with `git.commitPlanningOnTransition` on it
+   is already committed; `git rebase` refuses a dirty tree), rebase the ticket
+   branch onto the default in its worktree, then from the project root switch to
+   the default and `git merge --no-ff <branch>`. Then run `local-board
+   fast-forward --json` in the project root FIRST to advance your checkout onto
+   the merged default, and only then run the FULL test suite there — a
+   textually clean merge can still break tests via a semantic conflict git
+   cannot see (this masked 11 failures in the B20260710T1225Z merge). On any
+   failure fix forward and re-run the suite before `worktree-remove`; the `done`
+   slot is not refillable until this green suite completes.
+7. **Refill.** A slot vacated by a step-4 `questions`/`blocked` exit frees
+   immediately (those tickets leave in-flight without a Closeout), while a
+   `done` ticket frees its slot only after its Closeout completes — the
+   applicable merge, `local-board fast-forward`, a green merged-default full
+   suite, and any fix-forward. When a slot is free by either rule and the ready
+   queue is non-empty and in-flight `< maxInFlight`, pull the next ready ticket
+   (`worktree-add`, then `begin-step`/`start-work` as in Dispatch) and begin
+   dispatching it. Newly-unblocked dependents and `decompose` children appear on
+   the next `list --ready`.
 8. **Terminate.** When the ready queue is empty and nothing is in flight, emit a
    final per-ticket summary table: ticket, model(s) used per step, final status,
    branch, one-line evidence, and any questions/blockers.

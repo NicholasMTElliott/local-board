@@ -43,9 +43,18 @@ Use wave-barrier mode first:
    - run `start-work --root <worktreePath> --json` before implement/review/test/document;
    - dispatch from the returned `codexDispatch` block (`agentType`, `promptPath`, `model`, `evidenceExecutor`).
 3. Await the wave of spawned agents.
-4. Persist each result, record `complete-step`, run gate-check/specialty flow for design/implement/test, then `move`. For the `design` stage specifically, when `routing.requireDesignReview` is on, insert a design-review step between gate-check and the move to `ready_for_implementation`: resolve `design-review-check`, dispatch the returned reviewer route (`codex-task:read-only` with `--model`/`--reasoning-effort`; for a `claude-subagent:` route, `design-review-check` alone returns no `codexDispatch` block — run `begin-step <ticket-id> --action design-review --harness codex --json` to obtain the sanitized dispatch `model` and `evidenceExecutor`, `@codex-default` when no valid Codex id exists), parse the first-line `PASS`/`CONCERNS`/`FAIL` verdict (never JSON), record via `design-review-complete` with the resolved executor/model, and on `FAIL` move to `ready_for_design` with the findings as input (the loop-back strips both `design` and `design-review` evidence). Skipped when the flag is off; `design-review-check` refuses (naming `routing.requireDesignReview`) if run on a flag-off board anyway.
-5. Refill open slots with newly ready tickets.
-6. Repeat until no tickets are in flight and no ready tickets remain.
+4. Persist each result, record `complete-step`, run gate-check/specialty flow for design/implement/test, then `move` for non-terminal transitions only; terminal `move … done` is handled by Closeout (step 5) so the merged-default suite can gate the slot. For the `design` stage specifically, when `routing.requireDesignReview` is on, insert a design-review step between gate-check and the move to `ready_for_implementation`: resolve `design-review-check`, dispatch the returned reviewer route (`codex-task:read-only` with `--model`/`--reasoning-effort`; for a `claude-subagent:` route, `design-review-check` alone returns no `codexDispatch` block — run `begin-step <ticket-id> --action design-review --harness codex --json` to obtain the sanitized dispatch `model` and `evidenceExecutor`, `@codex-default` when no valid Codex id exists), parse the first-line `PASS`/`CONCERNS`/`FAIL` verdict (never JSON), record via `design-review-complete` with the resolved executor/model, and on `FAIL` move to `ready_for_design` with the findings as input (the loop-back strips both `design` and `design-review` evidence). Skipped when the flag is off; `design-review-check` refuses (naming `routing.requireDesignReview`) if run on a flag-off board anyway.
+5. **Closeout (terminal tickets only, before refill).** When a ticket reaches its
+   terminal step, run the `## Closeout` sequence below — the terminal
+   `move … done` (mode-branched merge), then `local-board fast-forward --json`
+   FIRST, then the FULL suite on the merged default, then any fix-forward — and
+   remove the worktree only after that suite is green. A `done` slot frees for
+   refill only after this green suite completes.
+6. Refill open slots with newly ready tickets. A `questions`/`blocked` exit frees
+   its slot immediately, but a `done` exit frees its slot only after its Closeout
+   suite is green (applicable merge + `fast-forward` + merged-default full suite
+   + any fix-forward).
+7. Repeat until no tickets are in flight and no ready tickets remain.
 
 Do not use event-loop pipelining in v1. The barrier keeps scheduling, conflict checks, and context compaction tractable.
 
@@ -99,7 +108,7 @@ local-board move <ticket-id> done --root <worktreePath> --json
 
 If it refuses because the branch lacks the latest default, commit planning-only ticket edits in the worktree, rebase the ticket branch onto default, and retry. If conflicts cannot be resolved safely, move the ticket to `questions`.
 
-After each successful `done`, run `fast-forward --json` in the project root and then `worktree-remove`.
+With `git.autoMerge` on, `move … done` already merged the branch into the default (via `commit-tree` + `update-ref` when the default is checked out at the project root, leaving that checkout on the old tree) and pruned it when `git.pruneMergedBranches` is not disabled and the `branch -d` is safe (otherwise the branch remains); with it off, merge manually — commit any post-`move` planning edit the transition hook left uncommitted (with `git.commitPlanningOnTransition` on it is already committed), rebase the ticket branch onto the default in its worktree, then from the project root switch to the default and `git merge --no-ff <branch>`. Then run `local-board fast-forward --json` in the project root FIRST to advance your checkout onto the merged default, and only then run the FULL test suite there — a clean merge can still break tests via a semantic conflict git cannot see (this masked 11 failures in the B20260710T1225Z merge). On failure fix forward and re-run before `worktree-remove`; do not free or refill the `done` slot until that suite is green.
 
 ## Final Summary
 

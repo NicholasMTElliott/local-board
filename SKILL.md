@@ -317,6 +317,12 @@ Each entry is a route string or a `{ route, model?, effort?, prompt? }` profile.
 - `claude-subagent:<agent-name>`: dispatch the named Claude subagent. When `configuredModel` is set, pin the subagent's model to it at dispatch — this is how per-step models (haiku gate-check, opus design, sonnet implement, etc.) take effect. When `configuredEffort` is set, pass it as the subagent dispatch's effort option (the Claude harness's per-agent reasoning-effort control).
 - `codex-task:<mode>`: use codex-task in the configured mode, such as `codex-task:read-only` or `codex-task:workspace-write`. `codex-task` dispatches are serial-by-design: never background one with a shell `&` (concurrent `CODEX_HOME` use corrupts session state) — use the harness's own background/spawn dispatch when you need concurrency. When `configuredEffort` is set, pass `--reasoning-effort <effort>` to the codex-task wrapper.
 
+If the routing-validator hook denies a dispatch with an agent-mismatch reason, first
+confirm you ran `begin-step` for the ticket's CURRENT stage before dispatching — the
+active begin-step ledger stamp is the hook's primary evidence, and a stale or missing
+stamp (e.g. dispatching a stage you never began, or re-dispatching after a loop-back) is
+the usual cause. Re-run `begin-step` for the current action, then retry the dispatch.
+
 Bundled Claude subagent names:
 
 - `local-board-decomposer`

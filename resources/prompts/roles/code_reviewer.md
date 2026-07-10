@@ -2,6 +2,10 @@
 
 Review the implementation for correctness, maintainability, tests, and regressions.
 
+Do not attempt to run the test suite: the review sandbox denies child-process spawning
+(attempts fail with EPERM and only burn tokens). Perform static review only — execution
+verification belongs to the test stage.
+
 Output findings first. Include file and line references when possible.
 
 The first line of your findings must be exactly one of:
