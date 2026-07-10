@@ -13,8 +13,8 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:14:10Z
 workCompletedAt: null
 created: 2026-07-10T11:56:26Z
-updated: 2026-07-10T12:26:03Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-10T12:27:05Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # optionalSteps: accept agent profiles with model and effort pins at the specialty-step level
@@ -226,3 +226,5 @@ None blocking. The one genuine decision — `specialty-run` field naming — is 
 - 2026-07-10T12:22:09Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design written by opus designer: shared normalizeAgentProfile via label+allowPrompt param, normalizeOptionalStepAgent (string stays string), specialty-aware profileForAction as the single enforcement seam, scanner reads entry.agent.route. Estimate 2 (basis T20260710T0037Z, designer-recorded).
 
 - 2026-07-10T12:26:03Z: Gate-check dispatch for the design stage was denied by the routing-validator hook (check-dispatch agent-mismatch: no gate-check awareness). Filed B20260710T1225Z. Proceeding via the hook's documented residual: gate dispatch without the Ticket: anchor line; consultation remains verified by gate-complete evidence.
+
+- 2026-07-10T12:27:05Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none - config schema and CLI JSON surface
