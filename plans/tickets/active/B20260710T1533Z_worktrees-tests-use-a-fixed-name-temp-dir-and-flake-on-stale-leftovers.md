@@ -13,7 +13,7 @@ estimateBasis: B20260710T1532Z
 workStartedAt: 2026-07-10T17:07:08Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T17:25:29Z
+updated: 2026-07-10T17:29:19Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -249,6 +249,32 @@ None — the failure mode, exact fixture path, deterministic ticket ID, and fail
 assertion are all confirmed by inspection.
 
 ## Implementation Notes
+
+Implemented the design as written, no deviations.
+
+- Added a defensive `await removeFixtureDir(worktreesRoot);` pre-clean at the
+  top of `withRepo`'s try block (test/worktrees.test.js), before `git init`,
+  symmetric with the existing `finally` teardown. Reuses the existing
+  `test/helpers/fixtures.js` `removeFixtureDir` helper (retried `rm`,
+  `force: true`, safe no-op when nothing is stale).
+- Added the seeded-stale regression test
+  `"worktree-add tolerates a stale fixed-name worktrees dir from an aborted
+  prior run"` immediately after the existing
+  `"worktree-add supports an explicit relative worktrees.location outside the
+  repo"` test. It pre-seeds `<os.tmpdir()>/explicit-worktrees/T20260522T1506Z`
+  with a leftover file before calling `withRepo`, then asserts `worktree-add`
+  exits 0 against the deterministic ticket id `T20260522T1506Z`.
+- Test-only change; no production source touched.
+
+Verification:
+- `npm run check`: pass (syntax check across bin/src/hooks).
+- `node --test test/worktrees.test.js` run 1: 40 pass, 0 fail.
+- `node --test test/worktrees.test.js` run 2 (back-to-back, repeat-run
+  stability): 40 pass, 0 fail.
+- `node --test` (full suite): 535 tests, 534 pass, 1 skipped, 0 fail.
+
+Commit: d373dcb on branch
+local-board/B20260710T1533Z-worktrees-tests-use-a-fixed-name-temp-dir-and-flake-on-stale-leftovers.
 
 ## Review Findings
 
