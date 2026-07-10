@@ -13,8 +13,8 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T15:48:27Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-10T15:50:18Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # section --file can duplicate the section heading when the payload carries it
@@ -141,3 +141,5 @@ None blocking. One deliberate scoping call recorded above: validate flags duplic
 - 2026-07-10T15:40:30Z: Ensured git branch local-board/B20260710T1532Z-section-file-can-duplicate-the-section-heading-when-the-payload-carries-it (already-current).
 
 - 2026-07-10T15:48:27Z: Completed design via claude-subagent:local-board-designer@opus: Reject contract: setTicketSection refuses payloads containing an unfenced top-level H2 line, actionable message names fencing escape; validate flags legacy duplicated standard-section headings via fence-aware walker. Repro confirmed at replaceSection. Estimate 2pts basis B20260708T0459Z.
+
+- 2026-07-10T15:50:18Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none requested (internal CLI fix; no security/UI/UX triggers)
