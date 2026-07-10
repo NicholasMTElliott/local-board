@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T19:02:04Z
+updated: 2026-07-10T19:09:33Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -239,6 +239,33 @@ review rounds; the advisory (Part 1) was never faulted in any round and ships
 unchanged.
 
 ## Implementation Notes
+
+Implemented the descoped Part 1 (advisory-only). Part 2 (authoring-correction lane) is REJECTED per the Technical Design and was not implemented; no lane code exists in the diff.
+
+Merge: branch predated several mainline merges (section H2 guard, skill prose, fallbackModels). `git merge mainline` completed with no conflicts (ort strategy, merge commit auto-created). Baseline `node --test test/tickets.test.js test/cli.test.js` after the merge: 242 pass, 1 skip, 0 fail.
+
+`src/tickets.js`: added `pluralize(word)` (private, naive English pluralizer for the four fixed types) and exported `typeStatusAdvisory(config, type, status)`, co-located immediately after `invertStatusActions`. Predicate: `statusActions[status]` defined AND that action not in `doneRequires[type]`; guards a missing `doneRequires[type]` (returns null, nothing to compare against) and a `doneRequires[type][0]` action with no producing status in `statusActions` (names the action instead of throwing or fabricating a status) per the design's defensive-edge note.
+
+`src/cli.js`: `commandCreate` now loads config (already-imported `loadConfig`) after `createTicket` succeeds, computes `typeStatusAdvisory(config, ticketType, status)`, and emits it via `console.warn` (stderr) before `console.log(ticketPath)`. Unconditional invocation; `null` return emits nothing, so stdout and the no-advisory path are byte-identical to pre-change behavior.
+
+Design-review CONCERNS folded in: (1) code comment above `typeStatusAdvisory` and in `commandCreate`, plus the docs/Workflow.md note, describe the behavior as "warning-only for existing boards" -- never "defaults-off" (invocation is unconditional); (2) the warning's suggested correction is the working form `move <id> <status> --override --reason "<text>"`, not a plain `move` (which `enforceTransitions` would refuse as an unmapped transition).
+
+Warning text emitted (story@ready_for_design example):
+`WARNING: story created at ready_for_design, but stories complete via "decompose" (routing.doneRequires.story = [decompose]); the conventional entry status is ready_for_decomposition. The ticket was created; re-place it with "move <id> ready_for_decomposition --override --reason "<text>"" if this was unintended.`
+
+Tests added:
+- `test/tickets.test.js`: two unit tests for `typeStatusAdvisory` -- the fires/silent matrix from the design's Test Strategy (story@ready_for_design, epic@ready_for_implementation, task@ready_for_design silent, task@ready_for_decomposition, bug@ready_for_decomposition, every other doneRequires-covered task/bug status silent, backlog/questions silent for all four types, and the --override --reason suggestion is present), plus a custom-config-edge test (missing `doneRequires[type]` never fires; an action with no producing status names the action instead of throwing).
+- `test/cli.test.js`: two `runCliChild` (child-process harness, required since `console.warn` is not one of the streams the in-process `runCli` helper patches -- same reason the existing codex-task-warning tests use it) integration tests -- `create story ... --status ready_for_design` warns on stderr naming `ready_for_decomposition` and the `--override --reason` form, stdout still exactly the created path, exit 0; `create task ... --status ready_for_design` is silent on stderr, stdout/exit unaffected.
+
+`docs/Workflow.md`: one paragraph after the trigger-statuses list documenting the advisory as warning-only, independent of `enforceTransitions`, and naming the `--override --reason` correction path.
+
+Verification: `npm run check` clean. Full `node --test`: 571 tests, 570 pass, 1 skipped (pre-existing slow smoke test, unrelated), 0 fail. `node --test test/skill-usage-sync.test.js test/resources-sync.test.js`: 9 pass, 0 fail.
+
+Commits on branch `local-board/T20260710T1535Z-create-type-vs-status-advisory-and-an-evidence-free-authoring-correction-lane`:
+- merge commit (git merge mainline, no conflicts)
+- eb542c8 "T20260710T1535Z: add create-time type-vs-status advisory (stderr warning)"
+
+No deviations from the descoped design.
 
 ## Review Findings
 
