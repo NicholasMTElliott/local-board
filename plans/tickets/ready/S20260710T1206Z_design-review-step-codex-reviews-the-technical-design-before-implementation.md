@@ -10,10 +10,10 @@ blocks: []
 branch: local-board/S20260710T1206Z-design-review-step-codex-reviews-the-technical-design-before-implementation
 estimate: null
 estimateBasis: null
-workStartedAt: null
+workStartedAt: 2026-07-10T12:14:10Z
 workCompletedAt: null
 created: 2026-07-10T12:06:56Z
-updated: 2026-07-10T12:14:09Z
+updated: 2026-07-10T12:14:10Z
 completedSteps: []
 routingApprovals: []
 ---
@@ -71,3 +71,5 @@ Candidate shapes, with tradeoffs the Technical Design must weigh:
 ## Run Log
 
 - 2026-07-10T12:07:33Z: Transition override: ready_for_design -> ready_for_decomposition: authoring correction: story was created with the wrong initial ready status; stories enter at decomposition
+
+- 2026-07-10T12:14:10Z: Ensured git branch local-board/S20260710T1206Z-design-review-step-codex-reviews-the-technical-design-before-implementation (already-current).
