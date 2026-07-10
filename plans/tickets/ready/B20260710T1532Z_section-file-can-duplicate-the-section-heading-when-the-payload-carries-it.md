@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T16:33:06Z
+updated: 2026-07-10T16:37:45Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -160,6 +160,20 @@ Live CLI acceptance (throwaway probe ticket in worktree): payload starting with 
 Hygiene note: the probe's CLI auto-commits (3 commits, probe file only) were verified probe-only and dropped by the orchestrator via git reset --hard a3cc73d; working tree clean at a3cc73d.
 
 ## Documentation Updates
+
+Updated human-facing docs and agent context for the section --file payload contract:
+
+- README, Workflow, and TicketFormat now state that section --file payloads are section bodies only, must omit the target H2 heading, and must fence literal top-level H2 sample lines.
+- CodexSupport and PerStepOrchestration now carry the same body-only rule where return-only output is persisted with section --file.
+- memory-bank/systemPatterns.md records the current section-write semantics for orchestrators and return-only subagents.
+
+Verification:
+
+- The requested node --test command was attempted but this sandbox blocked Node test-runner worker spawn with spawn EPERM before test code ran.
+- node --test with test isolation disabled passed: 9 tests, 9 pass.
+- Direct fallback execution also passed both test files: skill usage sync 5 of 5 pass, resources sync 4 of 4 pass.
+
+Commit note: the documentation commit could not be created in this sandbox because Git needs to write the worktree index.lock under the main repository .git directory, which is outside the writable roots and failed with permission denied.
 
 ## Questions
 
