@@ -1,7 +1,7 @@
 ---
 id: T20260710T1220Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: S20260710T1206Z
 children: []
@@ -13,7 +13,7 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:22:11Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T12:30:38Z
+updated: 2026-07-10T12:42:28Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -358,3 +358,5 @@ the shipped `requireGateConsultation` triad.
 - 2026-07-10T12:28:57Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design: requireGateConsultation-mirror triad (flag, scoped precondition after the gate block, recordDesignReview recorder), design-review token with producingStatus ready_for_design, config diffs for both defaults + guard allowlist, explicit merge coordination with T1156Z (no shared-function edits). Estimate 2 (basis T20260710T0037Z, designer-recorded).
 
 - 2026-07-10T12:30:38Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none - workflow-internal gating, no auth/UI/UX
+
+- 2026-07-10T12:42:28Z: Ensured git branch local-board/T20260710T1220Z-design-review-routing-flag-move-precondition-and-evidence-recorder (already-current).
