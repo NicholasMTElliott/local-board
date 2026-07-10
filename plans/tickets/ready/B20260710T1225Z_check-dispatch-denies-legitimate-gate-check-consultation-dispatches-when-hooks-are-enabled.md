@@ -13,8 +13,8 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:25:41Z
-updated: 2026-07-10T13:18:46Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-10T13:19:54Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # check-dispatch denies legitimate gate-check consultation dispatches when hooks are enabled
@@ -329,3 +329,5 @@ for symmetry with `completeStep`.
 - 2026-07-10T13:11:07Z: Ensured git branch local-board/B20260710T1225Z-check-dispatch-denies-legitimate-gate-check-consultation-dispatches-when-hooks-are-enabled (already-current).
 
 - 2026-07-10T13:18:46Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design: consultation stamping (gate-check non-skip + specialty-run stamp scoped ledger entries with kind/route/model; check-dispatch consumes; gate-complete/complete-step clear; single-record invariant), worktree-aware fallback via new resolveTicketWorktreeRoot, fail-open preserved, 5-case test plan, import-cycle caveat flagged. Estimate 4 (basis B20260708T0459Z, designer-recorded).
+
+- 2026-07-10T13:19:54Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none - internal ledger coordination that tightens enforcement; no auth/UI/UX surface
