@@ -1,7 +1,7 @@
 ---
 id: T20260710T1533Z
 type: task
-status: ready_for_docs
+status: done
 priority: P2
 parent: null
 children: []
@@ -11,9 +11,9 @@ branch: local-board/T20260710T1533Z-skills-process-hardening-from-the-2026-07-10
 estimate: 2
 estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
-workCompletedAt: null
+workCompletedAt: 2026-07-10T17:37:21Z
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T17:37:07Z
+updated: 2026-07-10T17:37:21Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
