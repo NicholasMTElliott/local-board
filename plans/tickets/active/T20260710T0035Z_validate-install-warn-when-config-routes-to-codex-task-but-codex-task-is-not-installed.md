@@ -13,8 +13,8 @@ estimateBasis: T20260709T1119Z
 workStartedAt: 2026-07-10T01:05:09Z
 workCompletedAt: null
 created: 2026-07-10T00:35:52Z
-updated: 2026-07-10T01:22:31Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet"]
+updated: 2026-07-10T01:24:21Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # validate/install: warn when config routes to codex-task but codex-task is not installed
@@ -306,3 +306,5 @@ churn).
 - 2026-07-10T01:12:58Z: Ensured git branch local-board/T20260710T0035Z-validate-install-warn-when-config-routes-to-codex-task-but-codex-task-is-not-installed (already-current).
 
 - 2026-07-10T01:22:31Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Commit ba06bf3: new src/codex-detect.js (fail-open injected probes), codexTaskRoutedActions in config.js, validate stderr warning, install claude-target hint with options.cwd seam, 13 new tests across 3 files, docs notes. node --test 458 pass/1 pre-existing skip; check + validate pass. Two documented minor deviations (precheck-safe resolvesOnPath stub; local runCliChild helper).
+
+- 2026-07-10T01:24:21Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - read-only probe + informational warning; no settings/permission/consent mutation, no UI
