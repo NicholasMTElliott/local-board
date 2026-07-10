@@ -1,7 +1,7 @@
 ---
 id: T20260710T0037Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: null
 children: []
@@ -203,3 +203,5 @@ Disposition: both findings accepted; ticket looped back to ready_for_implementat
 - 2026-07-10T01:46:26Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - internal config parsing and JSON surface; ledger/evidence untouched
 
 - 2026-07-10T01:50:05Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
+
+- 2026-07-10T01:50:05Z: Ensured git branch local-board/T20260710T0037Z-config-add-effort-to-agent-profiles-and-thread-it-through-begin-step-and-codex-dispatch (already-current).
