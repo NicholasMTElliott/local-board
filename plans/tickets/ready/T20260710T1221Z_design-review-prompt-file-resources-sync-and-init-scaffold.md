@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T12:22:12Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
 updated: 2026-07-10T12:51:13Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # design-review: prompt file, resources sync, and init scaffold
@@ -315,3 +315,5 @@ Validation: git diff --check clean; prose-only change.
 - 2026-07-10T12:43:41Z: Ensured git branch local-board/T20260710T1221Z-design-review-prompt-file-resources-sync-and-init-scaffold (already-current).
 
 - 2026-07-10T12:46:46Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. 464/467 (2 = declared B1232Z baseline, exact match); mirror hash-identical; content contract greps verified; guardrail honored (no external calls).
+
+- 2026-07-10T12:51:13Z: Completed document via codex-task:workspace-write: memory-bank step-prompt enumeration updated (38f10fa); feature-level docs deferred to T20260710T1223Z by scope.
