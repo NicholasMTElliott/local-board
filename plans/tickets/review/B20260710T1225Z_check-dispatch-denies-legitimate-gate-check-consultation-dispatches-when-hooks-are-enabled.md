@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:25:41Z
-updated: 2026-07-10T14:25:24Z
+updated: 2026-07-10T14:26:36Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -406,6 +406,8 @@ verdict: changes_requested; target: implementation
 Reviewer-verified clean: ESM cycle load-safe (deferred-function references only; both entry points import successfully); wrong-agent-with-live-stamp still denied; no-stamp fallback intact; tests cover happy-path stamps, wrong-agent denial, gate-complete cleanup, specialty authorization, normal worktree fallback. Coverage gaps named for each finding.
 
 Disposition: all three findings accepted; fixed in cbf3527; re-reviewed.
+
+Fourth review (terra@medium, 30s, of 3a5e716): verdict: pass. Gate-only clear predicate verified with the specialty-survives-gate-complete regression (check-dispatch still authorizes afterwards); same-status re-save preserves stamps while a real move sweeps (control test); scope confined to the two changes. Review loop closed after four passes: 3 findings -> 2 -> 1 -> 0.
 
 Third review (terra@medium, 55s, of identity pass 02e3dac): verdict: changes_requested — ONE residual: recordGateConsultation clears any gate OR specialty record with the same stage (no kind/action identity), so a stale gate-complete --stage design can erase a newer specialty stamp in design. Verified fixed: full idempotent-match identity with both collision tests (would fail pre-fix); action-identity clears with the stale-different-stage test; scope clean. Judgment recorded: moveTicket's broad consultation cleanup is CORRECT for real moves (a move abandons the pending dispatch); same-status re-saves clearing stamps is a minor edge to decide in the fix.
 
