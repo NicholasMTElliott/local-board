@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T19:10:49Z
+updated: 2026-07-10T19:13:29Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -268,6 +268,10 @@ Commits on branch `local-board/T20260710T1535Z-create-type-vs-status-advisory-an
 No deviations from the descoped design.
 
 ## Review Findings
+
+Verdict: pass (codex-task:read-only, gpt-5.6-terra @ high, 2026-07-10, commits c8f812b+eb542c8)
+
+No findings. typeStatusAdvisory implements the status-action/doneRequires predicate with absent-entry and unproduced-action handling, deriving the conventional status via the existing inversion helper; commandCreate warns unconditionally via console.warn before printing the path with the create result intact; warning and docs use the required move --override --reason correction form and describe warning-only behavior; unit and child-process coverage match the fire/silent matrix; no transition, ledger, or lane code shipped. Static review only.
 
 ## Test Evidence
 
