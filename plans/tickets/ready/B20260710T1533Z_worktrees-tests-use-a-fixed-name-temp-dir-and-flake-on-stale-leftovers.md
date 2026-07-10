@@ -13,8 +13,8 @@ estimateBasis: B20260710T1532Z
 workStartedAt: 2026-07-10T17:07:08Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T17:12:00Z
-completedSteps: []
+updated: 2026-07-10T17:12:28Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
 # worktrees tests use a fixed-name temp dir and flake on stale leftovers
@@ -261,3 +261,5 @@ assertion are all confirmed by inspection.
 ## Run Log
 
 - 2026-07-10T17:07:08Z: Ensured git branch local-board/B20260710T1533Z-worktrees-tests-use-a-fixed-name-temp-dir-and-flake-on-stale-leftovers (already-current).
+
+- 2026-07-10T17:12:28Z: Completed design via claude-subagent:local-board-designer@opus: Root cause: explicit relative location ../explicit-worktrees collapses to fixed os.tmpdir()/explicit-worktrees with deterministic ticket id; aborted run leaves orphan; next run hits not-a-registered-worktree throw (worktrees.js:41). Fix: removeFixtureDir pre-clean at top of withRepo try; seeded-stale regression test. Only fixed-name path in file. Estimate 2pts basis B20260710T1532Z.
