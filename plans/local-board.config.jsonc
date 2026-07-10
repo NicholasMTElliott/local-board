@@ -236,6 +236,7 @@
     "gate-check": { "route": "claude-subagent:local-board-gatecheck", "model": "haiku" },
     "design": { "route": "claude-subagent:local-board-designer", "model": "opus" },
     "implement": { "route": "claude-subagent:local-board-implementer", "model": "sonnet" },
+    "design-review": { "route": "codex-task:read-only", "model": "gpt-5.6-sol", "effort": "xhigh" },
     "review": { "route": "codex-task:read-only", "model": "gpt-5.6-terra", "effort": "high" },
     "test": { "route": "claude-subagent:local-board-tester", "model": "sonnet" },
     "document": { "route": "codex-task:workspace-write" }
@@ -249,6 +250,9 @@
     // Forward moves out of design/implement/test require a recorded gate
     // consultation token (gate-check auto-stamp or gate-complete).
     "requireGateConsultation": true,
+    // Moves from design to implementation require a recorded design-review
+    // token (design-review-check / design-review-complete).
+    "requireDesignReview": true,
     // Hard transition validation: refuse off-map moves without --override.
     "enforceTransitions": true,
     // Loop-back moves to an earlier ready_* status strip downstream
