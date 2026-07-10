@@ -21,6 +21,13 @@ async function withRepo(fn, options = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "local-board-worktree-"));
   const worktreesRoot = worktreesRootFor(root, location);
   try {
+    // Defensive pre-clean (B20260710T1533Z): `root` is unique per run, but a
+    // `..`-relative worktrees.location (e.g. "../explicit-worktrees") resolves
+    // ABOVE root to a fixed path in os.tmpdir(). A prior run aborted before the
+    // finally-teardown can leave a stale worktree dir there; ticket IDs are
+    // deterministic under a fixed `now`, so the next run collides on the exact
+    // same target path. Clear it up front, symmetric with the finally below.
+    await removeFixtureDir(worktreesRoot);
     await git(root, ["init"]);
     // Disable background maintenance so a detached gc/object-packing writer
     // can't still be touching .git when teardown removes the fixture dir.
@@ -979,6 +986,32 @@ test("worktree-add supports an explicit relative worktrees.location outside the 
     const out = JSON.parse(add.stdout);
     assert.equal(out.worktreePath, displayPath(path.join(worktreesRoot, ticketId)));
     assert.equal(await currentBranch(path.join(worktreesRoot, ticketId)), out.branch);
+  }, { location: "../explicit-worktrees" });
+});
+
+test("worktree-add tolerates a stale fixed-name worktrees dir from an aborted prior run", { skip: !GIT_AVAILABLE }, async () => {
+  // Simulate an aborted prior run: pre-seed the FIXED outside worktrees root
+  // (<tmp>/explicit-worktrees) with a leftover ticket-id subdir + junk file,
+  // exactly what a run killed before its finally-teardown would leave behind.
+  const staleWorktreesRoot = path.join(os.tmpdir(), "explicit-worktrees");
+  await mkdir(path.join(staleWorktreesRoot, "T20260522T1506Z"), { recursive: true });
+  await writeFile(path.join(staleWorktreesRoot, "T20260522T1506Z", "leftover.txt"), "stale\n", "utf8");
+
+  await withRepo(async (root, _baseBranch, worktreesRoot) => {
+    assert.equal(worktreesRoot, staleWorktreesRoot); // proves the fixed path
+    const ticketPath = await createTicket(root, "task", "Explicit path ticket", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-22T15:06:00Z"), // -> T20260522T1506Z, the seeded id
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add explicit path ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    assert.equal(ticketId, "T20260522T1506Z");
+
+    // Pre-fix: worktree-add throws "exists but is not a registered git worktree"
+    // (code 2) on the stale collision. Post-fix: withRepo's pre-clean wiped it.
+    const add = await runCli(["--root", root, "worktree-add", ticketId, "--json"]);
+    assert.equal(add.code, 0, add.stderr);
   }, { location: "../explicit-worktrees" });
 });
 
