@@ -13,7 +13,7 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:22:12Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T12:43:41Z
+updated: 2026-07-10T12:46:46Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -259,6 +259,23 @@ No findings.
 Residual risk: validates prompt content and artifact fidelity only; the sibling ticket T20260710T1222Z's parser is not exercised here.
 
 ## Test Evidence
+
+verdict: pass
+
+Environment: Windows 11, worktree @ commit 6f31997. Tester: claude-subagent:local-board-tester (sonnet).
+
+Commands and results:
+
+- npm run check — pass.
+- npm test — 467 tests: 464 pass, 2 fail, 1 skip. Both failures are the declared baseline (test/install.test.js:887 and :902, real-PATH tests, B20260710T1232Z) — exact count and name match.
+- Isolated resources-sync + prompt-scaffold suites — 14/14 pass (byte-for-byte mirror, wholesale init copy, add-missing-only restore).
+- validate — Ticket validation OK.
+- git hash-object: plans and resources copies identical (6d3ffa585b5c53d41f6d6f1ab0e7e896fd05f9df, 4398 bytes, 0 CR bytes).
+- Content greps: PASS/CONCERNS/FAIL verdict tokens, all five rubric dimensions, and the return-only clause each present at verified line ranges.
+
+Acceptance criteria: all four PASS (existence/content contract; byte-identical LF mirror; scaffold/restore via existing prompt-scaffold suite per no-file-creation constraint; check + suite green modulo declared baseline).
+
+Anomalies: none. No external AI CLI or paid service invoked; no files created or modified.
 
 ## Documentation Updates
 
