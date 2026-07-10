@@ -13,8 +13,8 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:25:41Z
-updated: 2026-07-10T14:24:20Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet"]
+updated: 2026-07-10T14:25:24Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # check-dispatch denies legitimate gate-check consultation dispatches when hooks are enabled
@@ -454,3 +454,5 @@ Second re-review (terra@medium, 42s, of cbf3527): verdict: changes_requested —
 - 2026-07-10T14:15:46Z: Ensured git branch local-board/B20260710T1225Z-check-dispatch-denies-legitimate-gate-check-consultation-dispatches-when-hooks-are-enabled (already-current).
 
 - 2026-07-10T14:24:20Z: Completed implement via claude-subagent:local-board-implementer@sonnet: 8fd5831 + cbf3527 + 02e3dac + final pass 3a5e716: recordGateConsultation clears via gate-only predicate; moveTicket skips abandonment sweep on same-status re-save (real changes still sweep); 2 regressions. 43/43 ledger tests; suite at declared branch baseline.
+
+- 2026-07-10T14:25:24Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - ledger lifecycle mechanics
