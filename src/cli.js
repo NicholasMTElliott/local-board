@@ -24,6 +24,7 @@ import {
   queryNext,
   queryReady,
   queryTicket,
+  recordDesignReview,
   recordGateConsultation,
   recordGateSkippedEmptyCatalog,
   schemaRecord,
@@ -171,6 +172,12 @@ export async function main(argv) {
     }
     if (command === "specialty-run") {
       return await commandSpecialtyRun(root, args);
+    }
+    if (command === "design-review-check") {
+      return await commandDesignReviewCheck(root, args, allowMainRoot);
+    }
+    if (command === "design-review-complete") {
+      return await commandDesignReviewComplete(root, args, allowMainRoot);
     }
     if (command === "calibration") {
       const sub = args.shift();
@@ -1250,6 +1257,103 @@ async function commandGateComplete(root, args, allowMainRoot) {
   return 0;
 }
 
+async function commandDesignReviewCheck(root, args, allowMainRoot) {
+  const asJson = takeFlag(args, "--json");
+  const ticketId = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined) {
+    throw new Error("design-review-check requires: <ticket-id> [--allow-main-root] [--json]");
+  }
+
+  // Parity with commandGateCheck: refuse a wrong-root invocation before any
+  // further work, even though this command performs no dispatch or write of
+  // its own.
+  await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
+
+  const config = await loadConfig(root);
+  if (config.routing?.requireDesignReview !== true) {
+    throw new Error(
+      "design-review-check: design review is disabled: set routing.requireDesignReview to true in the board config",
+    );
+  }
+
+  const profile = config.agents?.["design-review"];
+  if (profile === undefined || profile.route === undefined) {
+    throw new Error(
+      "design-review-check: routing.requireDesignReview is true but no agents[\"design-review\"] profile is configured. Run \"local-board init\" or restore the default profile (codex-task:read-only, gpt-5.6-sol, xhigh).",
+    );
+  }
+
+  const { ticket } = await findTicket(root, ticketId);
+
+  const promptPath = path.resolve(root, "plans", "prompts", "steps", "design_review.md");
+  await assertPromptExists(promptPath, "design-review");
+
+  const baseRecord = ticketRecord(root, ticket);
+  const currentAction = config.workflow?.statusActions?.[ticket.status] ?? null;
+  const ticketContext = {
+    id: baseRecord.id,
+    type: baseRecord.type,
+    status: baseRecord.status,
+    priority: baseRecord.priority,
+    path: baseRecord.path,
+    title: baseRecord.title,
+    currentAction,
+    requirement: getSectionText(ticket.body, "Requirement") ?? "",
+    acceptanceCriteria: getSectionText(ticket.body, "Acceptance Criteria") ?? "",
+  };
+
+  const payload = {
+    ticket: ticket.id,
+    prompt: promptPath,
+    agent: profile.route,
+    model: profile.model ?? null,
+    effort: profile.effort ?? null,
+    ticketPath: ticket.path,
+    ticketContext,
+  };
+
+  if (asJson) {
+    console.log(JSON.stringify(payload, null, 2));
+  } else {
+    const effortSuffix = profile.effort ? ` effort=${profile.effort}` : "";
+    const modelSuffix = profile.model ? `@${profile.model}` : "";
+    console.log(`design-review-check ${ticket.id} agent=${profile.route}${modelSuffix}${effortSuffix}`);
+    console.log(promptPath);
+  }
+  return 0;
+}
+
+async function commandDesignReviewComplete(root, args, allowMainRoot) {
+  const asJson = takeFlag(args, "--json");
+  const executor = takeOption(args, "--executor");
+  const model = takeOption(args, "--model");
+  const evidence = takeOption(args, "--evidence");
+  const ticketId = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined || executor === undefined || evidence === undefined) {
+    throw new Error(
+      "design-review-complete requires: <ticket-id> --executor <executor> [--model <model>] --evidence <text> [--allow-main-root]",
+    );
+  }
+
+  // Before any write: a wrong-root invocation must be refused before
+  // recordDesignReview acquires the lock or writes the ticket file.
+  await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
+
+  const composedExecutor = composeExecutor(executor, model);
+  const result = await recordDesignReview(root, ticketId, composedExecutor, evidence);
+  await maybeCommitPlanning(root, { ticketId: result.ticket, command: "design-review-complete", detail: "design-review" });
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`${result.ticket} design-review ${result.executor} ${result.path}`);
+  }
+  return 0;
+}
+
 async function commandSpecialtyRun(root, args) {
   const asJson = takeFlag(args, "--json");
   const ticketId = args.shift();
@@ -1507,6 +1611,8 @@ const USAGE_TEXT = `Usage:
   local-board [--root <path>] gate-check <ticket-id> --stage <stage> [--allow-main-root] [--json]
   local-board [--root <path>] gate-complete <ticket-id> --stage <stage> --executor <executor> [--model <model>] [--evidence <text>] [--allow-main-root] [--json]
   local-board [--root <path>] specialty-run <ticket-id> <step-name> [--json]
+  local-board [--root <path>] design-review-check <ticket-id> [--allow-main-root] [--json]
+  local-board [--root <path>] design-review-complete <ticket-id> --executor <executor> [--model <model>] --evidence <text> [--allow-main-root] [--json]
   local-board [--root <path>] calibration suggest <ticket-id> [--json]
 
 --allow-main-root overrides the wrong-root mutation guard (worktrees.guardWrongRoot)
