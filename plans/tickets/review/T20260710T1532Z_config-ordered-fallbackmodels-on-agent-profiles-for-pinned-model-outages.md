@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
 updated: 2026-07-10T17:56:22Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
 # config: ordered fallbackModels on agent profiles for pinned-model outages
@@ -827,3 +827,5 @@ Verified clean by static inspection: routing and schema validation, fallback thr
 - 2026-07-10T17:51:25Z: Completed implement via claude-subagent:local-board-implementer@sonnet: fallbackModels shipped per 6-round design: schema validation, modelAccepted at both seams incl. no-ledger path, conditional threading through begin-step/gate/specialty/DR payloads+stamps, isSpecialtyLedgerEntry clear, translateCodexDispatch sanitized+prompt, skills/docs split prose. Byte-identical legacy shapes tested deep-equal. Suite 565/0/1 (32 new); sync 9/9; board validate 0. Commits b981ff4+a70165a+1905cb0.
 
 - 2026-07-10T17:52:20Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none requested (config-driven allowlist within already-gated routing; no auth/credential/UI triggers)
+
+- 2026-07-10T17:56:22Z: Completed review via codex-task:read-only@gpt-5.6-terra: changes_requested target implementation: 1 Medium - byte-identical tests assert key sets not full deep-equal shapes (6 cited locations); all functional invariants verified clean statically
