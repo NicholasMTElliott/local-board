@@ -13,8 +13,8 @@ estimateBasis: B20260710T1532Z
 workStartedAt: 2026-07-10T17:07:08Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T17:42:43Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+updated: 2026-07-10T17:43:48Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # worktrees tests use a fixed-name temp dir and flake on stale leftovers
@@ -319,3 +319,5 @@ Commit: attempted `B20260710T1533Z: docs note worktree fixture pre-clean`, but g
 - 2026-07-10T17:32:55Z: Completed review via codex-task:read-only@gpt-5.6-terra: pass, no findings: pre-clean placement, non-vacuous seeded path, test-only scope, no concurrency hazard all verified
 
 - 2026-07-10T17:39:32Z: Completed test via claude-subagent:local-board-tester@sonnet: pass: full suite 534/0/1; worktrees suite 40/40 x3; independent stale-abort simulation recovered by pre-clean; diff scope test-only
+
+- 2026-07-10T17:43:48Z: Completed document via codex-task:workspace-write: techContext.md gains the withRepo pre-clean convention sentence (only file documenting fixture conventions; docs/ has no coverage). Sync tests 9/9.
