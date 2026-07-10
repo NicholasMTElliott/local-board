@@ -1,7 +1,7 @@
 ---
 id: T20260710T1535Z
 type: task
-status: ready_for_docs
+status: done
 priority: P3
 parent: null
 children: []
@@ -11,9 +11,9 @@ branch: local-board/T20260710T1535Z-create-type-vs-status-advisory-and-an-eviden
 estimate: 1
 estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
-workCompletedAt: null
+workCompletedAt: 2026-07-10T19:21:04Z
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T19:21:03Z
+updated: 2026-07-10T19:21:04Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
