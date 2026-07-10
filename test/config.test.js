@@ -4,7 +4,7 @@ import path from "node:path";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { DEFAULT_CONFIG, defaultConfigJsonc, loadConfig, parseJsonc } from "../src/config.js";
+import { DEFAULT_CONFIG, codexTaskRoutedActions, defaultConfigJsonc, loadConfig, parseJsonc } from "../src/config.js";
 import { removeFixtureDir } from "./helpers/fixtures.js";
 
 async function withRoot(fn) {
@@ -478,7 +478,156 @@ test("loadConfig preserves an optional agent override on optionalSteps entries",
     const config = await loadConfig(root);
     assert.equal(config.optionalSteps.design.length, 1);
     assert.equal(config.optionalSteps.design[0].agent, "claude-subagent:local-board-reviewer");
+    assert.equal(typeof config.optionalSteps.design[0].agent, "string");
   });
+});
+
+test("loadConfig accepts a { route, model, effort } profile object for optionalSteps[].agent", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      optionalSteps: {
+        implement: [
+          {
+            name: "security_audit",
+            prompt: "plans/prompts/optional-steps/impl/security_audit.md",
+            triggers: "Anything",
+            agent: { route: "codex-task:read-only", model: "gpt-5.6-sol", effort: "xhigh" },
+          },
+        ],
+      },
+    }));
+    const config = await loadConfig(root);
+    assert.deepEqual(config.optionalSteps.implement[0].agent, {
+      route: "codex-task:read-only",
+      model: "gpt-5.6-sol",
+      effort: "xhigh",
+    });
+  });
+});
+
+test("loadConfig rejects a prompt field inside an optionalSteps[].agent profile", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      optionalSteps: {
+        implement: [
+          {
+            name: "security_audit",
+            prompt: "plans/prompts/optional-steps/impl/security_audit.md",
+            triggers: "Anything",
+            agent: { route: "codex-task:read-only", prompt: "some/other.md" },
+          },
+        ],
+      },
+    }));
+    await assert.rejects(
+      loadConfig(root),
+      /optionalSteps\.implement entry "security_audit" agent cannot carry a prompt; set the entry-level "prompt" field instead/,
+    );
+  });
+});
+
+test("loadConfig rejects an inline route with a model or effort on optionalSteps[].agent", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      optionalSteps: {
+        implement: [
+          {
+            name: "security_audit",
+            prompt: "plans/prompts/optional-steps/impl/security_audit.md",
+            triggers: "Anything",
+            agent: { route: "inline", model: "opus" },
+          },
+        ],
+      },
+    }));
+    await assert.rejects(loadConfig(root), /cannot carry a model/);
+  });
+
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      optionalSteps: {
+        implement: [
+          {
+            name: "security_audit",
+            prompt: "plans/prompts/optional-steps/impl/security_audit.md",
+            triggers: "Anything",
+            agent: { route: "inline", effort: "high" },
+          },
+        ],
+      },
+    }));
+    await assert.rejects(loadConfig(root), /cannot carry an effort/);
+  });
+});
+
+test("loadConfig rejects a malformed optionalSteps[].agent object (non-object, bad route)", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      optionalSteps: {
+        implement: [
+          {
+            name: "security_audit",
+            prompt: "plans/prompts/optional-steps/impl/security_audit.md",
+            triggers: "Anything",
+            agent: 42,
+          },
+        ],
+      },
+    }));
+    await assert.rejects(loadConfig(root), /agent must be a route string or a \{ route, model\?, effort\? \} object/);
+  });
+
+  await withRoot(async (root) => {
+    await writeConfig(root, JSON.stringify({
+      version: 1,
+      optionalSteps: {
+        implement: [
+          {
+            name: "security_audit",
+            prompt: "plans/prompts/optional-steps/impl/security_audit.md",
+            triggers: "Anything",
+            agent: { route: "wizard:cast" },
+          },
+        ],
+      },
+    }));
+    await assert.rejects(loadConfig(root), /requires a valid route string/);
+  });
+});
+
+test("codexTaskRoutedActions detects an object-form optionalSteps agent routed to codex-task", () => {
+  const config = {
+    agents: {},
+    optionalSteps: {
+      implement: [
+        {
+          name: "security_audit",
+          agent: { route: "codex-task:read-only", model: "gpt-5.6-sol" },
+        },
+      ],
+    },
+  };
+  assert.deepEqual(codexTaskRoutedActions(config), ["security_audit (implement)"]);
+});
+
+test("codexTaskRoutedActions detects a raw (un-normalized) object-form optionalSteps agent routed to codex-task", () => {
+  // codexTaskRoutedActions is documented to run over raw parseJsonc output
+  // too (e.g. install's config hint), not just post-loadConfig normalized
+  // shapes. A raw object literal has no normalization guarantees beyond
+  // being a plain object with a route key.
+  const raw = parseJsonc(`{
+  "optionalSteps": {
+    "design": [
+      { "name": "security_threat_model", "agent": { "route": "codex-task:read-only" } }
+    ]
+  }
+}`);
+  assert.deepEqual(codexTaskRoutedActions(raw), ["security_threat_model (design)"]);
 });
 
 test("loadConfig rejects duplicate optionalSteps names within a stage", async () => {

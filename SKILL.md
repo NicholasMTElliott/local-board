@@ -264,13 +264,13 @@ For each name in `requestedSteps`, resolve the specialty:
 local-board specialty-run <ticket-id> <step-name> --json
 ```
 
-`specialty-run` derives the stage automatically from ticket status; do not pass `--stage`. It returns the resolved `prompt`, the `agent` route (defaulting to `inline`), and a narrow `ticketContext`. Dispatch the prompt through that route, parse the specialty agent's `verdict` (`PASS` / `CONCERNS` / `FAIL`) plus `findings`, then record evidence:
+`specialty-run` derives the stage automatically from ticket status; do not pass `--stage`. It returns the resolved `prompt`, the `agent` route (defaulting to `inline`), `model` and `effort` (both `null` when unset — a catalog entry's `agent` may be a bare route string or a `{ route, model?, effort? }` profile object, same grammar as `Delegation` below), and a narrow `ticketContext`. Dispatch the prompt through the returned `agent` route with the returned pins: for `claude-subagent:` pin the subagent's model to `model` at dispatch (effort via frontmatter, static today); for `codex-task:` pass `--model <model>` / `--reasoning-effort <effort>` when non-null. Parse the specialty agent's `verdict` (`PASS` / `CONCERNS` / `FAIL`) plus `findings`, then record evidence:
 
 ```sh
-local-board complete-step <ticket-id> <step-name> --executor <executor> --evidence "<VERDICT>: <short summary>"
+local-board complete-step <ticket-id> <step-name> --executor <agent> --model <model> --evidence "<VERDICT>: <short summary>"
 ```
 
-Use the exact `<step-name>` returned by gate-check. `specialty-run` rejects unknown names. Use the resolved executor string (the `agent` value from `specialty-run`, or `inline`) so the `<step-name>:<executor>` evidence pair satisfies strict routing.
+Use the exact `<step-name>` returned by gate-check. `specialty-run` rejects unknown names. Pass `--model` (omit when `model` is null) so `complete-step` composes `<step-name>:<agent>@<model>` server-side and enforces a pinned specialty model exactly like a mandatory action; effort is a dispatch hint only and never appears in the evidence token.
 
 Only after every requested specialty has recorded completion evidence does the orchestrator run `move <ticket-id> <next-status>`.
 
