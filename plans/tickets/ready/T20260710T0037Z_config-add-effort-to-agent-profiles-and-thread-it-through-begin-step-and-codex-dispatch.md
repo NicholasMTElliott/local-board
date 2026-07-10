@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T01:31:18Z
 workCompletedAt: null
 created: 2026-07-10T00:36:10Z
 updated: 2026-07-10T02:01:13Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # config: add effort to agent profiles and thread it through begin-step and codex dispatch
@@ -254,3 +254,5 @@ Validation: git diff --check clean; prose-only change.
 - 2026-07-10T01:54:05Z: Completed review via codex-task:read-only: Initial CONCERNS (2 minors, terra@high) fixed in 75b4116; focused re-review PASS (luna@medium). No open findings.
 
 - 2026-07-10T01:57:10Z: Completed test via claude-subagent:local-board-tester@sonnet: 466/467 pass (1 pre-existing skip); all acceptance criteria PASS; live probes confirm effort threading on all six dispatch branches and zero evidence/ledger leakage.
+
+- 2026-07-10T02:01:13Z: Completed document via codex-task:workspace-write: memory-bank systemPatterns + techContext synced with effort routing facts; README and CodexSupport verified current; committed on ticket branch.
