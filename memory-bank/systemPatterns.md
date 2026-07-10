@@ -121,7 +121,7 @@ Step prompts live in `plans/prompts/steps/`.
 
 Fresh `init` scaffolds the full packaged prompt tree into `plans/prompts/`:
 - role prompts: `code_reviewer.md`, `estimator.md`, `implementer.md`, `orchestrator.md`
-- step prompts: `decompose.md`, `design.md`, `document.md`, `estimate.md`, `gate-check.md`, `test.md`
+- step prompts: `decompose.md`, `design.md`, `design_review.md`, `document.md`, `estimate.md`, `gate-check.md`, `test.md`
 - optional-step prompts: design `security_threat_model.md`, `ui_component_review.md`, `ux_interaction_review.md`; impl `security_audit.md`, `ui_visual_review.md`
 
 Skills should be orchestration entrypoints. Step behavior should live in prompt files and deterministic scripts where possible.
