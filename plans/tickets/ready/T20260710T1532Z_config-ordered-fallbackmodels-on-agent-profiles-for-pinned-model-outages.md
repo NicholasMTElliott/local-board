@@ -13,7 +13,7 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T17:10:18Z
+updated: 2026-07-10T17:16:45Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -198,14 +198,21 @@ Concrete rules (all symmetric, all gated by D6):
 - **Consultation payload (hazard 2) — shared seam, fully gated.** Each
   consultation command routes its resolved profile through the same
   `translateCodexDispatch` seam begin-step uses, **passing the profile's own
-  `effort`** (never a hardcoded `null`) so the sanitized `codexDispatch`
-  sub-block preserves the configured effort across the fallback walk.
-  **When — and only when — the profile carries a non-empty `fallbackModels`**,
-  the payload gains, together:
+  `effort`** (never a hardcoded `null`) **and its already-resolved prompt path as
+  `prompt: promptPath`** (never omitting it) so the sanitized `codexDispatch`
+  sub-block preserves both the configured effort and the resolved `promptPath`
+  across the fallback walk. **When — and only when — the profile carries a
+  non-empty `fallbackModels`**, the payload gains, together:
   - `fallbackModels` at the payload top level — the **raw** list the native
     Claude harness walks; and
   - a `codexDispatch` sub-block carrying the **sanitized** `fallbackModels` (via
-    `sanitizeModel`) plus the carried-over `effort` the Codex harness walks; and
+    `sanitizeModel`), the carried-over `effort`, and the resolved `promptPath`
+    the Codex harness walks. Passing `prompt: promptPath` is required because for
+    a `codex-task:` consultation route `translateCodexDispatch` sets
+    `promptPath: prompt ?? null`; without it the sub-block's `promptPath` is
+    `null` and a fallback-configured codex-task consultation cannot be dispatched
+    directly from its `codexDispatch` block. Each command already resolves and
+    prints this prompt path, so it is simply forwarded; and
   - for gate-check specifically, the **`effort` field** (which the gate-check
     payload otherwise lacks). This effort field is now part of the
     fallback-only bundle, not a standalone additive change — a fallback-free
@@ -323,7 +330,10 @@ boards are byte-identical everywhere. Tests assert the exact legacy shapes when
 no fallback is configured, for results, stamps, and all three consultation
 payloads (see Test strategy). Unlike `effort` on specialty-run/design-review
 payloads (which predates this ticket and is already `null`-baseline there),
-`fallbackModels` is brand new, so its baseline is *absence*.
+`fallbackModels` is brand new, so its baseline is *absence*. The `codexDispatch`
+sub-block (and therefore its `promptPath`) is likewise part of the fallback-only
+bundle: it appears only when fallbacks are configured, so forwarding
+`prompt: promptPath` changes nothing on a fallback-free board.
 
 #### D7 — Explicitly out-of-scope pre-existing hook gaps (known limitations)
 
@@ -352,16 +362,17 @@ known limitations; the orchestrator will file follow-up tickets.
 The default `design-review` route is `codex-task:read-only` (not hook-gated), so
 the default board is unaffected by the first limitation.
 
-#### D8 — Corollary: effort preservation is scoped to fallback-configured profiles
+#### D8 — Corollary: effort and prompt preservation is scoped to fallback-configured profiles
 
 With D6, effort preservation across the fallback walk is **guaranteed for
 fallback-configured profiles**: every consultation command passes its own
-profile `effort` (never `null`) into `translateCodexDispatch`, and the raw
-payload plus the `codexDispatch` sub-block both carry it. **Fallback-free
-profiles keep today's behavior verbatim**, including today's gaps: the gate-check
-payload keeps its no-`effort` legacy shape, and no `codexDispatch` block is
-emitted. The effort-preservation improvement rides entirely on the
-fallback-configured path, consistent with the single scope rule.
+profile `effort` (never `null`) and its resolved `prompt: promptPath` into
+`translateCodexDispatch`, and the raw payload plus the `codexDispatch` sub-block
+both carry them. **Fallback-free profiles keep today's behavior verbatim**,
+including today's gaps: the gate-check payload keeps its no-`effort` legacy
+shape, and no `codexDispatch` block is emitted (so the forwarded prompt path is
+invisible there). The effort- and prompt-preservation improvement rides entirely
+on the fallback-configured path, consistent with the single scope rule.
 
 ### Implementation approach (files and changes)
 
@@ -414,41 +425,47 @@ fallback-configured path, consistent with the single scope rule.
   read — no design-review-specific branch is required.
 
 #### src/codex-dispatch.js
-- `translateCodexDispatch({ ..., effort, fallbackModels })`: when `fallbackModels`
-  is a non-empty array, sanitize each entry with the existing `sanitizeModel`
-  (Claude aliases / `claude*` / empty -> dropped) and include a `fallbackModels`
-  array on the returned object (possibly `[]` if every entry was an alias). When
-  `fallbackModels` is null/undefined, **omit the key entirely** (D6). `effort` is
-  already passed through verbatim on every branch (unchanged). Update the header
-  contract comment to document (a) this is the single shared seam used by
-  begin-step and the three consultation commands, (b) `codexDispatch.fallbackModels`
-  is the *sanitized* list the Codex harness walks while the raw list is what the
-  native harness walks, and (c) the carried-over `effort` applies to the fallback
-  walk too (each consultation command passes its own profile effort, never
-  `null`).
+- `translateCodexDispatch({ ..., prompt, effort, fallbackModels })`: when
+  `fallbackModels` is a non-empty array, sanitize each entry with the existing
+  `sanitizeModel` (Claude aliases / `claude*` / empty -> dropped) and include a
+  `fallbackModels` array on the returned object (possibly `[]` if every entry was
+  an alias). When `fallbackModels` is null/undefined, **omit the key entirely**
+  (D6). `prompt` and `effort` are already passed through verbatim on every branch
+  (`prompt` populates the returned `promptPath` on the codex-task/inline
+  branches — unchanged). Update the header contract comment to document (a) this
+  is the single shared seam used by begin-step and the three consultation
+  commands, (b) `codexDispatch.fallbackModels` is the *sanitized* list the Codex
+  harness walks while the raw list is what the native harness walks, (c) the
+  carried-over `effort` applies to the fallback walk too (each consultation
+  command passes its own profile effort, never `null`), and (d) each consultation
+  command passes `prompt: promptPath` (its already-resolved prompt file) so the
+  codex-task consultation `codexDispatch.promptPath` is populated and the fallback
+  walk is directly dispatchable.
 
 #### src/cli.js
 - `commandBeginStep`: pass `fallbackModels: result.configuredFallbackModels`
-  (which is `undefined` when absent) into `translateCodexDispatch`. No new CLI
-  command or flag.
+  (which is `undefined` when absent) into `translateCodexDispatch`. Already passes
+  `prompt: result.configuredPrompt`. No new CLI command or flag.
 - `commandGateCheck` (non-skip, `claude-subagent:` branch): add
   `fallbackModels: gateProfile.fallbackModels` to the `stampActiveStepNoClobber`
   record **only when present**. **Only when the profile lists a non-empty
   `fallbackModels`**, add to the printed `payload`, together: `effort:
   gateProfile.effort ?? null`, the raw `fallbackModels`, and a `codexDispatch`
   sub-block computed via `translateCodexDispatch({ route: gateProfile.route,
-  model: gateProfile.model, effort: gateProfile.effort ?? null, fallbackModels,
-  agentsDir })` — passing the **configured effort**, not `null`. **A fallback-free
-  gate-check payload gains nothing (no `effort`, no `fallbackModels`, no
-  `codexDispatch`) and is byte-identical to today.**
+  model: gateProfile.model, prompt: promptPath, effort: gateProfile.effort ??
+  null, fallbackModels, agentsDir })` — passing the **already-resolved
+  `promptPath`** (the same value the command resolves and prints) and the
+  **configured effort**, not `null`. **A fallback-free gate-check payload gains
+  nothing (no `effort`, no `fallbackModels`, no `codexDispatch`) and is
+  byte-identical to today.**
 - `commandSpecialtyRun`: `resolveOptionalStepAgent(entry.agent)` now also yields
   `fallbackModels` (when configured); add it to the `claude-subagent:`
   `stampActiveStepNoClobber` record **only when present**, and add the raw
   `fallbackModels` plus a `codexDispatch` sub-block via
-  `translateCodexDispatch({ route: agent, model, effort, fallbackModels,
-  agentsDir })` to the `payload` **only when present**. The payload already
-  carries `effort`; the translate call forwards that same `effort`. No hardcoded
-  `null`.
+  `translateCodexDispatch({ route: agent, model, prompt: promptPath, effort,
+  fallbackModels, agentsDir })` to the `payload` **only when present** — passing
+  the command's resolved `promptPath`. The payload already carries `effort`; the
+  translate call forwards that same `effort`. No hardcoded `null`.
 - `commandDesignReviewCheck`: **only when** the resolved `design-review` route is
   a `claude-subagent:` route **and** the profile lists a non-empty
   `fallbackModels`, stamp a `stampActiveStepNoClobber` record `{ ticket, kind:
@@ -459,11 +476,17 @@ fallback-configured path, consistent with the single scope rule.
   (see D7 known limitation). Independently, **only when** the profile lists a
   non-empty `fallbackModels`, add the raw `fallbackModels` and a `codexDispatch`
   sub-block via `translateCodexDispatch({ route: profile.route, model:
-  profile.model, effort: profile.effort ?? null, fallbackModels, agentsDir })` to
-  the payload (sanitized list, configured effort carried over). The payload
-  already carries `effort: profile.effort ?? null` on every branch (unchanged);
-  the translate call forwards the same value. A fallback-free design-review-check
-  payload and ledger are byte-identical to today.
+  profile.model, prompt: promptPath, effort: profile.effort ?? null,
+  fallbackModels, agentsDir })` to the payload (sanitized list, configured effort
+  carried over, resolved `promptPath` forwarded). The payload already carries
+  `effort: profile.effort ?? null` on every branch (unchanged); the translate
+  call forwards the same value. A fallback-free design-review-check payload and
+  ledger are byte-identical to today.
+- All three consultation commands already resolve `promptPath` and print it
+  today (gate-check/design-review-check under `plans/prompts/steps/...`,
+  specialty-run `path.resolve(root, entry.prompt)`); the amendment simply forwards
+  that same value as `prompt: promptPath` into the translate call, so no new
+  resolution is introduced and the printed prompt-path line is unchanged.
 - Update the stale specialty-run comment ("gate-complete's clear covers this
   entry too / there is no separate specialty-completion verb") to reflect that
   `complete-step` clears the specialty's stamp (D5-finding-1).
@@ -506,7 +529,9 @@ paths, with **no** exceptions this revision.
   intentionally not dispatchable under Codex.
 - State the gate-check / specialty-run / design-review-check payloads carry a
   `codexDispatch` sub-block **only when a fallback list is configured**, walked
-  identically, carrying the configured `effort`.
+  identically, carrying the configured `effort` and the resolved
+  `codexDispatch.promptPath` (so the codex-task consultation walk is directly
+  dispatchable from the sub-block).
 
 #### CLI-fence / sync invariants (unchanged)
 The `## CLI Commands` fenced blocks are unchanged (no new command/flag), so they
@@ -518,20 +543,21 @@ No `plans/prompts` files change, so `npm run sync-resources` is not required.
 - **Models** section: document `codexDispatch.fallbackModels` (sanitized like
   `model`, present only when a fallback list is configured); note begin-step
   surfaces the raw `configuredFallbackModels`, that the three consultation
-  payloads carry the same raw+sanitized pair (only when configured), and that the
-  two lists can differ when an entry is a Claude alias.
+  payloads carry the same raw+sanitized pair (only when configured) together with
+  the resolved `codexDispatch.promptPath`, and that the two lists can differ when
+  an entry is a Claude alias.
 - **Effort** section: document that strict routing accepts the pinned model OR
   any configured fallback (evidence records the model that actually ran; effort
   carries over, never recorded), that the consultation payloads carry the
-  configured effort into the fallback walk **only on the fallback-configured
-  path** (including the gate-check `effort` field, which appears only then), that
-  `optionalSteps[].agent` accepts `fallbackModels`, that a design-review
-  claude-subagent route is hook-authorized via a design-review-check stamp
-  **only when it lists fallbacks** (fallback-free claude-subagent design-review
-  remains a known limitation, follow-up ticket), that an exhausted or
-  fully-sanitized-out list falls through to approve-inline / questions (never
-  `@codex-default`), and that boards without `fallbackModels` are byte-identical
-  with **no** exceptions.
+  configured effort and resolved prompt path into the fallback walk **only on the
+  fallback-configured path** (including the gate-check `effort` field, which
+  appears only then), that `optionalSteps[].agent` accepts `fallbackModels`, that
+  a design-review claude-subagent route is hook-authorized via a
+  design-review-check stamp **only when it lists fallbacks** (fallback-free
+  claude-subagent design-review remains a known limitation, follow-up ticket),
+  that an exhausted or fully-sanitized-out list falls through to approve-inline /
+  questions (never `@codex-default`), and that boards without `fallbackModels` are
+  byte-identical with **no** exceptions.
 
 ### Risks and edge cases
 
@@ -547,6 +573,16 @@ No `plans/prompts` files change, so `npm run sync-resources` is not required.
   design-review stamp for every claude-subagent route. Fixed: both are now inside
   the fallback-only bundle (D6, no exceptions). Guarded by exact-legacy-shape
   tests for all three consultation payloads and stamps on fallback-free boards.
+- **Fallback-configured codex-task consultation not dispatchable (this revision,
+  finding 5, high):** the three consultation `translateCodexDispatch` calls
+  omitted `prompt`, so for a `codex-task:` consultation route the returned
+  `codexDispatch.promptPath` was `null` and the orchestrator had no prompt file
+  to dispatch the fallback walk from. Fixed by forwarding each command's already-
+  resolved `promptPath` as `prompt: promptPath` on all three calls. Guarded by a
+  test asserting a fallback-configured codex-task consultation payload's
+  `codexDispatch.promptPath` equals the resolved prompt path, while a
+  fallback-free profile emits no `codexDispatch` block at all (so the block, and
+  its prompt path, stay absent).
 - **Fallback-free claude-subagent design-review hook rejection (known
   limitation, D7):** out of scope; follow-up ticket. Covered by an assertion that
   a fallback-free claude-subagent design-review route writes no stamp (documenting
@@ -573,7 +609,7 @@ No `plans/prompts` files change, so `npm run sync-resources` is not required.
   specialty's ledger entry earlier than the `moveTicket` sweep did. This is a
   transient-state hygiene change that emits no field and alters no
   payload/evidence/ticket output; the sweep remains the catch-all for genuinely
-  abandoned (never-completed) specialties.
+  abandoned specialties.
 - **Lingering design-review action stamp:** like begin-step's own `action` stamp,
   a design-review-check stamp is cleared by its completion verb
   (`design-review-complete` -> `recordDesignReview`). This matches existing
@@ -610,10 +646,18 @@ test/ (consultation payloads + stamps — legacy shapes, D6 no-exceptions)
 - **gate-check effort preservation:** a `claude-subagent` `agents["gate-check"]`
   with `model` + `effort: "high"` + `fallbackModels` produces a payload whose
   top-level `effort === "high"` and whose `codexDispatch.effort === "high"`.
+- **consultation prompt-path preservation (finding 5):** for each of gate-check,
+  specialty-run, and design-review-check on a **codex-task** route with
+  `fallbackModels`, the payload's `codexDispatch.promptPath` equals the command's
+  resolved prompt path (gate-check/design-review-check under
+  `plans/prompts/steps/...`, specialty-run under the entry's prompt) — i.e. it is
+  non-null and dispatchable. Conversely, a **fallback-free** profile on each of
+  the three commands emits **no** `codexDispatch` block (so no `promptPath`
+  surfaces), preserving the byte-identical legacy shape.
 - **specialty-run:** exact deep-equal of the payload to today's shape when the
   specialty agent has no `fallbackModels`; the `specialty` stamp is byte-identical.
   When configured: payload gains raw `fallbackModels` + `codexDispatch` (resolved
-  `effort` preserved); stamp carries `fallbackModels`.
+  `effort` and `promptPath` preserved); stamp carries `fallbackModels`.
 - **design-review-check:** exact deep-equal of the payload to today's shape when
   the profile has no `fallbackModels`, on **every** route — and **no** stamp is
   written on any route without fallbacks (default `codex-task:read-only` and a
@@ -621,8 +665,8 @@ test/ (consultation payloads + stamps — legacy shapes, D6 no-exceptions)
   limitation). When `fallbackModels` is configured on a `claude-subagent:` route:
   payload gains raw `fallbackModels` + `codexDispatch`; the stamp
   (`action`/`design-review`) carries `fallbackModels`. A `codex-task:` route with
-  fallbacks: payload gains the fallback bundle but writes no stamp (not
-  hook-gated).
+  fallbacks: payload gains the fallback bundle (with a non-null
+  `codexDispatch.promptPath`) but writes no stamp (not hook-gated).
 
 test/ (routing / model acceptance)
 - complete-step `review --model gpt-5.5` accepted under strict routing when
@@ -662,13 +706,16 @@ test/ (check-dispatch — per-path threading, D5)
   status action; when that action lists a fallback, `--model <fallback>` is
   accepted (`resolved.fallbackModels` threaded), unlisted is model-mismatch.
 
-test/ (codex-dispatch — alias sanitization)
+test/ (codex-dispatch — alias sanitization + prompt forwarding)
 - An alias-containing `fallbackModels` (e.g. `["gpt-5.5", "sonnet"]`) on a Codex
   route yields `codexDispatch.fallbackModels === ["gpt-5.5"]` while
   `fallbackModelsForAction`/the config gate still lists both. Assert
   `codexDispatch.effort` carries through unchanged.
 - A claude-subagent route whose fallbacks are all aliases yields
   `codexDispatch.fallbackModels === []`.
+- Passing `prompt: promptPath` into `translateCodexDispatch` on a `codex-task:`
+  route populates `codexDispatch.promptPath` with that exact path (guards the
+  finding-5 forwarding contract at the seam level).
 
 test/ (completeStep specialty clear — finding 1 unit)
 - After `specialty-run` stamps a `kind: "specialty"` entry, `complete-step` for
@@ -692,10 +739,13 @@ walk is operational on begin-step plus three consultation paths (gate-check,
 specialty-run, design-review-check) via the shared seam, gated uniformly by the
 single D6 scope rule. This revision adds a general ledger-hygiene fix
 (`complete-step` clearing a completed specialty's stamp) so the fallback-configured
-design-review stamp lands, and tightens two additive changes (gate-check `effort`,
+design-review stamp lands, tightens two additive changes (gate-check `effort`,
 design-review stamp) back inside the fallback-only bundle so fallback-free boards
-are byte-identical with no exceptions. Work is mechanical and reuses existing
-seams (no new architecture), realistically near the top of a 4-point band.
+are byte-identical with no exceptions, and forwards each consultation command's
+already-resolved `promptPath` (`prompt: promptPath`) into the shared translate
+seam so a fallback-configured codex-task consultation is directly dispatchable
+from its `codexDispatch` block. Work is mechanical and reuses existing seams (no
+new architecture), realistically near the top of a 4-point band.
 
 ## Implementation Notes
 
