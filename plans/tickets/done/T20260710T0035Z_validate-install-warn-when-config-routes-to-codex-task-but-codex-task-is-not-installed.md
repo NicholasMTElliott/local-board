@@ -1,7 +1,7 @@
 ---
 id: T20260710T0035Z
 type: task
-status: ready_for_docs
+status: done
 priority: P2
 parent: null
 children: []
@@ -11,9 +11,9 @@ branch: local-board/T20260710T0035Z-validate-install-warn-when-config-routes-to-
 estimate: 2
 estimateBasis: T20260709T1119Z
 workStartedAt: 2026-07-10T01:05:09Z
-workCompletedAt: null
+workCompletedAt: 2026-07-10T01:43:30Z
 created: 2026-07-10T00:35:52Z
-updated: 2026-07-10T01:43:29Z
+updated: 2026-07-10T01:43:30Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
