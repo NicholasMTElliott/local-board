@@ -72,3 +72,4 @@ SKILL.md              installable orchestration skill template
 - `npm test`
 - `npm run validate`
 - Git temp fixtures set `gc.auto=0` and `gc.autoDetach=false`; recursive fixture teardown must use `test/helpers/fixtures.js` `removeFixtureDir` for retried `fs.rm`.
+- Install PATH-verification tests force the not-on-PATH branch through the injected `resolvesOnPath` seam and are hermetic against globally installed local-board.
