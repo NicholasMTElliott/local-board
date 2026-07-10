@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:25:41Z
-updated: 2026-07-10T14:26:37Z
+updated: 2026-07-10T14:34:13Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -414,6 +414,23 @@ Third review (terra@medium, 55s, of identity pass 02e3dac): verdict: changes_req
 Second re-review (terra@medium, 42s, of cbf3527): verdict: changes_requested — identity semantics incomplete. (a) stampActiveStepNoClobber's idempotent match compares only kind/route/model, ignoring action and stage: two specialties sharing a route/model, or gates for different stages, wrongly overwrite each other. (b) Same-kind clears remain too broad: a stale completion can erase a NEWER record of the same kind; predicates must compare the full stamped identity (action/stage/route/model or a unique id) under the lock. Verified fixed: worktree existence check + fallback (with test); lock discipline of the new primitives; scope. Second fix pass dispatched for (a) and (b).
 
 ## Test Evidence
+
+verdict: pass
+
+Environment: Windows 11, node v24.14.0. Tester: claude-subagent:local-board-tester (sonnet). Tree clean pre/post; no external AI CLI invoked.
+
+Commands and results:
+
+- npm run check — pass.
+- npm test — 493/497 at the exact declared branch baseline (estimate-prompt assertion + 2 PATH tests, all three already fixed on mainline post-branch), 1 skip.
+- test/active-steps.test.js isolated — 43/43, including both newest regressions.
+- validate — Ticket validation OK.
+- LIVE ACCEPTANCE (fresh temp board, git-init + local-board init, cleaned up): begin-step stamped the designer; complete-step cleared it; gate-check --stage design (non-empty catalog) stamped {kind:gate, route:claude-subagent:local-board-gatecheck, model:haiku, stage:design}; check-dispatch --agent local-board-gatecheck --model haiku returned ok:true reason:match exit 0; check-dispatch --agent local-board-tester returned ok:false agent-mismatch exit 1. The documented flow passes hook validation end to end and misroutes are still denied — the P1's acceptance criterion, proven live.
+- Facet 2 (stale-main-root fallback via registered worktree): covered by the named unit test + no-worktree control (isolated run green); live second-worktree probe out of scope per constraints.
+
+Acceptance criteria: all five PASS (zero-denial documented flow; misroute denied; no-stamp denied; specialty-route allowed; check/suite at baseline).
+
+Anomalies: the real globally-installed evidence-gate hook fired during the probe and correctly denied a manual complete-step lacking a Task-dispatch ledger entry — expected enforcement, worked around with approve-inline for the unrelated setup step. Not a bug.
 
 ## Documentation Updates
 
