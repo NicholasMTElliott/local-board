@@ -13,7 +13,7 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T17:17:35Z
+updated: 2026-07-10T17:23:33Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -517,6 +517,28 @@ issued the terminal move and its Refill preceded the separate `## Closeout` sect
   Closeout to carry the same full-suite contract. (Not blocking.)
 
 ## Implementation Notes
+
+Implemented all four design items after merging `mainline` (clean auto-merge, no conflicts, no textual overlap with the four skill/prompt files this ticket touches).
+
+Item 1 (`SKILL_TEAM.md` + `skills/codex/local-team/SKILL.md`): narrowed each skill's step-4 `move` to non-terminal transitions only; reordered `SKILL_TEAM.md` Control-loop steps so Closeout (6) precedes Refill (7); inserted a numbered Closeout step 5 in the codex file before Refill (Refill->6, Repeat->7); qualified both Closeout openings by `git.autoMerge` mode (prune conditioned on `git.pruneMergedBranches`); kept both existing recoveries (stale-default rebase-retry, unresolvable-conflict-to-questions) and conditionalized the "ticket file dirty" claim on `git.commitPlanningOnTransition` per the design-review CONCERNS; replaced each Closeout's final sentence with the mode-branched manual-merge + fast-forward-before-suite + fix-forward + refill-gate passage; amended both Refill passages so `questions`/`blocked` exits free their slot immediately while `done` exits gate on a green Closeout suite; re-gated `SKILL_TEAM.md`'s `## Worktrees` removal sentence behind a green Closeout instead of immediate-after-`done`.
+
+Item 2 (denial-recovery hint, Claude skills only): added the identical 2-sentence hint to `SKILL_TEAM.md` (`## Execution profiles`, after the `codex-task:<mode>` bullet) and `SKILL.md` (`## Delegation`, after the `codex-task:<mode>` bullet, near the `claude-subagent:` handling). No codex-mirror edit — `spawn_agent` dispatches never trigger the Claude-only routing-validator PreToolUse hook.
+
+Item 3 (reviewer no-test-run line): added to `plans/prompts/roles/code_reviewer.md` (role-prompt sentence form, after the intro line), `agents/claude/local-board-reviewer.md` (new `## Rules` bullet), and `agents/codex/local-board-reviewer.md` (new `## Rules` bullet). Ran `npm run sync-resources` to refresh `resources/prompts/roles/code_reviewer.md`.
+
+Item 4 (production-artifacts note): added a short paragraph to `AGENTS.md` under `## Plan Files`, naming `plans/prompts/` and `agents/` as production artifacts covered by content-assertion tests, directing the full `node --test` suite (not just guard suites) after edits, and the `npm run sync-resources` requirement for `plans/prompts` edits.
+
+Sentence-cap compliance: every inserted/replacement prose passage is 1-3 sentences (structural step renumbering/reordering and the two structural step-4 qualifications are exempt per the design, as are the two Closeout opening-parenthetical qualifications, which are single clauses appended to an existing sentence, not new multi-sentence prose).
+
+CLI Commands fenced blocks: untouched in both `SKILL.md` and `skills/codex/local-board/SKILL.md` (the latter was not edited at all this ticket); `skill-usage-sync` suite confirms byte-identity (modulo EOL).
+
+Verification: `npm run check` clean (no syntax errors). `node --test` full suite: 534 tests, 533 pass, 0 fail, 1 skipped (pre-existing slow smoke test, unrelated). `node --test test/skill-usage-sync.test.js test/resources-sync.test.js` explicitly: 9 tests, 9 pass.
+
+Files changed: `AGENTS.md`, `SKILL.md`, `SKILL_TEAM.md`, `agents/claude/local-board-reviewer.md`, `agents/codex/local-board-reviewer.md`, `plans/prompts/roles/code_reviewer.md`, `resources/prompts/roles/code_reviewer.md` (sync output), `skills/codex/local-team/SKILL.md`.
+
+Commits on branch `local-board/T20260710T1533Z-skills-process-hardening-from-the-2026-07-10-parallel-run-retro-post-merge-suite-denial-hint-reviewer-no-test-run-prompt-edit-full-suite`: merge commit `80f0f3a` (`Merge branch 'mainline' into ...`, no conflicts) and implementation commit `b6487ed` (`T20260710T1533Z: skills process hardening (post-merge suite closeout gate, denial-recovery hint, reviewer no-test-run, production-artifacts note)`).
+
+No deviations from the Technical Design. Open question from design (single-ticket `SKILL.md` Closeout out of scope for item 1) left as-is per the ticket's explicit scope.
 
 ## Review Findings
 
