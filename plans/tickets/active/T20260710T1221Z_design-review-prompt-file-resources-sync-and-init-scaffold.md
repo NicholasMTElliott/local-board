@@ -1,7 +1,7 @@
 ---
 id: T20260710T1221Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: S20260710T1206Z
 children: []
@@ -13,7 +13,7 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:22:12Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T12:27:06Z
+updated: 2026-07-10T12:27:07Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -258,3 +258,5 @@ under Risks.
 - 2026-07-10T12:26:04Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design with ship-ready embedded rubric (5 dimensions, first-line PASS/CONCERNS/FAIL, return-only clause, reachability guard); no code change needed for scaffold. Estimate 1 (basis T20260710T0037Z, designer-recorded).
 
 - 2026-07-10T12:27:06Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none - prompt content and resources sync only
+
+- 2026-07-10T12:27:07Z: Ensured git branch local-board/T20260710T1221Z-design-review-prompt-file-resources-sync-and-init-scaffold (already-current).
