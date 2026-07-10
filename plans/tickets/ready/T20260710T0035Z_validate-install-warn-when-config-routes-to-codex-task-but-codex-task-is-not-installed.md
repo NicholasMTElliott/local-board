@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T01:05:09Z
 workCompletedAt: null
 created: 2026-07-10T00:35:52Z
 updated: 2026-07-10T01:12:11Z
-completedSteps: []
+completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
 # validate/install: warn when config routes to codex-task but codex-task is not installed
@@ -298,3 +298,5 @@ churn).
 ## Run Log
 
 - 2026-07-10T01:05:09Z: Ensured git branch local-board/T20260710T0035Z-validate-install-warn-when-config-routes-to-codex-task-but-codex-task-is-not-installed (already-current).
+
+- 2026-07-10T01:12:11Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design written by opus designer: new src/codex-detect.js with injected probes (no import cycle), fail-open stderr warning in validate + install hint, install-seam skill-dir probe, hermetic test plan, docs notes. Estimate 2.
