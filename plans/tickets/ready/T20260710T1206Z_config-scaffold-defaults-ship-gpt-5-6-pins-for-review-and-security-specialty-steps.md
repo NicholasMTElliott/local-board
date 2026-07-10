@@ -7,13 +7,13 @@ parent: null
 children: []
 blockedBy: [T20260710T1156Z]
 blocks: []
-branch: null
+branch: local-board/T20260710T1206Z-config-scaffold-defaults-ship-gpt-5-6-pins-for-review-and-security-specialty-steps
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T12:06:56Z
-updated: 2026-07-10T12:07:16Z
+updated: 2026-07-10T13:11:06Z
 completedSteps: []
 routingApprovals: []
 ---
