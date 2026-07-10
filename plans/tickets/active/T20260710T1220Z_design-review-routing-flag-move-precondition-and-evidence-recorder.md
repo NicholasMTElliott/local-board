@@ -13,8 +13,8 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:22:11Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T12:53:33Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-10T12:54:32Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet"]
 routingApprovals: []
 ---
 # design-review: routing flag, move precondition, and evidence recorder
@@ -378,3 +378,5 @@ Deviation from the written design: `profileForAction` edit (see above) — requi
 - 2026-07-10T12:30:38Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none - workflow-internal gating, no auth/UI/UX
 
 - 2026-07-10T12:42:28Z: Ensured git branch local-board/T20260710T1220Z-design-review-routing-flag-move-precondition-and-evidence-recorder (already-current).
+
+- 2026-07-10T12:54:32Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Commits bdcbf96 (peer merge, clean) + 4d54bce: requireDesignReview flag, agents design-review profile (sol@xhigh) in both defaults, moveTicket precondition after gate block, recordDesignReview recorder, producing-status mapping, AC1-AC6 tests. 487 pass + 2 baseline. One-line documented deviation (profileForAction mandatory branch).
