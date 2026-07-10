@@ -1,7 +1,7 @@
 ---
 id: T20260710T1222Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: S20260710T1206Z
 children: []
@@ -456,3 +456,5 @@ Disposition: findings 1, 3, 4 loop back for a fix pass; finding 2 deferred to T2
 - 2026-07-10T13:49:51Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - CLI wrappers over existing recorder/resolver
 
 - 2026-07-10T13:53:38Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
+
+- 2026-07-10T13:53:38Z: Ensured git branch local-board/T20260710T1222Z-design-review-cli-check-and-complete-commands (already-current).
