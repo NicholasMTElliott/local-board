@@ -441,3 +441,5 @@ Anomalies: none beyond the tracked baseline.
 - 2026-07-10T13:13:02Z: Ensured git branch local-board/T20260710T1220Z-design-review-routing-flag-move-precondition-and-evidence-recorder (already-current).
 
 - 2026-07-10T13:18:16Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. 491/494 (2 = exact B1232Z baseline); AC1-AC6 all pass; inertness flip and token strictness probed live; guardrail honored.
+
+- 2026-07-10T13:18:17Z: Ensured git branch local-board/T20260710T1220Z-design-review-routing-flag-move-precondition-and-evidence-recorder (already-current).
