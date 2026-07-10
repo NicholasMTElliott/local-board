@@ -13,8 +13,8 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T19:02:02Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-10T19:02:03Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
 # create: type-vs-status advisory and an evidence-free authoring-correction lane
@@ -263,3 +263,5 @@ unchanged.
 - 2026-07-10T18:55:42Z: Design review #3 (sol@xhigh): FAIL. [High] clearActiveStepIf reads via readLedgerSelfHeal which converts corrupt/unreadable ledgers to {} - the lane clear silently no-ops instead of throwing, so fail-closed does not hold on transient read failures. Orchestrator hard-stop decision: DESCOPE per the Requirement's own latitude (lane adoption was design-optional). Part 1 advisory ships; Part 2 lane is REJECTED with rationale - three review rounds surfaced stale-authorization, publish-ordering, and self-heal-vs-fail-closed edges, disproportionate to removing --override ceremony for a rare authoring mistake. --override remains the correction path.
 
 - 2026-07-10T19:02:02Z: Design review #4 (sol@xhigh): CONCERNS - 2 Medium wording fixes for the implementer: (1) opening says defaults-off but invocation is unconditional - phrase as warning-only for existing boards; (2) warning's suggested correction must use the working form move <id> <status> --override --reason <text> (plain move is refused under enforceTransitions). Disposition: proceed to implementation with both folded in.
+
+- 2026-07-10T19:02:03Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: CONCERNS after 4 rounds (3 on the now-rejected lane, 1 on descoped advisory): 2 Medium wording fixes folded into implementation; advisory design sound
