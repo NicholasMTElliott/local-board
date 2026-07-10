@@ -13,7 +13,7 @@ estimateBasis: null
 workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:06:56Z
-updated: 2026-07-10T13:11:07Z
+updated: 2026-07-10T13:15:15Z
 completedSteps: []
 routingApprovals: []
 ---
@@ -50,6 +50,239 @@ All changes in src/config.js defaultConfigJsonc() (the init scaffold), NOT DEFAU
 ## Related Tickets
 
 ## Technical Design
+
+## Overview
+
+Ship GPT-5.6 routing pins in the **init scaffold only** (`defaultConfigJsonc()` in
+`src/config.js`), leaving `DEFAULT_CONFIG` (the ENOENT fallback / deep-merge base)
+unpinned for backward compat. Three config edits, one guard-test allowlist update,
+two existing-assertion fixes, a new init-in-temp-repo acceptance test, and two doc
+notes. No production *logic* changes — this is data + comment text + test surgery.
+The dependency (T20260710T1156Z) is merged, so `optionalSteps[].agent` already
+accepts `{ route, model?, effort? }` profiles and `agents.<action>` already accepts
+`effort`; `normalizeAgentProfile` validates all three fields. No normalizer changes
+are needed — the pins use grammar the loader already supports.
+
+## Related tickets and conflicts
+
+- **blockedBy T20260710T1156Z — DONE, merged.** This worktree branched after that
+  merge. `normalizeOptionalStepAgent` and the collision/duplicate validation are
+  present. The pin values in this design are byte-identical to shapes already
+  covered by existing passing tests (`test/config.test.js` lines 134-149 for
+  `agents.review` effort, 485-507 for the `optionalSteps[].agent` profile), so no
+  new normalizer behavior is exercised.
+- **T20260710T1220Z — in review, separate branch.** It adds
+  `routing.requireDesignReview` (false in `DEFAULT_CONFIG`, true in the scaffold)
+  and an `agents["design-review"]` profile `{ route: "codex-task:read-only",
+  model: "gpt-5.6-sol", effort: "xhigh" }` added *identically to both* defaults.
+  **Expected merge points at its closeout** (all additive, no logical conflict):
+  1. `src/config.js` `agents` block — both defaults gain a new `design-review`
+     key; this ticket only touches the `review` value. Different keys, textual
+     adjacency only.
+  2. `src/config.js` `routing` block + `DEFAULT_CONFIG` header comment — 1220Z adds
+     a seventh backward-compat flag; independent of this ticket's value pins.
+  3. `test/config.test.js` guard test — 1220Z adds `routing.requireDesignReview`
+     to the same `expected.*` assignment list and the same `collapsed` diff array
+     this ticket edits. Both are sorted-array / assignment-list insertions; resolve
+     by keeping both entries in sorted order (see Test strategy for the exact final
+     array so the merge is mechanical).
+  Design these edits as pure additions so the 1220Z merge is a two-line insert per
+  site, not a rewrite.
+
+## Implementation approach
+
+### Edit 1 — scaffold `agents.review` pin
+
+In `defaultConfigJsonc()` (currently line 967), change:
+
+```jsonc
+"review": { "route": "codex-task:read-only" },
+```
+to:
+```jsonc
+"review": { "route": "codex-task:read-only", "model": "gpt-5.6-terra", "effort": "high" },
+```
+
+`DEFAULT_CONFIG.agents.review` (line 275) stays `{ route: "codex-task:read-only" }`
+— untouched. This is the intentional value divergence the ticket calls out.
+
+### Edit 2 — scaffold security specialty `agent` profiles
+
+In `defaultConfigJsonc()` `optionalSteps`, add an `agent` field to two entries.
+`design/security_threat_model` (after its `triggers`, line ~1083):
+
+```jsonc
+{
+  "name": "security_threat_model",
+  "prompt": "plans/prompts/optional-steps/design/security_threat_model.md",
+  "triggers": "Auth, authorization, cryptography, external API integrations, PII handling, new attack surface.",
+  "agent": { "route": "codex-task:read-only", "model": "gpt-5.6-sol", "effort": "xhigh" }
+},
+```
+
+`implement/security_audit` (line ~1098) gains the same `agent` line (keep the long
+`triggers` string unchanged; append `,` + the `agent` line). The other three
+entries (`ui_component_review`, `ux_interaction_review`, `ui_visual_review`) stay
+inline — no `agent` field. `DEFAULT_CONFIG.optionalSteps` stays all-empty arrays.
+
+### Edit 3 — scaffold comment text (the pins + escape hatch)
+
+Two comment sites in `defaultConfigJsonc()`:
+
+- The `agents` block comment (currently lines 953-961): add a sentence naming the
+  shipped pins and the escape hatch, e.g.:
+  > New boards ship `review` pinned to `gpt-5.6-terra`/`high` and the two security
+  > specialty steps pinned to `gpt-5.6-sol`/`xhigh`. If your plan lacks GPT-5.6,
+  > delete the `model`/`effort` keys (falls back to the plan's default model) or
+  > reroute the step; Codex validates the model server-side, and `local-board
+  > validate` plus the `codex-task` failure hint surface a missing/unsupported
+  > model.
+- The `optionalSteps` block comment (currently lines 1065-1077): add a short note
+  that the two `security_*` entries ship pinned to `gpt-5.6-sol`/`xhigh` and point
+  back to the same escape hatch (delete `model`/`effort` or reroute).
+
+Keep both notes terse; they are documentation of an intentional default, not a
+tutorial.
+
+### Edit 4 — `DEFAULT_CONFIG` header comment (lines 8-51)
+
+Add one bullet to the enumerated divergence list documenting that scaffold
+`agents.review` carries a `gpt-5.6-terra`/`high` pin (and the security specialties
+carry `gpt-5.6-sol`/`xhigh`) while `DEFAULT_CONFIG` stays unpinned. Unlike the
+existing bullets (which are backward-compat *flags*), note this is a deliberate
+**value** divergence: the fallback stays model-agnostic so ENOENT/omitted-block
+boards never inherit a model that their plan may not offer. This keeps the header
+comment and the guard-test comment honest about *why* the allowlist grows.
+
+## Affected files
+
+- `src/config.js` — `defaultConfigJsonc()` (edits 1-3) and the `DEFAULT_CONFIG`
+  header comment (edit 4). **`DEFAULT_CONFIG` data is not touched.**
+- `test/config.test.js` — guard-test allowlist (edit 5) + existing-assertion fixes
+  (edit 6) + new acceptance test (edit 7). See Test strategy.
+- `docs/CodexSupport.md` — note the scaffolded pins + removal (edit 8).
+- `docs/specialty-steps.md` — note the two security entries ship pinned + removal
+  (edit 9).
+
+## Test strategy
+
+### The guard test — exact allowlist changes
+
+`test/config.test.js` "defaultConfigJsonc matches DEFAULT_CONFIG except for
+documented differences" (line 309) does two things; both must change:
+
+1. **First assertion** (`assert.deepEqual(scaffolded, expected)`): `expected` is
+   `structuredClone(DEFAULT_CONFIG)` with documented divergences applied. Note
+   `expected.optionalSteps = scaffolded.optionalSteps` (line 346) **already absorbs
+   the security-entry `agent` additions wholesale** — no allowlist change is needed
+   for Edit 2. Only the `agents.review` value divergence needs a new line, mirroring
+   the existing pattern:
+   ```js
+   expected.agents.review = scaffolded.agents.review;
+   ```
+   (or, equivalently, set `.model`/`.effort` explicitly). Placing it as an
+   assignment keeps it robust to the exact pin values.
+
+2. **Second assertion** (the `collapsed` sorted-diff array, lines 358-372): guards
+   against the allowlist silently masking drift. `leafDiffPaths(DEFAULT_CONFIG,
+   scaffold)` now yields two new leaf paths — `agents.review.model` and
+   `agents.review.effort` (route matches; model/effort are undefined in
+   `DEFAULT_CONFIG`). The `optionalSteps.*.agent` diffs still collapse to
+   `"optionalSteps"` via the existing `.map` collapse, so Edit 2 adds nothing here.
+   The final array must become (sorted):
+   ```js
+   assert.deepEqual(collapsed, [
+     "agents.review.effort",
+     "agents.review.model",
+     "estimation.enabled",
+     "git.commitPlanningOnTransition",
+     "optionalSteps",
+     "routing.enforceTransitions",
+     "routing.guardPrematureEvidence",
+     "routing.invalidateOnLoopBack",
+     "routing.requireGateConsultation",
+     "worktrees.guardWrongRoot",
+   ]);
+   ```
+   Also update the guard-test's own explanatory comment (lines 313-344) to add the
+   `agents.review` value-divergence bullet and bump the "these eight paths" count
+   language (it becomes ten leaf paths / nine collapsed entries). This is the
+   deliberate allowlist edit the acceptance criteria require.
+
+### Existing assertions that break and must be fixed
+
+1. "loadConfig reads the commented default config" (line 43) asserts
+   `config.agents.review` deepEquals `{ route: "codex-task:read-only" }` (line 59).
+   This loads `defaultConfigJsonc()`, so the pin breaks it. Update to:
+   ```js
+   assert.deepEqual(config.agents.review, {
+     route: "codex-task:read-only", model: "gpt-5.6-terra", effort: "high",
+   });
+   ```
+2. "loadConfig parses the v1 optionalSteps catalog from the default config"
+   (line 250): its loop at lines 272-276 asserts *no* entry sets `agent`. That now
+   fails for the two security entries. Fix it to assert `security_threat_model`
+   (design) and `security_audit` (implement) carry the `{ route:
+   codex-task:read-only, model: gpt-5.6-sol, effort: xhigh }` profile and the other
+   three specialties remain agent-less.
+
+### New acceptance test — init in a temp repo
+
+Add a test exercising the real `init` scaffold end to end (acceptance criterion 1),
+mirroring the file's `withRoot` helper:
+
+1. `withRoot` temp dir; write the scaffold via `writeDefaultConfig(root)` (the real
+   scaffold writer) — or `defaultConfigJsonc()` + `writeConfig` if avoiding fs
+   plumbing — then `loadConfig(root)`.
+2. Assert `config.agents.review` deepEquals the terra/high profile.
+3. Assert the `security_threat_model` (design) and `security_audit` (implement)
+   entries' `.agent` deepEqual the sol/xhigh profile; assert the other three
+   specialties have no `agent`.
+4. Assert `loadConfig` does not throw (the profile grammar is valid), implicitly
+   proving `validate` would pass on the scaffolded board. Optionally add a
+   CLI-level `validate` invocation against the temp root for the literal "validate
+   passes" wording if the suite already shells the CLI; otherwise prefer the
+   in-process `loadConfig` assertion to keep the unit test hermetic.
+
+### Regression / full-suite
+
+- `codexTaskRoutedActions` already covers object-form codex routes in both `agents`
+  and `optionalSteps` (lines 629-657); the pins are inert to it (route unchanged),
+  so no new codex-detect test is required. A quick manual check that the scaffold
+  still reports `review`, `document`, `security_threat_model (design)`,
+  `security_audit (implement)` is worthwhile.
+- Run `npm run check` and `node --test` (acceptance criterion 4).
+
+## Risks and edge cases
+
+- **Guard-test double-guard is the main trap.** Editing only the first assertion
+  and forgetting the `collapsed` array (or vice versa) fails the suite. Both edits
+  are specified above verbatim to make this mechanical.
+- **`optionalSteps` wholesale absorption is easy to over-correct.** Do *not* add an
+  `optionalSteps`-related entry to the `collapsed` array for the new `agent`
+  fields — they already collapse to the existing `"optionalSteps"` entry. Adding a
+  second would itself trip the `deepEqual`.
+- **Two pre-existing assertions break** (line 59 and the 272-276 loop). Both are
+  fixes, not new tests; missing either fails `node --test` even though the guard
+  test passes.
+- **Backward compat is preserved by construction** — no `DEFAULT_CONFIG` data
+  changes, so every "backward-compat disabled" test and the ENOENT-fallback path
+  are untouched. `init` never overwrites an existing config (`writeDefaultConfig`
+  uses the `wx` flag unless `overwrite`), so criterion 2 (existing boards untouched)
+  needs no code change.
+- **Plan portability** — the user explicitly overrode this caution; server-side
+  Codex validation + the existing detection/validate warnings are the guardrails,
+  and the escape-hatch comment tells operators how to drop the pins. No init-time
+  model probing (non-goal).
+- **1220Z merge** — keep edits additive (see Related tickets) so its closeout is a
+  sorted-insert, not a rewrite.
+
+## Open questions
+
+None blocking. One judgment call left to implementation: whether the new acceptance
+test shells out to `validate` for the literal "validate passes" wording or proves
+it in-process via `loadConfig` not throwing. Recommend in-process for hermeticity;
+either satisfies the criterion.
 
 ## Implementation Notes
 
