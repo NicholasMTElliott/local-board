@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T16:40:06Z
+updated: 2026-07-10T16:44:53Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -140,6 +140,18 @@ No deviations from the chosen contract (reject, not strip). No CLI signature cha
 Test results: `npm run check` passes (all `node --check` syntax checks). `node --test` — 532 tests, 531 pass, 1 skipped (pre-existing slow smoke test, gated by `LOCAL_BOARD_SLOW_TESTS`), 0 fail.
 
 Commit: 192d9b9 on branch `local-board/B20260710T1532Z-section-file-can-duplicate-the-section-heading-when-the-payload-carries-it`, files: SKILL.md, SKILL_TEAM.md, skills/codex/local-board/SKILL.md, skills/codex/local-team/SKILL.md, src/tickets.js, test/tickets.test.js.
+
+Review-fix pass (commit 137620a): the idempotent re-write test now asserts byte-for-byte body equality across two identical writes (comparing `parseMarkdownTicket(text).body`, which excludes the front-matter `updated` timestamp), closing the review finding that the prior version only checked extracted section text, heading count, and validation result.
+
+Loop-back fix pass (this pass, commit b03c0bf): the docs stage exposed an operational defect on the real board — the validate duplicate-heading check added in step 2 above hard-failed roughly 40 legacy tickets under `plans/tickets/done/` and `plans/tickets/archive/` because it ran unconditionally over every ticket's body, so board-level `validate` exited 1 and every preflight/closeout broke. Decision recorded in the Run Log: the duplicate-heading validation now applies ONLY to tickets whose front-matter status is neither `done` nor `archived`. Rationale: closed history is immutable evidence and must not force a rewrite of ~40 real tickets just to satisfy a check invented after they closed; live tickets (any status not in `done`/`archived`) keep the hard guard so new corruption from `section --file` calls is still caught before a ticket ever reaches `done`/`archived`. Implementation: `validateTicketShape` now gates the entire fence-aware duplicate-counting pass behind `!isClosedStatus(fm.status)`, reusing the existing `isClosedStatus`/`CLOSED_STATUSES` helper (`src/tickets.js:113`, `:2284`) already used elsewhere in this file for the identical done/archived predicate, rather than inventing a second status set. `fm.status` (front matter), not `ticket.status`, is the read — consistent with the rest of `validateTicketShape`, which reads every other field off `fm`. The reject guard (`assertPayloadHasNoSectionHeading`, called from `setTicketSection`) is unrelated to this scoping and is unchanged: it still refuses an unfenced `## ` heading in any payload, regardless of the target ticket's status.
+
+Tests: added a parametrized test (`for (const closedStatus of ["done", "archived"])`) asserting that a ticket created with that status and a bypassed-guard duplicated `## Implementation Notes` heading produces NO duplicate-heading issue from `validate`. Kept the existing live-status duplicate test unchanged (retitled only, to make the status scope explicit: "validate flags a ticket with two identical section headings for a live (non-done/archived) status"), which still asserts a `backlog` ticket with the same corruption IS flagged. No changes to the reject-guard tests.
+
+No doc lines from commit 013f3ea (README.md, docs/Workflow.md, docs/TicketFormat.md, docs/CodexSupport.md, docs/PerStepOrchestration.md, memory-bank/systemPatterns.md) needed amending: all of that commit's added prose describes the `section --file` reject-guard payload contract (omit the heading, fence literal `## ` samples), not the validate duplicate-heading check, and the reject guard is unchanged by this fix.
+
+Test results (this pass): `npm run check` passes. `node --test` (full suite) — 534 tests, 533 pass, 0 fail, 1 skipped (same pre-existing gated slow smoke test; net +2 tests vs the prior 532, from the new done/archived parametrized pair). Board-level acceptance: `node ./bin/local-board.js validate --root <worktree>` now exits 0 on this real board (previously exited 1 against the ~40 legacy done/archived tickets).
+
+Commit: b03c0bf on branch `local-board/B20260710T1532Z-section-file-can-duplicate-the-section-heading-when-the-payload-carries-it`, files: src/tickets.js, test/tickets.test.js.
 
 ## Review Findings
 
