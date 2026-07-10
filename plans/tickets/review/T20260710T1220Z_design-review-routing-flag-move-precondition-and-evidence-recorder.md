@@ -13,7 +13,7 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:22:11Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T12:55:27Z
+updated: 2026-07-10T13:00:06Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -362,6 +362,18 @@ Two pre-existing tests needed updates because the scaffold now ships `requireDes
 Deviation from the written design: `profileForAction` edit (see above) — required by the post-merge function shape, not by the original pre-merge design text; scope and intent unchanged (design-review resolves through `config.agents["design-review"]`, never through the optionalSteps catalog).
 
 ## Review Findings
+
+verdict: changes_requested; target: implementation
+
+(codex-task:read-only, gpt-5.6-terra @ reasoning-effort high, 139s — reviewed commit 4d54bce; peer merge bdcbf96 excluded)
+
+1. High — src/tickets.js:2348 + src/config.js:289: flag-off inertness violated. design-review is unconditionally a known action, so begin-step --action design-review, resolveExpectedStep, and completeStep all work on flag-off boards and can stamp/record routing evidence; the default agents profile is also scanned by codexTaskRoutedActions, producing new validate/install codex-task warnings on flag-off boards (test/cli.test.js:230 was adjusted to compensate — itself evidence of the behavior change). Fix: gate recognition, dispatch/profile resolution, and codex-task warning discovery must exclude design-review unless routing.requireDesignReview is true; the recorder should refuse while disabled (or be explicitly documented as the sole inert-safe API). Restore test/cli.test.js:230 to its pre-change form as proof of inertness.
+
+2. Medium — src/tickets.js:137: hasDesignReviewToken accepts bare "design-review" and any "design-review:" prefix including empty/garbage executors; set <id> completedSteps ["design-review:"] followed by the gated move bypasses the precondition without recorder-produced evidence. Fix: parse on the first colon and require a non-empty executor token; add regression coverage through the public set-then-move path.
+
+Verified clean by the reviewer: transition enforcement ordering; deterministic gate-consultation precedence with no write side effects on refusal; recorder validation order (empty evidence -> model pin -> premature guard); first-colon parsing preserves codex-task:read-only; lock + Run Log mirror completeStep; identical default profiles; allowlist gained exactly one path. Coverage gaps noted for the two findings plus combined-refusal ordering and single-emission of the loop-back Run Log line. (Reviewer sandbox could not spawn test workers; suite verification stays with the test stage.)
+
+Disposition: both findings accepted; loop-back to ready_for_implementation for the fix pass.
 
 ## Test Evidence
 
