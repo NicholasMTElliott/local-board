@@ -13,7 +13,7 @@ estimateBasis: T20260710T1220Z
 workStartedAt: 2026-07-10T13:25:24Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T14:03:10Z
+updated: 2026-07-10T14:06:03Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -453,6 +453,22 @@ Disposition: findings 1, 3, 4 fixed in e535c63; finding 2 deferred to T20260710T
 Re-review: verdict: pass (terra@medium, 36s). Refusal text gives the real two-command recovery with arguments and the E2E asserts both clauses; regex updates strengthen coverage; [--json] usage asserted; all four coverage paths genuinely tested; scope clean, SKILL files untouched.
 
 ## Test Evidence
+
+verdict: pass
+
+Environment: worktree commits 7b2dd91 + e535c63 (peer merge 452d20a). Tester: claude-subagent:local-board-tester (sonnet). Tree clean pre/post; no external AI CLI invoked.
+
+Commands and results:
+
+- npm run check — pass.
+- npm test — 512 tests: 509 pass, 2 fail (exact B20260710T1232Z baseline by name and count), 1 skip.
+- validate — Ticket validation OK.
+- Filtered design-review pattern rerun across three test files — 18/18 pass.
+- Live probe on a throwaway OS-temp board: init, create task, design-review-check --json returned agent codex-task:read-only, model gpt-5.6-sol, effort xhigh, prompt ending design_review.md, and the full narrow ticketContext. Temp dir removed.
+
+Acceptance criteria: all ten rows PASS — resolution shape, missing-prompt naming local-board init, full pipeline, skip-refused with the corrected two-command remediation, model pin + codex-default wildcard, flag-off refusal (both commands), wrong-root-before-write + --allow-main-root (both commands), no-ledger-stamp, combined route@model executor, suite green at declared baseline.
+
+Anomalies: none beyond the tracked baseline.
 
 ## Documentation Updates
 
