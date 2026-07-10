@@ -13,8 +13,8 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T16:54:15Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-10T16:54:16Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
 # section --file can duplicate the section heading when the payload carries it
@@ -232,3 +232,5 @@ Commit note: the documentation commit could not be created in this sandbox becau
 - 2026-07-10T16:46:21Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none requested (validate-scoping delta; no new triggers)
 
 - 2026-07-10T16:54:15Z: Focused re-review of b03c0bf (terra@medium): pass. isClosedStatus gating correct, live detection intact, test fixtures corrupt only test files, reject guard unconditional, 013f3ea docs-only.
+
+- 2026-07-10T16:54:16Z: Completed review via codex-task:read-only@gpt-5.6-terra: pass: focused re-review of validate-scoping fix b03c0bf (terra@medium); prior full review terra@high passed guard+tests+skills; 137620a re-review passed earlier
