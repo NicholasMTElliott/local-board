@@ -29,6 +29,19 @@ Both skills treat the local-board CLI as the state authority. Codex should query
 
 When maintaining skill text, keep the repo-root `SKILL.md` and `skills/codex/local-board/SKILL.md` `## CLI Commands` blocks byte-identical; `test/skill-usage-sync.test.js` treats root `SKILL.md` as canonical.
 
+## codex-task availability (detected, not managed)
+
+The default config routes `review` -> `codex-task:read-only` and `document`
+-> `codex-task:workspace-write`. codex-task is a **peer install**: local-board
+detects whether it is usable but never installs or manages it. `validate`
+(and a `claude`-target `install`) check, best-effort and fail-open, whether
+the `codex` CLI resolves on `PATH` and whether a codex-task skill is present
+under any installed harness's skills directory. If the config routes to
+`codex-task:*` and either prerequisite is missing, a one-line `WARNING` names
+the affected action(s) and the missing prerequisite(s); the check never fails
+the command it runs in (`validate`'s exit code is driven only by ticket
+issues). See [docs/Install.md](Install.md#prerequisites) for the remedy.
+
 ## Route Translation
 
 Existing projects can keep Claude-first config in `plans/local-board.config.jsonc`. `begin-step <ticket-id> --harness codex --json` computes the translation from the configured route directly (single authority: `src/codex-dispatch.js`) and returns it as an additive `codexDispatch` block. Dispatch straight from that block instead of a hand-maintained table.
