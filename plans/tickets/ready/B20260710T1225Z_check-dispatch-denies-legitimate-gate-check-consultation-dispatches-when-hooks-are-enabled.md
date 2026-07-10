@@ -1,7 +1,7 @@
 ---
 id: B20260710T1225Z
 type: bug
-status: ready_for_review
+status: ready_for_implementation
 priority: P1
 parent: null
 children: []
@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:25:41Z
 updated: 2026-07-10T14:15:46Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # check-dispatch denies legitimate gate-check consultation dispatches when hooks are enabled
@@ -431,3 +431,5 @@ Second re-review (terra@medium, 42s, of cbf3527): verdict: changes_requested —
 - 2026-07-10T14:10:07Z: Completed implement via claude-subagent:local-board-implementer@sonnet: 8fd5831 + cbf3527 + identity pass 02e3dac: isIdempotentStampMatch compares action+stage+kind+route+model; clears take identity args (action/stage) so stale completions cannot erase newer stamps; moveTicket abandonment sweep intentionally kind-only; 3 collision tests. 41/41 ledger tests; suite at declared branch baseline.
 
 - 2026-07-10T14:10:49Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - ledger identity semantics completion
+
+- 2026-07-10T14:15:46Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
