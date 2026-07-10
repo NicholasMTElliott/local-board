@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T16:13:44Z
+updated: 2026-07-10T16:17:17Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -176,3 +176,5 @@ Verified clean: reject guard fence-aware and H2-only with actionable message; du
 - 2026-07-10T16:13:43Z: Completed review via codex-task:read-only@gpt-5.6-terra: changes_requested target implementation: 1 finding - idempotence test lacks byte-identical-body assertion (test/tickets.test.js:732). Guard, validate pass, and skill notes verified clean.
 
 - 2026-07-10T16:13:44Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku, review:codex-task:read-only@gpt-5.6-terra].
+
+- 2026-07-10T16:17:17Z: Fix pass for review finding: idempotent re-write test now asserts byte-for-byte body equality across identical writes (parseMarkdownTicket body, excludes updated timestamp). Commit 137620a; suite 531/0/1.
