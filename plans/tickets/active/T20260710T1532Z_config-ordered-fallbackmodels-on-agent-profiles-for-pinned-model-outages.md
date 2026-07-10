@@ -13,8 +13,8 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T17:50:33Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
+updated: 2026-07-10T17:51:25Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet"]
 routingApprovals: []
 ---
 # config: ordered fallbackModels on agent profiles for pinned-model outages
@@ -817,3 +817,5 @@ No changes to `plans/prompts/**`, so `npm run sync-resources` was not required; 
 - 2026-07-10T17:21:38Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: PASS after 6 rounds; final design: conditional-on-fallbacks everywhere, isSpecialtyLedgerEntry clear seam, shared translateCodexDispatch with prompt passthrough, D7 carve-out for pre-existing fallback-free DR hook rejection
 
 - 2026-07-10T17:21:39Z: Ensured git branch local-board/T20260710T1532Z-config-ordered-fallbackmodels-on-agent-profiles-for-pinned-model-outages (already-current).
+
+- 2026-07-10T17:51:25Z: Completed implement via claude-subagent:local-board-implementer@sonnet: fallbackModels shipped per 6-round design: schema validation, modelAccepted at both seams incl. no-ledger path, conditional threading through begin-step/gate/specialty/DR payloads+stamps, isSpecialtyLedgerEntry clear, translateCodexDispatch sanitized+prompt, skills/docs split prose. Byte-identical legacy shapes tested deep-equal. Suite 565/0/1 (32 new); sync 9/9; board validate 0. Commits b981ff4+a70165a+1905cb0.
