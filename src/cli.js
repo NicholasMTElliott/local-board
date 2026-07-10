@@ -15,6 +15,7 @@ import {
   createTicket,
   discover,
   findTicket,
+  formatIsoSeconds,
   getSectionText,
   linkParent,
   moveTicket,
@@ -37,7 +38,7 @@ import {
   validate,
 } from "./tickets.js";
 import { assertAutoMergeReady, autoMergeTicketBranch, commitPlanningTransition, startTicketWork } from "./git.js";
-import { checkDispatch } from "./active-steps.js";
+import { checkDispatch, stampActiveStep } from "./active-steps.js";
 import { translateCodexDispatch } from "./codex-dispatch.js";
 import { codexTaskWarning } from "./codex-detect.js";
 import { loadConfig, OPTIONAL_STEP_STAGES, resolveOptionalStepAgent } from "./config.js";
@@ -1132,6 +1133,7 @@ async function commandGateCheck(root, args, allowMainRoot) {
   });
 
   const promptPath = path.resolve(root, "plans", "prompts", "steps", "gate-check.md");
+  const gateProfile = config.agents?.["gate-check"] ?? { route: "inline" };
   // Only verify the prompt exists when a dispatch will actually occur: an
   // empty catalog for this stage means gate-check.md is never opened, so a
   // missing file here must not fail what would otherwise be a legitimate
@@ -1140,6 +1142,28 @@ async function commandGateCheck(root, args, allowMainRoot) {
   let recorded = null;
   if (!skip) {
     await assertPromptExists(promptPath, "gate-check");
+    // Non-skip branch: stamp a scoped consultation entry in the main-anchored
+    // active-steps ledger so `check-dispatch` recognizes the upcoming gate
+    // agent dispatch as authorized (B20260710T1225Z). Only for a
+    // Task-dispatched route -- an `inline`/`codex-task:` gate is never routed
+    // through the Task/Agent hook, so stamping there would be harmless but
+    // pointless. `complete-step` already cleared the stage's action entry
+    // before `gate-check` runs (the documented flow), and `gate-complete`
+    // clears this entry after recording the consultation -- the two records
+    // never overlap in time (single-dispatch-in-flight invariant), so this
+    // overwrite of the ledger's one record per ticket is safe.
+    if (typeof gateProfile.route === "string" && gateProfile.route.startsWith("claude-subagent:")) {
+      await stampActiveStep(root, ticket.id, {
+        ticket: ticket.id,
+        kind: "gate",
+        action: "gate-check",
+        stage,
+        route: gateProfile.route,
+        model: gateProfile.model ?? null,
+        root: path.resolve(root),
+        ts: formatIsoSeconds(new Date()),
+      });
+    }
   } else {
     // Empty-catalog branch: the CLI itself has deterministically established
     // there is nothing to consult, so it self-certifies the consultation by
@@ -1166,7 +1190,6 @@ async function commandGateCheck(root, args, allowMainRoot) {
     acceptanceCriteria: getSectionText(ticket.body, "Acceptance Criteria") ?? "",
   };
 
-  const gateProfile = config.agents?.["gate-check"] ?? { route: "inline" };
   const payload = {
     ticket: ticket.id,
     stage,
@@ -1264,6 +1287,24 @@ async function commandSpecialtyRun(root, args) {
   // existing test asserts out.agent is the plain route string. See
   // docs/specialty-steps.md.
   const { route: agent, model, effort } = resolveOptionalStepAgent(entry.agent);
+
+  // Stamp a scoped consultation entry in the ledger, mirroring gate-check's
+  // non-skip stamp (B20260710T1225Z), so `check-dispatch` authorizes the
+  // upcoming specialty agent dispatch instead of falling back to the stage's
+  // action route. Only for a Task-dispatched route; `gate-complete`'s clear
+  // covers this entry too (there is no separate specialty-completion verb).
+  if (typeof agent === "string" && agent.startsWith("claude-subagent:")) {
+    await stampActiveStep(root, ticket.id, {
+      ticket: ticket.id,
+      kind: "specialty",
+      action: entry.name,
+      stage,
+      route: agent,
+      model: model ?? null,
+      root: path.resolve(root),
+      ts: formatIsoSeconds(new Date()),
+    });
+  }
 
   const baseRecord = ticketRecord(root, ticket);
   const currentAction = config.workflow?.statusActions?.[ticket.status] ?? null;
