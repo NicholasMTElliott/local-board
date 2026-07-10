@@ -13,7 +13,7 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:14:10Z
 workCompletedAt: null
 created: 2026-07-10T11:56:26Z
-updated: 2026-07-10T13:07:35Z
+updated: 2026-07-10T13:10:36Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -298,6 +298,19 @@ Guardrail: no external AI CLI or paid service invoked.
 Gaps: private schema functions not independently re-probed live (no-Write constraint); covered by named green unit tests with assertions read directly.
 
 ## Documentation Updates
+
+Documentation step executed by codex-task:workspace-write (gpt-5.6-luna @ reasoning-effort medium, 136s); edits committed by the orchestrator on the ticket branch.
+
+Changed:
+
+- memory-bank/systemPatterns.md, memory-bank/techContext.md: terse current-state facts — optionalSteps[].agent accepts { route, model?, effort? } profiles; specialty-run surfaces agent/model/effort; specialty evidence enforces the model pin (codex-default wildcard); effort never enters tokens; specialty names must not collide with effective statusActions values.
+
+Checked and deliberately left alone:
+
+- docs/specialty-steps.md, docs/CodexSupport.md, docs/Workflow.md — implementation-commit edits verified accurate, no corrections needed.
+- README.md — no new doc files; index current.
+
+Validation: git diff --check clean; prose-only change.
 
 ## Questions
 
