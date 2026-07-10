@@ -39,7 +39,7 @@ import {
   validate,
 } from "./tickets.js";
 import { assertAutoMergeReady, autoMergeTicketBranch, commitPlanningTransition, startTicketWork } from "./git.js";
-import { checkDispatch, stampActiveStep } from "./active-steps.js";
+import { checkDispatch, stampActiveStepNoClobber } from "./active-steps.js";
 import { translateCodexDispatch } from "./codex-dispatch.js";
 import { codexTaskWarning } from "./codex-detect.js";
 import { loadConfig, OPTIONAL_STEP_STAGES, resolveOptionalStepAgent } from "./config.js";
@@ -1106,6 +1106,22 @@ async function assertPromptExists(promptPath, action) {
   }
 }
 
+// Formats the non-fatal warning printed when `gate-check`/`specialty-run`
+// decline to overwrite a live ledger entry (B20260710T1225Z review finding
+// 1). `conflict` is the existing record left untouched by
+// `stampActiveStepNoClobber`.
+function describeLedgerStampConflict(command, ticketId, conflict) {
+  const kind = conflict?.kind ?? "action";
+  const routeModel = conflict?.route
+    ? `${conflict.route}${conflict.model ? `@${conflict.model}` : ""}`
+    : "an unknown route";
+  return (
+    `${command} ${ticketId}: consultation ledger entry not stamped -- a live ${kind} entry ` +
+    `(${routeModel}) already occupies this ticket's dispatch slot. Leaving it intact; ` +
+    `check-dispatch will continue to authorize that entry, not this ${command} dispatch, until it clears.`
+  );
+}
+
 async function commandGateCheck(root, args, allowMainRoot) {
   const asJson = takeFlag(args, "--json");
   const stage = takeOption(args, "--stage");
@@ -1156,11 +1172,17 @@ async function commandGateCheck(root, args, allowMainRoot) {
     // through the Task/Agent hook, so stamping there would be harmless but
     // pointless. `complete-step` already cleared the stage's action entry
     // before `gate-check` runs (the documented flow), and `gate-complete`
-    // clears this entry after recording the consultation -- the two records
-    // never overlap in time (single-dispatch-in-flight invariant), so this
-    // overwrite of the ledger's one record per ticket is safe.
+    // clears this entry after recording the consultation. That ordering is
+    // only a documented convention, not enforced -- a gate-check run before
+    // complete-step (or any other live entry already in flight) must not
+    // silently clobber it, so this stamps no-clobber (review finding 1): only
+    // when the slot is empty or already holds an idempotent match for this
+    // exact stamp. A conflict is reported as a non-fatal warning; the command
+    // still succeeds and remains useful even though check-dispatch will keep
+    // authorizing the pre-existing entry, not this gate dispatch, until it
+    // clears.
     if (typeof gateProfile.route === "string" && gateProfile.route.startsWith("claude-subagent:")) {
-      await stampActiveStep(root, ticket.id, {
+      const stampResult = await stampActiveStepNoClobber(root, ticket.id, {
         ticket: ticket.id,
         kind: "gate",
         action: "gate-check",
@@ -1170,6 +1192,9 @@ async function commandGateCheck(root, args, allowMainRoot) {
         root: path.resolve(root),
         ts: formatIsoSeconds(new Date()),
       });
+      if (!stampResult.stamped) {
+        console.warn(describeLedgerStampConflict("gate-check", ticket.id, stampResult.conflict));
+      }
     }
   } else {
     // Empty-catalog branch: the CLI itself has deterministically established
@@ -1397,8 +1422,11 @@ async function commandSpecialtyRun(root, args) {
   // upcoming specialty agent dispatch instead of falling back to the stage's
   // action route. Only for a Task-dispatched route; `gate-complete`'s clear
   // covers this entry too (there is no separate specialty-completion verb).
+  // No-clobber (review finding 1): a second specialty-run (or a gate-check)
+  // already in flight for this ticket must not be silently overwritten;
+  // conflicts are reported as a non-fatal warning instead.
   if (typeof agent === "string" && agent.startsWith("claude-subagent:")) {
-    await stampActiveStep(root, ticket.id, {
+    const stampResult = await stampActiveStepNoClobber(root, ticket.id, {
       ticket: ticket.id,
       kind: "specialty",
       action: entry.name,
@@ -1408,6 +1436,9 @@ async function commandSpecialtyRun(root, args) {
       root: path.resolve(root),
       ts: formatIsoSeconds(new Date()),
     });
+    if (!stampResult.stamped) {
+      console.warn(describeLedgerStampConflict("specialty-run", ticket.id, stampResult.conflict));
+    }
   }
 
   const baseRecord = ticketRecord(root, ticket);

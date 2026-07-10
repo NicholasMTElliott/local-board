@@ -186,7 +186,23 @@ export async function resolveTicketWorktreeRoot(root, ticketId) {
     const config = await loadConfig(mainRoot);
     const expected = ticketWorktreePath(mainRoot, ticketId, config.worktrees.location);
     const registered = await findRegisteredWorktree(mainRoot, expected);
-    return registered === null ? null : registered.worktreePath;
+    if (registered === null) {
+      return null;
+    }
+    // Guard against a manually removed but unpruned worktree (B20260710T1225Z
+    // review finding 3): `git worktree list --porcelain` keeps reporting a
+    // worktree's directory after it has been deleted outside git, until `git
+    // worktree prune` runs. Handing that path back as-is would make the
+    // caller's `resolveExpectedStep` throw reading a nonexistent ticket file,
+    // which `checkDispatchForTicket` turns into exit 2 (ticket-not-found) --
+    // the hook fail-opens for every agent instead of falling back to validate
+    // against the invocation root / main checkout. Verify the directory is
+    // actually present before returning it; on failure, return `null` so the
+    // caller's existing fallback (`resolveRoot ?? root`) takes over.
+    if (!(await pathExists(registered.worktreePath))) {
+      return null;
+    }
+    return registered.worktreePath;
   } catch {
     return null;
   }
