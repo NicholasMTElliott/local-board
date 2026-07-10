@@ -13,8 +13,8 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T19:10:16Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet"]
+updated: 2026-07-10T19:10:48Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # create: type-vs-status advisory and an evidence-free authoring-correction lane
@@ -296,3 +296,5 @@ No deviations from the descoped design.
 - 2026-07-10T19:02:04Z: Ensured git branch local-board/T20260710T1535Z-create-type-vs-status-advisory-and-an-evidence-free-authoring-correction-lane (already-current).
 
 - 2026-07-10T19:10:16Z: Completed implement via claude-subagent:local-board-implementer@sonnet: typeStatusAdvisory helper + unconditional console.warn in commandCreate with --override correction form; docs/Workflow.md note; unit matrix + runCliChild integration tests. Both DR CONCERNS folded. No lane code (rejected). Suite 570/0/1; sync 9/9. Commits c8f812b(merge)+eb542c8.
+
+- 2026-07-10T19:10:48Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none requested (warning-only advisory)
