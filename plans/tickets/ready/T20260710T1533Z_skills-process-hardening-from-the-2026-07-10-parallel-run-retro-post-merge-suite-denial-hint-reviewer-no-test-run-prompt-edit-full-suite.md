@@ -13,8 +13,8 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T17:35:43Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+updated: 2026-07-10T17:37:07Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # skills: process hardening from the 2026-07-10 parallel-run retro (post-merge suite, denial hint, reviewer no-test-run, prompt-edit full suite)
@@ -599,3 +599,5 @@ Verification: `node --test --test-isolation=none test/skill-usage-sync.test.js t
 - 2026-07-10T17:28:32Z: Completed review via codex-task:read-only@gpt-5.6-terra: pass, no findings: closeout/refill gating, merge-mode and prune qualifications, denial hint placement, reviewer lines + mirror, AGENTS.md note all verified; CLI fences untouched
 
 - 2026-07-10T17:32:54Z: Completed test via claude-subagent:local-board-tester@sonnet: pass: suite 533/0/1, sync tests 9/9, all six textual acceptance checks verified incl. pairwise-identical CLI fences and sentence caps
+
+- 2026-07-10T17:37:07Z: Completed document via codex-task:workspace-write: Narrative docs aligned with the new closeout/refill contract: PerStepOrchestration.md (closeout-before-refill, full-suite gate, slot rules), Workflow.md (one sentence), systemPatterns.md (terse rule). Sync tests 9/9. Skills/agents/prompts untouched.
