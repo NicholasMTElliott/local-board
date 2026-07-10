@@ -1,7 +1,7 @@
 ---
 id: T20260710T1222Z
 type: task
-status: ready_for_review
+status: ready_for_implementation
 priority: P2
 parent: S20260710T1206Z
 children: []
@@ -13,8 +13,8 @@ estimateBasis: T20260710T1220Z
 workStartedAt: 2026-07-10T13:25:24Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T13:53:37Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-10T13:53:38Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # design-review: CLI check and complete commands
@@ -454,3 +454,5 @@ Disposition: findings 1, 3, 4 loop back for a fix pass; finding 2 deferred to T2
 - 2026-07-10T13:49:04Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Commits 452d20a (B1225Z peer merge, clean) + 7b2dd91: design-review-check resolver + design-review-complete recorder passthrough, main() + usage wiring, 7 new tests (pipeline, skip-refused, model pin, flag-off, wrong-root in worktrees.test.js). 505 pass + 2 baseline. Two documented micro-deviations (ticketContext.type parity; wrong-root test placement).
 
 - 2026-07-10T13:49:51Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - CLI wrappers over existing recorder/resolver
+
+- 2026-07-10T13:53:38Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
