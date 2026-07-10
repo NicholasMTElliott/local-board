@@ -1,7 +1,7 @@
 ---
 id: B20260710T1533Z
 type: bug
-status: ready_for_implementation
+status: implementing
 priority: P3
 parent: null
 children: []
@@ -267,3 +267,5 @@ assertion are all confirmed by inspection.
 - 2026-07-10T17:13:33Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none requested (test-only fixture fix; no triggers)
 
 - 2026-07-10T17:25:28Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: PASS, no findings (round 1)
+
+- 2026-07-10T17:25:29Z: Ensured git branch local-board/B20260710T1533Z-worktrees-tests-use-a-fixed-name-temp-dir-and-flake-on-stale-leftovers (already-current).
