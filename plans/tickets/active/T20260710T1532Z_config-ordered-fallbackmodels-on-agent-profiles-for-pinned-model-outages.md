@@ -1,7 +1,7 @@
 ---
 id: T20260710T1532Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P2
 parent: null
 children: []
@@ -13,7 +13,7 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T17:21:38Z
+updated: 2026-07-10T17:21:39Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -778,3 +778,5 @@ new architecture), realistically near the top of a 4-point band.
 - 2026-07-10T17:21:38Z: Design review #6 (sol@xhigh): PASS, no findings. Six rounds total (FAIL x5: null-placeholder back-compat, consultation threading, stranded superseded design, DR-stamp reachability + byte-identical violations, prompt-path omission - all resolved).
 
 - 2026-07-10T17:21:38Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: PASS after 6 rounds; final design: conditional-on-fallbacks everywhere, isSpecialtyLedgerEntry clear seam, shared translateCodexDispatch with prompt passthrough, D7 carve-out for pre-existing fallback-free DR hook rejection
+
+- 2026-07-10T17:21:39Z: Ensured git branch local-board/T20260710T1532Z-config-ordered-fallbackmodels-on-agent-profiles-for-pinned-model-outages (already-current).
