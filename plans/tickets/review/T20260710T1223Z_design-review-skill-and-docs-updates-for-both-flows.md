@@ -13,7 +13,7 @@ estimateBasis: T20260710T1222Z
 workStartedAt: 2026-07-10T14:16:04Z
 workCompletedAt: null
 created: 2026-07-10T12:20:26Z
-updated: 2026-07-10T14:44:57Z
+updated: 2026-07-10T14:45:29Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -366,7 +366,9 @@ verdict: changes_requested; target: implementation
 
 Reviewer-verified clean: command signatures match usage; CLI blocks byte-identical; REQUIRED_COMMANDS test fails if either line is dropped; verdict + loop-back semantics match the shipped recorder and precondition. (Reviewer sandbox could not spawn test workers; suite verification with the test stage.)
 
-Disposition: all three accepted; loop-back for a prose fix pass.
+Disposition: all three accepted; fixed in 57e2a4f; re-reviewed.
+
+Re-review: verdict: pass (terra@medium, 74s). Verified: both Codex-voice files carry the begin-step --action design-review --harness codex instruction (CLI support traced in src/cli.js + src/tickets.js on flag-on boards); explicit --reasoning-effort mechanism; refusal sentence in both team flows matching the CLI message shape; commit confined to the three prose locations with CLI Commands blocks untouched and byte-identical.
 
 ## Test Evidence
 
