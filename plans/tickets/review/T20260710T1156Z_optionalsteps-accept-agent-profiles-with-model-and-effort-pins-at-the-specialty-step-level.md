@@ -13,7 +13,7 @@ estimateBasis: T20260710T0037Z
 workStartedAt: 2026-07-10T12:14:10Z
 workCompletedAt: null
 created: 2026-07-10T11:56:26Z
-updated: 2026-07-10T12:56:23Z
+updated: 2026-07-10T13:02:06Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -266,7 +266,9 @@ verdict: changes_requested; target: implementation
 
 Verified clean by the reviewer: mandatory-agent error labels byte-identical; scanner handles raw and normalized shapes; specialty-run returns agent/model/effort; specialty completion reaches the existing modelSatisfies gate without serializing effort; CLI Commands blocks untouched; npm run check passed. (Reviewer sandbox could not spawn test workers — suite verification deferred to the test stage as usual.)
 
-Disposition: all three findings accepted; loop-back to ready_for_implementation for the fix pass.
+Disposition: all three findings accepted; looped back, fixed in commit c4ed945, re-reviewed.
+
+Re-review: verdict: pass (codex-task:read-only, gpt-5.6-terra @ reasoning-effort medium, 43s). Verified: effectiveStatusActionNames preserves defaults while catching custom overrides, message names both colliding sites, regression test uses a custom statusActions value; Object.hasOwn rejects owned prompt:null/undefined with the prior message and a null test; docs/Workflow.md documents both agent forms, the extended specialty-run example, and the model-recorded/effort-dispatch-only rules. Scope clean (three files, no plans/). Re-reviewer sandbox could not spawn test workers; suite verification with the test stage.
 
 ## Test Evidence
 
