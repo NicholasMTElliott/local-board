@@ -13,8 +13,8 @@ estimateBasis: T20260710T1156Z
 workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:06:56Z
-updated: 2026-07-10T13:27:17Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-10T13:27:53Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet"]
 routingApprovals: []
 ---
 # config: scaffold defaults ship GPT-5.6 pins for review and security specialty steps
@@ -316,3 +316,5 @@ Final `npm test`: 497 tests, 493 pass, 3 fail (the same 3 baseline failures, con
 - 2026-07-10T13:16:46Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none - config default values, comments, tests, docs
 
 - 2026-07-10T13:16:47Z: Ensured git branch local-board/T20260710T1206Z-config-scaffold-defaults-ship-gpt-5-6-pins-for-review-and-security-specialty-steps (already-current).
+
+- 2026-07-10T13:27:53Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Commits (peer merge clean) + dce310c: scaffold agents.review terra@high, both security specialties sol@xhigh, escape-hatch comments, DEFAULT_CONFIG unpinned, guard allowlist combined with sibling insert, init-in-temp-repo test, executor-suffix test updates (necessary consequence of pin enforcement). 493 pass + branch baseline (3rd failure is the estimate-prompt assertion already fixed on mainline post-branch).
