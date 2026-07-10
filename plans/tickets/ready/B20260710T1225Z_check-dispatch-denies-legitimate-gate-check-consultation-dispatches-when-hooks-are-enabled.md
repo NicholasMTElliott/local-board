@@ -8,12 +8,12 @@ children: []
 blockedBy: []
 blocks: []
 branch: local-board/B20260710T1225Z-check-dispatch-denies-legitimate-gate-check-consultation-dispatches-when-hooks-are-enabled
-estimate: null
-estimateBasis: null
+estimate: 4
+estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:25:41Z
-updated: 2026-07-10T13:18:06Z
+updated: 2026-07-10T13:18:12Z
 completedSteps: []
 routingApprovals: []
 ---
