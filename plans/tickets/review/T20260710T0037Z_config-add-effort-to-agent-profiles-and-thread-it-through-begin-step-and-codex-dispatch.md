@@ -13,7 +13,7 @@ estimateBasis: T20260710T0036Z
 workStartedAt: 2026-07-10T01:31:18Z
 workCompletedAt: null
 created: 2026-07-10T00:36:10Z
-updated: 2026-07-10T01:46:26Z
+updated: 2026-07-10T01:50:05Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -169,6 +169,18 @@ None blocking. One design decision is recorded rather than asked: effort is deli
 ## Implementation Notes
 
 ## Review Findings
+
+Verdict: CONCERNS (codex-task:read-only, gpt-5.6-terra @ reasoning-effort high — first production use of the T20260710T0036Z flag; 123s)
+
+Reviewed commit d3c425d (peer-merge 7fbcf15 and planning commits excluded).
+
+1. [minor — accepted] docs/CodexSupport.md:100: text claims local-board "never enumerates or validates" effort values, but normalizeAgentProfile does shape-validate the token. Fix: state that local-board shape-validates the token locally while the target harness/server validates model support; keep the --reasoning-effort mapping.
+
+2. [minor — accepted] test/codex-dispatch.test.js:79: effort threading is untested on the unknown claude-subagent:* branch and the unrecognized-route fallback; a regression dropping effort from those dispatch shapes would pass. Fix: assert claude-subagent:foo and an unrecognized route return the supplied effort unchanged alongside the existing known:false assertions.
+
+Verified clean by the reviewer: whitespace-only/non-string effort rejected; effort rejected on object-form inline; bare-string profiles cannot carry effort; effortForAction falls back safely; all current translateCodexDispatch branches include effort; ledger stamps carry only ticket/action/route/model/root/timestamp; completion tokens remain action:executor (effort cannot leak); CLI Commands blocks byte-identical; npm run check passed (node --test blocked by read-only sandbox spawn EPERM — environment restriction, covered by implement/test stages).
+
+Disposition: both findings accepted; ticket looped back to ready_for_implementation for the two fixes (loop-back strips implement/gate evidence per invalidateOnLoopBack; this section records the review outcome).
 
 ## Test Evidence
 
