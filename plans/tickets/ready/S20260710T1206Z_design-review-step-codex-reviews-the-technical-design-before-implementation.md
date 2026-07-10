@@ -1,7 +1,7 @@
 ---
 id: S20260710T1206Z
 type: story
-status: ready_for_design
+status: ready_for_decomposition
 priority: P2
 parent: null
 children: []
@@ -13,7 +13,7 @@ estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T12:06:56Z
-updated: 2026-07-10T12:07:16Z
+updated: 2026-07-10T12:07:33Z
 completedSteps: []
 routingApprovals: []
 ---
@@ -69,3 +69,5 @@ Candidate shapes, with tradeoffs the Technical Design must weigh:
 ## Questions
 
 ## Run Log
+
+- 2026-07-10T12:07:33Z: Transition override: ready_for_design -> ready_for_decomposition: authoring correction: story was created with the wrong initial ready status; stories enter at decomposition
