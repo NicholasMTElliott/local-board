@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T01:05:09Z
 workCompletedAt: null
 created: 2026-07-10T00:35:52Z
 updated: 2026-07-10T01:40:38Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only, "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
 # validate/install: warn when config routes to codex-task but codex-task is not installed
