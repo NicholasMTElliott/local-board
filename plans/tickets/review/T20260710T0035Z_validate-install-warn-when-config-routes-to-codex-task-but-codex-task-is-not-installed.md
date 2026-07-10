@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T01:05:09Z
 workCompletedAt: null
 created: 2026-07-10T00:35:52Z
 updated: 2026-07-10T01:34:51Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", review:codex-task:read-only]
 routingApprovals: []
 ---
 # validate/install: warn when config routes to codex-task but codex-task is not installed
@@ -318,3 +318,5 @@ Reviewer's other checks (all clean): stderr-only warning keeps --json stdout par
 - 2026-07-10T01:22:31Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Commit ba06bf3: new src/codex-detect.js (fail-open injected probes), codexTaskRoutedActions in config.js, validate stderr warning, install claude-target hint with options.cwd seam, 13 new tests across 3 files, docs notes. node --test 458 pass/1 pre-existing skip; check + validate pass. Two documented minor deviations (precheck-safe resolvesOnPath stub; local runCliChild helper).
 
 - 2026-07-10T01:24:21Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none - read-only probe + informational warning; no settings/permission/consent mutation, no UI
+
+- 2026-07-10T01:34:51Z: Completed review via codex-task:read-only: CONCERNS resolved non-blocking: major finding refuted (config schema rejects object-form optionalSteps agent at load, src/config.js:601); minor test-hardening note recorded as follow-up. No blocking issues.
