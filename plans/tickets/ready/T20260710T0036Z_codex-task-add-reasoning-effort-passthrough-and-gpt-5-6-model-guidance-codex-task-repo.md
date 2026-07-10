@@ -1,7 +1,7 @@
 ---
 id: T20260710T0036Z
 type: task
-status: ready_for_test
+status: ready_for_docs
 priority: P2
 parent: null
 children: []
