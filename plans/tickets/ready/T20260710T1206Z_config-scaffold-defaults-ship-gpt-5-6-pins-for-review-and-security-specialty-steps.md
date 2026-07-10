@@ -13,7 +13,7 @@ estimateBasis: T20260710T1156Z
 workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:06:56Z
-updated: 2026-07-10T13:32:20Z
+updated: 2026-07-10T13:36:49Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -316,6 +316,21 @@ Reviewer-verified:
 Residual risk: acceptance coverage is distributed across config/CLI tests rather than one direct init-plus-validate CLI assertion; reviewer sandbox could not run the suite (fixture spawning blocked) — verification stays with the test stage.
 
 ## Test Evidence
+
+verdict: pass
+
+Environment: worktree commit dce310c, Windows, node 24.14.0. Tester: claude-subagent:local-board-tester (sonnet). Tree clean before and after; no external AI CLI invoked (codex present on PATH, never executed).
+
+Commands and results:
+
+- npm run check — pass.
+- npm test — 497 tests: 493 pass, 3 fail (exact branch baseline: the estimate-prompt assertion fixed on mainline post-branch, plus the 2 B20260710T1232Z PATH tests), 1 skip.
+- REAL init end-to-end (closes the review's coverage note): init --json against an OS-temp dir succeeded; scaffolded config verified — agents.review = codex-task:read-only/gpt-5.6-terra/high; both security specialty agents = codex-task:read-only/gpt-5.6-sol/xhigh; validate on the scaffolded board passed (no codex-task warning, correct on this machine: both prerequisites present). Temp dirs cleaned up.
+- Deep-merge no-leak probe: minimal overlay config omitting agents.review loaded via loadConfig -> merged review equals DEFAULT_CONFIG's unpinned route. No pin leak.
+
+Acceptance criteria: fresh-init pins + validate PASS (direct end-to-end); DEFAULT_CONFIG unpinned + allowlist PASS; check/suite PASS at declared baseline; init-never-overwrites relies on existing unchanged wx-flag coverage (not re-verified live).
+
+Anomalies: none.
 
 ## Documentation Updates
 
