@@ -1,7 +1,7 @@
 ---
 id: B20260710T1532Z
 type: bug
-status: ready_for_review
+status: ready_for_implementation
 priority: P2
 parent: null
 children: []
@@ -13,8 +13,8 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T16:13:43Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
+updated: 2026-07-10T16:13:44Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
 # section --file can duplicate the section heading when the payload carries it
@@ -174,3 +174,5 @@ Verified clean: reject guard fence-aware and H2-only with actionable message; du
 - 2026-07-10T16:03:16Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none requested (internal CLI fix; security trigger explicitly excludes CLI parsing; no UI)
 
 - 2026-07-10T16:13:43Z: Completed review via codex-task:read-only@gpt-5.6-terra: changes_requested target implementation: 1 finding - idempotence test lacks byte-identical-body assertion (test/tickets.test.js:732). Guard, validate pass, and skill notes verified clean.
+
+- 2026-07-10T16:13:44Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku, review:codex-task:read-only@gpt-5.6-terra].
