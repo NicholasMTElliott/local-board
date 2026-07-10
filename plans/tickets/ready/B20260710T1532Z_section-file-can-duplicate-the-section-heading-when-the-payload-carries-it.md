@@ -8,12 +8,12 @@ children: []
 blockedBy: []
 blocks: []
 branch: local-board/B20260710T1532Z-section-file-can-duplicate-the-section-heading-when-the-payload-carries-it
-estimate: null
-estimateBasis: null
+estimate: 2
+estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T15:45:51Z
+updated: 2026-07-10T15:46:25Z
 completedSteps: []
 routingApprovals: []
 ---
