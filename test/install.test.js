@@ -3,6 +3,7 @@ import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } 
 import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -884,37 +885,42 @@ test("PATH verification (in-process option seam): resolvesOnPath false throws a 
   });
 });
 
-test("PATH verification failure (real PATH, clone/git-checkout mode): guidance recommends npm link", async () => {
+test("PATH verification failure (injected PATH miss, clone/git-checkout mode): guidance recommends npm link", async () => {
   await withHome(async (home) => {
-    await assert.rejects(
-      runInstallCli(home, ["--target=codex"], { includeLocalBoardStub: false, sanitizePath: true }),
+    assert.throws(
+      () =>
+        runInstallInProcess(["--target=codex"], {
+          home,
+          resolvesOnPath: (command) => command !== "local-board",
+        }),
       (error) => {
-        const output = errorOutput(error);
-        assert.match(output, /local-board is not on PATH/);
-        assert.match(output, /npm install -g \./);
-        assert.match(output, /npm link/);
+        assert.match(error.message, /local-board is not on PATH/);
+        assert.match(error.message, /npm install -g \./);
+        assert.match(error.message, /npm link/);
         return true;
       },
     );
   });
 });
 
-test("PATH verification failure (packaged/no-.git tree): guidance omits npm link", async () => {
+test("PATH verification failure (injected PATH miss, packaged/no-.git tree): guidance omits npm link", async () => {
   await withHome(async (home) => {
     const packagedDir = createPackagedCopy();
     try {
       assert.equal(existsSync(path.join(packagedDir, ".git")), false);
-      await assert.rejects(
-        execFileAsync(process.execPath, [path.join(packagedDir, "bin", "local-board.js"), "install", "--target=codex"], {
-          cwd: packagedDir,
-          encoding: "utf8",
-          env: installEnv(home, { includeLocalBoardStub: false, sanitizePath: true }),
-        }),
+      const packaged = await import(
+        pathToFileURL(path.join(packagedDir, "src", "install.js")).href
+      );
+      assert.throws(
+        () =>
+          packaged.runInstall(["--target=codex"], {
+            home,
+            resolvesOnPath: (command) => command !== "local-board",
+          }),
         (error) => {
-          const output = errorOutput(error);
-          assert.match(output, /local-board is not on PATH/);
-          assert.match(output, /npm install -g local-board/);
-          assert.doesNotMatch(output, /npm link/);
+          assert.match(error.message, /local-board is not on PATH/);
+          assert.match(error.message, /npm install -g local-board/);
+          assert.doesNotMatch(error.message, /npm link/);
           return true;
         },
       );
