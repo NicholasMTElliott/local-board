@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T13:11:07Z
 workCompletedAt: null
 created: 2026-07-10T12:25:41Z
-updated: 2026-07-10T14:15:46Z
+updated: 2026-07-10T14:23:17Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -333,6 +333,23 @@ Implemented per Technical Design, both decisions:
 **Tests added** (`test/active-steps.test.js`): stage-boundary allow for design/implement/test (test-stage catalog seeded non-empty via config override for this test only), misrouted-and-unstamped-denies, gate-complete-clears-then-denies, specialty-run stamp + model-unverifiable variant, stale-main-root fallback via a registered worktree (with a no-worktree control). `test/cli.test.js`: extended two existing gate-check tests with ledger assertions (stamped on non-empty branch, not stamped on empty-catalog branch).
 
 **Deviation/pre-existing issue noted, not fixed (out of scope):** `npm test` full run shows a 3rd failure beyond the 2 documented install.test.js baseline failures (B20260710T1232Z): `test/cli.test.js` "estimation prompts are present and reference the estimate pipeline" — `plans/prompts/steps/estimate.md` contains `local-board --root <worktreePath> calibration suggest` (the ticket's `--root` mandate) but the test asserts the literal contiguous substring `"local-board calibration suggest"`. Untouched by this ticket's file set; unrelated to gate/specialty dispatch. Confirmed via `git log` that both the prompt and its wording predate this ticket.
+
+### Review-fix pass 3 (third review residual)
+
+Scope: exactly the single residual from the third review, plus the deferred edge-case decision.
+
+**Residual fix — `recordGateConsultation`'s clear predicate was kind-agnostic:**
+`src/tickets.js`'s `isConsultationLedgerEntry(record, stage)` matched `kind === "gate" || kind === "specialty"` as long as `stage` matched, so a stale/retried `gate-complete --stage design` could erase a live `specialty-run` stamp for a still-unconsulted design-stage specialty. Replaced it with `isGateLedgerEntry(record, stage)` (`kind === "gate" && stage` match only) and pointed `recordGateConsultation`'s clear at the new predicate. `recordGateConsultation` now clears only its own gate stamp, never a specialty entry. Specialty stamps are left to `moveTicket`'s broad abandonment sweep (`isAnyConsultationLedgerEntry`, kind-only, unchanged) or self-heal on the next `begin-step`/`specialty-run` overwrite. `isAnyConsultationLedgerEntry` (used only by `moveTicket`) and `isActionLedgerEntry` (used by `completeStep`/`approveInline`) are unchanged.
+
+**Edge-case decision (reviewer-flagged, resolved as instructed):** same-status re-saves previously triggered `moveTicket`'s broad consultation sweep even though a re-save abandons nothing. Implemented the preferred resolution: `moveTicket` now skips the abandonment sweep when `ticket.status === status` (the move target equals the ticket's current status). A real status change (including a loop-back or a move into questions/blocked) still sweeps unconditionally, matching existing behaviour.
+
+**Tests added** (`test/active-steps.test.js`):
+- `gate-complete --stage design does NOT clear a live specialty consultation stamp for a design-stage specialty (third review residual); the specialty dispatch still passes check-dispatch` — regression for the residual: stamps a design-stage specialty via `specialty-run`, then calls `gate-complete --stage design` (no prior gate-check), asserts the specialty stamp survives byte-identical and the specialty agent still passes `check-dispatch`.
+- `a same-status move (re-save) does NOT sweep a live consultation stamp; only a real status change abandons it` — stamps a gate consultation, re-saves the ticket at its current status via `move <id> <same-status>`, asserts the stamp survives; then moves to a different status as a control and asserts the existing sweep-on-real-move behaviour is unchanged.
+
+Both new tests pass (43/43 in `test/active-steps.test.js`, up from 41).
+
+`npm run check` clean. `npm test`: 493 pass, 3 fail (2 tracked `install.test.js` PATH tests + the pre-existing `estimate-prompt` assertion, both documented in earlier passes and unchanged by this pass), 1 skipped (pre-existing smoke test) — matches the declared branch baseline exactly. `node ./bin/local-board.js validate --root <worktree>` passes.
 
 ## Review-fix pass (commit cbf3527, following changes_requested)
 
