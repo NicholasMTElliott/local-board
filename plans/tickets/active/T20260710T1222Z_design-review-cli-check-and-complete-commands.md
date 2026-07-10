@@ -13,7 +13,7 @@ estimateBasis: T20260710T1220Z
 workStartedAt: 2026-07-10T13:25:24Z
 workCompletedAt: null
 created: 2026-07-10T12:20:25Z
-updated: 2026-07-10T13:44:32Z
+updated: 2026-07-10T13:45:12Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -367,6 +367,53 @@ prompt path is resolved as a fixed `plans/prompts/steps/design_review.md`
 config change (a non-goal here).
 
 ## Implementation Notes
+
+Implemented exactly per Technical Design, no core-logic changes.
+
+- **src/cli.js**: imported `recordDesignReview` from `./tickets.js`. Added
+  `commandDesignReviewCheck(root, args, allowMainRoot)` and
+  `commandDesignReviewComplete(root, args, allowMainRoot)`, placed between
+  `commandGateComplete` and `commandSpecialtyRun`. Both mirror the design's
+  pseudocode verbatim (flag-off refusal, missing-profile guard, fixed
+  `plans/prompts/steps/design_review.md` path + `assertPromptExists`,
+  `assertInvocationRootForTicket` before any write on `-complete`). Wired two
+  new `main()` dispatch branches and two `printUsage()` lines beside the
+  gate-check/gate-complete/specialty-run cluster.
+- One deviation worth flagging: the design's pseudocode for the
+  `ticketContext` field list omitted `type`, but `ticketRecord()` (the
+  existing helper reused, unmodified) always includes `type` alongside
+  `id/status/priority/path/title` — `commandGateCheck` includes it too. Kept
+  `type` in the narrow context for consistency with gate-check rather than
+  hand-stripping it; adjusted the test's expected key list accordingly.
+
+**Test Evidence**
+
+Added the 8-case E2E plan (test/cli.test.js, requireDesignReview:true via
+`init` scaffold):
+1. resolution shape (`--json` + plain) — agent/model/effort/prompt/ticketContext.
+2. missing prompt names `local-board init`.
+3. missing-args coverage for both commands (ticket id / --executor / --evidence).
+4. full pipeline: design → gate-complete (design stage, unrelated guard) →
+   design-review-check → design-review-complete → move succeeds; skip is
+   refused with "no recorded design review".
+5. model pin: mismatched `--model` refused; `gpt-5.6-sol` and `codex-default`
+   succeed.
+6. flag-off: both commands refuse naming `routing.requireDesignReview`.
+
+Case 5 of the design's numbering ("wrong root refused before write") requires
+a real `git worktree` registration (`findRegisteredWorktree` shells out to
+`git worktree list --porcelain`), which cli.test.js has no fixture machinery
+for. Placed that test in **test/worktrees.test.js** instead, directly
+alongside the existing analogous gate-check wrong-root tests (`withRepo`/`git`
+helpers, `displayPath`/`escapeRegExp`), asserting refusal from the main root
+before any write (byte-identical ticket file, no `design-review` token) and
+success from the ticket's own registered worktree root.
+
+Full suite: `npm test` → 508 tests, 505 pass, 2 fail (tracked
+install.test.js PATH tests, pre-existing/unrelated), 1 skipped — 7 more
+passing tests than the pre-implementation baseline (501/498/2/1), all net-new
+design-review coverage. `npm run check` clean. `node ./bin/local-board.js
+validate` → "Ticket validation OK".
 
 ## Implementation Notes
 
