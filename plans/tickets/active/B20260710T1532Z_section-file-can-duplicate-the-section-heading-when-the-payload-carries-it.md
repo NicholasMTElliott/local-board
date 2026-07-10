@@ -13,8 +13,8 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T16:02:29Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet"]
+updated: 2026-07-10T16:03:16Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # section --file can duplicate the section heading when the payload carries it
@@ -164,3 +164,5 @@ Commit: 192d9b9 on branch `local-board/B20260710T1532Z-section-file-can-duplicat
 - 2026-07-10T15:54:42Z: Ensured git branch local-board/B20260710T1532Z-section-file-can-duplicate-the-section-heading-when-the-payload-carries-it (already-current).
 
 - 2026-07-10T16:02:29Z: Completed implement via claude-subagent:local-board-implementer@sonnet: assertPayloadHasNoSectionHeading guard in setTicketSection (fence-aware, H2-only); duplicate standard-heading check in validateTicketShape; 7 regression tests; 4-skill prose contract note outside CLI fence. Full suite 531 pass/0 fail/1 skip. Commit 192d9b9.
+
+- 2026-07-10T16:03:16Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: none requested (internal CLI fix; security trigger explicitly excludes CLI parsing; no UI)
