@@ -13,8 +13,8 @@ estimateBasis: T20260710T1223Z
 workStartedAt: 2026-07-10T15:40:30Z
 workCompletedAt: null
 created: 2026-07-10T15:32:22Z
-updated: 2026-07-10T15:48:42Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-10T15:50:48Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # config: ordered fallbackModels on agent profiles for pinned-model outages
@@ -301,3 +301,5 @@ override) is intentionally out of scope and forward-compatible.
 - 2026-07-10T15:40:30Z: Ensured git branch local-board/T20260710T1532Z-config-ordered-fallbackmodels-on-agent-profiles-for-pinned-model-outages (already-current).
 
 - 2026-07-10T15:48:42Z: Completed design via claude-subagent:local-board-designer@opus: Ordered fallbackModels as model-id string array (no objects; effort carries over); validation mirrors model rule + rejects empty/no-pin; optionalSteps profiles included; shared modelAccepted predicate wired at both validateStepRouting and check-dispatch seams; no CLI surface change. Estimate 4pts basis T20260710T1223Z.
+
+- 2026-07-10T15:50:48Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: none requested (config-driven policy enforcement, borderline security trigger weighed and omitted per uncertainty rule; no UI/UX)
