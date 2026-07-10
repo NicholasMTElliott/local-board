@@ -13,7 +13,7 @@ estimateBasis: B20260708T0459Z
 workStartedAt: 2026-07-10T13:48:46Z
 workCompletedAt: null
 created: 2026-07-10T12:32:28Z
-updated: 2026-07-10T14:08:18Z
+updated: 2026-07-10T14:19:51Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -330,6 +330,18 @@ Guardrail: no external AI CLI invoked (the codex-target path exercises only the 
 Anomalies: none.
 
 ## Documentation Updates
+
+Documentation step executed by codex-task:workspace-write (gpt-5.6-luna @ reasoning-effort medium, 113s); edit committed by the orchestrator on the ticket branch.
+
+Changed:
+
+- memory-bank/techContext.md: Verification facts gain the injected resolvesOnPath seam — the install PATH-verification tests force the not-on-PATH branch deterministically and are hermetic against a globally-installed local-board.
+
+Checked and deliberately left alone:
+
+- memory-bank/systemPatterns.md, docs/, README.md — no stale claims; test-internals change needs no narrative.
+
+Validation: git diff --check clean; prose-only change.
 
 ## Questions
 
