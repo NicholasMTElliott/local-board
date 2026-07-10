@@ -56,7 +56,7 @@ For each returned ticket:
 
 1. Read the returned ticket `path`, returned `prompt`, `branch`, `transitions`, and relevant project context.
 2. Default: run `worktree-add <ticket-id> --json` first and capture `worktreePath` — see `## Worktrees`.
-3. Run `begin-step <ticket-id> --root <worktreePath> --harness codex --json` to resolve `action`, `configuredAgent`, `configuredModel`, `configuredEffort`, `configuredPrompt`, and the translated `codexDispatch` block, and record the in-flight step for dispatch verification.
+3. Run `begin-step <ticket-id> --root <worktreePath> --harness codex --json` to resolve `action`, `configuredAgent`, `configuredModel`, `configuredEffort`, `configuredPrompt`, `configuredFallbackModels` (present only when the resolved profile lists one), and the translated `codexDispatch` block (whose `fallbackModels`, when present, is the sanitized list to walk — see Fallback Model Walk below), and record the in-flight step for dispatch verification.
 4. Before `implement`, `review`, `test`, or `document`, run `start-work <ticket-id> --root <worktreePath> --json`.
 5. Dispatch the returned action through the route translation contract below.
 6. Persist return-only output with `section --file`; self-writing workers write their own scoped changes.
@@ -83,6 +83,14 @@ Do not hand-translate the route. Run `begin-step <ticket-id> --harness codex --j
 For unknown `claude-subagent:*` routes (`codexDispatch.known` is `false`), ask the user before falling back to inline. If approved, run `approve-inline <ticket-id> <action> --root <worktreePath> --reason "<reason>"`, then record `complete-step` with `--root <worktreePath> --executor inline`. If not approved, move the ticket to `questions` and record the blocker.
 
 Do not pass Claude model aliases (`opus`, `sonnet`, `haiku`) as Codex model overrides; `begin-step --harness codex` performs this sanitization for you (`codexDispatch.model` is already `null` when no valid Codex model id exists, and `codexDispatch.evidenceExecutor` already carries `@codex-default`).
+
+### Fallback Model Walk
+
+When the resolved `codexDispatch` block carries a `fallbackModels` array (present only when the action's or consultation's profile lists one), a capacity/unavailability failure of the pinned model does not require user approval. Retry the pin once; if it still fails, dispatch each entry in `codexDispatch.fallbackModels` **in order** — this is the **sanitized** list (Claude aliases dropped), not the raw `fallbackModels` the native Claude harness walks; an entry sanitized out of `codexDispatch.fallbackModels` is intentionally not dispatchable under Codex. Keep the same route, carry `codexDispatch.effort` unchanged, and dispatch via `codexDispatch.promptPath` exactly as the pin was dispatched. On the first success, record completion with `--model <fallbackModel>` — strict routing accepts it because the model is a sanctioned fallback.
+
+If `codexDispatch.fallbackModels` is empty (every configured entry was a Claude alias) or the pin plus every walkable fallback is exhausted, go to the `approve-inline` / `questions` path above — **never** record `@codex-default` in that case; `codex-default` is the pinned-model-satisfied wildcard, not an escape hatch for an exhausted fallback walk, and recording it would bypass the pin's exhaustion-to-approval contract with an unconfigured model.
+
+This walk applies to `begin-step` and all three consultation commands (`gate-check`, `specialty-run`, `design-review-check`): each carries a `codexDispatch` sub-block, with the same sanitized `fallbackModels`, carried-over `effort`, and resolved `promptPath`, **only when the resolved profile lists a non-empty `fallbackModels`** — a fallback-free profile's payload carries no `codexDispatch` sub-block on those three commands (unlike `begin-step`, which always resolves one under `--harness codex`). `design-review-check` stamps the ledger for a `claude-subagent:` reviewer route **only when the reviewer profile lists fallbacks**, so the hook authorizes the reviewer (and any configured fallback) dispatch on that path — a fallback-free `claude-subagent:` design-review route is a known, separately-tracked limitation (the hook rejects it; the default `codex-task:read-only` design-review route is unaffected).
 
 ## Dispatch Rules
 
@@ -256,9 +264,9 @@ Resolve the reviewer:
 local-board design-review-check <ticket-id> --json
 ```
 
-It returns `agent` (route, default `codex-task:read-only`), `model` (`gpt-5.6-sol`), `effort` (`xhigh`), the resolved `prompt` (`plans/prompts/steps/design_review.md`), and a narrow `ticketContext`. It performs no dispatch and stamps nothing.
+It returns `agent` (route, default `codex-task:read-only`), `model` (`gpt-5.6-sol`), `effort` (`xhigh`), the resolved `prompt` (`plans/prompts/steps/design_review.md`), and a narrow `ticketContext`. It performs no dispatch. When the resolved profile lists a non-empty `fallbackModels`, the payload also carries the raw `fallbackModels` and a `codexDispatch` sub-block (see Fallback Model Walk above); with no `fallbackModels` configured, the payload carries none of that and — for a `claude-subagent:*` route specifically — stamps nothing (a known, separately-tracked limitation: the hook then rejects that reviewer dispatch; the default `codex-task:read-only` route is unaffected either way).
 
-Dispatch the reviewer through the returned route: for `codex-task:read-only`, pass `--model <model>` and `--reasoning-effort <effort>`. For a `claude-subagent:*` reviewer route, `design-review-check` alone does not return a `codexDispatch` block — instead run `begin-step <ticket-id> --action design-review --harness codex --json` to obtain the sanitized `codexDispatch` block (its `model`, already `null` when no valid Codex model id exists, and `evidenceExecutor`, `@codex-default` in that case) and dispatch from that. The reviewer is read-only and return-only.
+Dispatch the reviewer through the returned route: for `codex-task:read-only`, pass `--model <model>` and `--reasoning-effort <effort>`. For a `claude-subagent:*` reviewer route with no `fallbackModels` configured, `design-review-check` alone does not return a `codexDispatch` block — instead run `begin-step <ticket-id> --action design-review --harness codex --json` to obtain the sanitized `codexDispatch` block (its `model`, already `null` when no valid Codex model id exists, and `evidenceExecutor`, `@codex-default` in that case) and dispatch from that. The reviewer is read-only and return-only.
 
 Parse the **first line** of the reviewer's reply — exactly one verdict token, `PASS` / `CONCERNS` / `FAIL`, followed by any numbered findings. Do not `JSON.parse`; the verdict contract is first-line TEXT, unlike gate-check's JSON.
 
