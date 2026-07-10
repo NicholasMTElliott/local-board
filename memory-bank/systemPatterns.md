@@ -24,7 +24,7 @@ It defines:
 - `workflow.actionPrompts`
 - `workflow.transitions`
 - `agents`
-- `routing.strict`, `routing.doneRequires`, `routing.requireGateConsultation`, `routing.invalidateOnLoopBack`, `routing.enforceTransitions`, and `routing.guardPrematureEvidence`
+- `routing.strict`, `routing.doneRequires`, `routing.requireGateConsultation`, `routing.requireDesignReview`, `routing.invalidateOnLoopBack`, `routing.enforceTransitions`, and `routing.guardPrematureEvidence`
 - retention policy: `archiveDoneAfterDays`, `archiveOnMoveDone`
 - git policy: `defaultBranch`, `commitPlanningChanges`, `autoMerge`, `commitPlanningOnTransition`
 - `optionalSteps`: per-stage specialty review catalogs (`design`/`implement`/`test`)
@@ -37,12 +37,13 @@ The scaffolded `security_audit` trigger is consequence-surface based: auth/sessi
 
 In `src/config.js`, `DEFAULT_CONFIG` = ENOENT fallback + deep-merge base
 (`estimation.enabled: false`, `optionalSteps` empty, `routing.requireGateConsultation:
-false`, `routing.invalidateOnLoopBack: false`, `worktrees.guardWrongRoot: false`,
-`routing.enforceTransitions: false`, `routing.guardPrematureEvidence: false`, all
-six intentional for backward compat); `defaultConfigJsonc()` = the `init`
+false`, `routing.requireDesignReview: false`, `routing.invalidateOnLoopBack: false`,
+`worktrees.guardWrongRoot: false`, `routing.enforceTransitions: false`,
+`routing.guardPrematureEvidence: false`, all intentional for backward compat);
+`defaultConfigJsonc()` = the `init`
 scaffold (estimation on, catalogs populated, gate consultation required,
-loop-back invalidation on, transitions enforcement on, premature-evidence
-guard on).
+design review required, loop-back invalidation on, transitions enforcement on,
+premature-evidence guard on).
 A guard test (`test/config.test.js`) keeps the rest of the two defaults in sync.
 
 ## Ticket Types
@@ -134,6 +135,8 @@ The `## CLI Commands` blocks in root `SKILL.md` and `skills/codex/local-board/SK
 `init` restores missing packaged prompts/templates but never overwrites existing prompt files, even with `--overwrite`.
 For design/implement/test stages with a non-empty specialty catalog, the orchestrator skill runs `gate-check` + `specialty-run` between mandatory action completion and stage transition.
 `gate-check` records that the consultation happened: on an empty stage catalog it auto-stamps `gate:<stage>:skipped-empty-catalog` in `completedSteps` (idempotent, no dispatch; JSON `skip: true`, `recorded: <token>`); on a non-empty catalog it stays a pure read (`skip: false`, `recorded: null`) and the orchestrator calls `gate-complete <ticket-id> --stage <stage> --executor <route> [--model <model>] [--evidence <text>]` after the gate agent answers; `--executor <route>@<model>` remains accepted. `gate:` tokens are excluded from routing evidence (`completedStepRecords`/`validateStepRouting`/`doneRequires`) via a dedicated parser (`gateConsultationRecords`) so they never trip done-time "unknown action" validation. When `routing.requireGateConsultation` is true, `moveTicket` refuses the three forward transitions out of a gated stage (`ready_for_design`/`designing`→`ready_for_implementation`, `ready_for_implementation`/`implementing`→`ready_for_review`, `ready_for_test`/`testing`→`ready_for_docs`) unless the matching `gate:` token is present; backward, lateral, and archive/done moves are never gated.
+
+When `routing.requireDesignReview` is true, `moveTicket` refuses only the design→implementation forward move (`ready_for_design`/`designing`→`ready_for_implementation`) unless `completedSteps` contains a strictly parsed `design-review:<executor>` token with a non-empty executor after the first colon. The `agents["design-review"]` profile is `codex-task:read-only` pinned to `gpt-5.6-sol` with `xhigh` effort; it is inert when the flag is false, including being ignored by action/profile resolution and codex-task route scanning. Design-review evidence is mapped to `ready_for_design` as its producing status, so loop-back stripping and the premature-evidence guard treat it like design evidence.
 
 When `routing.invalidateOnLoopBack` is true, `moveTicket` strips stale evidence on a loop-back: moving to any of the six `ready_*` pipeline statuses removes `completedSteps` (action/`gate:`/specialty) and `routingApprovals` tokens whose producing stage ranks at or downstream of the target in `workflow.pipelineOrder` (target-inclusive), and appends one Run Log line enumerating what was removed. `questions`/`blocked`/`done`/`archived`/active-status targets are never affected; a forward move with no downstream evidence yet is a no-op. Pure core: `invalidateDownstreamEvidence(frontMatter, config, targetStatus)` in `src/tickets.js`.
 

@@ -42,6 +42,9 @@ export const OPTIONAL_STEP_STAGES = ["design", "implement", "test"];
 //   - git.commitPlanningOnTransition: false here (vs true in the scaffold) so
 //     a pre-existing board that omits the key does not silently start
 //     committing planning-only changes after every mutating command.
+//   - routing.requireDesignReview: false here (vs true in the scaffold) so a
+//     pre-existing config that omits the key does not silently start
+//     refusing the design->implementation forward move.
 // These differences are pinned by tests in test/config.test.js (search
 // "backward-compat disabled" and "empty optionalSteps catalog"). Do NOT
 // converge them to match the scaffold — see the guard test
@@ -275,6 +278,7 @@ export const DEFAULT_CONFIG = {
     review: { route: "codex-task:read-only" },
     test: { route: "claude-subagent:local-board-tester", model: "sonnet" },
     document: { route: "codex-task:workspace-write" },
+    "design-review": { route: "codex-task:read-only", model: "gpt-5.6-sol", effort: "xhigh" },
   },
   routing: {
     strict: true,
@@ -288,6 +292,7 @@ export const DEFAULT_CONFIG = {
     invalidateOnLoopBack: false,
     enforceTransitions: false,
     guardPrematureEvidence: false,
+    requireDesignReview: false,
   },
   retention: {
     archiveDoneAfterDays: 30,
@@ -487,7 +492,15 @@ export function resolveOptionalStepAgent(agentValue) {
 export function codexTaskRoutedActions(config) {
   const actions = [];
   if (isObject(config?.agents)) {
+    // Flag-off inertness: agents["design-review"] is never consulted (and
+    // must not surface a validate/install codex-task warning) unless
+    // routing.requireDesignReview is true, even though the default profile
+    // ships that key pre-routed to codex-task:read-only.
+    const requireDesignReview = config?.routing?.requireDesignReview === true;
     for (const [action, value] of Object.entries(config.agents)) {
+      if (action === "design-review" && !requireDesignReview) {
+        continue;
+      }
       const route = typeof value === "string" ? value : value?.route;
       if (typeof route === "string" && route.startsWith("codex-task:")) {
         actions.push(action);
@@ -966,7 +979,8 @@ export function defaultConfigJsonc() {
     "implement": { "route": "claude-subagent:local-board-implementer", "model": "sonnet" },
     "review": { "route": "codex-task:read-only" },
     "test": { "route": "claude-subagent:local-board-tester", "model": "sonnet" },
-    "document": { "route": "codex-task:workspace-write" }
+    "document": { "route": "codex-task:workspace-write" },
+    "design-review": { "route": "codex-task:read-only", "model": "gpt-5.6-sol", "effort": "xhigh" }
   },
 
   // Routing policy is enforced by validate, complete-step, and move-to-done.
@@ -1032,7 +1046,12 @@ export function defaultConfigJsonc() {
     // --reason <text> to record anyway (appended to the Run Log), or set to
     // false to disable (pre-existing boards that omit this key keep that
     // behavior via DEFAULT_CONFIG's fallback).
-    "guardPrematureEvidence": true
+    "guardPrematureEvidence": true,
+    // requireDesignReview: true refuses "move" out of ready_for_design/designing
+    // toward ready_for_implementation unless a design-review:<executor> token is
+    // recorded in completedSteps (via the design-review recorder). Backward,
+    // lateral, and archive/done moves are never gated. Set to false to opt out.
+    "requireDesignReview": true
   },
 
   // Done tickets are recent closeout history. Older done tickets are retained
