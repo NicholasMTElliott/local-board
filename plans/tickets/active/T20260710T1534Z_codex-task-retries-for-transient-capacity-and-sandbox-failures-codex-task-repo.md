@@ -13,8 +13,8 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-11T20:05:07Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-11T20:06:02Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # codex-task: --retries for transient capacity and sandbox failures (../codex-task repo)
@@ -656,3 +656,5 @@ Original question history (for context): five sol@xhigh design-review rounds; ro
 - 2026-07-11T19:45:22Z: Invalidated downstream evidence on loop-back to ready_for_design: removed completedSteps [design:claude-subagent:local-board-designer@opus, gate:design:claude-subagent:local-board-gatecheck@haiku].
 
 - 2026-07-11T20:05:07Z: Completed design via claude-subagent:local-board-designer@opus: Descope pass per user option-2 decision: Trigger B fully removed (section, findSandboxWrapperMarker, clean-exit retry branch, tests 20-23, FAKE_CODEX_BLOCK_* knobs); Trigger A kept as rounds-1-4 hardened (classifyFailure last-lines first-match, durable exclusions first, pre-attempt rmSync lastMessagePath, gated attempts, option-b structural equivalence, tests 1-19); SKILL.md known-limitation item added; descope note recorded; stale line refs refreshed against sibling repo.
+
+- 2026-07-11T20:06:02Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (CLI retry flag; auth failures explicitly non-retryable; no UI/API/PII surface)
