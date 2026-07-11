@@ -254,3 +254,5 @@ written here).
 - 2026-07-11T20:12:27Z: Completed implement via claude-subagent:local-board-implementer@sonnet: commandDesignReviewCheck stamps unconditionally for claude-subagent routes; fallbackModels D6-conditional spread; 7-key fallback-free shape; stale comments updated; tests: flipped known-limitation, existsSync-absent + sentinel-bytes codex-route, one-slot premature/normal, consecutive-call rewrite regression, recordDesignReview clear, checkDispatch matrix. npm run check pass; node --test 575/576 pass 0 fail 1 pre-existing skip. Commit 0fa37d4.
 
 - 2026-07-11T20:13:13Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (ledger-stamp guard fix; no auth/UI surface)
+
+- 2026-07-11T20:13:14Z: Ensured git branch local-board/B20260710T2050Z-design-review-fallback-free-claude-subagent-dispatch-is-rejected-by-the-routing-validator-hook-d7-carve-out (already-current).
