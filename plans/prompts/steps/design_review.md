@@ -81,7 +81,14 @@ finding.
 
 You run on a read-only route. You do NOT write files, edit the ticket, or run any
 mutating local-board command (`section`, `comment`, `complete-step`, `move`,
-`estimate`, `gate-complete`). Return the verdict and findings as your message
-only. The orchestrator records the `## Design Review` section and the completion
-evidence, and decides whether a FAIL loops the ticket back to design. Do not run
-tree-wide or history/branch-mutating git commands inside the worktree.
+`estimate`, `gate-complete`). Your route may even be a sandbox that denies process
+spawning entirely, so do not attempt to run any command beyond reading the files
+named above; if the sandbox denies a read you need, still emit a verdict-first
+response (the first line is PASS, CONCERNS, or FAIL) and list the inputs you could
+not read as findings-context, rather than trying to work around the denial. Return
+the verdict and findings as your message only. The orchestrator persists the
+outcome by running `design-review-complete`, which stamps the design-review
+completion token and appends your verdict to the ticket's Run Log — there is no
+`Design Review` section and none is required. The orchestrator decides whether a
+FAIL loops the ticket back to design. Do not run tree-wide or
+history/branch-mutating git commands inside the worktree.
