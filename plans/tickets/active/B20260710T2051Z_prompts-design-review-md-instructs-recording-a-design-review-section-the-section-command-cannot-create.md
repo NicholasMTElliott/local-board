@@ -1,7 +1,7 @@
 ---
 id: B20260710T2051Z
 type: bug
-status: ready_for_implementation
+status: implementing
 priority: P3
 parent: null
 children: []
@@ -10,7 +10,7 @@ blocks: []
 branch: local-board/B20260710T2051Z-prompts-design-review-md-instructs-recording-a-design-review-section-the-section-command-cannot-create
 estimate: 2
 estimateBasis: B20260710T2050Z
-workStartedAt: null
+workStartedAt: 2026-07-11T20:44:50Z
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
 updated: 2026-07-11T20:44:50Z
@@ -269,3 +269,5 @@ unchanged.
 - 2026-07-11T20:44:49Z: Completed design via claude-subagent:local-board-designer@opus: Option (a) design, r1-patched: denial branch now verdict-first-compatible (unreadable inputs listed as findings-context); cross-reference audit recorded (four skills consistent via design-review-complete, prompt hits titles-only, agents/ clean); option-(b) rejection phrasing softened. Files: design_review.md + resources mirror + cli.test.js content pin.
 
 - 2026-07-11T20:44:49Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: r1 CONCERNS (1 Med contract-compat branch + 2 Low wording) all patched by designer; option (a), assertion design, sync-resources requirement confirmed correct; proceed
+
+- 2026-07-11T20:44:50Z: Ensured git branch local-board/B20260710T2051Z-prompts-design-review-md-instructs-recording-a-design-review-section-the-section-command-cannot-create (already-current).
