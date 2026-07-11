@@ -14,7 +14,7 @@ workStartedAt: 2026-07-11T23:12:17Z
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
 updated: 2026-07-11T23:22:47Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
 # prompts: operational-reality gaps - sandbox commit fallback, orchestrator obligations, loop-back re-design guidance, routing-pin drift
@@ -164,3 +164,5 @@ Verdict: CONCERNS.
 - 2026-07-11T23:18:01Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (prose edits + mirror sync)
 
 - 2026-07-11T23:18:02Z: Ensured git branch local-board/T20260711T2138Z-prompts-operational-reality-gaps-sandbox-commit-fallback-orchestrator-obligations-loop-back-re-design-guidance-routing-pin-drift (already-current).
+
+- 2026-07-11T23:22:47Z: Completed review via codex-task:read-only@gpt-5.6-terra: r1 CONCERNS (1 Low: em-dash vs designed ASCII delimiter in 2 files) fixed in 58c2c13 with mirrors re-synced; all groups/anchors/mirrors/assertions/sibling-zones verified clean.
