@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
 updated: 2026-07-11T20:43:50Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", security_audit:inline]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", security_audit:inline, "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
 # codex-task: --retries for transient capacity and sandbox failures (../codex-task repo)
@@ -773,3 +773,5 @@ Original question history (for context): five sol@xhigh design-review rounds; ro
 - 2026-07-11T20:41:18Z: Completed security_audit via inline: PASS: flag-confusion vector fixed and regression-tested (VALUE_TAKING_FLAGS + exit-2 test); --retries strictly validated (integer regex + non-negative); classifier regexes simple, input is tool stderr bounded by MAX_TAIL_SCAN; rmSync paths internally derived; no secrets/crypto/dependency changes. Note (non-blocking): --retries has no upper bound - local self-inflicted resource use only.
 
 - 2026-07-11T20:42:31Z: Ensured git branch local-board/T20260710T1534Z-codex-task-retries-for-transient-capacity-and-sandbox-failures-codex-task-repo (already-current).
+
+- 2026-07-11T20:43:50Z: Completed review via codex-task:read-only@gpt-5.6-terra: r1 FAIL (1 High: --retries missing from VALUE_TAKING_FLAGS - installer-dispatch bypass) fixed in 2f8a8a6; security_audit inline PASS; r2 focused re-review PASS (fix + regression test verified, scope limited).
