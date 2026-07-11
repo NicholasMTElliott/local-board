@@ -13,8 +13,8 @@ estimateBasis: B20260710T2051Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-11T21:36:09Z
-updated: 2026-07-11T23:09:01Z
-completedSteps: []
+updated: 2026-07-11T23:09:33Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
 # prompts: specialty and estimate commands as taught fail under strict routing (--model, --force, role-conditional persistence)
@@ -173,3 +173,5 @@ None blocking.
 ## Questions
 
 ## Run Log
+
+- 2026-07-11T23:09:33Z: Completed design via claude-subagent:local-board-designer@opus: Canonical Recording line with --model + omit-when-null parenthetical across five specialty prompts (matches SKILL.md L273 server-side composition); estimate.md step-6 --force sentence + new Persistence section mirroring decompose.md return-only branch; pinned substrings verified intact (cli.test.js:3361-3362); new substring-level content assertion for the five prompts; sync-resources for all six mirrored files; paragraph-disjoint from T2137Z.
