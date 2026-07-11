@@ -13,7 +13,7 @@ estimateBasis: B20260710T2050Z
 workStartedAt: 2026-07-11T20:44:50Z
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
-updated: 2026-07-11T20:49:02Z
+updated: 2026-07-11T20:56:24Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -278,6 +278,13 @@ staged by explicit path (`plans/prompts/steps/design_review.md`,
 `resources/prompts/steps/design_review.md`, `test/cli.test.js`).
 
 ## Review Findings
+
+### Review round 1 (codex-task:read-only@gpt-5.6-terra, high, static)
+
+Verdict: PASS, no findings.
+
+- plans/prompts/steps/design_review.md:83 - replacement matches the r1-patched design: names design-review-complete, Run Log, completion token; retains return-only; explicitly states no Design Review section exists; denied reads stay within a PASS/CONCERNS/FAIL-first response as findings-context. Verdict-contract wording unchanged; no residual phantom-section instruction anywhere in the prompt.
+- resources/prompts/steps/design_review.md:83 byte-identical to plans copy. test/cli.test.js:3365 assertions focused (recorder presence, phantom-phrase absence, spawn-denial guidance) per the estimate-prompt idiom, no full-prose pinning. Commit 8e2b08c contains exactly the three expected files.
 
 ## Test Evidence
 
