@@ -571,6 +571,52 @@ test("check-dispatch (T20260710T1532Z, D5): action-path fallback model is accept
   });
 });
 
+test("checkDispatch (B20260710T2050Z, D7 fix): a fallback-free design-review action stamp is authorized like any other fallback-free action stamp -- pinned model matches, wrong model denies, wrong agent denies, and model omitted is model-unverifiable", async () => {
+  await withBoard(async (root) => {
+    await stampActiveStep(root, "T-design-review-no-fallback", {
+      ticket: "T-design-review-no-fallback",
+      kind: "action",
+      action: "design-review",
+      route: "claude-subagent:local-board-reviewer",
+      model: "sonnet",
+      root: path.resolve(root),
+      ts: "2026-07-11T00:00:00Z",
+    });
+
+    const pinned = await checkDispatch(root, {
+      agent: "local-board-reviewer",
+      model: "sonnet",
+      ticketId: "T-design-review-no-fallback",
+    });
+    assert.equal(pinned.code, 0);
+    assert.equal(pinned.body.reason, "match");
+
+    const wrongModel = await checkDispatch(root, {
+      agent: "local-board-reviewer",
+      model: "opus",
+      ticketId: "T-design-review-no-fallback",
+    });
+    assert.equal(wrongModel.code, 1);
+    assert.equal(wrongModel.body.reason, "model-mismatch");
+
+    const wrongAgent = await checkDispatch(root, {
+      agent: "local-board-designer",
+      model: "sonnet",
+      ticketId: "T-design-review-no-fallback",
+    });
+    assert.equal(wrongAgent.code, 1);
+    assert.equal(wrongAgent.body.reason, "agent-mismatch");
+    assert.deepEqual(wrongAgent.body.expected, { agent: "local-board-reviewer", model: "sonnet" });
+
+    const modelOmitted = await checkDispatch(root, {
+      agent: "local-board-reviewer",
+      ticketId: "T-design-review-no-fallback",
+    });
+    assert.equal(modelOmitted.code, 0);
+    assert.equal(modelOmitted.body.reason, "model-unverifiable");
+  });
+});
+
 test("check-dispatch (T20260710T1532Z, D5/D7): no-ledger path threads the status action's fallbackModels", async () => {
   await withBoard(async (root) => {
     await writeFile(
