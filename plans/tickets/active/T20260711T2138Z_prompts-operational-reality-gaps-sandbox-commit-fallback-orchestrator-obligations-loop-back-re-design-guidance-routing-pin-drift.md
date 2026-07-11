@@ -1,7 +1,7 @@
 ---
 id: T20260711T2138Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P4
 parent: null
 children: []
@@ -10,10 +10,10 @@ blocks: []
 branch: local-board/T20260711T2138Z-prompts-operational-reality-gaps-sandbox-commit-fallback-orchestrator-obligations-loop-back-re-design-guidance-routing-pin-drift
 estimate: 2
 estimateBasis: T20260710T2050Z
-workStartedAt: null
+workStartedAt: 2026-07-11T23:12:17Z
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:12:16Z
+updated: 2026-07-11T23:12:17Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -138,3 +138,5 @@ None. Requirement text specifies exact insertions; anchors verified against curr
 - 2026-07-11T23:12:15Z: Design review r1 (codex-task:read-only@gpt-5.6-sol, xhigh): PASS, no findings. Anchors, wording, config reference, test-pin isolation, sync coverage, sibling-line separation, requirement coverage all verified.
 
 - 2026-07-11T23:12:16Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: r1 PASS no findings
+
+- 2026-07-11T23:12:17Z: Ensured git branch local-board/T20260711T2138Z-prompts-operational-reality-gaps-sandbox-commit-fallback-orchestrator-obligations-loop-back-re-design-guidance-routing-pin-drift (already-current).
