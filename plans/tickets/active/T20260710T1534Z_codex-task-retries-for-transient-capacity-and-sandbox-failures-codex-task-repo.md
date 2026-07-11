@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-11T20:10:03Z
+updated: 2026-07-11T20:14:06Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -72,32 +72,20 @@ exhaustion, generic "please try again" errors, JSON/contract failures
 including task-level `completed`/`partial`/`blocked`/`failed` — is non-transient
 and never retried.
 
-#### Descoped: the clean-exit "blocked + sandbox-marker" retry (Trigger B)
+Descope note (single attribution; do not re-expand): an auto-retry for the
+clean-exit Windows sandbox case (codex exits 0 and reports `taskResult: blocked`)
+was removed per the user decision of 2026-07-11 (option 2). Do NOT re-add a
+clean-exit retry without a structured tool-failure record from codex's event
+output — matching sandbox phrases in the untyped diagnostic tail causes false
+retries on genuinely durable blocked runs. Windows sandbox blocked-runs stay a
+manual re-dispatch, documented as a known limitation in SKILL.md (candidate
+future ticket, out of scope here).
 
-Removed per the user decision of 2026-07-11 (option 2). Earlier revisions of this
-design added a second trigger — "clean exit + `taskResult: blocked` +
-sandbox-wrapper marker" — to auto-retry the real Windows sandbox-wrapper
-`apply_patch` case (codex hits the wrapper prep failure mid-turn, recovers,
-exits 0, and reports the write as `blocked`). Five sol@xhigh design-review rounds
-each found a new real defect; the final round-5 High was that this trigger had to
-match the marker inside an **untyped** tail, so a prompt echo or a model
-explanation mentioning a sandbox-wrapper phrase on a genuinely durable `blocked`
-run could cause a false retry — violating transient-only. The user chose to
-descope it rather than run a further structured-event constraint round.
-
-Consequence recorded for future readers: Trigger B, its detection helper, its
-tests (20-23), and the `FAKE_CODEX_BLOCK_*` test knobs are all deliberately out
-of scope here. Windows sandbox blocked-runs (EXIT 0 + `taskResult: blocked`)
-remain a **manual re-dispatch**. SKILL.md documents this as a known limitation
-and notes that a reliable automatic retry would require a structured
-tool-failure record from codex's event output — a candidate future ticket, not
-scoped here.
-
-This design ships **Trigger A only**, exactly as hardened across design-review
-rounds 1-4: last-lines, first-classified-line-wins classification; durable
-exclusions checked first; removal of the bare "please try again" signal; a
-mandatory pre-attempt final-message delete; gated `attempts` semantics; and the
-narrow structural-equivalence contract.
+This design ships one trigger only, hardened across design-review rounds 1-4:
+last-lines, first-classified-line-wins classification; durable exclusions checked
+first; removal of the bare "please try again" signal; a mandatory pre-attempt
+final-message delete; gated `attempts` semantics; and the narrow
+structural-equivalence contract.
 
 ### Related tickets and conflicts
 
@@ -269,21 +257,21 @@ exclusions:
 
 Explicitly NON-retryable:
 
-- Spawn errors (`child.on('error')` -> "failed to spawn codex", `:778-787`):
-  environmental, already gated by the `checkCodexAvailable` preflight; part of
-  attempt 1, emitted immediately (with `attempts` when gated).
+- Spawn errors (the `child.on('error')` handler at `:501` rejects the `runCodex`
+  promise, caught by the `main()` try/catch that emits "failed to spawn codex" at
+  `:778-787`): environmental, already gated by the `checkCodexAvailable`
+  preflight; part of attempt 1, emitted immediately (with `attempts` when gated).
 - `readResult` failures on a code-0 exit (missing / empty / non-JSON / malformed
   final message, `:801-813`): contract failures — a Non-goal; they need a prompt
   fix, not a repeat. Structurally these are the code-0 branch with `!read.ok`, and
   the loop treats them as a terminal (break) outcome, never a retry — asserted by
   dedicated tests (exit-0 malformed JSON, exit-0 missing-final-message, and the
   stale-file sentinel test).
-- **Every clean (`code === 0`) exit**, regardless of `taskResult`. In particular
-  `blocked` — including the Windows sandbox-wrapper `apply_patch` case that exits
-  0 and reports `blocked` — is NOT retried. That is the descoped Trigger B (see
-  Summary); it remains a manual re-dispatch, documented as a known limitation in
-  SKILL.md. `completed` succeeded; `partial`/`failed` are substantive task-level
-  outcomes; none are transient-infrastructure signals.
+- **Every clean (`code === 0`) exit**, regardless of `taskResult`. `completed`
+  succeeded; `partial`/`failed`/`blocked` are substantive task-level outcomes, not
+  transient-infrastructure signals, so none are retried. (The Windows
+  sandbox-wrapper `apply_patch` case, which exits 0 and reports `blocked`, falls
+  here — it stays a manual re-dispatch per the Summary descope note.)
 
 ### Final-message file hygiene across attempts
 
@@ -461,13 +449,11 @@ Extend `fakeCodexJs` with env-driven, on-disk modes (state on disk because each
   and exit 0.
 - `FAKE_CODEX_FAIL_VERSION` (flag) — make the `--version` branch exit non-zero.
 
-(No `FAKE_CODEX_BLOCK_*` knobs: the clean-exit "blocked + sandbox-marker" retry —
-Trigger B — is descoped, so no fake mode models an exit-0 blocked shape.)
-
 All retry tests set `CODEX_TASK_RETRY_DELAY_MS=0` and assert the state-file counter
 alongside the reported `attempts` field — they must agree.
 
-Tests (existing retained/renumbered; NEW marks additions in this revision):
+Tests (all model a non-zero-exit or contract-failure shape; every fake mode above
+exits non-zero on failure or writes a normal `completed` message on success):
 
 1. transient-retry-success (capacity, Trigger A): `FAIL_TIMES=1`, "Selected model
    is at capacity", `--retries 2` -> status 0, `ok:true`, `attempts:2`, one warning
@@ -504,10 +490,8 @@ Tests (existing retained/renumbered; NEW marks additions in this revision):
 13. sandbox-wrapper as a NON-ZERO terminal error (Trigger A): "windows unelevated
     restricted-token sandbox cannot enforce split writable root sets directly;
     refusing to run unsandboxed" via `FAIL_TIMES=1`, `--retries 1` -> status 0,
-    `attempts:2`; counter == 2. This is the only sandbox-wrapper retry case: it
-    covers a sandbox-wrapper prep failure that surfaces as a non-zero exit. The
-    clean-exit (exit 0 + `taskResult: blocked`) sandbox case is descoped and has
-    no test.
+    `attempts:2`; counter == 2. Covers a sandbox-wrapper prep failure that
+    surfaces as a non-zero exit.
 14. exit-0 malformed-final-message-JSON (must NOT retry): `FAKE_CODEX_BAD_FINAL=1`,
     `--retries 2` -> status 1, error `/not valid JSON|no extractable JSON/`,
     `attempts:1`, counter == 1.
@@ -524,15 +508,9 @@ Tests (existing retained/renumbered; NEW marks additions in this revision):
 19. invalid value: `--retries -1` and `--retries abc` -> status 2, stderr
     `/--retries must be a non-negative integer/`.
 
-Tests 1-19 are the full set. The former Trigger B tests 20-23 (clean-exit blocked
-+ sandbox-wrapper -> retry; clean-exit blocked + capacity -> no retry; clean-exit
-blocked, no marker -> no retry; clean-exit partial + sandbox -> no retry) are
-**removed** with Trigger B. Their intent — that a clean exit is never retried —
-is preserved structurally: the clean-exit branch unconditionally `break`s, and
-tests 14, 15, and 17 already assert `attempts:1` (no retry) on clean/near-clean
-exits. A dedicated "clean-exit blocked is not retried" assertion is unnecessary
-because no fake mode emits an exit-0 blocked shape anymore, and adding one would
-require re-introducing the descoped `FAKE_CODEX_BLOCK_*` knobs.
+Tests 1-19 are the full set. That a clean exit is never retried is covered
+structurally: the clean-exit branch unconditionally `break`s, and tests 14, 15,
+and 17 already assert `attempts:1` (no retry) on clean / near-clean exits.
 
 `npm run check` (node --check) and `npm test` (node --test) are the acceptance
 gate; both must pass in `../codex-task`.
@@ -582,14 +560,6 @@ gate; both must pass in `../codex-task`.
   transient phrase wastes up to `n` bounded retries; the higher-stakes direction
   (retrying durable quota/auth) is blocked because the durable phrase, when
   terminal, matches Phase 1 first. Both directions covered (tests 3, 4, 10).
-- Descope gap — Windows sandbox blocked-runs are not auto-retried. The real
-  Windows sandbox-wrapper `apply_patch` failure surfaces as exit 0 +
-  `taskResult: blocked`, which Trigger A never sees, so it stays a manual
-  re-dispatch. This is an accepted limitation of this ticket (Trigger B descoped
-  to avoid false retries on genuinely-durable blocked runs), documented in
-  SKILL.md with a structured-event future pointer. Impact: the operator must
-  notice a sandbox-wrapper `blocked` result and re-invoke — exactly today's
-  behavior, no regression, just not the automation the retro originally wished for.
 - Wall-clock cost. Failed attempts happened after 180s+ of work; `n` retries
   multiply worst-case latency. `n` bounds it; default 0 is opt-in.
 - Idempotency of write tasks. The retried transient classes fail *before* a
@@ -611,11 +581,6 @@ gate; both must pass in `../codex-task`.
 2. Backoff magnitude: fixed 2000 ms (env-overridable). Acceptable, or 0/1000 ms?
 3. `MAX_TAIL_SCAN` = 3: confirm no known codex mode emits a terminal diagnostic
    whose classifiable phrase sits more than 3 non-blank lines above end.
-4. Descope confirmation (resolved 2026-07-11): the clean-exit blocked
-   sandbox-wrapper auto-retry (Trigger B) is intentionally out of scope per the
-   user's option-2 decision; Windows sandbox blocked-runs stay manual and are
-   documented as a known SKILL.md limitation. Recorded here so a future reader
-   does not re-add it without a structured-tool-failure signal.
 
 ## Implementation Notes
 
@@ -660,3 +625,5 @@ Original question history (for context): five sol@xhigh design-review rounds; ro
 - 2026-07-11T20:06:02Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (CLI retry flag; auth failures explicitly non-retryable; no UI/API/PII surface)
 
 - 2026-07-11T20:10:03Z: Design review r6 (codex-task:read-only@gpt-5.6-sol, xhigh; descope-scoped): FAIL. 1) [High] Excision incomplete: Trigger B material retained at Technical Design lines 75-94, 464-465, 527-535, 585-592, 614-618 (clean-exit sandbox-marker retry, tests 20-23, FAKE_CODEX_BLOCK_* knobs preserved as historical detail) - violates the ANSWERED directive; allowed remnant is only a concise attribution note (option-2 decision 2026-07-11, warn against re-adding without structured tool-failure data). 2) [Low] Spawn-error bullet cites codex-task.mjs:778-787 for child.on(error) which is at line 501; 778-787 is the main() catch/emit path - cite both or relabel. Looping design rework.
+
+- 2026-07-11T20:14:06Z: Completed design via claude-subagent:local-board-designer@opus: Rework r7: Trigger B fully excised (Summary subsection collapsed to single attribution note ~L75; FAKE_CODEX_BLOCK_/tests-20-23/clean-exit-retry prose deleted from test strategy, risks, open questions, failure-paths); SKILL.md known-limitation item retained; spawn-error refs corrected (child.on error :501, :778-787 relabeled main catch/emit).
