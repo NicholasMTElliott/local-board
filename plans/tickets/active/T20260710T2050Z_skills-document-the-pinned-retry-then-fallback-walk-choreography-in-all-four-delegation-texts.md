@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-11T20:13:50Z
 workCompletedAt: null
 created: 2026-07-10T20:50:02Z
-updated: 2026-07-11T20:13:50Z
+updated: 2026-07-11T20:19:31Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -312,6 +312,48 @@ content-asserted). No `sync-resources` needed.
   line-46 correction in the codex parallel skill).
 
 ## Implementation Notes
+
+Implemented the r2 design exactly (docs-only):
+
+1. `SKILL_TEAM.md` — inserted the 3-sentence native retry-then-walk paragraph
+   in `## Execution profiles`, immediately after the `codex-task:<mode>`
+   bullet and before the routing-validator-hook paragraph. Uses native field
+   names (`configuredFallbackModels`, configured effort).
+2. `skills/codex/local-team/SKILL.md`:
+   - Inserted the 3-sentence codex retry-then-walk paragraph in
+     `## Route Translation`, after the `codexDispatch` dispatch paragraph and
+     before the "Preserve the configured logical route..." paragraph. Uses
+     sanitized `codexDispatch.fallbackModels` / `.effort` / `.promptPath`.
+   - Applied the line-46 replacement qualifying the `begin-step` design-review
+     workaround as fallback-FREE only (mirrors codex local-board L269; cited
+     by `cli.test.js` L1884-1919), with the one design-review-r2 correction:
+     "per Route Translation below" (not "above" — Route Translation begins
+     later in the file).
+3. `SKILL.md` and `skills/codex/local-board/SKILL.md` — no changes (design
+   confirmed both already document the full choreography).
+4. `test/skill-usage-sync.test.js` — added one new content-assertion test,
+   "all four skill texts document the pinned-retry-then-fallback-walk
+   choreography". It extracts each file's Delegation-equivalent section
+   (heading-scoped, honoring `### ` subheadings within a `## ` section, e.g.
+   SKILL.md's paragraph lives inside `### Persisting Delegated Output`) and
+   asserts, per audience: pinned-retry-once wording; ordered-walk
+   ("in order" + "fallback"); actual-model evidence
+   (`--model <fallbackModel>`, literal); effort carry-over (native vs
+   `codexDispatch.effort` dialect); all three consultation names
+   (`gate-check`, `specialty-run`, `design-review-check`); the exhaustion
+   path (`approve-inline`, `questions`); and, codex files only, the
+   never-`@codex-default` guard. No existing assertion in the suite was
+   weakened.
+
+No `sync-resources` needed — skills ship verbatim, not mirrored via
+`plans/prompts`/`plans/templates` (confirmed by design; unaffected by
+`test/resources-sync.test.js`).
+
+Verification: `npm run check` — clean. `node --test` (full suite) — 572
+tests, 571 pass, 1 skip (pre-existing `smoke (slow)` skip, unrelated to this
+change).
+
+No deviations from the r2 design.
 
 ## Review Findings
 
