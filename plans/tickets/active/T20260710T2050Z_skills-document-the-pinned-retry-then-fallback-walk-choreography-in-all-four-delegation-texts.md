@@ -8,12 +8,12 @@ children: []
 blockedBy: []
 blocks: []
 branch: local-board/T20260710T2050Z-skills-document-the-pinned-retry-then-fallback-walk-choreography-in-all-four-delegation-texts
-estimate: null
-estimateBasis: null
+estimate: 2
+estimateBasis: T20260710T1533Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T20:50:02Z
-updated: 2026-07-11T20:00:14Z
+updated: 2026-07-11T20:00:24Z
 completedSteps: []
 routingApprovals: []
 ---
