@@ -14,7 +14,7 @@ workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T20:50:02Z
 updated: 2026-07-11T20:03:59Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
 # design-review: fallback-free claude-subagent dispatch is rejected by the routing-validator hook (D7 carve-out)
@@ -228,3 +228,5 @@ written here).
 - 2026-07-11T20:00:19Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (internal CLI ledger fix; no UI/auth/attack surface)
 
 - 2026-07-11T20:03:59Z: Design review r1 (codex-task:read-only@gpt-5.6-sol, xhigh): CONCERNS. 1) [Med] byte-identical scaffold claim needs absent-ledger-stays-absent + sentinel-bytes assertions (readActiveSteps maps ENOENT and empty to {}). 2) [Med] one-slot-per-ticket ledger: existing different-action record is neither coexisted-with nor clobbered - command warns, old record stays, dispatch still rejected; document + test premature design-review-check after begin-step design, and post-complete-step path. 3) [Low] second identical design-review-check rewrites record with new ts (not a pure no-op); state accurately + consecutive-call regression test. 4) [Low] update stale 'performs no write of its own' comment for claude-subagent routes. Verdict proceedable; findings folded into implement brief.
+
+- 2026-07-11T20:03:59Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: CONCERNS: 2 Medium (test-plan: absent-ledger assertion, one-slot-per-ticket conflict semantics) + 2 Low (idempotence wording, stale comment); proceed to implementation with findings carried
