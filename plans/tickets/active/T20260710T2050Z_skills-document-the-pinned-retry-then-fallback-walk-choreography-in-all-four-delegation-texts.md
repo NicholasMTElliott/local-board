@@ -13,8 +13,8 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-11T20:13:50Z
 workCompletedAt: null
 created: 2026-07-10T20:50:02Z
-updated: 2026-07-11T20:20:40Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet"]
+updated: 2026-07-11T20:21:30Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # skills: document the pinned-retry-then-fallback-walk choreography in all four Delegation texts
@@ -380,3 +380,5 @@ No deviations from the r2 design.
 - 2026-07-11T20:13:50Z: Ensured git branch local-board/T20260710T2050Z-skills-document-the-pinned-retry-then-fallback-walk-choreography-in-all-four-delegation-texts (already-current).
 
 - 2026-07-11T20:20:40Z: Completed implement via claude-subagent:local-board-implementer@sonnet: SKILL_TEAM.md +3-sentence retry-then-walk paragraph (Execution profiles); codex local-team SKILL.md +3-sentence Route Translation insertion + line-46 fallback-free-only replacement (with below correction); skill-usage-sync.test.js +1 test (6 native / 7 codex markers); SKILL.md + codex local-board untouched per design. npm run check clean; node --test 571/572 pass 1 pre-existing skip. Commit 725c68d.
+
+- 2026-07-11T20:21:30Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (prose-only skill docs + content-assertion test)
