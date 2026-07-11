@@ -13,8 +13,8 @@ estimateBasis: T20260710T2050Z
 workStartedAt: 2026-07-11T23:18:33Z
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:32:25Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+updated: 2026-07-11T23:34:23Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # prompts: encode the unfenced-H2 section-payload constraint in all executor output contracts
@@ -298,6 +298,18 @@ None. No isolation fallback needed.
 
 ## Documentation Updates
 
+### Checked and accurate
+
+- `docs/TicketFormat.md` already documents CLI section payload behavior: section bodies must omit their own `## Heading`, and literal top-level `## ` sample lines must be fenced.
+- `docs/Workflow.md` already documents the same `section --file` payload contract in the workflow command guidance.
+- `memory-bank/systemPatterns.md` already records the return-only executor and CLI section-payload constraints, including the H2 guard.
+
+### Files edited
+
+- This ticket file only: recorded documentation evidence in the `Documentation Updates` section.
+
+No `docs/`, `README.md`, or `memory-bank/` changes were needed. The checked files describe CLI behavior, not executor prompt text, and are still accurate after the prompt/agent output-contract update.
+
 ## Questions
 
 ## Run Log
@@ -327,3 +339,5 @@ None. No isolation fallback needed.
 - 2026-07-11T23:29:59Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. 586/587 pass 0 fail 1 pre-existing skip; all 12 sentences cited by file:line; live guard probe on throwaway board (H2 rejected exit 2 with exact message, H3 accepted); sibling zones untouched; mirrors identical; scope exactly 17 paths.
 
 - 2026-07-11T23:32:25Z: Ensured git branch local-board/T20260711T2136Z-prompts-encode-the-unfenced-h2-section-payload-constraint-in-all-executor-output-contracts (already-current).
+
+- 2026-07-11T23:34:23Z: Completed document via codex-task:workspace-write: Doc audit: TicketFormat.md, Workflow.md, systemPatterns.md all accurate (they document the CLI guard; prompt-wording change needs no doc mention); no narrative doc changes; Documentation Updates section records the audit.
