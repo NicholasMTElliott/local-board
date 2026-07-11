@@ -1,7 +1,7 @@
 ---
 id: T20260710T2051Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P4
 parent: null
 children: []
@@ -10,10 +10,10 @@ blocks: []
 branch: local-board/T20260710T2051Z-active-steps-strict-read-ledger-clear-primitive-and-beginstep-moveticket-lock-decision-correction-lane-preconditions
 estimate: 4
 estimateBasis: T20260710T1532Z
-workStartedAt: null
+workStartedAt: 2026-07-11T20:57:06Z
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
-updated: 2026-07-11T20:57:05Z
+updated: 2026-07-11T20:57:06Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -197,3 +197,5 @@ None blocking. (If the reviewer wants `clearActiveStepStrict` exported from `act
 - 2026-07-11T20:57:05Z: Design review r2 (codex-task:read-only@gpt-5.6-sol, xhigh): PASS. Rejection properly scoped with correction-lane race, non-composable strict clear, two future serialization options, and blocked residual explicit; mechanics accurate; strengthened tests confirmed; unchanged sections coherent.
 
 - 2026-07-11T20:57:05Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: r1 FAIL (lock rationale) reworked to option (b) honest residual; r2 PASS all findings resolved, no new inconsistencies
+
+- 2026-07-11T20:57:06Z: Ensured git branch local-board/T20260710T2051Z-active-steps-strict-read-ledger-clear-primitive-and-beginstep-moveticket-lock-decision-correction-lane-preconditions (already-current).
