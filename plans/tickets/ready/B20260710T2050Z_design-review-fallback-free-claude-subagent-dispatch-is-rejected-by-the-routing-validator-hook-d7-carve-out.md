@@ -1,7 +1,7 @@
 ---
 id: B20260710T2050Z
 type: bug
-status: ready_for_review
+status: ready_for_test
 priority: P3
 parent: null
 children: []
