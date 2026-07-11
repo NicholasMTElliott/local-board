@@ -8,12 +8,12 @@ children: []
 blockedBy: []
 blocks: []
 branch: local-board/T20260710T2051Z-active-steps-strict-read-ledger-clear-primitive-and-beginstep-moveticket-lock-decision-correction-lane-preconditions
-estimate: null
-estimateBasis: null
+estimate: 4
+estimateBasis: T20260710T1532Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
-updated: 2026-07-11T20:35:30Z
+updated: 2026-07-11T20:36:21Z
 completedSteps: []
 routingApprovals: []
 ---
