@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-11T20:19:27Z
+updated: 2026-07-11T20:28:23Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -583,6 +583,94 @@ gate; both must pass in `../codex-task`.
    whose classifiable phrase sits more than 3 non-blank lines above end.
 
 ## Implementation Notes
+
+### Summary
+
+Implemented the approved r7 design (Trigger A only) in the sibling repo
+`C:/Users/Nicho/Documents/codex-task`, branch `T20260710T1534Z-retries`
+(created from `mainline`, clean tree). Local-board repo/worktree touched
+only for this Implementation Notes section, per the implementer contract.
+
+### Files changed (all in ../codex-task)
+
+- `codex-task.mjs` — new `--retries <n>` flag (`parseArgs`, non-negative
+  integer validation via `usageErr`); `classifyFailure()` + `NON_TRANSIENT_PATTERNS`
+  / `SANDBOX_WRAPPER_PATTERNS` / `TRANSIENT_PATTERNS` / `MAX_TAIL_SCAN` (last-lines,
+  first-classified-line-wins, durable-first-per-line); `tailOf()`;
+  `RETRY_BACKOFF_MS` (2000ms, env-overridable via `CODEX_TASK_RETRY_DELAY_MS`);
+  `attempt` counter declared right after `parseArgs`, before any structured
+  emit; retry loop in `main()` replacing the single `runCodex` call — mandatory
+  pre-attempt `rmSync(lastMessagePath, {force:true})` at every loop top, clean
+  (code 0) exit unconditionally `break`s (never retried, including `blocked`),
+  Trigger A branch retries only when `classifyFailure` returns a transient
+  label and `attempt <= retries`; uniform gated `...(retriesEnabled ? {attempts:
+  attempt} : {})` spread inserted at a fixed position (before `warnings`) in
+  all six structured-emit sites (bad cwd, preflight failure, session-dir
+  failure, spawn-error catch, non-zero-exit failure, readResult contract
+  failure, final success); `printUsage` updated (synopsis + new `--retries`
+  bullet).
+- `tests/cli-smoke.test.mjs` — extended `fakeCodexJs` shim with on-disk
+  env-driven modes: `FAKE_CODEX_STATE` (invocation counter file,
+  `makeFakeCodex` now returns `{dir, statePath}`), `FAKE_CODEX_FAIL_TIMES` /
+  `FAKE_CODEX_FAIL_MESSAGE` / `FAKE_CODEX_FAIL_WRITES_FINAL`,
+  `FAKE_CODEX_BAD_FINAL`, `FAKE_CODEX_NO_FINAL`, `FAKE_CODEX_FAIL_VERSION`.
+  Added tests 1-19 exactly per the design's test strategy (transient-retry-
+  success, banner-bearing capacity, durable-earlier/transient-earlier mixed
+  multiline, 429, generic-please-try-again no-retry, auth/unsupported-model/
+  unsupported-effort exclusions, mixed-single-line durable+transient,
+  retries-exhausted, stale-final-message sentinel, non-zero-exit
+  sandbox-wrapper retry [test 13], exit-0 malformed-JSON no-retry, exit-0
+  missing-final-message no-retry, preflight-failure attempts:0, option-b
+  structural-equivalence on the clean-success and fixed-diagnostic-failure
+  paths, help-contract, invalid `--retries` value). No `FAKE_CODEX_BLOCK_*`
+  knobs, no tests 20-23 — matches the descoped (Trigger-A-only) design.
+- `SKILL.md` — `--retries` documented in the how-to-invoke synopsis and a new
+  Wrapper options bullet (transient-class list, default-0 byte-identical
+  note, serial/backoff note); Output section gains an `attempts` +
+  retry-warning example; Field semantics documents `attempts` (gated
+  presence) and the retry-warning shape; "After invoking" step 4 points at
+  `--retries` for the non-zero-exit transient shapes; new "Known limitation:
+  Windows sandbox blocked-runs are not auto-retried" subsection under
+  Failure modes, with the structured-tool-failure-record future-ticket
+  pointer, per the ticket's item 4 mandate.
+
+### Test evidence
+
+- `npm run check` (node --check on codex-task.mjs, install.mjs,
+  scripts/permission-matrix.mjs): pass, no output.
+- `npm test` (node --test): **33/33 pass, 0 fail, 0 skipped** (14 pre-existing
+  + 19 new `--retries` tests). Ran twice (once after the code+test commits,
+  once after the SKILL.md commit) — both green. Full run ~5.9-6.5s.
+
+### Commits (on `T20260710T1534Z-retries`, codex-task repo)
+
+- `aa1a063` — T20260710T1534Z: add --retries flag for transient
+  capacity/sandbox-wrapper failures (Trigger A) [codex-task.mjs]
+- `ea026b1` — T20260710T1534Z: extend fake-codex shim and add tests 1-19 for
+  --retries [tests/cli-smoke.test.mjs]
+- `8aeec88` — T20260710T1534Z: document --retries and the Windows sandbox
+  blocked-run known limitation [SKILL.md]
+
+Working tree clean after the three commits; `mainline` untouched.
+
+### Deviations from design
+
+None. Implemented the r7 (PASSED, xhigh, no findings) design as written:
+Trigger A only, last-lines/first-classified-line-wins classification with
+durable patterns checked first per line, no bare "please try again" pattern,
+mandatory pre-attempt `rmSync`, gated `attempts` semantics including the
+three pre-loop preflight sites, clean exits (incl. `blocked`) never retried,
+option-b narrow structural-equivalence contract, tests 1-19 exactly, SKILL.md
+known-limitation item as specified.
+
+### Remaining risks (carried from design, not new)
+
+- `MAX_TAIL_SCAN=3` is a tunable fail-safe bound; a future terminal
+  diagnostic burying the classifiable phrase deeper than 3 non-blank lines
+  classifies non-transient (no retry), by design.
+- Windows sandbox clean-exit (`blocked`) case remains a manual re-dispatch,
+  documented; a reliable automatic path needs a structured tool-failure
+  record from codex's event output (candidate future ticket, out of scope).
 
 ## Review Findings
 
