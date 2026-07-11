@@ -13,8 +13,8 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-11T20:19:13Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-11T20:19:14Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
 # codex-task: --retries for transient capacity and sandbox failures (../codex-task repo)
@@ -629,3 +629,5 @@ Original question history (for context): five sol@xhigh design-review rounds; ro
 - 2026-07-11T20:14:06Z: Completed design via claude-subagent:local-board-designer@opus: Rework r7: Trigger B fully excised (Summary subsection collapsed to single attribution note ~L75; FAKE_CODEX_BLOCK_/tests-20-23/clean-exit-retry prose deleted from test strategy, risks, open questions, failure-paths); SKILL.md known-limitation item retained; spawn-error refs corrected (child.on error :501, :778-787 relabeled main catch/emit).
 
 - 2026-07-11T20:19:13Z: Design review r7 (codex-task:read-only@gpt-5.6-sol, xhigh; descope-scoped): PASS, no findings. Trigger B excised, Trigger A hardening intact, clean exits unambiguously no-retry, SKILL.md limitation correctly scoped, sibling refs current.
+
+- 2026-07-11T20:19:14Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: r7 PASS (descope revision): excision complete, Trigger A intact, no-retry on clean exit unambiguous, SKILL.md item scoped, refs current
