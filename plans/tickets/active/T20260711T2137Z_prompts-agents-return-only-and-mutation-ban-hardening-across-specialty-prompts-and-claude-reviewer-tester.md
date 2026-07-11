@@ -1,7 +1,7 @@
 ---
 id: T20260711T2137Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P3
 parent: null
 children: []
@@ -10,7 +10,7 @@ blocks: []
 branch: local-board/T20260711T2137Z-prompts-agents-return-only-and-mutation-ban-hardening-across-specialty-prompts-and-claude-reviewer-tester
 estimate: 2
 estimateBasis: T20260711T2136Z
-workStartedAt: null
+workStartedAt: 2026-07-11T23:48:46Z
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
 updated: 2026-07-11T23:48:46Z
@@ -276,3 +276,5 @@ None. Requirement wording is explicit for all four items.
 - 2026-07-11T23:48:45Z: Completed design via claude-subagent:local-board-designer@opus: Rework: generic mutation prohibition (ticket/ledger/worktree/repo/config/install) with non-exhaustive such-as list + explicit read-only allow-list; ban scoped to project board/ticket worktree with tester probe-fixture carve-out mirrored to reviewer; pin analysis corrected (Recording prose pinned post-B2136Z, insertion non-colliding).
 
 - 2026-07-11T23:48:46Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: r1 CONCERNS (2 Med ban-wording + 1 Low pin analysis, aligned with security_threat_model specialty) all patched; proceed
+
+- 2026-07-11T23:48:46Z: Ensured git branch local-board/T20260711T2137Z-prompts-agents-return-only-and-mutation-ban-hardening-across-specialty-prompts-and-claude-reviewer-tester (already-current).
