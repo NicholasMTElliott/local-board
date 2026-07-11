@@ -13,7 +13,7 @@ estimateBasis: T20260711T2136Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:41:29Z
+updated: 2026-07-11T23:46:03Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", security_threat_model:inline]
 routingApprovals: []
 ---
@@ -243,3 +243,5 @@ None. Requirement wording is explicit for all four items.
 - 2026-07-11T23:41:05Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: security_threat_model (design addresses a prompt-injection attack surface on return-only agents)
 
 - 2026-07-11T23:41:29Z: Completed security_threat_model via inline: CONCERNS: [Med] enumerated ban under-covers the mutating surface (misses set - which can force status - link-parent/link-child, block/unblock, approve-inline, start-work, worktree-*); recommend generic any-mutating-command formulation with the enumeration as examples plus an explicit read-only allow-list. Accepted residual: prompt-text mitigation is advisory (permission/hook enforcement is a ticket non-goal). Direction and remaining items sound.
+
+- 2026-07-11T23:46:03Z: Design review r1 (codex-task:read-only@gpt-5.6-sol, xhigh): CONCERNS. 1) [Med] item-1 parenthetical reads as exhaustive but the mutating surface also includes create, start-work, worktree-add/remove, fast-forward, begin-step, approve-inline, set, link/unlink, block/unblock, design-review-complete, init, install (and gate-check/specialty-run/design-review-check stamp state) - use a generic prohibition over ticket/ledger/worktree/repo/config/install mutations, mark enumeration non-exhaustive, add explicit read-only allow-list (matches security_threat_model specialty finding). 2) [Med] unqualified ban conflicts with legitimate tester probes (test.md L14-26; cli.test.js runs mutating flows on isolated temp boards) - scope the ban to the project board/current worktree; isolated temporary fixtures may be mutated; install/user-home stays prohibited. 3) [Low] pin analysis stale post-rebase: cli.test.js:3365-3386 pins the adjacent Recording prose (no collision with the insertion, but state it accurately). Verified sound: anchors, codex generic bans, T2136Z warnings untouched, insertion points, decompose reword, gatecheck forms, sync scope. Designer patching; proceedable after patch.
