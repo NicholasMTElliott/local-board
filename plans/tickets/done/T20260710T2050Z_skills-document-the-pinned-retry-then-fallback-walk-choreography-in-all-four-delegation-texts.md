@@ -1,7 +1,7 @@
 ---
 id: T20260710T2050Z
 type: task
-status: ready_for_docs
+status: done
 priority: P3
 parent: null
 children: []
@@ -11,9 +11,9 @@ branch: local-board/T20260710T2050Z-skills-document-the-pinned-retry-then-fallba
 estimate: 2
 estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-11T20:13:50Z
-workCompletedAt: null
+workCompletedAt: 2026-07-11T20:33:46Z
 created: 2026-07-10T20:50:02Z
-updated: 2026-07-11T20:31:25Z
+updated: 2026-07-11T20:33:46Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
