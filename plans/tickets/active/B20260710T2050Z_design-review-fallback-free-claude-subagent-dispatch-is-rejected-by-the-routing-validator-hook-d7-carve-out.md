@@ -13,7 +13,7 @@ estimateBasis: B20260710T1533Z
 workStartedAt: 2026-07-11T20:04:07Z
 workCompletedAt: null
 created: 2026-07-10T20:50:02Z
-updated: 2026-07-11T20:04:07Z
+updated: 2026-07-11T20:11:25Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -212,6 +212,24 @@ owns that transition (this brief forbids front-matter edits, so no estimate is
 written here).
 
 ## Implementation Notes
+
+- `src/cli.js` `commandDesignReviewCheck`: dropped the trailing `&& designReviewFallbackModels` clause from the stamp guard, so any `claude-subagent:` design-review route stamps the ledger unconditionally; codex-task routes are unaffected (guard still requires the `claude-subagent:` prefix). The record's `fallbackModels` field now uses the same conditional-spread idiom `beginStep` uses (`...(designReviewFallbackModels ? { fallbackModels: designReviewFallbackModels } : {})`), so a fallback-free stamp carries exactly the 7 `beginStep`-shape keys (`ticket/kind/action/route/model/root/ts`), no `fallbackModels` key present.
+- Rewrote both stale comments flagged by review finding 4: the `assertInvocationRootForTicket` comment ("performs no dispatch or write of its own") and the stamp-guard block comment (previously described the D7 no-stamp limitation as intentional) now state the command stamps for claude-subagent routes and skips codex-task routes.
+- Folded all four design-review r1 findings into tests:
+  - Finding 1 (byte-identical claim): strengthened the codex-route "stamps nothing" test in `test/cli.test.js` to assert via `fs.existsSync` that the ledger file never gets created at all (not just that `readActiveSteps` maps ENOENT to `{}`), plus a second case that pre-seeds a sentinel ledger file and asserts its raw bytes are byte-for-byte unchanged after a codex-task `design-review-check`.
+  - Finding 2 (one-slot-per-ticket semantics): added two `test/cli.test.js` cases — (a) a premature `design-review-check` while a live `begin-step design` action stamp is still present: documents and asserts the actual no-clobber behavior (command still exits 0 with a "not stamped" warning, the old `design` record survives untouched, and `check-dispatch` for the reviewer still returns `agent-mismatch`); (b) the normal flow (`complete-step design` clears the slot, then `design-review-check` stamps cleanly) followed by `check-dispatch` accepting the pinned reviewer model and rejecting a wrong model and a wrong agent.
+  - Finding 3 (consecutive calls): added a regression test asserting a second identical `design-review-check` call is accepted with no conflict warning AND rewrites the record (ts is back-dated deterministically before the second call, then asserted to have advanced) — not a pure no-op claim.
+  - Finding 4 (stale comment): see above.
+- Flipped the existing D6/D7 "known limitation" test in `test/cli.test.js` (~L1800, now retitled) to assert the fallback-free claude-subagent branch now stamps the 7-key record (`Object.hasOwn(record, "fallbackModels") === false`, exact key set via `Object.keys(record).sort()`); the JSON payload assertions (`out1`/`out2`) are unchanged since the wire payload was already fallback-free/byte-identical.
+- Added a `recordDesignReview`-clears-the-stamp case (identity-scoped): `design-review-check` stamps the fallback-free claude-subagent record, `design-review-complete` (matching executor/model) clears it, and a follow-up `check-dispatch` reverts to `agent-mismatch` (falls back to the ticket's status action, not the reviewer).
+- Added a unit-level `checkDispatch` matrix test in `test/active-steps.test.js` against a hand-written fallback-free `design-review` action stamp: pinned model matches, wrong model denies (`model-mismatch`), wrong agent denies (`agent-mismatch`), and model omitted returns `model-unverifiable`.
+- The fallback-configured claude-subagent test and the codex-task-with-fallback test are unchanged and stay green, confirming existing fallback behavior and codex-task no-stamp behavior are untouched.
+- No changes to `src/active-steps.js` or `src/tickets.js` (matches the design's "no other code changes" section); no `plans/prompts/**` or `agents/**` edits, so no `npm run sync-resources` needed.
+
+### Test Evidence
+
+- `npm run check`: pass (all `node --check` syntax checks green).
+- `node --test`: 576 tests, 575 pass, 0 fail, 1 skipped (pre-existing `smoke (slow)` skip, unrelated to this ticket), 34.8s.
 
 ## Review Findings
 
