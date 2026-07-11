@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-11T20:46:37Z
+updated: 2026-07-11T20:54:15Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", security_audit:inline, "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -743,6 +743,22 @@ verdict: pass
 - None blocking. No real codex exec run (fake shim + usage-error probes per guardrail). Git state untouched in both repos.
 
 ## Documentation Updates
+
+All documentation lives in the sibling codex-task repo (branch T20260710T1534Z-retries).
+
+### SKILL.md (committed 8aeec88, implement step)
+--retries in synopsis and wrapper options; attempts field semantics; "Known limitation: Windows sandbox blocked-runs are not auto-retried" subsection with the structured-event future pointer.
+
+### README.md (committed 446f084)
+--retries option docs, gated attempts semantics, transient retry scope, blocked-run manual re-dispatch limitation, retry design note.
+
+### memory-bank (committed 446f084)
+- projectBrief.md - --retries scope, attempts gating, durable exclusions, clean-exit blocked non-retry.
+- productContext.md - attempts output, --retries input/behavior, blocked-run limitation.
+- systemPatterns.md - run flow, retry classification semantics, attempts gating, invariants.
+- techContext.md - CLI shape, error handling, output contract, blocked-run non-retry.
+
+No local-board repo docs referenced the codex-task wrapper's flag surface; none needed changes.
 
 ## Questions
 
