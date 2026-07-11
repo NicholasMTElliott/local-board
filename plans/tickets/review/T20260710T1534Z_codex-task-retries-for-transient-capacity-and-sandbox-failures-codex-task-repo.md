@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-11T20:42:31Z
+updated: 2026-07-11T20:43:50Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", security_audit:inline]
 routingApprovals: []
 ---
@@ -688,6 +688,23 @@ patching). `npm run check` pass; `npm test` **34/34 pass** (33 + 1 new).
 Commit `2f8a8a6` on `T20260710T1534Z-retries` (codex-task repo).
 
 ## Review Findings
+
+### Review round 1 - full review (codex-task:read-only@gpt-5.6-terra, high, static)
+
+Verdict: FAIL.
+
+- [High] codex-task.mjs:92-100 - --retries added to parseArgs but not VALUE_TAKING_FLAGS (documented as mirroring the parser). "codex-task --prompt noop --retries --uninstall" was misdetected as installer mode before validation and forwarded to install.mjs - could remove installed tool/skill directories instead of rejecting the invalid retry value.
+- All other checks statically consistent: Trigger-A retry loop, last-lines/durable-first classification, attempts gating at all emit sites, pre-attempt rmSync, clean-exit no-retry, structural equivalence, tests 1-19, SKILL.md docs, no Trigger B leakage.
+
+### Specialty: security_audit (inline, implement stage re-gate)
+
+Verdict: PASS. Flag-confusion vector fixed and regression-tested; --retries strictly validated; classifier regexes simple over bounded tool stderr; rmSync paths internally derived; no secrets/crypto/dependency changes. Non-blocking note: --retries has no upper bound (local self-inflicted resource use only).
+
+### Review round 2 - focused re-review (codex-task:read-only@gpt-5.6-terra, medium, static)
+
+Verdict: PASS.
+
+- Fix commit 2f8a8a6 verified: --retries in VALUE_TAKING_FLAGS, hasInstallerFlag skips its value token; regression test exercises the pre-fix failure path (exit 2, retry validation error on stderr, no uninstall output); sibling "--retries 3 --uninstall" intentionally still installer mode; commit scope limited to the set addition + test.
 
 ## Test Evidence
 
