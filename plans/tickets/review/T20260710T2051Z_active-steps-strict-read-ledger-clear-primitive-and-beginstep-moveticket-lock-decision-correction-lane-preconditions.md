@@ -13,7 +13,7 @@ estimateBasis: T20260710T1532Z
 workStartedAt: 2026-07-11T20:57:06Z
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
-updated: 2026-07-11T21:01:54Z
+updated: 2026-07-11T21:01:55Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -220,3 +220,5 @@ None from the approved r2 design.
 - 2026-07-11T21:01:06Z: Completed implement via claude-subagent:local-board-implementer@sonnet: clearActiveStepWith helper factored via literal body move (clearActiveStepIf byte-identical, self-heal regression proves it); clearActiveStepStrict reuses helper with readLedgerStrict; nothing wired (non-goal upheld); 9 new tests incl. corrupt-throws-bytes-untouched, legacy corrupt regression, predicate-throw+lock-release, concurrency parity; systemPatterns note. Full suite 585/586 pass 1 pre-existing skip. Commit d02c2ab.
 
 - 2026-07-11T21:01:54Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (internal ledger primitive; ledger file is board-internal, no UI/auth)
+
+- 2026-07-11T21:01:55Z: Ensured git branch local-board/T20260710T2051Z-active-steps-strict-read-ledger-clear-primitive-and-beginstep-moveticket-lock-decision-correction-lane-preconditions (already-current).
