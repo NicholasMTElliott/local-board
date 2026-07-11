@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-11T20:14:06Z
+updated: 2026-07-11T20:19:13Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -627,3 +627,5 @@ Original question history (for context): five sol@xhigh design-review rounds; ro
 - 2026-07-11T20:10:03Z: Design review r6 (codex-task:read-only@gpt-5.6-sol, xhigh; descope-scoped): FAIL. 1) [High] Excision incomplete: Trigger B material retained at Technical Design lines 75-94, 464-465, 527-535, 585-592, 614-618 (clean-exit sandbox-marker retry, tests 20-23, FAKE_CODEX_BLOCK_* knobs preserved as historical detail) - violates the ANSWERED directive; allowed remnant is only a concise attribution note (option-2 decision 2026-07-11, warn against re-adding without structured tool-failure data). 2) [Low] Spawn-error bullet cites codex-task.mjs:778-787 for child.on(error) which is at line 501; 778-787 is the main() catch/emit path - cite both or relabel. Looping design rework.
 
 - 2026-07-11T20:14:06Z: Completed design via claude-subagent:local-board-designer@opus: Rework r7: Trigger B fully excised (Summary subsection collapsed to single attribution note ~L75; FAKE_CODEX_BLOCK_/tests-20-23/clean-exit-retry prose deleted from test strategy, risks, open questions, failure-paths); SKILL.md known-limitation item retained; spawn-error refs corrected (child.on error :501, :778-787 relabeled main catch/emit).
+
+- 2026-07-11T20:19:13Z: Design review r7 (codex-task:read-only@gpt-5.6-sol, xhigh; descope-scoped): PASS, no findings. Trigger B excised, Trigger A hardening intact, clean exits unambiguously no-retry, SKILL.md limitation correctly scoped, sibling refs current.
