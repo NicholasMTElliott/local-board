@@ -13,7 +13,7 @@ estimateBasis: T20260710T1532Z
 workStartedAt: 2026-07-11T20:57:06Z
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
-updated: 2026-07-11T21:01:55Z
+updated: 2026-07-11T21:04:01Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -194,6 +194,14 @@ Added a systemPatterns.md note (in the existing active-steps ledger paragraph's 
 None from the approved r2 design.
 
 ## Review Findings
+
+### Review round 1 (codex-task:read-only@gpt-5.6-terra, high, static)
+
+Verdict: PASS, no findings.
+
+- clearActiveStepWith confirmed as the literal prior locked-RMW body; clearActiveStepIf keeps the self-healing reader and byte-identical behavior; strict mode matches the specified throw/no-op contract (missing file/entry no-op post-lock, corrupt throws with bytes untouched).
+- Commit d02c2ab changes exactly src/active-steps.js, test/active-steps.test.js, memory-bank/systemPatterns.md; no production strict-clear caller (non-goal upheld); all nine design test cases present, none weakened.
+- Memory Bank note accurately records the two read/clear modes and the option-(b) lock decision with the blocked-correction-lane residual.
 
 ## Test Evidence
 
