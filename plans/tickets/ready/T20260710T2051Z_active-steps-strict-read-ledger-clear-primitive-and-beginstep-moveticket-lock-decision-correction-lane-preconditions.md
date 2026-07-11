@@ -13,8 +13,8 @@ estimateBasis: T20260710T1532Z
 workStartedAt: 2026-07-11T20:57:06Z
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
-updated: 2026-07-11T21:07:02Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+updated: 2026-07-11T21:08:57Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # active-steps: strict-read ledger clear primitive and beginStep/moveTicket lock decision (correction-lane preconditions)
@@ -233,6 +233,18 @@ healthy match clears (others intact); healthy present-entry predicate mismatch n
 
 ## Documentation Updates
 
+### Files edited
+
+- `plans/tickets/ready/T20260710T2051Z_active-steps-strict-read-ledger-clear-primitive-and-beginstep-moveticket-lock-decision-correction-lane-preconditions.md`: recorded this documentation update.
+
+### Files checked and accurate
+
+- `docs/PerStepOrchestration.md`: no active-steps ledger read/clear semantics or authoring-correction-lane status prose needing update.
+- `docs/Workflow.md`: active-step ledger prose remains accurate at its current level of detail; it does not claim all ledger reads/clears are self-healing or describe the correction lane as unblocked.
+- `docs/TicketFormat.md`: no active-steps ledger read/clear semantics or correction-lane status prose needing update.
+- `memory-bank/techContext.md`: does not enumerate the active-steps API surface, so no strict primitive entry was added.
+- `memory-bank/systemPatterns.md`: already contains the ledger-semantics note from implementation; intentionally left unchanged.
+
 ## Questions
 
 ## Run Log
@@ -264,3 +276,5 @@ healthy match clears (others intact); healthy present-entry predicate mismatch n
 - 2026-07-11T21:06:54Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. Full suite 585/586 pass 0 fail 1 pre-existing skip; targeted 55/55; all nine design cases named and passing; contract cited by line; five clearActiveStepIf callers unchanged; zero src/ strict callers; lock decision + residual recorded in design L122-145 and systemPatterns; test diff purely additive.
 
 - 2026-07-11T21:07:02Z: Ensured git branch local-board/T20260710T2051Z-active-steps-strict-read-ledger-clear-primitive-and-beginstep-moveticket-lock-decision-correction-lane-preconditions (already-current).
+
+- 2026-07-11T21:08:57Z: Completed document via codex-task:workspace-write: Doc audit: PerStepOrchestration.md, Workflow.md, TicketFormat.md, techContext.md checked - none cover ledger strict/self-heal semantics at this depth or remain accurate; systemPatterns.md already updated with the implementation (not duplicated). Documentation Updates section records the audit.
