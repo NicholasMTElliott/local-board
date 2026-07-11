@@ -29,10 +29,6 @@ The orchestrator provides:
 
 Return strict JSON only. No prose, no code fences, no trailing comments.
 
-Shape:
-
-```json
-{ "requestedSteps": ["<step-name>"] }
-```
+Shape: `{ "requestedSteps": ["<step-name>", ...] }`
 
 The array may be empty.
