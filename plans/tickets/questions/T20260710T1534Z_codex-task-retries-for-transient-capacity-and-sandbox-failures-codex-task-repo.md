@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-10T19:26:54Z
+updated: 2026-07-11T19:45:22Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -752,3 +752,5 @@ Design state is fully preserved in the Technical Design section (both triggers s
 - 2026-07-10T19:11:31Z: Design review #4 (sol@xhigh): FAIL, one new High - the real Windows sandbox-wrapper failure surfaces as apply_patch tool failure inside a continuing turn: codex exits 0 with taskResult blocked, so the exit-nonzero retry loop never fires for the second motivating transient class. Disposition: final revision #4 per reviewer's specified fix (retry when exit 0 + taskResult blocked + isolated sandbox-wrapper pattern in captured output; missing/malformed-final-message and other contract failures stay non-retryable). Round 5 non-PASS/CONCERNS parks the ticket in questions.
 
 - 2026-07-10T19:26:53Z: Design review #5 FINAL (sol@xhigh): FAIL. [High] Trigger B matches sandbox-wrapper phrases in untyped tails, so prompt echoes or model explanations mentioning the phrase on a durable blocked run would retry - violates transient-only. Five rounds each found a new real defect; per the declared stop, parking in questions with options (continue structured-event round / descope Trigger B / accept residual).
+
+- 2026-07-11T19:45:22Z: User decision 2026-07-11: option 2 - descope Trigger B. Next design pass ships Trigger A (capacity/non-zero-exit) only; sandbox blocked-runs stay manual, documented as a known limitation in SKILL.md with a structured-event future pointer. Resuming questions -> ready_for_design.
