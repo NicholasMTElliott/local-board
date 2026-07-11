@@ -343,8 +343,9 @@ a throwaway git repo using the real worktree CLI and real subagent dispatch with
 per-step models. Confirmed working:
 
 - per-step model dispatch in-loop (designer `opus`, implementer `sonnet`, tester
-  `sonnet`), each running on the requested model; fallback models are now a
-  configured ordered walk for pinned-model outages;
+  `sonnet`), each running on the requested model; fallback dispatch now retries
+  the pinned model once, then walks the configured ordered fallback list for
+  pinned-model outages;
 - wave-barrier concurrency (two executors per wave, in parallel);
 - designer **self-write** (its own `Technical Design` section, temp file outside
   the worktree, terse return) and tester **return-only** (orchestrator persists);
