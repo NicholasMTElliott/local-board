@@ -305,3 +305,5 @@ git diff --name-only mainline...HEAD: src/cli.js (only production source), test/
 - 2026-07-11T20:20:37Z: Ensured git branch local-board/B20260710T2050Z-design-review-fallback-free-claude-subagent-dispatch-is-rejected-by-the-routing-validator-hook-d7-carve-out (already-current).
 
 - 2026-07-11T20:23:50Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. Full suite 575/576 pass 0 fail 1 pre-existing skip; targeted cli+active-steps 118/118; acceptance criteria traced to src/cli.js:1383-1393, active-steps.js:225-313, tests cli.test.js:1774-2251 + active-steps.test.js:574-635; src/cli.js only production change; no quality concerns.
+
+- 2026-07-11T20:24:02Z: Ensured git branch local-board/B20260710T2050Z-design-review-fallback-free-claude-subagent-dispatch-is-rejected-by-the-routing-validator-hook-d7-carve-out (already-current).
