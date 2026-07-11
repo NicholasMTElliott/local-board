@@ -14,7 +14,7 @@ workStartedAt: 2026-07-11T20:57:06Z
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
 updated: 2026-07-11T21:04:01Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
 # active-steps: strict-read ledger clear primitive and beginStep/moveTicket lock decision (correction-lane preconditions)
@@ -230,3 +230,5 @@ Verdict: PASS, no findings.
 - 2026-07-11T21:01:54Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (internal ledger primitive; ledger file is board-internal, no UI/auth)
 
 - 2026-07-11T21:01:55Z: Ensured git branch local-board/T20260710T2051Z-active-steps-strict-read-ledger-clear-primitive-and-beginstep-moveticket-lock-decision-correction-lane-preconditions (already-current).
+
+- 2026-07-11T21:04:01Z: Completed review via codex-task:read-only@gpt-5.6-terra: r1 PASS no findings: literal body-move confirmed, strict contract matches design, exact 3-file scope, 9 cases present, nothing wired, memory-bank note accurate.
