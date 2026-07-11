@@ -722,18 +722,11 @@ gate; both must pass in `../codex-task`.
 
 ## Questions
 
-2026-07-10, parked by the orchestrator after design review round 5 (declared final round) returned FAIL.
+ANSWERED 2026-07-11 by the user: option 2 - descope Trigger B.
 
-Five sol@xhigh design-review rounds each found a genuinely new defect; rounds 1-4 were resolved in revisions (classifier exclusion ordering; banner-tail isolation replaced by last-lines scan; bare try-again removed; stale final-message deletion; clean-exit blocked+sandbox Trigger B). The remaining round-5 High: Trigger B scans untyped stdout/stderr tails for sandbox-wrapper phrases, so a prompt or model explanation that merely MENTIONS such a phrase on a blocked-for-durable-reasons run would be retried - a transient-only violation. Recommended fix per the reviewer: constrain matching to an identifiable tool-failure record or structured codex event (excluding prompt/final-response echoes) plus a negative echo test.
+Direction for the next design pass: ship --retries for the non-zero-exit transient class only (Trigger A as already review-hardened across rounds 1-4: last-lines classification, durable-exclusions-first, mandatory pre-attempt final-message deletion, gated attempts semantics, structural-equivalence contract). Remove Trigger B (clean-exit blocked + sandbox-marker retry) from scope entirely; Windows sandbox blocked-runs remain a manual re-dispatch, documented in SKILL.md as a known limitation with a pointer that a reliable automatic retry would require a structured tool-failure record from codex's event output (candidate future ticket, not scoped). Drop tests 20-23 and the FAKE_CODEX_BLOCK_* knobs; keep tests 1-19.
 
-Question for the user - pick a direction:
-1. Continue: one more design round constraining Trigger B to structured tool-failure evidence (requires inspecting codex's event/output structure for a reliable tool-failure frame; the classifier work so far suggests unstructured text keeps leaking).
-2. Descope Trigger B: ship --retries for the non-zero-exit capacity class only (Trigger A, already review-hardened); Windows sandbox blocked-runs stay a manual re-dispatch, documented as a known limitation.
-3. Accept the residual risk and ship Trigger B as designed (the false-positive needs the conjunction of a marker phrase in prompt/output AND a durable blocked result; retry cost is one duplicate --ephemeral run).
-
-Orchestrator's recommendation: option 2 - the capacity class caused both observed incidents' retries to succeed and is cleanly detectable; Trigger B's value is real but its reliable form needs structured-event work disproportionate to a P3.
-
-Design state is fully preserved in the Technical Design section (both triggers specified, tests 1-23 enumerated) - any option resumes from there.
+Original question history (for context): five sol@xhigh design-review rounds; rounds 1-4 resolved (classifier ordering, banner-tail isolation, bare try-again, stale final-message, clean-exit shape); round 5 High was Trigger B matching sandbox phrases in untyped tails (prompt echoes / model explanations could trigger false retries on durable blocked runs). Options were (1) structured-event constraint round, (2) descope Trigger B, (3) accept residual risk. User chose 2, matching the orchestrator recommendation.
 
 ## Run Log
 
