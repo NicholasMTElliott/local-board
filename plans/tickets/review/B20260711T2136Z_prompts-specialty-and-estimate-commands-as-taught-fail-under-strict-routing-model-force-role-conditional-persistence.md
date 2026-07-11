@@ -1,7 +1,7 @@
 ---
 id: B20260711T2136Z
 type: bug
-status: implementing
+status: ready_for_review
 priority: P3
 parent: null
 children: []
@@ -13,7 +13,7 @@ estimateBasis: B20260710T2051Z
 workStartedAt: 2026-07-11T23:23:49Z
 workCompletedAt: null
 created: 2026-07-11T21:36:09Z
-updated: 2026-07-11T23:29:17Z
+updated: 2026-07-11T23:29:18Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
