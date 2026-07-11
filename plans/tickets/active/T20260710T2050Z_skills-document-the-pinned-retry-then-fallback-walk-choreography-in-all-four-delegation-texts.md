@@ -13,8 +13,8 @@ estimateBasis: T20260710T1533Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T20:50:02Z
-updated: 2026-07-11T20:00:53Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-11T20:01:36Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # skills: document the pinned-retry-then-fallback-walk choreography in all four Delegation texts
@@ -252,3 +252,5 @@ content-asserted). No `sync-resources` needed.
 ## Run Log
 
 - 2026-07-11T20:00:53Z: Completed design via claude-subagent:local-board-designer@opus: Docs-only design: SKILL.md and codex local-board skill already document retry-then-walk (compliant as-is); insert 3-sentence native paragraph in SKILL_TEAM.md Execution profiles and sanitized codexDispatch variant in codex local-team Route Translation; no sync-resources needed (skills ship verbatim); optional new content assertion in skill-usage-sync.test.js.
+
+- 2026-07-11T20:01:36Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (docs-only skill-text change)
