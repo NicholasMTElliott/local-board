@@ -201,3 +201,5 @@ No deviations from the approved design.
 - 2026-07-11T23:28:33Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Five specialty Recording lines corrected to --executor/--model/--evidence + omit-when-null parenthetical; estimate.md step-6 --force sentence + capability-based Persistence section; pins verified verbatim (calibration suggest + estimate); new cli.test.js assertion pinning the corrected form across all five prompts; sync-resources (6 mirrors). npm run check clean; node --test 587/588 pass 1 pre-existing skip. Commits 198bee9 + 0602092.
 
 - 2026-07-11T23:29:17Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (prompt prose + content-assertion test)
+
+- 2026-07-11T23:29:18Z: Ensured git branch local-board/B20260711T2136Z-prompts-specialty-and-estimate-commands-as-taught-fail-under-strict-routing-model-force-role-conditional-persistence (already-current).
