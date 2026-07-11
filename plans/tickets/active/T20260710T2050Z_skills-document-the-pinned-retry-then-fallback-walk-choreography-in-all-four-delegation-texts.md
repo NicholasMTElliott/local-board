@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T20:50:02Z
-updated: 2026-07-11T20:07:43Z
+updated: 2026-07-11T20:11:04Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -80,6 +80,8 @@ retry choreography" is only half true. Actual state in the worktree:
   model-fallback-walk prose. The only `fallback` hit (line 81) is "inline
   fallback when `codexDispatch.known` is false", which is unrelated. The
   `Route Translation` section never mentions `codexDispatch.fallbackModels`.
+  Separately, its **line 46** carries an inaccuracy this ticket must fix (see
+  insertion 2b).
 
 Conclusion: the real gap is the two **parallel** skills. The two single-ticket
 skills already satisfy the acceptance criteria as written. See the scope note in
@@ -130,16 +132,16 @@ resolved profile lists a non-empty \`fallbackModels\`.` bullet to the
 line 37. Recommended for completeness but can be folded — the paragraph above
 already names the field.
 
-#### 2. `skills/codex/local-team/SKILL.md` (codex parallel; Codex parallel-orchestrator audience)
+#### 2a. `skills/codex/local-team/SKILL.md` — new Route-Translation walk paragraph (codex parallel; Codex parallel-orchestrator audience)
 
 Anchor: `## Route Translation`, immediately **after the first paragraph (current
 line 81)** that describes dispatching from the `codexDispatch` block, before the
 `Preserve the configured logical route...` paragraph (current line 83). Uses the
 codex field names (`codexDispatch.fallbackModels`, `codexDispatch.effort`,
-`codexDispatch.promptPath`) and cross-references the single-ticket Codex skill's
-authoritative subsection.
+`codexDispatch.promptPath`).
 
-Proposed text (3 sentences + 1 cross-reference):
+Proposed text (3 sentences — cross-reference sentence dropped to honor the
+1-3-sentence cap, per review finding 2):
 
 > When the resolved `codexDispatch` block carries a non-empty `fallbackModels`
 > array (the **sanitized** list, present on `begin-step` and on a `gate-check` /
@@ -151,14 +153,49 @@ Proposed text (3 sentences + 1 cross-reference):
 > with `--model <fallbackModel>` for the model that actually ran — strict routing
 > accepts a sanctioned fallback. Only if `codexDispatch.fallbackModels` is empty
 > or the pin plus every entry is exhausted, take the `approve-inline` /
-> `questions` path; never record `@codex-default` for an exhausted walk. See the
-> Codex `local-board` skill's `### Fallback Model Walk` for the full contract
-> (including the fallback-free `claude-subagent:` design-review limitation).
+> `questions` path; never record `@codex-default` for an exhausted walk.
 
-Both insertions are audience-correct: native field names + native
-`complete-step`/`*-complete` recording for `SKILL_TEAM.md`; sanitized
-`codexDispatch.*` fields + the "never `@codex-default`" guard for the codex
-parallel skill.
+#### 2b. `skills/codex/local-team/SKILL.md` — fix the inaccurate design-review clause on line 46 (review finding 1)
+
+Line 46's design-review sub-clause states **unconditionally** that a
+`claude-subagent:` design-review route returns no `codexDispatch` block and
+directs the orchestrator to fall back to `begin-step --action design-review`.
+`test/cli.test.js` lines 1884-1919 prove the opposite for the fallback-CONFIGURED
+case: a `claude-subagent:local-board-reviewer` design-review profile with
+`fallbackModels: ["gpt-5.5-fallback"]` returns a payload whose
+`out.codexDispatch.fallbackModels` and top-level `out.fallbackModels` are both
+populated and stamps an `action`/`design-review` ledger record. So the
+`begin-step` workaround applies only to the fallback-FREE case, exactly as the
+sibling single-ticket skill `skills/codex/local-board/SKILL.md` line 269 already
+qualifies it ("For a `claude-subagent:*` reviewer route with **no**
+`fallbackModels` configured ...").
+
+Exact replacement — within line 46, replace the clause:
+
+> for a `claude-subagent:` route, `design-review-check` alone returns no
+> `codexDispatch` block — run `begin-step <ticket-id> --action design-review
+> --harness codex --json` to obtain the sanitized dispatch `model` and
+> `evidenceExecutor`, `@codex-default` when no valid Codex id exists
+
+with:
+
+> for a `claude-subagent:` route with **no** `fallbackModels` configured,
+> `design-review-check` alone returns no `codexDispatch` block — run `begin-step
+> <ticket-id> --action design-review --harness codex --json` to obtain the
+> sanitized dispatch `model` and `evidenceExecutor`, `@codex-default` when no
+> valid Codex id exists (with `fallbackModels` configured, the
+> `design-review-check` payload already carries `fallbackModels` + a
+> `codexDispatch` block — walk it per Route Translation above)
+
+This mirrors line 269's fallback-free qualification and keeps the sentence a
+single clause (no new sentence added, so the 1-3-sentence guidance is unaffected;
+this is a correction, not a fresh insertion). It also makes 2a's fallback walk
+actually reachable for a fallback-configured Claude reviewer instead of being
+contradicted two paragraphs above.
+
+Both 2a and 2b are audience-correct: sanitized `codexDispatch.*` fields, the
+"never `@codex-default`" guard, and the fallback-free-only qualification of the
+`begin-step` workaround.
 
 #### 3-4. `SKILL.md` and `skills/codex/local-board/SKILL.md`
 
@@ -171,7 +208,8 @@ not needed to pass the "all four texts describe ..." acceptance test.
 ### Affected files
 
 - `SKILL_TEAM.md` — one paragraph inserted (optional second bullet).
-- `skills/codex/local-team/SKILL.md` — one paragraph inserted.
+- `skills/codex/local-team/SKILL.md` — one paragraph inserted (2a) + one clause
+  corrected on line 46 (2b).
 - `test/skill-usage-sync.test.js` — optional new content assertion (see Test
   strategy).
 - No production `src/` change. No `plans/prompts/` or `agents/` change.
@@ -192,28 +230,57 @@ mandatory if we edited `plans/prompts/**` (per AGENTS.md), which we do not.
 
 Existing suites — all remain green without modification:
 
-- `test/skill-usage-sync.test.js` — only extracts and compares the ` ```sh `
-  block under the `## CLI Commands` heading of **two** files (`SKILL.md` and
-  `skills/codex/local-board/SKILL.md`) for byte-identity and command-name parity.
-  It does NOT read `SKILL_TEAM.md` or the codex parallel skill, and it does NOT
-  read Delegation/Route-Translation prose. Our insertions touch none of those
-  fenced blocks, so this suite is unaffected. (Brief note: the byte-identity check
-  spans two copies, not four.)
-- `test/cli.test.js` — the `fallbackModels` assertions (T20260710T1532Z, D5/D6/D7)
-  assert CLI JSON behavior (`configuredFallbackModels`,
-  `codexDispatch.fallbackModels`, stamp shape), not skill markdown. No change.
+- `test/skill-usage-sync.test.js` — this suite operates only on the two
+  single-ticket board skills (`SKILL.md`, `skills/codex/local-board/SKILL.md`),
+  via `SKILL_FILES`, and does five things: (1) extracts the ` ```sh ` block under
+  each file's `## CLI Commands` heading and asserts the two blocks list the same
+  command-name set; (2) asserts the two blocks are byte-identical (EOL-normalized);
+  (3) asserts every command name in each block is a subset of the authoritative
+  usage surface returned by `usageCommandNames()` from `src/cli.js`; (4) asserts
+  both blocks contain the required `design-review-check` and
+  `design-review-complete` commands; (5) guards against a silently-broken parser
+  by asserting `usageCommandNames()` and each extracted block are non-empty. It
+  does NOT read `SKILL_TEAM.md` or the codex **parallel** skill, and it reads only
+  the `## CLI Commands` fence, never Delegation/Route-Translation prose. Our
+  edits touch none of those fenced blocks and add no CLI command, so all five
+  assertions stay green.
+- `test/cli.test.js` — the `fallbackModels` assertions (T20260710T1532Z, D5/D6/D7,
+  including lines 1884-1919) assert CLI JSON behavior
+  (`configuredFallbackModels`, `codexDispatch.fallbackModels`, stamp shape), not
+  skill markdown. Our prose edits do not change CLI behavior. No change; these are
+  the assertions cited as ground truth for the line-46 correction (2b).
 - `test/resources-sync.test.js` — mirrors prompts/templates only. No change.
 
-Optional new assertion (the brief calls it "desirable"). Add a test in
+Optional new assertion (the brief calls it "desirable"). If added, put it in
 `test/skill-usage-sync.test.js` (it already imports `readFile` and knows the
-skill paths) that, for **all four** skill files, asserts the dispatch/Delegation
-prose documents the retry-then-walk contract — e.g. each file matches
-`/retry the pin(ned model)? once/i` AND mentions an ordered walk AND mentions
-the `approve-inline`/`questions` exhaustion path. This pins the choreography
-sentence against future drift across all four audiences (today only two files
-carry it; after this ticket all four do). Keep the matcher tolerant of the two
-prose dialects (native vs `codexDispatch.*`). Marked optional, not blocking
-acceptance.
+skill paths) and assert **every** choreography element separately, with
+audience-partitioned stable markers so the two prose dialects both pass. Suggested
+markers, applied per file against the Delegation / Execution-profiles /
+Route-Translation prose (case-insensitive), split into a native set and a codex
+set:
+
+- pinned retry — `/retry the pin(ned model)? once/`;
+- ordered walk — `/\bin order\b/` co-occurring with `/fallback/`;
+- actual-model evidence — `/--model <fallbackModel>/` (literal; identical across
+  all four dialects);
+- effort carry-over — native files: `/carry(ing)? the configured effort over
+  unchanged/`; codex files: `/carry(ing)?[^.]*codexDispatch\.effort[^.]*unchanged/`;
+- consultation payloads — `/gate-check/` AND `/specialty-run/` AND
+  `/design-review-check/` all present in the walk paragraph;
+- exhaustion path — `/approve-inline/` AND `/questions/` in the walk paragraph;
+- never-codex-default — **codex files only** (`skills/codex/local-board/SKILL.md`,
+  `skills/codex/local-team/SKILL.md`): `/never\b[^.]*@?codex-default/`; the two
+  native files never mention `codex-default`, so this element is deliberately NOT
+  asserted against them.
+
+Run the native-file element set against `SKILL.md` and `SKILL_TEAM.md`, and the
+native set PLUS never-codex-default against the two codex skills, so no marker is
+applied to an audience that legitimately omits it. This is optional and does not
+block acceptance; if the implementer prefers not to maintain seven regexes across
+four files, drop it — rationale: the choreography is already indirectly protected
+by the CLI-behavior assertions in `cli.test.js`, and the prose carries no
+machine-consumed contract, so a brittle multi-regex guard may cost more than it
+saves.
 
 Acceptance verification commands (run at the end): `npm run check` and
 `node --test` (full suite, per AGENTS.md, since agent/skill artifacts are
@@ -225,9 +292,13 @@ content-asserted). No `sync-resources` needed.
   satisfy acceptance. Editing them redundantly is the main way to introduce
   needless drift. Mitigation: leave the two single-ticket skills unchanged;
   document why (this design).
+- **Contradiction risk (addressed by 2b):** without 2b, the new 2a walk paragraph
+  would directly contradict line 46's unconditional "no `codexDispatch` for a
+  claude-subagent design review" claim. 2b resolves it and aligns the file with
+  `cli.test.js` 1884-1919 and sibling line 269.
 - **Prose-dialect risk (low):** an over-strict new content assertion could fail
-  on the legitimate native-vs-codex wording difference. Mitigation: match on
-  audience-agnostic phrases (retry once / ordered walk / approve-inline).
+  on the legitimate native-vs-codex wording difference. Mitigation: audience-
+  partitioned markers as specified above.
 - **Fence-integrity risk (very low):** insertions are plain paragraphs outside any
   ` ```sh ` block; `skill-usage-sync` byte-identity is not at risk.
 
@@ -237,7 +308,8 @@ content-asserted). No `sync-resources` needed.
   `SKILL.md` and `skills/codex/local-board/SKILL.md` need no edit because they
   already describe the full choreography (line 373; lines 87-93). If the intent
   was instead to reword/relocate that existing prose in the single-ticket skills,
-  say so; otherwise implementation touches only the two parallel skills.
+  say so; otherwise implementation touches only the two parallel skills (plus the
+  line-46 correction in the codex parallel skill).
 
 ## Implementation Notes
 
