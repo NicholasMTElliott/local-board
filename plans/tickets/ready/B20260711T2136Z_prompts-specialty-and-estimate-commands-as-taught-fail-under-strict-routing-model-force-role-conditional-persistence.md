@@ -13,8 +13,8 @@ estimateBasis: B20260710T2051Z
 workStartedAt: 2026-07-11T23:23:49Z
 workCompletedAt: null
 created: 2026-07-11T21:36:09Z
-updated: 2026-07-11T23:36:48Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+updated: 2026-07-11T23:38:59Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # prompts: specialty and estimate commands as taught fail under strict routing (--model, --force, role-conditional persistence)
@@ -211,6 +211,18 @@ verdict: pass
 
 ## Documentation Updates
 
+### Files Checked
+
+- `docs/Workflow.md`: already documents model-qualified completion evidence for specialty steps, including `--model` on `complete-step`, and already documents `estimate --force` for overwrites.
+- `docs/PerStepOrchestration.md`: no stale model-less specialty Recording command found. The remaining `--executor <route>@<model>` example is the still-accepted combined evidence form, not the old model-less form.
+- `memory-bank/systemPatterns.md`: already documents `--executor <route> --model <model>` for model-qualified evidence, applies the same rule to specialties resolved by `specialty-run`, and notes that `estimate` requires `--force` to overwrite.
+
+### Files Edited
+
+- `plans/tickets/ready/B20260711T2136Z_prompts-specialty-and-estimate-commands-as-taught-fail-under-strict-routing-model-force-role-conditional-persistence.md`: filled this Documentation Updates section.
+
+No narrative documentation or Memory Bank content changes were needed.
+
 ## Questions
 
 ## Run Log
@@ -242,3 +254,5 @@ verdict: pass
 - 2026-07-11T23:36:47Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. 587/588 pass 0 fail 1 pre-existing skip; all five Recording lines + estimate.md edits cited; live --force probe on scratch board matches taught flow exactly; pins verbatim; designer-def consistency confirmed; mirrors identical; scope exactly 14 files.
 
 - 2026-07-11T23:36:48Z: Ensured git branch local-board/B20260711T2136Z-prompts-specialty-and-estimate-commands-as-taught-fail-under-strict-routing-model-force-role-conditional-persistence (already-current).
+
+- 2026-07-11T23:38:59Z: Completed document via codex-task:workspace-write: Doc audit: Workflow.md, PerStepOrchestration.md, systemPatterns.md already model-qualified and --force-aware; no narrative changes; Documentation Updates section records the audit.
