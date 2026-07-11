@@ -13,7 +13,7 @@ estimateBasis: T20260710T1532Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
-updated: 2026-07-11T20:51:23Z
+updated: 2026-07-11T20:57:05Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -193,3 +193,5 @@ None blocking. (If the reviewer wants `clearActiveStepStrict` exported from `act
 - 2026-07-11T20:47:33Z: Design review r1 (codex-task:read-only@gpt-5.6-sol, xhigh): FAIL. 1) [High] Lock-rejection rationale evaluated only against today's moveTicket; for the future correction lane (strict clear under ticket lock) beginStep must share the ticket lock across resolution+stamping or it can stamp the old action around a lateral correction; strict clear releases the ledger lock on return so it cannot provide atomic clear+publication - either adopt ticket-lock sharing (ticket-before-ledger ordering) or explicitly record that the correction lane stays blocked pending a composable transaction primitive; the claim that strict clear alone enables the real fix is incorrect. 2) [Med] Overstated fail-open: checkDispatch returns code 1 on mismatch (only the hook fails open on ambiguity/code 2); specialty-run stampActiveStepNoClobber reports conflicts, does not overwrite. 3) [Low] Strengthen corrupt-ledger regression (clearActiveStepIf returns false + raw bytes unchanged), add predicate-throws case (no write, lock released), qualify missing-file success as post-lock-acquisition. Verified clean: readLedgerStrict exists w/ stated semantics incl. Windows ENOENT, helper factoring sound, caller enumeration complete, no reentrancy cycle, non-goal upheld. Looping design rework.
 
 - 2026-07-11T20:51:23Z: Completed design via claude-subagent:local-board-designer@opus: Rework r2: lock rejection kept but re-argued against correction-lane concurrency (strict clear is fail-closed but not composable; lane REMAINS BLOCKED pending ticket-lock sharing or clear-under-held-lock primitive; overstatements retracted); accurate-mechanics note (check-dispatch denies code 1 on mismatch, hook-only fail-open on code 2; no-clobber reports conflicts); tests strengthened (corrupt returns false + bytes unchanged, predicate-throws, post-lock qualification); systemPatterns note synced.
+
+- 2026-07-11T20:57:05Z: Design review r2 (codex-task:read-only@gpt-5.6-sol, xhigh): PASS. Rejection properly scoped with correction-lane race, non-composable strict clear, two future serialization options, and blocked residual explicit; mechanics accurate; strengthened tests confirmed; unchanged sections coherent.
