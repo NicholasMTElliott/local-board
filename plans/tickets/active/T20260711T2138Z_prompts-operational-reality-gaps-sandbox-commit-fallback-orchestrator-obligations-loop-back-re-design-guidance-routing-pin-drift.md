@@ -13,7 +13,7 @@ estimateBasis: T20260710T2050Z
 workStartedAt: 2026-07-11T23:12:17Z
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:12:17Z
+updated: 2026-07-11T23:15:21Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -120,6 +120,17 @@ Sibling T20260711T2136Z will also edit `design.md`, adding a heading-line warnin
 None. Requirement text specifies exact insertions; anchors verified against current file contents.
 
 ## Implementation Notes
+
+Applied all four groups exactly as designed, all four unique anchors matched on the first read (no drift from the design's line references).
+
+- Group 1: appended the sandbox-commit-fallback sentence to the Commit-scope block in `plans/prompts/steps/document.md` ("in your returned summary" wording), `agents/codex/local-board-documenter.md`, and `agents/codex/local-board-implementer.md` ("in your Output" wording for the latter two).
+- Group 2: added the two run-learned obligation bullets to `plans/prompts/roles/orchestrator.md` Responsibilities, before "Do not hide state transitions in prose."
+- Group 3: appended the loop-back re-design bullet to the Include list in `plans/prompts/steps/design.md`, referencing `Review Findings`, `Test Evidence`, and Run Log design-review comments (not a "Design Review" section).
+- Group 4: reworded `plans/prompts/steps/design_review.md` L3-4 to reference the design-review agent profile in `plans/local-board.config.jsonc` instead of hardcoding `gpt-5.6-sol @ xhigh`.
+
+Ran `npm run sync-resources` to mirror the four `plans/prompts/**` edits into `resources/prompts/**` (the two `agents/codex/*` files are not mirrored, per design). `npm run check` passed. Full `node --test`: 587 tests, 586 pass, 1 skipped (pre-existing racing-CLI smoke skip), 0 fail. Explicitly re-ran `test/cli.test.js` and confirmed "design-review prompt describes the real persistence flow, not a phantom section" (~L3365) still passes after the Group 4 reword.
+
+No deviations from the approved design.
 
 ## Review Findings
 
