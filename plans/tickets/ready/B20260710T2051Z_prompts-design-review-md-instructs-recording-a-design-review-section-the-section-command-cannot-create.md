@@ -13,7 +13,7 @@ estimateBasis: B20260710T2050Z
 workStartedAt: 2026-07-11T20:44:50Z
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
-updated: 2026-07-11T20:56:25Z
+updated: 2026-07-11T20:58:52Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -287,6 +287,30 @@ Verdict: PASS, no findings.
 - resources/prompts/steps/design_review.md:83 byte-identical to plans copy. test/cli.test.js:3365 assertions focused (recorder presence, phantom-phrase absence, spawn-denial guidance) per the estimate-prompt idiom, no full-prose pinning. Commit 8e2b08c contains exactly the three expected files.
 
 ## Test Evidence
+
+verdict: pass
+
+### Commands run
+
+- npm run check clean. node --test full suite: 577 tests, 576 pass, 0 fail, 1 pre-existing skip (smoke (slow)).
+- Targeted rerun (design-review prompt / resources mirror / estimate-prompt patterns): 19/19 pass.
+- diff plans vs resources design_review.md: identical.
+- grep "Design Review" in the prompt: only the step title (L1) and the explicit negation "there is no Design Review section and none is required" (L92) - no recording instruction remains.
+- git show 8e2b08c -- test/cli.test.js: one new test block (L3365-3385), estimate-prompt test (L3347-3363) byte-unchanged. Worktree clean before/after.
+
+### Acceptance criteria coverage
+
+- Prompt/CLI agreement: prompt L80-94 names design-review-complete (Run Log + token) as the recorder; STANDARD_SECTIONS (src/tickets.js:594-605) confirmed still lacks Design Review; section remains only in the reviewer's forbidden-mutations list (L83). Dead end closed.
+- Verdict-first contract preserved: L55-60 unchanged; spawn-denial fallback (L84-88) keeps failures inside PASS/CONCERNS/FAIL as findings-context, no fourth token.
+- npm run check and node --test pass (above).
+
+### Test-quality check
+
+New assertion pins contract-level substrings only (positive design-review-complete, negative exact removed phrase, whitespace-normalized spawn-denial check). No full-sentence pinning; existing assertions untouched.
+
+### Gaps / caveats
+
+None. No spawn fallback needed. Fresh-scaffold walk not separately re-run (prompt-text-only change; static grep + STANDARD_SECTIONS check sufficient).
 
 ## Documentation Updates
 
