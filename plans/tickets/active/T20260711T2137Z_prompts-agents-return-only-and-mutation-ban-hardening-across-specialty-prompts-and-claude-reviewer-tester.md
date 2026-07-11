@@ -13,7 +13,7 @@ estimateBasis: T20260711T2136Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:46:03Z
+updated: 2026-07-11T23:48:23Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", security_threat_model:inline]
 routingApprovals: []
 ---
@@ -51,42 +51,60 @@ From the prompt-library review of 2026-07-11 (items 2, 9, 10, 11): return-only a
 Prompt/agent-text hardening only. Four independent edits across two agent
 definitions and three prompt files (five specialty prompts + decompose.md), plus
 one resources mirror sync. No production code, config, or permission-rule changes.
-All edits are line-disjoint from the in-flight sibling B20260711T2136Z, which
-touches only the specialty prompts' Recording lines and estimate.md.
+This worktree has been rebased onto mainline, so B20260711T2136Z's Recording-line
+changes (`--model` + omit parenthetical) are already present in the five specialty
+prompts; item 2 inserts into the Output Contract section above those lines and
+leaves them untouched.
 
 ### Item 1 - Claude reviewer/tester mutation ban (the exposure)
 
 Both claude return-only agents currently ban only the `section` CLI, while the
 codex variants already ban all local-board mutations generically ("Do not run
 local-board mutation commands" + a section/complete-step/move example). Broaden
-the claude Rules line to match, enumerating the full mutating set and explicitly
-allowing read-only queries.
+the claude Rules line to a GENERIC prohibition (design-review r1 finding 1, and
+the recorded security_threat_model finding): prohibit any local-board command
+that mutates ticket, ledger, worktree, repository, configuration, or installation
+state, present the command list as non-exhaustive examples ("such as ..."), and
+add an explicit read-only allow-list. The prohibition is scoped to the PROJECT
+board and this ticket's worktree so the tester can still exercise mutating flows
+against isolated temporary probe fixtures (r1 finding 2; test.md L14-26 and the
+suite itself run such probes).
 
 `agents/claude/local-board-reviewer.md`, Rules bullet (currently L23). Replace the
-substring:
+substring (each command name styled inline-code, as the file already styles
+`section`):
 
 - from: `Do not edit files, do not create files, and do not run the local-board section CLI.` (the word `section` is inline-code in the file)
-- to: `Do not edit files, do not create files, and do not run any mutating local-board command (section, comment, complete-step, move, estimate, gate-complete); read-only queries (query-ticket, list) are fine.` (each command name inline-code, as the file already styles `section`)
+- to: `Do not edit files, do not create files, and do not run any local-board command that mutates ticket, ledger, worktree, repository, configuration, or installation state of the project board or this ticket's worktree - such as section, comment, complete-step, move, estimate, gate-complete, set, create, start-work, approve-inline, the link/unlink and block/unblock commands, worktree-add/worktree-remove, design-review-complete, init, or install (the list is illustrative, not exhaustive). Read-only queries are fine: query-ticket, query-next, list, state-report, schema, validate, where.`
 
 `agents/claude/local-board-tester.md`, Rules bullet (currently L22). Replace the
-substring:
+substring. The tester wording carries the same generic prohibition and allow-list
+but adds the probe carve-out - mutations are permitted only against a verified
+isolated temporary probe board/fixture, never against the project board, this
+worktree, or user-home/install state:
 
 - from: `Do not edit or create files, and do not run the local-board section CLI.`
-- to: `Do not edit or create files, and do not run any mutating local-board command (section, comment, complete-step, move, estimate, gate-complete); read-only queries (query-ticket, list) are fine.`
+- to: `Do not edit or create files, and do not run any local-board command that mutates the project board's or this ticket worktree's ticket, ledger, worktree, repository, configuration, or installation state - such as section, comment, complete-step, move, estimate, gate-complete, set, create, start-work, approve-inline, link/unlink, block/unblock, worktree-add/worktree-remove, design-review-complete, init, or install (illustrative, not exhaustive). Running these mutating flows against a verified isolated temporary probe board/fixture (as the suite itself does) is permitted; never target the project board, this worktree, or user-home/install state. Read-only queries - query-ticket, query-next, list, state-report, schema, validate, where - are always fine.`
+
+Apply the same project-board/worktree scoping to the reviewer wording for
+consistency (r1 finding 2): the reviewer says "of the project board or this
+ticket's worktree" rather than an absolute, even though reviewers should not need
+probes.
 
 In both files, preserve the rest of the bullet verbatim: the leading "You have
 only Read, Glob, Grep, and Bash - no Write or Edit tool" clause, the trailing
 Bash-write warning ("Do not write file content through Bash..."), and the
 tester's "If a code fix is needed, report it..." tail. Keep the existing
-inline-code backticks on each command name to match the file's current style for
+inline-code backticks on the command names to match the file's current style for
 `section`. Do NOT touch the Output section's headings/fence warning sentence that
 T20260711T2136Z added (reviewer L39, tester L37) - that is a different section.
 
-After this edit both claude and codex reviewer/tester ban the full mutation set,
-satisfying the "equivalent in coverage" acceptance. The codex variants already
-cover all mutations via their generic "mutation commands" wording, so no codex
-edit is required; the claude enumeration is a superset of the codex example list
-and does not contradict it.
+After this edit both claude and codex reviewer/tester ban all state-mutating
+commands, satisfying the "equivalent in coverage" acceptance. The codex variants
+already cover all mutations via their generic "mutation commands" wording, so no
+codex edit is required; the claude generic prohibition (examples non-exhaustive,
+scoped to board/worktree, with a read-only allow-list) is at least as strong and
+does not contradict it.
 
 ### Item 2 - Return-only clause in the five specialty prompts
 
@@ -173,26 +191,35 @@ fenced-block removal; the JSON stays as inline code.
   `test/` found only unrelated "mutating" usages and check-dispatch
   `--agent local-board-reviewer` value references, not file-text assertions).
   Item 1 is safe.
-- No test content-asserts the specialty prompts' Output Contract or Recording
-  prose in this worktree; `test/cli.test.js` references these files only by PATH
-  (e.g. `plans/prompts/optional-steps/impl/security_audit.md`) via specialty-run
-  and catalog fixtures. Item 2's added paragraph does not change any path.
-- The only prompt content assertions in `test/cli.test.js` pin the estimate
-  prompt substrings `local-board calibration suggest` and `local-board estimate`;
-  none of the four items touch `estimate.md`, so they are unaffected.
+- Post-rebase correction (r1 finding 3): `test/cli.test.js:3365-3386` ("specialty
+  optional-step prompts teach the strict-routing Recording command") NOW
+  content-asserts all five specialty Recording sections, requiring each file to
+  include `--executor <executor> --model <model> --evidence` and ``omit `--model` ``.
+  These are B2136Z's Recording lines, now present after the rebase. Item 2's
+  paragraph is inserted in the Output Contract section (before the Recording
+  heading) and contains none of those pinned substrings, so it does not collide -
+  but the adjacent Recording prose IS pinned, so the item-2 insertion must not
+  disturb the Recording line or its parenthetical. Beyond this pin, `cli.test.js`
+  references the specialty files by PATH (e.g.
+  `plans/prompts/optional-steps/impl/security_audit.md`) via specialty-run and
+  catalog fixtures; item 2 changes no path.
+- The only other prompt content assertions in `test/cli.test.js` pin the estimate
+  prompt substrings `local-board calibration suggest` and `local-board estimate`
+  (L3361-3362); none of the four items touch `estimate.md`, so they are
+  unaffected.
 - `test/resources-sync.test.js` is the binding check for items 2 and 3 - it goes
   green iff `npm run sync-resources` is run after the edits.
 
-### B20260711T2136Z disjointness (explicit)
+### B20260711T2136Z relationship (post-rebase)
 
-This worktree branched after T2136Z and T2138Z merged but before B2136Z. B2136Z
-edits (a) the five specialty prompts' Recording line (adds `--model` and an
-omit-when-null parenthetical) and (b) `estimate.md`. This ticket's item-2 edits
-add a paragraph to the same five files' Output Contract sections - a different,
-non-adjacent region separated by the Recording heading - and touches neither the
-Recording line nor `estimate.md`. Both siblings therefore modify disjoint line
-ranges; the post-merge rebase auto-merges without conflict. Sequencing is not
-required in either direction.
+This worktree has already been rebased onto mainline, so B2136Z is merged and its
+changes are live here: the five specialty prompts' Recording line now carries
+`--executor <executor> --model <model> --evidence` plus the omit-when-null
+parenthetical, and `estimate.md` carries the --force / role-conditional edits.
+Item 2 adds a paragraph to each file's Output Contract section - a different,
+non-adjacent region separated by the Recording heading - and must leave the
+Recording line and its parenthetical exactly as B2136Z left them (they are pinned
+by `cli.test.js:3365-3386`). No further rebase coordination is needed.
 
 ### Risks and edge cases
 
