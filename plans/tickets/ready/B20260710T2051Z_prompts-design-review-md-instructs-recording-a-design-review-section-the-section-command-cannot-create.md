@@ -1,7 +1,7 @@
 ---
 id: B20260710T2051Z
 type: bug
-status: ready_for_test
+status: ready_for_docs
 priority: P3
 parent: null
 children: []
@@ -13,7 +13,7 @@ estimateBasis: B20260710T2050Z
 workStartedAt: 2026-07-11T20:44:50Z
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
-updated: 2026-07-11T20:58:53Z
+updated: 2026-07-11T20:58:59Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
