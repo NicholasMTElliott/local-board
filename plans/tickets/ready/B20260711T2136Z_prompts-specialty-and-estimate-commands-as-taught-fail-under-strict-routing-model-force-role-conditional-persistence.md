@@ -1,7 +1,7 @@
 ---
 id: B20260711T2136Z
 type: bug
-status: designing
+status: ready_for_implementation
 priority: P3
 parent: null
 children: []
