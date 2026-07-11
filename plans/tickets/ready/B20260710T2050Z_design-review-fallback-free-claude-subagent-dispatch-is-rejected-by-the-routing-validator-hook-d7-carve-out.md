@@ -13,8 +13,8 @@ estimateBasis: B20260710T1533Z
 workStartedAt: 2026-07-11T20:04:07Z
 workCompletedAt: null
 created: 2026-07-10T20:50:02Z
-updated: 2026-07-11T20:24:02Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+updated: 2026-07-11T20:28:47Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # design-review: fallback-free claude-subagent dispatch is rejected by the routing-validator hook (D7 carve-out)
@@ -280,6 +280,16 @@ git diff --name-only mainline...HEAD: src/cli.js (only production source), test/
 
 ## Documentation Updates
 
+### Edited
+
+- docs/Workflow.md — clarified that design-review-check stamps active-step verification for claude-subagent routes while codex-task design-review routes still stamp nothing.
+- docs/CodexSupport.md — removed the stale D7 fallback-free limitation and clarified fallbackModels remains conditional on payloads and stamps.
+- memory-bank/systemPatterns.md — updated terse dispatch-verification facts to include claude-subagent design-review-check stamps.
+
+### Checked
+
+- docs/PerStepOrchestration.md — checked for D7/design-review dispatch-verification statements; no stale fallback-free hook-verification wording found.
+
 ## Questions
 
 ## Run Log
@@ -307,3 +317,5 @@ git diff --name-only mainline...HEAD: src/cli.js (only production source), test/
 - 2026-07-11T20:23:50Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. Full suite 575/576 pass 0 fail 1 pre-existing skip; targeted cli+active-steps 118/118; acceptance criteria traced to src/cli.js:1383-1393, active-steps.js:225-313, tests cli.test.js:1774-2251 + active-steps.test.js:574-635; src/cli.js only production change; no quality concerns.
 
 - 2026-07-11T20:24:02Z: Ensured git branch local-board/B20260710T2050Z-design-review-fallback-free-claude-subagent-dispatch-is-rejected-by-the-routing-validator-hook-d7-carve-out (already-current).
+
+- 2026-07-11T20:28:47Z: Completed document via codex-task:workspace-write: docs/Workflow.md + docs/CodexSupport.md + memory-bank/systemPatterns.md updated for unconditional claude-subagent design-review stamp (D6 field conditionality unchanged, codex routes stamp nothing); PerStepOrchestration.md checked, no stale wording; Documentation Updates section written. Orchestrator committed a904a75 (sandbox denies git).
