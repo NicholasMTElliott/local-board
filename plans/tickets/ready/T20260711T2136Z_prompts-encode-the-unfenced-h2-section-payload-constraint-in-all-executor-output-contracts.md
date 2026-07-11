@@ -14,7 +14,7 @@ workStartedAt: 2026-07-11T23:18:33Z
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
 updated: 2026-07-11T23:29:59Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet"]
 routingApprovals: []
 ---
 # prompts: encode the unfenced-H2 section-payload constraint in all executor output contracts
@@ -323,3 +323,5 @@ None. No isolation fallback needed.
 - 2026-07-11T23:26:22Z: Completed review via codex-task:read-only@gpt-5.6-terra: r1 PASS no findings: canonical warning verbatim in all six blocks, ban lines untouched, groups 2-3 match design, mirrors byte-identical, diff scope exact.
 
 - 2026-07-11T23:26:23Z: Ensured git branch local-board/T20260711T2136Z-prompts-encode-the-unfenced-h2-section-payload-constraint-in-all-executor-output-contracts (already-current).
+
+- 2026-07-11T23:29:59Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. 586/587 pass 0 fail 1 pre-existing skip; all 12 sentences cited by file:line; live guard probe on throwaway board (H2 rejected exit 2 with exact message, H3 accepted); sibling zones untouched; mirrors identical; scope exactly 17 paths.
