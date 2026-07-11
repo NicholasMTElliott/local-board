@@ -14,7 +14,7 @@ workStartedAt: null
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
 updated: 2026-07-11T23:18:32Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
 # prompts: encode the unfenced-H2 section-payload constraint in all executor output contracts
@@ -250,3 +250,5 @@ adjust punctuation to match each file's surrounding voice without changing meani
 - 2026-07-11T23:15:49Z: Design review r1 (codex-task:read-only@gpt-5.6-sol, xhigh): CONCERNS. 1) [Med] file counts wrong: Requirement names 12 targets (4 prompts + 8 agent defs); design says nine/five in places though the group lists cover all 12 - correct the counts. 2) [Med] warning sentence overstates the guard: /^## (.+?)\s*$/ rejects only column-zero H2 lines with content after the delimiter (delimiter-only and indented lines pass) - either match the guard precisely or frame the broader wording as an authoring rule, not runtime behavior. 3) [Low] group-3 self-compliance rationale says avoids the token entirely but the clause contains a mid-line two-hash token (persistable since regex is line-anchored) - fix the rationale wording. 4) [Low] assertion claim incomplete: cli.test.js:3365 also pins design_review.md content (conclusion unchanged - no target-prose pins). Anchors and sibling disjointness verified accurate. Designer patching; proceedable after patch without a new round.
 
 - 2026-07-11T23:18:32Z: Completed design via claude-subagent:local-board-designer@opus: Rework: counts corrected to 12 targets (4 prompts + 8 agents) everywhere incl. test-strategy mirror check; guard precision added (column-zero two-hash-space-content only; canonical sentence explicitly framed as stricter authoring rule); group-3 rationale fixed (line-anchored regex, mid-line token fine); assertion inventory corrected (estimate + design_review pins, none on targets).
+
+- 2026-07-11T23:18:32Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: r1 CONCERNS (2 Med counts/guard-precision + 2 Low) all patched by designer; anchors and sibling disjointness verified; proceed
