@@ -13,7 +13,7 @@ estimateBasis: T20260710T1532Z
 workStartedAt: 2026-07-11T20:57:06Z
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
-updated: 2026-07-11T21:04:02Z
+updated: 2026-07-11T21:06:53Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -204,6 +204,32 @@ Verdict: PASS, no findings.
 - Memory Bank note accurately records the two read/clear modes and the option-(b) lock decision with the blocked-correction-lane residual.
 
 ## Test Evidence
+
+verdict: pass
+
+### Commands run
+
+- npm run check: all node --check pass. node --test full suite: 586 tests, 585 pass, 0 fail, 1 pre-existing skip (smoke (slow)). Targeted node --test test/active-steps.test.js: 55/55 pass. No spawn denial; isolation fallback unused.
+- git log/show on d02c2ab (scope exactly the 3 declared files; test diff 146 insertions 0 deletions - purely additive); worktree clean.
+
+### Nine new design cases (all pass)
+
+healthy match clears (others intact); healthy present-entry predicate mismatch no-op; missing entry no-op bytes unchanged; missing FILE (ENOENT) no-op creates no file; corrupt JSON throws bytes untouched; non-object top-level throws bytes untouched; legacy regression clearActiveStepIf self-heals on corrupt (no throw, returns false, bytes byte-identical); predicate-throw propagates with no write and lock released; concurrent stamp serialized via ledger lock (no lost update).
+
+### Acceptance probes
+
+- (a) Contract cited: clearActiveStepStrict src/active-steps.js:172-174 delegating to clearActiveStepWith(readLedgerStrict,...) :132-154; ENOENT no-op via readLedgerStrict :24-33; missing entry :139-140; corrupt/non-object throws :36-43 before any write (writeLedgerAtomic :148); lock released in withFileLock finally (src/lock.js:146-150), proven by follow-on acquisition in test 8.
+- (b) All five clearActiveStepIf call sites in src/tickets.js (1005, 1486, 1594, 1690, 1778) unchanged, self-healing; clearActiveStepStrict has zero src/ callers.
+- (c) Lock decision recorded: Technical Design L122-145 (acyclic ticket-before-ledger ordering today; REJECT sharing in this ticket; explicit residual - correction lane blocked pending ticket-lock sharing or a composable clear-under-held-lock primitive); matching systemPatterns.md paragraph added (two read modes, two clear modes, same decision/residual/ordering).
+- (d) Repo-wide grep: identifier only in its definition and the test file.
+
+### Test-quality checks
+
+- Corrupt cases read raw bytes before/after and assert byte-identical strings (test/active-steps.test.js:1793-1851). Predicate-throw case (1873-1895) proves no write plus lock release via a successful second call. Purely additive diff; nothing weakened.
+
+### Gaps / caveats
+
+- Non-ENOENT IO errors (EACCES) not simulated - matches the design's own stated limitation (not Windows-portable); rethrow path confirmed by inspection (src/active-steps.js:28-33). No environment blockers.
 
 ## Documentation Updates
 
