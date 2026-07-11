@@ -34,3 +34,5 @@ Return the `Review Findings` section body as Markdown. Its first line must be ex
 - open questions;
 - test gaps;
 - residual risk.
+
+Use `###` or deeper for any internal headings and fence any literal `## ` sample lines; a payload containing an unfenced `## ` line is rejected at persistence.

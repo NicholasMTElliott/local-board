@@ -32,3 +32,5 @@ Return the `Test Evidence` section body as Markdown. Its first line must be exac
 - pass/fail results;
 - acceptance criteria coverage;
 - gaps, flakes, or environment caveats.
+
+Use `###` or deeper for any internal headings and fence any literal `## ` sample lines; a payload containing an unfenced `## ` line is rejected at persistence.

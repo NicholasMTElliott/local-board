@@ -32,7 +32,7 @@ Return, per child, an ordered list of:
 - `title`;
 - `status` (the configured first status, e.g. `ready_for_design`);
 - `priority` (inherit parent unless justified);
-- `requirementBody`: complete Markdown body for the child's Requirement section, including explicit acceptance criteria, ready for the orchestrator to persist unchanged with `section --file`;
+- `requirementBody`: complete Markdown body for the child's Requirement section, including explicit acceptance criteria, ready for the orchestrator to persist unchanged with `section --file`; use `###` or deeper for internal headings (e.g. `### Acceptance Criteria`) and never include an unfenced `## ` line; the persistence guard rejects it;
 - `blockedBy` (references to sibling proposals, by ordinal, when sequencing matters).
 
 ## Output
