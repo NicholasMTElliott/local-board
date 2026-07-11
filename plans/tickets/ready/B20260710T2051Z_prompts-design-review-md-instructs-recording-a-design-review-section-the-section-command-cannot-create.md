@@ -13,8 +13,8 @@ estimateBasis: B20260710T2050Z
 workStartedAt: 2026-07-11T20:44:50Z
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
-updated: 2026-07-11T20:59:00Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+updated: 2026-07-11T21:01:40Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # prompts: design_review.md instructs recording a Design Review section the section command cannot create
@@ -314,6 +314,17 @@ None. No spawn fallback needed. Fresh-scaffold walk not separately re-run (promp
 
 ## Documentation Updates
 
+### Files edited
+
+- `plans/tickets/ready/B20260710T2051Z_prompts-design-review-md-instructs-recording-a-design-review-section-the-section-command-cannot-create.md` - recorded documentation audit evidence in this section only.
+
+### Checked and accurate
+
+- `docs/Workflow.md` - design review flow already describes `design-review-check` / `design-review-complete` evidence; no stale writable `Design Review` ticket section claim found.
+- `docs/PerStepOrchestration.md` - no design-review persistence sentence requiring correction found.
+- `docs/CodexSupport.md` - no design-review persistence sentence requiring correction found.
+- `memory-bank/systemPatterns.md` - already describes design-review evidence via `design-review-complete` / `completedSteps`; no stale writable `Design Review` ticket section claim found.
+
 ## Questions
 
 ## Run Log
@@ -343,3 +354,5 @@ None. No spawn fallback needed. Fresh-scaffold walk not separately re-run (promp
 - 2026-07-11T20:58:53Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. Full suite 576/577 pass 0 fail 1 pre-existing skip; targeted 19/19; mirror identical; no phantom-section instruction remains (only title + negation); verdict-first contract intact; STANDARD_SECTIONS unchanged as designed.
 
 - 2026-07-11T20:59:00Z: Ensured git branch local-board/B20260710T2051Z-prompts-design-review-md-instructs-recording-a-design-review-section-the-section-command-cannot-create (already-current).
+
+- 2026-07-11T21:01:40Z: Completed document via codex-task:workspace-write: Doc audit: Workflow.md, PerStepOrchestration.md, CodexSupport.md, systemPatterns.md all checked - no stale Design-Review-section claims (existing refs already use design-review-complete); no narrative doc changes needed; Documentation Updates section records the audit.
