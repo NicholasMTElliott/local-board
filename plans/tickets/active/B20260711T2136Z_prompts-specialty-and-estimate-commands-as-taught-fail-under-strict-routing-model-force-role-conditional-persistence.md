@@ -13,7 +13,7 @@ estimateBasis: B20260710T2051Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-11T21:36:09Z
-updated: 2026-07-11T23:18:57Z
+updated: 2026-07-11T23:21:19Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -54,7 +54,7 @@ Prompt-only fix. Three defect classes across six files under `plans/prompts` (al
 
 ### Defect class 1: specialty Recording lines omit `--model`
 
-All five optional-step specialty prompts carry an identical Recording sentence that omits `--model`, so strict routing rejects the exact command taught whenever the specialty profile pins a model (`security_threat_model` and `security_audit` pin `gpt-5.6-sol`). `SKILL.md` (Delegation section, lines 270/273) is the source of truth for how `complete-step` composes the evidence token: it passes `--model` and composes `<step-name>:<agent>@<model>` server-side, "omit when `model` is null". The taught form must match that.
+All five optional-step specialty prompts carry an identical Recording sentence that omits `--model`, so strict routing rejects the exact command taught whenever the specialty profile resolves a non-null model. Premise attribution: on THIS board the five specialty profiles resolve to inline with a null model (no pins in `plans/local-board.config.jsonc`), so the gap does not bite here today. The `gpt-5.6-sol/xhigh` pins for `security_threat_model` and `security_audit` live in the init scaffold defaults in `src/config.js` (the two `agent` blocks around lines 1161-1164 and 1179-1182, plus the design-review pin near line 1039), so ANY board initialized from that scaffold hits the failure. The generic routing analysis is unchanged: the taught command must carry `--model` whenever the resolved model is non-null. `SKILL.md` (Delegation section, lines 270/273) is the source of truth for how `complete-step` composes the evidence token: it passes `--model` and composes `<step-name>:<agent>@<model>` server-side, "omit when `model` is null". The taught form must match that.
 
 Affected files and current Recording line (line numbers):
 
@@ -88,15 +88,15 @@ So for `security_threat_model.md` the taught command becomes `local-board comple
 
 ### Defect class 3: `steps/estimate.md` has no role-conditional persistence branch
 
-Step 6 unconditionally tells the executor to run `local-board estimate`, which mutates front matter and therefore contradicts the return-only contract when design routes to a `codex-task:read-only` executor. Mirror the exact model `steps/decompose.md` already uses (its `## Persistence` section: a return-only branch that returns a proposal and mutates nothing, and an orchestrator/inline branch that runs the write commands). Add an analogous section to `estimate.md` after the split-threshold paragraph. Proposed new section (verbatim text to add; steps 2-5 stay as read-only analysis, only the step-6 write is deferred on return-only routes):
+Step 6 unconditionally tells the executor to run `local-board estimate`, which mutates front matter and therefore contradicts the return-only contract when design routes to a read-only executor. The branch must key on CAPABILITY (can this route write?), not on delegation, because the writable `local-board-designer` subagent is itself a delegated route: both `agents/claude/local-board-designer.md` (has `Write`/`Edit`; steps 48-49 instruct it to run `calibration suggest` + `estimate` itself) and `agents/codex/local-board-designer.md` (line 7/28: records the section "and any required estimate", runs `calibration suggest` plus `estimate`) are delegated yet writable and MUST record the estimate themselves. Classifying by delegation would sweep the designer into the return-only branch, leave the estimate unrecorded, and block design completion. Mirror the structure of `steps/decompose.md`'s `## Persistence` section (a return-only branch that mutates nothing and a writable branch that runs the commands), but split on write capability. Add an analogous section to `estimate.md` after the split-threshold paragraph. Proposed new section (verbatim text to add; steps 2-5 stay as read-only analysis, only the step-6 write is deferred on return-only routes):
 
 ```
 ## Persistence
 
-Persistence is role-conditional — identify which role you are before running the write command in step 6:
+Persistence is capability-conditional — decide whether your route can write before running the write command in step 6:
 
-- Delegated or return-only executor (any `codex-task:read-only` route): do not run `local-board estimate`. The read-only analysis (steps 1-5, including `local-board calibration suggest`, which mutates nothing) still applies; return the chosen point value, the basis id (or `bootstrap`), and a one-sentence rationale for the orchestrator to record. Do not mutate local-board state or write files.
-- Orchestrator or inline route: run `local-board estimate` yourself as described in step 6 (with `--force` when re-estimating).
+- Return-only route (any `codex-task:read-only` route, or any executor without a Write tool): do not run `local-board estimate`. The read-only analysis (steps 1-5, including `local-board calibration suggest`, which mutates nothing) still applies; return the chosen point value, the basis id (or `bootstrap`), and a one-sentence rationale for the orchestrator to record. Do not mutate local-board state or write files.
+- Writable route (the `local-board-designer` subagent — claude or codex, which is instructed to record its own estimate — the orchestrator, or an inline run): run `local-board estimate` yourself as described in step 6 (with `--force` when re-estimating).
 ```
 
 Note the deliberate re-use of the literal phrases `local-board calibration suggest` and `local-board estimate` in this section — additive, and it keeps both pinned substrings present even if step wording is later reworded.
@@ -179,3 +179,5 @@ None blocking.
 - 2026-07-11T23:10:34Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (prompt edits + content-assertion test)
 
 - 2026-07-11T23:18:57Z: Design review r1 (codex-task:read-only@gpt-5.6-sol, xhigh): FAIL. 1) [High] proposed estimate.md Persistence section misclassifies routes: 'delegated or return-only executor' would sweep in the WRITABLE claude-subagent:local-board-designer (which is explicitly instructed to run calibration suggest + estimate itself); following it the designer would return points instead of recording, blocking design completion. Classify by capability: return-only routes return points/basis/rationale; writable routes (designer subagent, orchestrator, inline) run the command. 2) [Med] strict-routing premise misattributed: THIS board's five specialty profiles resolve inline@null (no pins); the gpt-5.6-sol pins for security_threat_model/security_audit live in the src/config.js init scaffold - attribute the premise there. Verified correct: Recording command + null parenthetical, --force guidance, pin survival, assertion conventions, sync coverage, T2137Z paragraph-disjointness. Looping design rework.
+
+- 2026-07-11T23:21:19Z: Completed design via claude-subagent:local-board-designer@opus: Rework r2: Persistence section reclassified by capability (return-only codex-task:read-only returns points/basis/rationale; writable routes incl. designer subagent, orchestrator, inline run estimate themselves, matching both designer agent defs); routing premise reattributed to src/config.js init scaffold pins (~L1161-1182) with board-local inline/null noted; reviewer-approved items untouched.
