@@ -13,7 +13,7 @@ estimateBasis: B20260710T2051Z
 workStartedAt: 2026-07-11T23:23:49Z
 workCompletedAt: null
 created: 2026-07-11T21:36:09Z
-updated: 2026-07-11T23:29:18Z
+updated: 2026-07-11T23:31:27Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -175,6 +175,15 @@ Implemented the r2-approved design exactly:
 No deviations from the approved design.
 
 ## Review Findings
+
+### Review round 1 (codex-task:read-only@gpt-5.6-terra, high, static)
+
+Verdict: PASS, no findings.
+
+- All five Recording lines use the canonical executor/model/evidence order + omit-when-null wording, matching SKILL.md:270-273 server-side composition.
+- estimate.md:11 --force guidance accurate; :16-21 capability-based Persistence consistent with both designer definitions.
+- test/cli.test.js:3365-3386 pins token order + parenthetical across all five prompts; existing estimate and design-review assertions untouched.
+- SHA-256: all six mirrors byte-identical. Commit paths exactly the intended files; no sibling-owned content touched.
 
 ## Test Evidence
 
