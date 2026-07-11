@@ -1,7 +1,7 @@
 ---
 id: T20260711T2136Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P3
 parent: null
 children: []
@@ -10,7 +10,7 @@ blocks: []
 branch: local-board/T20260711T2136Z-prompts-encode-the-unfenced-h2-section-payload-constraint-in-all-executor-output-contracts
 estimate: 2
 estimateBasis: T20260710T2050Z
-workStartedAt: null
+workStartedAt: 2026-07-11T23:18:33Z
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
 updated: 2026-07-11T23:18:33Z
@@ -252,3 +252,5 @@ adjust punctuation to match each file's surrounding voice without changing meani
 - 2026-07-11T23:18:32Z: Completed design via claude-subagent:local-board-designer@opus: Rework: counts corrected to 12 targets (4 prompts + 8 agents) everywhere incl. test-strategy mirror check; guard precision added (column-zero two-hash-space-content only; canonical sentence explicitly framed as stricter authoring rule); group-3 rationale fixed (line-anchored regex, mid-line token fine); assertion inventory corrected (estimate + design_review pins, none on targets).
 
 - 2026-07-11T23:18:32Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: r1 CONCERNS (2 Med counts/guard-precision + 2 Low) all patched by designer; anchors and sibling disjointness verified; proceed
+
+- 2026-07-11T23:18:33Z: Ensured git branch local-board/T20260711T2136Z-prompts-encode-the-unfenced-h2-section-payload-constraint-in-all-executor-output-contracts (already-current).
