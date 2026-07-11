@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-11T20:43:51Z
+updated: 2026-07-11T20:46:22Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", security_audit:inline, "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -707,6 +707,40 @@ Verdict: PASS.
 - Fix commit 2f8a8a6 verified: --retries in VALUE_TAKING_FLAGS, hasInstallerFlag skips its value token; regression test exercises the pre-fix failure path (exit 2, retry validation error on stderr, no uninstall output); sibling "--retries 3 --uninstall" intentionally still installer mode; commit scope limited to the set addition + test.
 
 ## Test Evidence
+
+verdict: pass
+
+### Commands run (codex-task repo)
+
+- Branch confirmed T20260710T1534Z-retries, HEAD 2f8a8a6 with aa1a063/ea026b1/8aeec88 ancestors.
+- npm run check pass. npm test 34/34 pass, 0 fail, 0 skipped (~5.1s).
+
+### Descope compliance
+
+- grep FAKE_CODEX_BLOCK: no matches. Inventory: 14 pre-existing (L24-227) + design tests 1-19 (L258-566) + 1 r1-fix regression (L576) = 34. No tests 20-23.
+- Test 13 (L456): non-zero-exit sandbox-wrapper prep failure, FAKE_CODEX_FAIL_TIMES 1, --retries 1 -> status 0, attempts 2. Matches design spec.
+
+### Behavioral spot-probes
+
+- node codex-task.mjs --retries --uninstall -> exit 2, "--retries must be a non-negative integer", no installer output.
+- node codex-task.mjs --retries -1 --prompt x -> exit 2 same error. --help -> exit 0, --retries in synopsis + options.
+
+### Clean-exit no-retry and pre-attempt rmSync
+
+- codex-task.mjs:902 breaks on code===0 before any taskResult classification (completed/partial/failed/blocked uniformly non-retried; readResult only after the loop, L926-943).
+- codex-task.mjs:880-881: attempt++ then unconditional rmSync(lastMessagePath, {force:true}) at top of every iteration incl. attempt 1. Test 12 (L437-454) exercises the stale-sentinel case (doesNotMatch /STALE/).
+
+### SKILL.md docs
+
+- :41 synopsis; :82 wrapper-options bullet (transient classes, explicit non-retry list incl. every clean exit and blocked, backoff/env, serial-only); :117/:126/:148 attempts semantics; :185-189 Known limitation subsection (Windows sandbox blocked-runs, structured-event future pointer).
+
+### Test-quality notes
+
+- No weakened assertions in sampled tests (11/12/13/structural-equivalence L510); negative assertions present per design. Diff scope = the three expected files only.
+
+### Gaps / caveats
+
+- None blocking. No real codex exec run (fake shim + usage-error probes per guardrail). Git state untouched in both repos.
 
 ## Documentation Updates
 
