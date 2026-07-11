@@ -13,7 +13,7 @@ estimateBasis: B20260710T2050Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
-updated: 2026-07-11T20:31:52Z
+updated: 2026-07-11T20:35:21Z
 completedSteps: []
 routingApprovals: []
 ---
@@ -43,6 +43,184 @@ Observed 2026-07-10 during the parallel run. plans/prompts/steps/design_review.m
 ## Related Tickets
 
 ## Technical Design
+
+### Decision
+
+Adopt **option (a)**: correct the `design_review.md` prompt to describe the real
+persistence flow (verdict recorded by `design-review-complete`, which stamps the
+completion token and appends the verdict to the Run Log), and mirror the change into
+`resources/prompts`. Reject option (b) (adding a `Design Review` standard section).
+Fold in the adjacent spawn-denial warning flagged by the 2026-07-11 prompt-library
+review, since it lives in the same file and the same review-contract paragraph.
+
+### Why the current instruction is a dead end
+
+`plans/prompts/steps/design_review.md` (the "Return-only — you persist nothing"
+paragraph, lines 80-87) tells the executor the orchestrator "records the
+`Design Review` section and the completion evidence." Two facts make that
+impossible / misleading:
+
+- `STANDARD_SECTIONS` in `src/tickets.js:594-605` has no `Design Review` entry. The
+  scaffold ships exactly these ten headings and nothing else (`buildTicketBody`
+  template at `src/tickets.js:2549-2569`, mirrored in `plans/templates/ticket.md`
+  and `resources/templates/ticket.md`).
+- The `section` command is positional, not name-additive. `commandSection`
+  (`src/cli.js:933-955`) calls `setTicketSection` -> `replaceSection`
+  (`src/tickets.js:2943-2947`), which throws `section "Design Review" not found`
+  whenever the heading does not already exist in the body. There is no CLI path
+  that creates a new heading, so `section ... --section "Design Review"` can never
+  succeed on a scaffolded ticket.
+
+What actually persists the verdict today is `design-review-complete`
+(`recordDesignReview`, `src/tickets.js:1608-1694`): it adds the design-review token
+to `completedSteps` and appends a Run Log line
+`- <ts>: Recorded design review via <executor>: <evidence>` (lines 1662-1683). So
+the durable record is Run Log + `completedSteps` token, exactly what orchestrators
+have been doing (five rounds this run persisted cleanly this way). The prompt is
+the only thing out of step with the code.
+
+### Why not option (b)
+
+Adding `"Design Review"` to `STANDARD_SECTIONS` is a migration cliff, not a tidy
+enrichment:
+
+- `validateTicketShape` (`src/tickets.js:1992-1996`) iterates `STANDARD_SECTIONS`
+  and emits `missing ## <name> section` for any ticket lacking the heading. That
+  loop runs for **every** status. Unlike the duplicate-heading pass just below it
+  (`src/tickets.js:2014`, carved out for closed statuses), the missing-section loop
+  has no closed-status exemption. Adding the section would therefore make every
+  existing ticket on every board — including the ~40 done/archived tickets the
+  duplicate-heading carve-out was created to protect — fail `validate`, `preflight`,
+  and closeout until each is edited to add an empty heading.
+- Template churn in three synchronized places (`buildTicketBody` in `src/tickets.js`,
+  `plans/templates/ticket.md`, `resources/templates/ticket.md`) plus a
+  `sync-resources` run, and new `validate`/section-count test coverage.
+- It is redundant. The verdict is already durably recorded by
+  `design-review-complete` in the Run Log and `completedSteps`. A dedicated section
+  would duplicate that record and invite drift between the two.
+
+The verdict-first TEXT contract (PASS/CONCERNS/FAIL) and the return-only reviewer
+role are unchanged either way; option (a) needs no code change at all.
+
+### Change 1 — rewrite the persistence paragraph
+
+In `plans/prompts/steps/design_review.md`, replace the final paragraph under the
+`Return-only — you persist nothing` heading. Current text:
+
+```text
+You run on a read-only route. You do NOT write files, edit the ticket, or run any
+mutating local-board command (`section`, `comment`, `complete-step`, `move`,
+`estimate`, `gate-complete`). Return the verdict and findings as your message
+only. The orchestrator records the `## Design Review` section and the completion
+evidence, and decides whether a FAIL loops the ticket back to design. Do not run
+tree-wide or history/branch-mutating git commands inside the worktree.
+```
+
+Replacement text (verbatim target):
+
+```text
+You run on a read-only route. You do NOT write files, edit the ticket, or run any
+mutating local-board command (`section`, `comment`, `complete-step`, `move`,
+`estimate`, `gate-complete`). Your route may even be a sandbox that denies process
+spawning entirely, so do not attempt to run any command beyond reading the files
+named above; if a needed read is itself denied, report that and stop rather than
+work around it. Return the verdict and findings as your message only. The
+orchestrator persists the outcome by running `design-review-complete`, which
+stamps the design-review completion token and appends your verdict to the ticket's
+Run Log — there is no `Design Review` section and none is required. The orchestrator
+decides whether a FAIL loops the ticket back to design. Do not run tree-wide or
+history/branch-mutating git commands inside the worktree.
+```
+
+Notes on the wording:
+- Drops the phantom `Design Review` section claim; names the real command
+  (`design-review-complete`) and the real sink (Run Log + completion token).
+- The spawn-denial sentence is folded into the same paragraph (in scope: same file,
+  same review-contract paragraph, flagged independently on 2026-07-11). It
+  reinforces the existing "do NOT run any mutating command" line by covering the
+  stricter codex read-only sandbox where even benign spawns are denied.
+- Keeps `section`/`comment`/etc. in the do-not-run list so the reviewer still never
+  mutates; only the *description of what the orchestrator does afterward* is fixed.
+
+### Change 2 — sync the resources mirror
+
+`resources/prompts/steps/design_review.md` must match byte-for-byte. Run
+`npm run sync-resources` after editing `plans/prompts/steps/design_review.md`.
+`resources-sync.test.js` (`resources/prompts mirrors plans/prompts byte-for-byte`,
+lines 58-60) fails otherwise. No template mirror is touched.
+
+### Change 3 — pin the corrected instruction with a content assertion
+
+No content-assertion pin currently guards `design_review.md`; existing test
+references are path/behavior assertions only (`test/cli.test.js` around lines
+1560-1894 assert the resolved prompt *path*, not its text). Add one prompt-content
+test modeled on the estimate-prompt test at `test/cli.test.js:3347-3363`:
+
+- Read `plans/prompts/steps/design_review.md`.
+- Assert it `includes("design-review-complete")` (the real recorder).
+- Assert it does **not** include the phantom instruction, e.g.
+  `assert.ok(!stepText.includes("records the `## Design Review` section"))`, or more
+  robustly assert the absence of the substring `## Design Review` outside a fenced
+  sample. Prefer pinning the positive signal (`design-review-complete` present) plus
+  a negative guard on the exact old phrase `records the` + `Design Review section`.
+- Optionally assert it mentions the spawn-denial guard (e.g. `includes("denies
+  process spawning")`) so that fold-in cannot silently regress.
+
+Because the assertion reads `plans/` (the source of truth), it also indirectly
+guards the mirror via the separate `resources-sync` byte check.
+
+### Affected files
+
+- `plans/prompts/steps/design_review.md` — reword the persistence paragraph
+  (Change 1). Production prompt artifact.
+- `resources/prompts/steps/design_review.md` — regenerated by `npm run
+  sync-resources` (Change 2). Do not hand-edit.
+- `test/cli.test.js` — add the prompt-content assertion (Change 3).
+- No change to `src/tickets.js`, `src/cli.js`, templates, or config.
+
+### Test plan
+
+- `npm run sync-resources` then confirm no drift.
+- `node --test` full suite (CLAUDE.md requires the full suite after any
+  `plans/prompts` edit, not just guard suites). Expect green, including
+  `resources-sync.test.js` and the new content assertion.
+- `npm run check` (lint + tests per the acceptance criteria).
+- Manual acceptance walk: scaffold a fresh ticket (`local-board new ...`), confirm
+  its body has no `Design Review` heading, then confirm the documented flow
+  (`design-review-check` -> reviewer returns verdict -> `design-review-complete
+  ... --evidence <verdict>`) records the verdict in the Run Log and completion
+  token with no dead-end `section` call. This satisfies "prompt and CLI agree; a
+  fresh scaffold plus the documented flow produces no dead-end instruction."
+
+### Risks and edge cases
+
+- Low blast radius: a prompt wording change plus one test; no runtime code path
+  changes, so routing, the design-review token, and preconditions are untouched
+  (non-goal respected).
+- Mirror drift is the main failure mode; forgetting `sync-resources` fails
+  `resources-sync.test.js`. The new content test reads `plans/`, so both must agree.
+- Backtick fragility: the replacement paragraph contains inline backticks
+  (`` `design-review-complete` ``, `` `Design Review` ``). The prompt file is edited
+  with the Edit tool (not shell redirection), and the temp file for any `section`
+  write is produced with the Write tool, avoiding the heredoc/backtick hazard noted
+  in project memory.
+- Content assertion brittleness: pin on the stable substring `design-review-complete`
+  and a negative guard on the removed phrase rather than on an entire sentence, so
+  future harmless copy edits do not break it.
+
+### Documentation impact
+
+None required. The prompt is the user-facing description of the flow; no `docs/` or
+`memory-bank/` file documents a `Design Review` section (there was never one). If a
+memory-bank note ever references the design-review persistence path, it already
+describes Run Log + completion evidence, which this change makes authoritative.
+
+### Open questions
+
+None blocking. The spawn-denial sentence is included as an in-scope adjacent fix per
+the brief; if the orchestrator wants it excluded, drop that one sentence from Change
+1 and the optional third assertion in Change 3 — the rest of the design stands
+unchanged.
 
 ## Implementation Notes
 
