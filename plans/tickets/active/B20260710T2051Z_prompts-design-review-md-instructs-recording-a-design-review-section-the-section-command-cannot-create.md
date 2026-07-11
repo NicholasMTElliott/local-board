@@ -13,7 +13,7 @@ estimateBasis: B20260710T2050Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
-updated: 2026-07-11T20:37:07Z
+updated: 2026-07-11T20:41:45Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -237,3 +237,5 @@ unchanged.
 - 2026-07-11T20:36:25Z: Completed design via claude-subagent:local-board-designer@opus: Option (a) chosen: reword design_review.md persistence paragraph to the real comment + design-review-complete flow; option (b) rejected because validateTicketShape's missing-section check has no closed-status exemption (would fail ~40 legacy tickets). Files: prompt + resources mirror via sync-resources + new cli.test.js content pin (design-review-complete present, phantom section phrase absent). Spawn-denial warning folded into same paragraph. No src/template change.
 
 - 2026-07-11T20:37:07Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (prompt reword + content-assertion test)
+
+- 2026-07-11T20:41:45Z: Design review r1 (codex-task:read-only@gpt-5.6-sol, xhigh): CONCERNS. 1) [Med] Change 1's 'if a needed read is itself denied, report that and stop' branch is incompatible with the verdict-first contract (environmental failure is not PASS/CONCERNS/FAIL) - keep static-review guidance, drop the branch or define a contract-compatible blocker response. 2) [Low] cross-reference grep audit not documented in the design - record that the four skills already describe design-review-complete persistence, optional-prompt hits are titles only, agents/ clean; scope out explicitly. 3) [Low] soften 'every existing ticket on every board' to 'every existing ticket lacking the heading, incl. current done/archived'. Option (a), assertion design, and sync-resources requirement all confirmed correct. Designer patching; proceedable after patch without a new review round.
