@@ -1,0 +1,321 @@
+---
+id: B20260710T2050Z
+type: bug
+status: done
+priority: P3
+parent: null
+children: []
+blockedBy: []
+blocks: []
+branch: local-board/B20260710T2050Z-design-review-fallback-free-claude-subagent-dispatch-is-rejected-by-the-routing-validator-hook-d7-carve-out
+estimate: 2
+estimateBasis: B20260710T1533Z
+workStartedAt: 2026-07-11T20:04:07Z
+workCompletedAt: 2026-07-11T20:29:27Z
+created: 2026-07-10T20:50:02Z
+updated: 2026-07-11T20:29:27Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
+routingApprovals: []
+---
+# design-review: fallback-free claude-subagent dispatch is rejected by the routing-validator hook (D7 carve-out)
+
+## Requirement
+
+Carved out of T20260710T1532Z (design decision D7, 2026-07-10). A board may validly route agents["design-review"] to a claude-subagent (e.g. claude-subagent:local-board-reviewer). Today commandDesignReviewCheck stamps an active-steps ledger record ONLY when the resolved profile carries a non-empty fallbackModels list (the D6 conditionality rule). For a fallback-FREE claude-subagent design-review profile, no record is stamped, so the routing-validator hook's check-dispatch falls back to the ticket's status action and rejects the reviewer dispatch as an agent mismatch. The default codex-task route is unaffected (Bash dispatches are not hook-gated).
+
+### Scope
+
+1. Stamp the design-review action record in commandDesignReviewCheck for claude-subagent routes unconditionally (drop the fallback-configured condition for the stamp itself), reusing the existing stampActiveStepNoClobber identity semantics and recordDesignReview's identity-scoped clear. The fallbackModels FIELD on the record stays conditional per D6.
+2. Byte-identical back-compat carve: codex-task design-review routes still stamp nothing; boards whose design-review profile is codex-task (the scaffold default) are unchanged.
+3. Tests: claude-subagent design-review profile without fallbacks -> design-review-check stamps -> check-dispatch accepts the pinned model and rejects others; codex-task route stamps nothing (legacy-shape deep-equal); recordDesignReview still clears the stamp.
+
+### Acceptance criteria
+
+- A board with agents["design-review"] = { route claude-subagent:local-board-reviewer, model opus } passes check-dispatch for that reviewer after design-review-check, with hooks installed.
+- Scaffold-default (codex-task) boards byte-identical.
+- npm run check and node --test pass.
+
+### Non-goals
+
+- No change to the D6 conditionality of fallback FIELDS; no new CLI commands.
+
+## Acceptance Criteria
+
+## Related Tickets
+
+## Technical Design
+
+### Root cause
+
+`commandDesignReviewCheck` (`src/cli.js`, ~L1377-1397) gates the design-review
+ledger stamp on TWO conditions: the route is `claude-subagent:` AND
+`designReviewFallbackModels` is a non-empty list. The second clause is the D7
+bug. A fallback-free claude-subagent design-review profile writes no stamp, so
+`checkDispatchForTicket` (`src/active-steps.js` L225-285) finds no record for the
+ticket and takes the no-ledger branch: it resolves the ticket's *status* action
+via `resolveExpectedStep` (the ticket's status action is `design`, routed to the
+scaffold default), and the reviewer dispatch is rejected `agent-mismatch`.
+
+The fix is a one-line loosening of the stamp guard plus a shape adjustment so the
+`fallbackModels` FIELD stays D6-conditional. This mirrors the already-correct
+pattern in `beginStep` (`src/tickets.js` L1426-1437), which stamps an
+`action` record unconditionally and spreads `fallbackModels` only when non-empty.
+
+### Approach
+
+In `commandDesignReviewCheck`, change the stamp guard from
+
+```js
+if (
+  typeof profile.route === "string"
+  && profile.route.startsWith("claude-subagent:")
+  && designReviewFallbackModels
+) {
+```
+
+to drop the trailing `&& designReviewFallbackModels` clause:
+
+```js
+if (typeof profile.route === "string" && profile.route.startsWith("claude-subagent:")) {
+```
+
+and change the record's `fallbackModels: designReviewFallbackModels,` line to the
+same D6-conditional spread `beginStep` already uses:
+
+```js
+...(designReviewFallbackModels ? { fallbackModels: designReviewFallbackModels } : {}),
+```
+
+Everything else in the stamp block is unchanged: it keeps using
+`stampActiveStepNoClobber` (no-clobber identity semantics) and the non-fatal
+`describeLedgerStampConflict` warning on conflict. The `designReviewFallbackModels`
+local (L1377-1378) and the separate `designReviewFallbackBundle` payload logic
+(L1418-1430) are untouched -- the fallback BUNDLE in the JSON payload stays
+D5/D6-conditional, and only the ledger stamp is now unconditional for
+claude-subagent routes.
+
+codex-task routes: `profile.route.startsWith("claude-subagent:")` is false, so
+the block is skipped and nothing is stamped -- byte-identical to today.
+
+### Record shape (fallback-free claude-subagent case)
+
+The stamp carries exactly these keys, with no `fallbackModels` key present:
+
+```json
+{
+  "ticket": "<ticket-id>",
+  "kind": "action",
+  "action": "design-review",
+  "route": "claude-subagent:local-board-reviewer",
+  "model": "sonnet",
+  "root": "<abs worktree root>",
+  "ts": "<iso-seconds>"
+}
+```
+
+This key set is byte-identical to a fallback-free `beginStep` action stamp
+(same seven keys; only the `action` value differs), satisfying the legacy-shape
+deep-equal discipline: no new key is added with a null/undefined value. When
+`profile.model` is undefined the `model` key is `null` (existing `?? null`),
+matching `beginStep`. The fallback-configured case is unchanged: it additionally
+carries `fallbackModels: [...]` exactly as today.
+
+### Downstream correctness (no other code changes)
+
+- `checkDispatchForTicket`: with the fallback-free stamp present,
+  `record.fallbackModels ?? null` -> `null`, so `modelAccepted` degenerates to
+  `modelSatisfies`. The pinned `model` is accepted, a wrong model is rejected
+  `model-mismatch`, and a different local-board agent is rejected `agent-mismatch`
+  (expected.agent = `bareRoute(route)` = `local-board-reviewer`). No edit needed.
+- `stampActiveStepNoClobber` / `isIdempotentStampMatch`: compares
+  kind/action/stage/route/model. On the fallback-free record `stage` is
+  `undefined` on both existing and next (`undefined === undefined`), so a re-run
+  is an idempotent match and self-heals -- no spurious conflict.
+- `recordDesignReview` (`src/tickets.js` L1690): the identity-scoped clear uses
+  `isActionLedgerEntry(record, "design-review")` = `(record.kind ?? "action") ===
+  "action" && record.action === "design-review"`. The fallback-free record has
+  `kind: "action"`, `action: "design-review"`, so it is cleared unchanged.
+
+### Affected files
+
+- `src/cli.js` -- `commandDesignReviewCheck` stamp guard + record shape (the only
+  production edit).
+- `test/cli.test.js` -- update the existing D6/D7 "known limitation" test and add
+  a new stamp-shape assertion (below).
+- `test/active-steps.test.js` -- add the check-dispatch accept/reject cases
+  against a fallback-free design-review stamp.
+
+No production edits to `src/active-steps.js` or `src/tickets.js`.
+
+### Test plan
+
+1. `test/cli.test.js` -- REVISE the existing test at ~L1800 ("D6/D7 ... a
+   claude-subagent route without fallbackModels ... known limitation"). Its
+   ticketId2 branch currently asserts
+   `Object.hasOwn(await readActiveSteps(root), ticketId2) === false`. Flip it: the
+   fallback-free claude-subagent route now DOES stamp. Assert the stamped record
+   deep-equals the fallback-free shape above -- specifically
+   `assert.equal(Object.hasOwn(steps[ticketId2], "fallbackModels"), false)` plus
+   kind=`action`, action=`design-review`, route=`claude-subagent:local-board-reviewer`,
+   model=`sonnet`. Retitle to reflect D7 fixed. The JSON PAYLOAD assertion
+   (`out2` deep-equal) stays unchanged -- the payload is still fallback-free and
+   byte-identical; only the ledger side effect changed.
+2. `test/cli.test.js` -- the codex-task test ("performs no dispatch and stamps
+   nothing", ~L1774) and the fallback-free-default `out1` branch stay green
+   unchanged, proving codex-task routes still stamp nothing (deep-equal ledger
+   unchanged). Optionally strengthen the codex-task case with an explicit
+   `assert.deepEqual(after, before)` on the full ledger.
+3. `test/cli.test.js` -- the fallback-configured test (~L1884) stays green
+   unchanged, proving existing fallback behavior is untouched.
+4. `test/active-steps.test.js` -- add a case: hand-write a fallback-free
+   design-review ledger record (via `stampActiveStep` or the CLI) for a ticket,
+   then `checkDispatch({ agent: "local-board-reviewer", model: <pinned>, ticketId })`
+   returns `{ ok: true, reason: "match" }`; a wrong model returns
+   `model-mismatch`; a different local-board agent returns `agent-mismatch`; and
+   `model` undefined returns `model-unverifiable`.
+5. `test/cli.test.js` -- (recordDesignReview clear) a full-pipeline-style case:
+   after design-review-check stamps the fallback-free record, run
+   `design-review-complete`; assert the ledger entry for the ticket is gone
+   (`Object.hasOwn(after, ticketId) === false`). May extend the existing pipeline
+   test (~L1623) once its board is reconfigured to a fallback-free claude-subagent
+   design-review profile.
+
+### Risks and edge cases
+
+- The primary regression surface is the existing "known limitation" test, which
+  encodes the OLD (buggy) no-stamp behavior; it MUST be revised, not left as-is,
+  or `node --test` fails. This is expected churn, not a break.
+- Scaffold/back-compat: codex-task routes never enter the stamp block, so
+  `local-board init` default boards produce a byte-identical ledger (empty for
+  this ticket) -- covered by keeping tests 1(out1) and 2 green.
+- Concurrency/no-clobber semantics are inherited unchanged from
+  `stampActiveStepNoClobber`; the fallback-free `stage: undefined` idempotency is
+  the same shape `beginStep`/gate stamps already rely on.
+- Content-assertion suites: no `plans/prompts/**` or `agents/**` text changes, so
+  `npm run sync-resources` is not required. Still run the FULL `node --test` and
+  `npm run check` per acceptance.
+
+### Documentation impact
+
+No user-facing behavior change beyond fixing a rejected dispatch. The D7
+"known limitation" note in the `commandDesignReviewCheck` comment block
+(`src/cli.js` L1366-1376) MUST be rewritten to state the stamp is now
+unconditional for claude-subagent routes (fallback FIELD still D6-conditional).
+No Memory Bank or `docs/` change is required; if `memory-bank/systemPatterns.md`
+references the D7 carve-out limitation, update it to "resolved".
+
+### Open questions
+
+None blocking. Estimation is enabled for this board (`estimation.enabled: true`);
+an estimate must be recorded before `complete-step design` -- the orchestrator
+owns that transition (this brief forbids front-matter edits, so no estimate is
+written here).
+
+## Implementation Notes
+
+- `src/cli.js` `commandDesignReviewCheck`: dropped the trailing `&& designReviewFallbackModels` clause from the stamp guard, so any `claude-subagent:` design-review route stamps the ledger unconditionally; codex-task routes are unaffected (guard still requires the `claude-subagent:` prefix). The record's `fallbackModels` field now uses the same conditional-spread idiom `beginStep` uses (`...(designReviewFallbackModels ? { fallbackModels: designReviewFallbackModels } : {})`), so a fallback-free stamp carries exactly the 7 `beginStep`-shape keys (`ticket/kind/action/route/model/root/ts`), no `fallbackModels` key present.
+- Rewrote both stale comments flagged by review finding 4: the `assertInvocationRootForTicket` comment ("performs no dispatch or write of its own") and the stamp-guard block comment (previously described the D7 no-stamp limitation as intentional) now state the command stamps for claude-subagent routes and skips codex-task routes.
+- Folded all four design-review r1 findings into tests:
+  - Finding 1 (byte-identical claim): strengthened the codex-route "stamps nothing" test in `test/cli.test.js` to assert via `fs.existsSync` that the ledger file never gets created at all (not just that `readActiveSteps` maps ENOENT to `{}`), plus a second case that pre-seeds a sentinel ledger file and asserts its raw bytes are byte-for-byte unchanged after a codex-task `design-review-check`.
+  - Finding 2 (one-slot-per-ticket semantics): added two `test/cli.test.js` cases — (a) a premature `design-review-check` while a live `begin-step design` action stamp is still present: documents and asserts the actual no-clobber behavior (command still exits 0 with a "not stamped" warning, the old `design` record survives untouched, and `check-dispatch` for the reviewer still returns `agent-mismatch`); (b) the normal flow (`complete-step design` clears the slot, then `design-review-check` stamps cleanly) followed by `check-dispatch` accepting the pinned reviewer model and rejecting a wrong model and a wrong agent.
+  - Finding 3 (consecutive calls): added a regression test asserting a second identical `design-review-check` call is accepted with no conflict warning AND rewrites the record (ts is back-dated deterministically before the second call, then asserted to have advanced) — not a pure no-op claim.
+  - Finding 4 (stale comment): see above.
+- Flipped the existing D6/D7 "known limitation" test in `test/cli.test.js` (~L1800, now retitled) to assert the fallback-free claude-subagent branch now stamps the 7-key record (`Object.hasOwn(record, "fallbackModels") === false`, exact key set via `Object.keys(record).sort()`); the JSON payload assertions (`out1`/`out2`) are unchanged since the wire payload was already fallback-free/byte-identical.
+- Added a `recordDesignReview`-clears-the-stamp case (identity-scoped): `design-review-check` stamps the fallback-free claude-subagent record, `design-review-complete` (matching executor/model) clears it, and a follow-up `check-dispatch` reverts to `agent-mismatch` (falls back to the ticket's status action, not the reviewer).
+- Added a unit-level `checkDispatch` matrix test in `test/active-steps.test.js` against a hand-written fallback-free `design-review` action stamp: pinned model matches, wrong model denies (`model-mismatch`), wrong agent denies (`agent-mismatch`), and model omitted returns `model-unverifiable`.
+- The fallback-configured claude-subagent test and the codex-task-with-fallback test are unchanged and stay green, confirming existing fallback behavior and codex-task no-stamp behavior are untouched.
+- No changes to `src/active-steps.js` or `src/tickets.js` (matches the design's "no other code changes" section); no `plans/prompts/**` or `agents/**` edits, so no `npm run sync-resources` needed.
+
+### Test Evidence
+
+- `npm run check`: pass (all `node --check` syntax checks green).
+- `node --test`: 576 tests, 575 pass, 0 fail, 1 skipped (pre-existing `smoke (slow)` skip, unrelated to this ticket), 34.8s.
+
+## Review Findings
+
+### Review round 1 — full review (codex-task:read-only@gpt-5.6-terra, high, static)
+
+Verdict: CONCERNS.
+
+- [Medium] test/active-steps.test.js:574 — the new fallback-free design-review checkDispatch matrix covered only checkDispatchForTicket (ticketId always passed); checkDispatchByScan had no coverage for the new stamp. Production scan logic was verified correct (absent fallbackModels reads as null into modelAccepted); the gap was test-only.
+- Confirmed clean: unconditional stamp for claude-subagent routes; D6-conditional fallbackModels spread (7-key fallback-free record, no placeholder keys); codex-task routes stamp nothing (absent-ledger and sentinel-bytes assertions); payload JSON surface unchanged; no-clobber/idempotent-rewrite semantics; identity-scoped recordDesignReview clear; stale comments updated.
+
+### Review round 2 — focused re-review (codex-task:read-only@gpt-5.6-terra, medium, static)
+
+Verdict: PASS.
+
+- Fix commit e5636e3 adds three no-ticket-id checkDispatch calls that route through checkDispatchByScan: pinned-model acceptance, wrong-model rejection, wrong-agent rejection (scan rejection shape no-active-step-for-agent asserted). Commit touches only test/active-steps.test.js. Medium resolved.
+
+## Test Evidence
+
+verdict: pass
+
+### Commands run
+
+- npm run check — all node --check syntax checks pass.
+- node --test (full suite) — tests 576, pass 575, fail 0, skipped 1 (pre-existing smoke (slow), unrelated), ~40s.
+- node --test test/cli.test.js test/active-steps.test.js — tests 118, pass 118, fail 0, ~14.5s.
+- git diff --stat mainline...HEAD / git status --short — worktree clean. No spawn issues; isolation fallback not needed.
+
+### Acceptance criteria coverage (static trace)
+
+1. Fallback-free claude-subagent design-review stamps: src/cli.js:1383 guard is now route.startsWith("claude-subagent:") with the designReviewFallbackModels clause dropped; record at src/cli.js:1384-1393 includes fallbackModels only via conditional spread (src/cli.js:1390) — fallback-free profile stamps the 7-key beginStep-shape record. Verified test/cli.test.js:1911-1925 (Object.hasOwn false, exact key-set assertion).
+2. check-dispatch accepts pinned reviewer, rejects wrong model/agent: checkDispatchForTicket src/active-steps.js:225-285 (expectedFallbackModels = record.fallbackModels ?? null at :238; wrong model model-mismatch :280-281; wrong agent agent-mismatch :266-269); scan mode mirrors (src/active-steps.js:287-313). Tested test/active-steps.test.js:574-635 (ticket-scoped + scan-mode matrices, e5636e3).
+3. codex-task route writes nothing: guard skips entirely; test/cli.test.js:1774-1827 asserts absent ledger stays absent (existsSync false) and pre-seeded sentinel ledger bytes unchanged.
+4. recordDesignReview clears the fallback-free stamp: test/cli.test.js:2201-2251 (stamp, clear, follow-up check-dispatch reverts to agent-mismatch).
+5. npm run check / node --test pass: confirmed above; matches Implementation Notes exactly.
+
+### Production-file scope
+
+git diff --name-only mainline...HEAD: src/cli.js (only production source), test/active-steps.test.js, test/cli.test.js, ticket markdown. Matches design's Affected files.
+
+### Review-finding closure
+
+- r1 Medium (scan-mode coverage gap, test-only) fixed in e5636e3 (test/active-steps.test.js:618-633). r2 focused re-review PASS.
+
+### Gaps / caveats
+
+- No plans/prompts or agents text changed; sync-resources correctly not required (confirmed by diff scope).
+- No test-quality concerns: exact-shape assertions (sorted key sets, byte-identical sentinel), nothing weakened.
+
+## Documentation Updates
+
+### Edited
+
+- docs/Workflow.md — clarified that design-review-check stamps active-step verification for claude-subagent routes while codex-task design-review routes still stamp nothing.
+- docs/CodexSupport.md — removed the stale D7 fallback-free limitation and clarified fallbackModels remains conditional on payloads and stamps.
+- memory-bank/systemPatterns.md — updated terse dispatch-verification facts to include claude-subagent design-review-check stamps.
+
+### Checked
+
+- docs/PerStepOrchestration.md — checked for D7/design-review dispatch-verification statements; no stale fallback-free hook-verification wording found.
+
+## Questions
+
+## Run Log
+
+- 2026-07-11T19:59:19Z: Completed design via claude-subagent:local-board-designer@opus: Drop third guard clause in commandDesignReviewCheck so claude-subagent design-review routes stamp unconditionally; fallbackModels field stays D6-conditional via spread; codex routes stamp nothing; fallback-free record = 7-key beginStep shape; tests flip old known-limitation case + checkDispatch accept/reject + recordDesignReview clear.
+
+- 2026-07-11T20:00:19Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (internal CLI ledger fix; no UI/auth/attack surface)
+
+- 2026-07-11T20:03:59Z: Design review r1 (codex-task:read-only@gpt-5.6-sol, xhigh): CONCERNS. 1) [Med] byte-identical scaffold claim needs absent-ledger-stays-absent + sentinel-bytes assertions (readActiveSteps maps ENOENT and empty to {}). 2) [Med] one-slot-per-ticket ledger: existing different-action record is neither coexisted-with nor clobbered - command warns, old record stays, dispatch still rejected; document + test premature design-review-check after begin-step design, and post-complete-step path. 3) [Low] second identical design-review-check rewrites record with new ts (not a pure no-op); state accurately + consecutive-call regression test. 4) [Low] update stale 'performs no write of its own' comment for claude-subagent routes. Verdict proceedable; findings folded into implement brief.
+
+- 2026-07-11T20:03:59Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: CONCERNS: 2 Medium (test-plan: absent-ledger assertion, one-slot-per-ticket conflict semantics) + 2 Low (idempotence wording, stale comment); proceed to implementation with findings carried
+
+- 2026-07-11T20:04:07Z: Ensured git branch local-board/B20260710T2050Z-design-review-fallback-free-claude-subagent-dispatch-is-rejected-by-the-routing-validator-hook-d7-carve-out (already-current).
+
+- 2026-07-11T20:12:27Z: Completed implement via claude-subagent:local-board-implementer@sonnet: commandDesignReviewCheck stamps unconditionally for claude-subagent routes; fallbackModels D6-conditional spread; 7-key fallback-free shape; stale comments updated; tests: flipped known-limitation, existsSync-absent + sentinel-bytes codex-route, one-slot premature/normal, consecutive-call rewrite regression, recordDesignReview clear, checkDispatch matrix. npm run check pass; node --test 575/576 pass 0 fail 1 pre-existing skip. Commit 0fa37d4.
+
+- 2026-07-11T20:13:13Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (ledger-stamp guard fix; no auth/UI surface)
+
+- 2026-07-11T20:13:14Z: Ensured git branch local-board/B20260710T2050Z-design-review-fallback-free-claude-subagent-dispatch-is-rejected-by-the-routing-validator-hook-d7-carve-out (already-current).
+
+- 2026-07-11T20:20:36Z: Completed review via codex-task:read-only@gpt-5.6-terra: r1 CONCERNS (1 Medium: scan-mode checkDispatch coverage gap, test-only) fixed in e5636e3; r2 focused re-review PASS. Production paths verified: unconditional claude-subagent stamp, D6-conditional field, codex no-write, no-clobber, identity-scoped clear.
+
+- 2026-07-11T20:20:37Z: Ensured git branch local-board/B20260710T2050Z-design-review-fallback-free-claude-subagent-dispatch-is-rejected-by-the-routing-validator-hook-d7-carve-out (already-current).
+
+- 2026-07-11T20:23:50Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. Full suite 575/576 pass 0 fail 1 pre-existing skip; targeted cli+active-steps 118/118; acceptance criteria traced to src/cli.js:1383-1393, active-steps.js:225-313, tests cli.test.js:1774-2251 + active-steps.test.js:574-635; src/cli.js only production change; no quality concerns.
+
+- 2026-07-11T20:24:02Z: Ensured git branch local-board/B20260710T2050Z-design-review-fallback-free-claude-subagent-dispatch-is-rejected-by-the-routing-validator-hook-d7-carve-out (already-current).
+
+- 2026-07-11T20:28:47Z: Completed document via codex-task:workspace-write: docs/Workflow.md + docs/CodexSupport.md + memory-bank/systemPatterns.md updated for unconditional claude-subagent design-review stamp (D6 field conditionality unchanged, codex routes stamp nothing); PerStepOrchestration.md checked, no stale wording; Documentation Updates section written. Orchestrator committed a904a75 (sandbox denies git).

@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { commandWhere, main } from "../src/cli.js";
 import { loadConfig } from "../src/config.js";
 import { createTicket, discover, queryNext } from "../src/tickets.js";
-import { readActiveSteps } from "../src/active-steps.js";
+import { ledgerPath, readActiveSteps, stampActiveStep } from "../src/active-steps.js";
 import { removeFixtureDir } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
@@ -1771,7 +1771,7 @@ test("CLI design-review-check and design-review-complete both refuse on a flag-o
   });
 });
 
-test("CLI design-review-check performs no dispatch and stamps nothing in the active-steps ledger", async () => {
+test("CLI design-review-check performs no dispatch and stamps nothing in the active-steps ledger: an absent ledger file stays absent, and a pre-seeded sentinel ledger's raw bytes are unchanged (review finding 1)", async () => {
   await withBoard(async (root) => {
     assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
 
@@ -1782,6 +1782,9 @@ test("CLI design-review-check performs no dispatch and stamps nothing in the act
     assert.equal(create.code, 0, create.stderr);
     const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
 
+    const ledgerFilePath = await ledgerPath(root);
+    assert.equal(existsSync(ledgerFilePath), false, "precondition: the ledger file does not exist yet");
+
     const before = await readActiveSteps(root);
     assert.equal(Object.hasOwn(before, ticketId), false);
 
@@ -1790,14 +1793,42 @@ test("CLI design-review-check performs no dispatch and stamps nothing in the act
 
     // Unlike gate-check's non-empty-catalog branch, design-review-check
     // routes to codex-task:read-only (not a local-board-* claude-subagent),
-    // which checkDispatch short-circuits: no consultation entry is stamped.
+    // which the ledger stamp block skips entirely: not merely an empty
+    // ledger for this ticket, but no ledger FILE at all is ever created.
+    assert.equal(existsSync(ledgerFilePath), false, "a codex-task route must not create the ledger file at all");
     const after = await readActiveSteps(root);
     assert.deepEqual(after, before);
     assert.equal(Object.hasOwn(after, ticketId), false);
+
+    // Separately: a PRE-EXISTING ledger file (e.g. from an earlier
+    // claude-subagent stamp for a different ticket) must be byte-for-byte
+    // untouched by a codex-task design-review-check too -- not just
+    // unchanged after a JSON.parse/deep-equal round-trip, which would hide a
+    // spurious rewrite (re-serialized whitespace, key order, etc.).
+    const sentinelBytes = `${JSON.stringify(
+      { "T-sentinel": { ticket: "T-sentinel", kind: "action", action: "design", route: "r", model: "m" } },
+      null,
+      2,
+    )}\n`;
+    await mkdir(path.dirname(ledgerFilePath), { recursive: true });
+    await writeFile(ledgerFilePath, sentinelBytes, "utf8");
+
+    const create2 = await runCli([
+      "--root", root, "create", "task", "Design-review-check sentinel ledger untouched",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create2.code, 0, create2.stderr);
+    const ticketId2 = path.basename(create2.stdout.trim()).split("_", 1)[0];
+
+    const result2 = await runCli(["--root", root, "design-review-check", ticketId2, "--json"]);
+    assert.equal(result2.code, 0, result2.stderr);
+
+    const rawAfter = await readFile(ledgerFilePath, "utf8");
+    assert.equal(rawAfter, sentinelBytes, "a codex-task design-review-check must not rewrite a pre-existing ledger file at all");
   });
 });
 
-test("CLI design-review-check (T20260710T1532Z, D6/D7): a fallback-free payload is byte-identical to the legacy shape on every route; no stamp is written on the default codex-task:read-only route or on a claude-subagent route without fallbackModels (known limitation)", async () => {
+test("CLI design-review-check (T20260710T1532Z D6, B20260710T2050Z D7 fix): a fallback-free payload is byte-identical to the legacy shape on every route; no stamp is written on the default codex-task:read-only route, but a claude-subagent route without fallbackModels now DOES stamp the fallback-free 7-key record", async () => {
   await withBoard(async (root) => {
     assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
 
@@ -1833,8 +1864,8 @@ test("CLI design-review-check (T20260710T1532Z, D6/D7): a fallback-free payload 
     });
     assert.equal(Object.hasOwn(await readActiveSteps(root), ticketId1), false);
 
-    // claude-subagent route, no fallbackModels: hook-gated but no stamp is
-    // written (D7 known limitation, explicitly out of scope for this ticket).
+    // claude-subagent route, no fallbackModels: hook-gated, and (D7 fix)
+    // now DOES stamp the ledger unconditionally for claude-subagent routes.
     // Agent profiles are replaced wholesale per action (loadConfig, not
     // deep-merged): the overlay omits "effort", so it resolves to null, not
     // DEFAULT_CONFIG's "xhigh".
@@ -1877,7 +1908,21 @@ test("CLI design-review-check (T20260710T1532Z, D6/D7): a fallback-free payload 
         acceptanceCriteria: "",
       },
     });
-    assert.equal(Object.hasOwn(await readActiveSteps(root), ticketId2), false);
+    // D7 fix (B20260710T2050Z): the stamp guard no longer requires a
+    // non-empty fallbackModels list -- ANY claude-subagent design-review
+    // route stamps unconditionally. The record carries exactly the 7
+    // beginStep-shape keys; no `fallbackModels` key is present at all (D6:
+    // the FIELD stays conditional on a non-empty configured list).
+    const record2 = (await readActiveSteps(root))[ticketId2];
+    assert.ok(record2, "a fallback-free claude-subagent design-review route must now stamp the ledger");
+    assert.equal(Object.hasOwn(record2, "fallbackModels"), false);
+    assert.deepEqual(Object.keys(record2).sort(), ["action", "kind", "model", "root", "route", "ticket", "ts"]);
+    assert.equal(record2.kind, "action");
+    assert.equal(record2.action, "design-review");
+    assert.equal(record2.route, "claude-subagent:local-board-reviewer");
+    assert.equal(record2.model, "sonnet");
+    assert.equal(record2.root, path.resolve(root));
+    assert.equal(typeof record2.ts, "string");
   });
 });
 
@@ -1951,6 +1996,256 @@ test("CLI design-review-check (T20260710T1532Z, finding 5): a fallback-configure
     assert.equal(out.codexDispatch.promptPath, out.prompt);
     assert.deepEqual(out.codexDispatch.fallbackModels, ["gpt-5.5"]);
     assert.equal(Object.hasOwn(await readActiveSteps(root), ticketId), false);
+  });
+});
+
+test("CLI design-review-check (B20260710T2050Z, review finding 2a: one-slot-per-ticket, premature call): design-review-check while a live begin-step design stamp is still present does not clobber it -- the command still succeeds, the old record stays, and check-dispatch still rejects the reviewer route", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({
+        routing: { requireDesignReview: true },
+        agents: {
+          "design-review": { route: "claude-subagent:local-board-reviewer", model: "sonnet" },
+        },
+      }),
+      "utf8",
+    );
+
+    const create = await runCli([
+      "--root", root, "create", "task", "Premature design-review-check before design completes",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    assert.equal((await runCli(["--root", root, "estimate", ticketId, "2"])).code, 0);
+    assert.equal((await runCli(["--root", root, "begin-step", ticketId, "--json"])).code, 0);
+
+    const beforeCheck = (await readActiveSteps(root))[ticketId];
+    assert.equal(beforeCheck.kind, "action");
+    assert.equal(beforeCheck.action, "design");
+    assert.equal(beforeCheck.route, "claude-subagent:local-board-designer");
+
+    // Premature use: design-review-check runs while the "design" action
+    // stamp is still live (design was never completed). Documenting the
+    // actual, observed behavior: the command still succeeds (no-clobber is a
+    // non-fatal warning, not an error), the pre-existing "design" record is
+    // left untouched, and the reviewer dispatch stays rejected until the
+    // slot is cleared by the normal complete-step flow.
+    const warnings = [];
+    const originalWarn = console.warn;
+    console.warn = (message = "") => warnings.push(String(message));
+    let check;
+    try {
+      check = await runCli(["--root", root, "design-review-check", ticketId, "--json"]);
+    } finally {
+      console.warn = originalWarn;
+    }
+    assert.equal(check.code, 0, check.stderr);
+    assert.ok(
+      warnings.some((message) => message.includes(ticketId) && message.includes("not stamped")),
+      `expected a not-stamped warning naming ${ticketId}, got: ${JSON.stringify(warnings)}`,
+    );
+
+    const afterCheck = (await readActiveSteps(root))[ticketId];
+    assert.deepEqual(
+      afterCheck,
+      beforeCheck,
+      "the live design action stamp must survive the conflicting design-review-check",
+    );
+
+    const dispatch = await runCli([
+      "--root", root, "check-dispatch",
+      "--agent", "local-board-reviewer", "--model", "sonnet", "--ticket", ticketId,
+    ]);
+    assert.equal(dispatch.code, 1);
+    assert.deepEqual(JSON.parse(dispatch.stdout), {
+      ok: false,
+      reason: "agent-mismatch",
+      expected: { agent: "local-board-designer", model: "opus" },
+      ticket: ticketId,
+    });
+  });
+});
+
+test("CLI design-review-check (B20260710T2050Z, review finding 2b: one-slot-per-ticket, normal flow): complete-step design clears the slot, then design-review-check stamps cleanly; check-dispatch accepts the pinned reviewer, rejects a wrong model, and rejects a wrong agent", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({
+        routing: { requireDesignReview: true },
+        agents: {
+          "design-review": { route: "claude-subagent:local-board-reviewer", model: "sonnet" },
+        },
+      }),
+      "utf8",
+    );
+
+    const create = await runCli([
+      "--root", root, "create", "task", "Design-review-check after design completes cleanly",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    assert.equal((await runCli(["--root", root, "estimate", ticketId, "2"])).code, 0);
+    assert.equal((await runCli(["--root", root, "begin-step", ticketId, "--json"])).code, 0);
+    assert.equal(
+      (
+        await runCli([
+          "--root", root, "complete-step", ticketId, "design",
+          "--executor", "claude-subagent:local-board-designer", "--model", "opus",
+          "--evidence", "Design evidence.", "--json",
+        ])
+      ).code,
+      0,
+    );
+    assert.equal(
+      Object.hasOwn(await readActiveSteps(root), ticketId),
+      false,
+      "complete-step must clear the design action slot",
+    );
+
+    const check = await runCli(["--root", root, "design-review-check", ticketId, "--json"]);
+    assert.equal(check.code, 0, check.stderr);
+    const record = (await readActiveSteps(root))[ticketId];
+    assert.equal(record.kind, "action");
+    assert.equal(record.action, "design-review");
+    assert.equal(record.route, "claude-subagent:local-board-reviewer");
+    assert.equal(record.model, "sonnet");
+
+    const pinned = await runCli([
+      "--root", root, "check-dispatch", "--agent", "local-board-reviewer", "--model", "sonnet", "--ticket", ticketId,
+    ]);
+    assert.equal(pinned.code, 0, pinned.stderr);
+    assert.equal(JSON.parse(pinned.stdout).reason, "match");
+
+    const wrongModel = await runCli([
+      "--root", root, "check-dispatch", "--agent", "local-board-reviewer", "--model", "opus", "--ticket", ticketId,
+    ]);
+    assert.equal(wrongModel.code, 1);
+    assert.equal(JSON.parse(wrongModel.stdout).reason, "model-mismatch");
+
+    const wrongAgent = await runCli([
+      "--root", root, "check-dispatch", "--agent", "local-board-tester", "--model", "sonnet", "--ticket", ticketId,
+    ]);
+    assert.equal(wrongAgent.code, 1);
+    assert.equal(JSON.parse(wrongAgent.stdout).reason, "agent-mismatch");
+  });
+});
+
+test("CLI design-review-check (B20260710T2050Z, review finding 3): a second identical call is accepted as an idempotent match and rewrites the record with a refreshed ts, not a pure no-op", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({
+        routing: { requireDesignReview: true },
+        agents: {
+          "design-review": { route: "claude-subagent:local-board-reviewer", model: "sonnet" },
+        },
+      }),
+      "utf8",
+    );
+
+    const create = await runCli([
+      "--root", root, "create", "task", "Consecutive design-review-check calls",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const first = await runCli(["--root", root, "design-review-check", ticketId, "--json"]);
+    assert.equal(first.code, 0, first.stderr);
+    const firstRecord = (await readActiveSteps(root))[ticketId];
+    assert.equal(firstRecord.kind, "action");
+    assert.equal(firstRecord.action, "design-review");
+
+    // Force a distinguishable ts, deterministically (independent of clock
+    // resolution): back-date the stamp directly, then re-run
+    // design-review-check and assert the record's ts actually advances. A
+    // second identical call is NOT a pure no-op -- stampActiveStepNoClobber
+    // treats the same kind/action/route/model as an idempotent match and
+    // rewrites the record, mirroring beginStep's self-healing re-stamp.
+    await stampActiveStep(root, ticketId, { ...firstRecord, ts: "2020-01-01T00:00:00Z" });
+    assert.equal((await readActiveSteps(root))[ticketId].ts, "2020-01-01T00:00:00Z");
+
+    const warnings = [];
+    const originalWarn = console.warn;
+    console.warn = (message = "") => warnings.push(String(message));
+    let second;
+    try {
+      second = await runCli(["--root", root, "design-review-check", ticketId, "--json"]);
+    } finally {
+      console.warn = originalWarn;
+    }
+    assert.equal(second.code, 0, second.stderr);
+    assert.equal(warnings.length, 0, "an idempotent re-stamp must be accepted cleanly, not reported as a conflict");
+
+    const secondRecord = (await readActiveSteps(root))[ticketId];
+    assert.equal(secondRecord.kind, "action");
+    assert.equal(secondRecord.action, "design-review");
+    assert.equal(secondRecord.route, "claude-subagent:local-board-reviewer");
+    assert.equal(secondRecord.model, "sonnet");
+    assert.notEqual(
+      secondRecord.ts,
+      "2020-01-01T00:00:00Z",
+      "a second identical call must rewrite the record with a refreshed ts, not leave the stale one in place",
+    );
+  });
+});
+
+test("CLI design-review-check -> design-review-complete (claude-subagent, fallback-free): recordDesignReview clears the identity-scoped stamp, and check-dispatch reverts to agent-mismatch afterward", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+    await writeFile(
+      path.join(root, "plans", "local-board.config.jsonc"),
+      JSON.stringify({
+        routing: { requireDesignReview: true },
+        agents: {
+          "design-review": { route: "claude-subagent:local-board-reviewer", model: "sonnet" },
+        },
+      }),
+      "utf8",
+    );
+
+    const create = await runCli([
+      "--root", root, "create", "task", "recordDesignReview clears the fallback-free stamp",
+      "--status", "ready_for_design", "--priority", "P2",
+    ]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const check = await runCli(["--root", root, "design-review-check", ticketId, "--json"]);
+    assert.equal(check.code, 0, check.stderr);
+    assert.ok(Object.hasOwn(await readActiveSteps(root), ticketId), "design-review-check must stamp the ledger");
+
+    const complete = await runCli([
+      "--root", root, "design-review-complete", ticketId,
+      "--executor", "claude-subagent:local-board-reviewer", "--model", "sonnet",
+      "--evidence", "PASS - no concerns", "--json",
+    ]);
+    assert.equal(complete.code, 0, complete.stderr);
+
+    assert.equal(
+      Object.hasOwn(await readActiveSteps(root), ticketId),
+      false,
+      "design-review-complete (recordDesignReview) must clear the identity-scoped design-review stamp",
+    );
+
+    const dispatch = await runCli([
+      "--root", root, "check-dispatch",
+      "--agent", "local-board-reviewer", "--model", "sonnet", "--ticket", ticketId,
+    ]);
+    assert.equal(dispatch.code, 1);
+    assert.equal(
+      JSON.parse(dispatch.stdout).reason,
+      "agent-mismatch",
+      "after the stamp clears, check-dispatch must fall back to the status action route (design), not the reviewer",
+    );
   });
 });
 

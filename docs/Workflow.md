@@ -203,9 +203,12 @@ approved deviation recorded via `approve-inline --executor <route>@<model>`.
 Done-time re-validation stays route-only for back-compat with evidence recorded
 before this rule.
 
-For dispatch verification, `begin-step` also records the ticket's active action,
-route, and model in `.local-board/active-steps.json` in the main checkout, so
-linked worktrees share one ledger. `check-dispatch --agent [--model] [--ticket]`
+For dispatch verification, the CLI records active work in
+`.local-board/active-steps.json` in the main checkout, so linked worktrees share
+one ledger. `begin-step` stamps the ticket's active action/route/model;
+`design-review-check` also stamps the design-review action for
+`claude-subagent:` routes so hook callers can verify the reviewer. `codex-task`
+design-review routes still stamp nothing. `check-dispatch --agent [--model] [--ticket]`
 reads that ledger for hook callers, prints a JSON verdict to stdout, and exits
 0 for allow, 1 for deny, or 2 for error. `complete-step` and `approve-inline`
 clear the ticket's active ledger entry.
@@ -454,7 +457,7 @@ Step order: after `complete-step design` records the design evidence and the des
 local-board design-review-check <ticket-id> --json
 ```
 
-This returns the `agent` route (default `codex-task:read-only`), `model` (`gpt-5.6-sol`), `effort` (`xhigh`), the resolved `prompt` (`plans/prompts/steps/design_review.md`), and a narrow `ticketContext`. It performs no dispatch and stamps nothing. Dispatch the reviewer through the returned route, pinning `model` and passing `effort` at dispatch.
+This returns the `agent` route (default `codex-task:read-only`), `model` (`gpt-5.6-sol`), `effort` (`xhigh`), the resolved `prompt` (`plans/prompts/steps/design_review.md`), and a narrow `ticketContext`. It performs no dispatch. For `claude-subagent:` routes it stamps a design-review active-step record so dispatch hooks can verify the reviewer; `codex-task` routes still stamp nothing. Dispatch the reviewer through the returned route, pinning `model` and passing `effort` at dispatch.
 
 The verdict contract: the reviewer (see `plans/prompts/steps/design_review.md`) returns a **first-line TEXT** verdict token — `PASS`, `CONCERNS`, or `FAIL` — followed by any numbered findings, never JSON. Record it verbatim with the resolved executor/model:
 

@@ -1340,8 +1340,9 @@ async function commandDesignReviewCheck(root, args, allowMainRoot) {
   }
 
   // Parity with commandGateCheck: refuse a wrong-root invocation before any
-  // further work, even though this command performs no dispatch or write of
-  // its own.
+  // further work. This command performs no dispatch of its own; it stamps
+  // the active-steps ledger for claude-subagent design-review routes only
+  // (codex-task routes stamp nothing -- see below).
   await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
   const config = await loadConfig(root);
@@ -1363,31 +1364,30 @@ async function commandDesignReviewCheck(root, args, allowMainRoot) {
   const promptPath = path.resolve(root, "plans", "prompts", "steps", "design_review.md");
   await assertPromptExists(promptPath, "design-review");
 
-  // T20260710T1532Z, D5/D7: only when BOTH the route is claude-subagent: AND
-  // the profile lists a non-empty fallbackModels, stamp a design-review
-  // `action` ledger record so check-dispatch authorizes the reviewer dispatch
-  // (and any configured fallback). A claude-subagent route with NO
-  // fallbackModels writes no stamp (D7 known limitation, carried out of
-  // scope: check-dispatch falls back to the status action and rejects the
-  // reviewer as agent-mismatch -- pre-existing, not fixed here). No-clobber,
-  // mirroring gate-check/specialty-run: a conflict is a non-fatal warning.
-  // The existing `recordDesignReview` completion clear
-  // (isActionLedgerEntry(record, "design-review")) already clears this exact
-  // stamp, so no new clear code is needed.
+  // T20260710T1532Z, D5; D7 fix: whenever the route is claude-subagent:,
+  // stamp a design-review `action` ledger record so check-dispatch authorizes
+  // the reviewer dispatch (and any configured fallback), regardless of
+  // whether fallbackModels is configured. The `fallbackModels` FIELD on the
+  // record stays D6-conditional -- present only for a non-empty configured
+  // list, via the same conditional-spread idiom `beginStep` uses -- so a
+  // fallback-free stamp carries no `fallbackModels` key at all. codex-task
+  // routes are unaffected: the block is skipped and nothing is stamped.
+  // No-clobber, mirroring gate-check/specialty-run: a conflict (an existing,
+  // differently-shaped record for the ticket) is a non-fatal warning; the old
+  // record is left in place and the design-review dispatch stays rejected
+  // until the slot is cleared. The existing `recordDesignReview` completion
+  // clear (isActionLedgerEntry(record, "design-review")) already clears this
+  // exact stamp, so no new clear code is needed.
   const designReviewFallbackModels =
     Array.isArray(profile.fallbackModels) && profile.fallbackModels.length > 0 ? profile.fallbackModels : null;
-  if (
-    typeof profile.route === "string"
-    && profile.route.startsWith("claude-subagent:")
-    && designReviewFallbackModels
-  ) {
+  if (typeof profile.route === "string" && profile.route.startsWith("claude-subagent:")) {
     const stampResult = await stampActiveStepNoClobber(root, ticket.id, {
       ticket: ticket.id,
       kind: "action",
       action: "design-review",
       route: profile.route,
       model: profile.model ?? null,
-      fallbackModels: designReviewFallbackModels,
+      ...(designReviewFallbackModels ? { fallbackModels: designReviewFallbackModels } : {}),
       root: path.resolve(root),
       ts: formatIsoSeconds(new Date()),
     });
