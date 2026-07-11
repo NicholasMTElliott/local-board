@@ -14,7 +14,7 @@ workStartedAt: 2026-07-11T20:04:07Z
 workCompletedAt: null
 created: 2026-07-10T20:50:02Z
 updated: 2026-07-11T20:20:36Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
 # design-review: fallback-free claude-subagent dispatch is rejected by the routing-validator hook (D7 carve-out)
@@ -269,3 +269,5 @@ Verdict: PASS.
 - 2026-07-11T20:13:13Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (ledger-stamp guard fix; no auth/UI surface)
 
 - 2026-07-11T20:13:14Z: Ensured git branch local-board/B20260710T2050Z-design-review-fallback-free-claude-subagent-dispatch-is-rejected-by-the-routing-validator-hook-d7-carve-out (already-current).
+
+- 2026-07-11T20:20:36Z: Completed review via codex-task:read-only@gpt-5.6-terra: r1 CONCERNS (1 Medium: scan-mode checkDispatch coverage gap, test-only) fixed in e5636e3; r2 focused re-review PASS. Production paths verified: unconditional claude-subagent stamp, D6-conditional field, codex no-write, no-clobber, identity-scoped clear.
