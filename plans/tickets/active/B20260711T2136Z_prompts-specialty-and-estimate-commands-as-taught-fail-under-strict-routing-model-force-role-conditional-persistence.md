@@ -8,12 +8,12 @@ children: []
 blockedBy: []
 blocks: []
 branch: local-board/B20260711T2136Z-prompts-specialty-and-estimate-commands-as-taught-fail-under-strict-routing-model-force-role-conditional-persistence
-estimate: null
-estimateBasis: null
+estimate: 2
+estimateBasis: B20260710T2051Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-11T21:36:09Z
-updated: 2026-07-11T23:04:40Z
+updated: 2026-07-11T23:04:41Z
 completedSteps: []
 routingApprovals: []
 ---
