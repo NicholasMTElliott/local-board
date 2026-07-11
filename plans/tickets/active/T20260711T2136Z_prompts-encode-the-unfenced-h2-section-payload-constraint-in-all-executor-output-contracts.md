@@ -13,8 +13,8 @@ estimateBasis: T20260710T2050Z
 workStartedAt: 2026-07-11T23:18:33Z
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:22:29Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
+updated: 2026-07-11T23:23:00Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet"]
 routingApprovals: []
 ---
 # prompts: encode the unfenced-H2 section-payload constraint in all executor output contracts
@@ -277,3 +277,5 @@ No deviations from the r1-patched design.
 - 2026-07-11T23:18:32Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: r1 CONCERNS (2 Med counts/guard-precision + 2 Low) all patched by designer; anchors and sibling disjointness verified; proceed
 
 - 2026-07-11T23:18:33Z: Ensured git branch local-board/T20260711T2136Z-prompts-encode-the-unfenced-h2-section-payload-constraint-in-all-executor-output-contracts (already-current).
+
+- 2026-07-11T23:23:00Z: Completed implement via claude-subagent:local-board-implementer@sonnet: All 12 targets + 4 mirrors landed (6 reviewer/tester Output blocks, 3 requirementBody bullets, 3 designer body-only rewords); sync-resources run; npm run check clean; node --test 586/587 pass 1 pre-existing skip. Commits 9dfbe0e (implementation, explicit paths) + 4e68f03 (Implementation Notes).
