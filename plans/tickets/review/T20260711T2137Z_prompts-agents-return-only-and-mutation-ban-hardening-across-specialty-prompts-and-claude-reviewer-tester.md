@@ -13,7 +13,7 @@ estimateBasis: T20260711T2136Z
 workStartedAt: 2026-07-11T23:48:46Z
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:53:41Z
+updated: 2026-07-11T23:55:57Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", security_threat_model:inline, "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -276,6 +276,14 @@ Implemented all four items of the r1-patched design.
 None. Implementation matches the r1-patched Technical Design exactly.
 
 ## Review Findings
+
+### Review round 1 (codex-task:read-only@gpt-5.6-terra, high, static)
+
+Verdict: PASS, no findings.
+
+- Claude bans match the r1-patched scoped generic prohibition; tester keeps the isolated-fixture carve-out; codex variants keep their equivalent generic bans; both T2136Z Output warnings byte-unchanged.
+- All five specialty prompts carry the canonical return-only paragraph at the Output-Contract/Recording anchor; pinned Recording text, decompose.md L18, and the gatecheck requestedSteps JSON contract preserved. All six source/mirror pairs byte-identical.
+- Commit scope exact (54ba8d1: six prompt sources + ticket notes; 31235da: three agent defs + six mirrors); composed diff contains only the fifteen files + moved ticket markdown. Allow-listed CLI commands verified read-only by their implementation paths.
 
 ## Test Evidence
 
