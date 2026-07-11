@@ -13,8 +13,8 @@ estimateBasis: T20260710T2050Z
 workStartedAt: 2026-07-11T23:12:17Z
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:25:58Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+updated: 2026-07-11T23:29:38Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # prompts: operational-reality gaps - sandbox commit fallback, orchestrator obligations, loop-back re-design guidance, routing-pin drift
@@ -167,6 +167,20 @@ None. No isolation fallback needed; no probe edits made.
 
 ## Documentation Updates
 
+### Files edited
+
+- `docs/PerStepOrchestration.md` - updated the self-writing executor completion path to mention the sandboxed `git commit` fallback where the executor returns exact intended paths for the orchestrator to commit.
+
+### Checked and accurate
+
+- `docs/Workflow.md` - already reflects loop-back invalidation of action, gate, and design-review evidence; its design-review model/effort examples describe the current config-resolved defaults rather than quoting prompt text.
+- `docs/CodexSupport.md` - no stale documenter commit prohibition or old `design_review.md` hardcoded-pin prose found.
+- `memory-bank/systemPatterns.md` - current state already describes design-review as config-profile driven and loop-back stripping of gate/design-review consultations; no factual update needed.
+
+### Verification
+
+- No tests run, per documenter invocation instructions.
+
 ## Questions
 
 ## Run Log
@@ -194,3 +208,5 @@ None. No isolation fallback needed; no probe edits made.
 - 2026-07-11T23:25:56Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. Full suite 586/587 pass 0 fail 1 pre-existing skip; all four groups cited by file:line; mirrors identical; em-dash fix verified; diff scope exactly 11 expected files.
 
 - 2026-07-11T23:25:58Z: Ensured git branch local-board/T20260711T2138Z-prompts-operational-reality-gaps-sandbox-commit-fallback-orchestrator-obligations-loop-back-re-design-guidance-routing-pin-drift (already-current).
+
+- 2026-07-11T23:29:38Z: Completed document via codex-task:workspace-write: docs/PerStepOrchestration.md: softened the executors-have-committed claim to cover the sandbox fallback (executor returns exact paths, orchestrator commits); Workflow.md, CodexSupport.md, systemPatterns.md checked accurate. Documentation Updates section written. Orchestrator committed (sandbox denies git).
