@@ -813,3 +813,5 @@ Original question history (for context): five sol@xhigh design-review rounds; ro
 - 2026-07-11T20:43:51Z: Ensured git branch local-board/T20260710T1534Z-codex-task-retries-for-transient-capacity-and-sandbox-failures-codex-task-repo (already-current).
 
 - 2026-07-11T20:46:22Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. codex-task 34/34 pass; descope confirmed (no FAKE_CODEX_BLOCK, no tests 20-23, test 13 = non-zero-exit wrapper); spot-probes: --retries --uninstall exit 2 no installer, -1 rejected, help documents flag; clean-exit break at :902 pre-classification; rmSync at :880-881 every attempt; SKILL.md items cited; diff scope = 3 expected files.
+
+- 2026-07-11T20:46:37Z: Ensured git branch local-board/T20260710T1534Z-codex-task-retries-for-transient-capacity-and-sandbox-failures-codex-task-repo (already-current).
