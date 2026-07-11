@@ -13,8 +13,8 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-11T20:13:50Z
 workCompletedAt: null
 created: 2026-07-10T20:50:02Z
-updated: 2026-07-11T20:28:18Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+updated: 2026-07-11T20:31:25Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # skills: document the pinned-retry-then-fallback-walk choreography in all four Delegation texts
@@ -402,6 +402,17 @@ None.
 
 ## Documentation Updates
 
+### Updated
+
+- `docs/CodexSupport.md` — qualified the Codex fallback walk to retry the pinned model once before walking sanitized `codexDispatch.fallbackModels`.
+- `docs/PerStepOrchestration.md` — updated the real-run validation note to describe pinned-retry-then-ordered-fallback dispatch.
+
+### Checked
+
+- `docs/Workflow.md` — existing fallback text is schema/evidence-level and remains accurate.
+- `memory-bank/systemPatterns.md` — terse current-state facts remain accurate; no stale claim about parallel skills lacking the choreography.
+- `memory-bank/techContext.md` — profile/evidence constraints remain accurate.
+
 ## Questions
 
 ## Run Log
@@ -433,3 +444,5 @@ None.
 - 2026-07-11T20:27:46Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. Full suite 571/572 pass 0 fail 1 pre-existing skip; skill-usage-sync 6/6 incl. new choreography assertion; all six choreography elements cited in all four skills; line-46 qualification verified with no residual claim; fences byte-identical; no quality concerns.
 
 - 2026-07-11T20:28:18Z: Ensured git branch local-board/T20260710T2050Z-skills-document-the-pinned-retry-then-fallback-walk-choreography-in-all-four-delegation-texts (already-current).
+
+- 2026-07-11T20:31:25Z: Completed document via codex-task:workspace-write: docs/CodexSupport.md + docs/PerStepOrchestration.md fallback-walk sentences updated with pinned-retry choreography; Workflow.md + systemPatterns.md + techContext.md checked, accurate as-is; Documentation Updates section written. Orchestrator committed (sandbox denies git).
