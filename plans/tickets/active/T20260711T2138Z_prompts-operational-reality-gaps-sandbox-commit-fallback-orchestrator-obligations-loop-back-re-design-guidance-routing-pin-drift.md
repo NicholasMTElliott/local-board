@@ -13,8 +13,8 @@ estimateBasis: T20260710T2050Z
 workStartedAt: 2026-07-11T23:12:17Z
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:15:21Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
+updated: 2026-07-11T23:17:17Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet"]
 routingApprovals: []
 ---
 # prompts: operational-reality gaps - sandbox commit fallback, orchestrator obligations, loop-back re-design guidance, routing-pin drift
@@ -151,3 +151,5 @@ No deviations from the approved design.
 - 2026-07-11T23:12:16Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: r1 PASS no findings
 
 - 2026-07-11T23:12:17Z: Ensured git branch local-board/T20260711T2138Z-prompts-operational-reality-gaps-sandbox-commit-fallback-orchestrator-obligations-loop-back-re-design-guidance-routing-pin-drift (already-current).
+
+- 2026-07-11T23:17:17Z: Completed implement via claude-subagent:local-board-implementer@sonnet: All four groups landed at designed anchors (sandbox-commit fallback x3, orchestrator bullets x2, design.md loop-back bullet, design_review.md pin reworded to config profile reference); sync-resources run, 4 mirrors identical, agents/codex unmirrored; npm run check clean; node --test 586/587 pass 1 pre-existing skip; cli.test.js:3365 design_review assertion re-verified green. Commits dd3acd8 + 6019a19.
