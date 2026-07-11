@@ -45,4 +45,4 @@ Strict JSON only. No prose, no code fences.
 
 ## Recording
 
-The orchestrator records evidence via `local-board complete-step <id> ui_component_review --executor <executor> --evidence "<VERDICT>: <short summary>"`. When a finding deserves a longer note in the ticket, the orchestrator may also call `local-board comment <id> "<text>" --section "Review Findings"`.
+The orchestrator records evidence via `local-board complete-step <id> ui_component_review --executor <executor> --model <model> --evidence "<VERDICT>: <short summary>"` (omit `--model` when `specialty-run` returned a null model). When a finding deserves a longer note in the ticket, the orchestrator may also call `local-board comment <id> "<text>" --section "Review Findings"`.

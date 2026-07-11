@@ -3362,6 +3362,29 @@ test("estimation prompts are present and reference the estimate pipeline", async
   assert.ok(stepText.includes("local-board estimate"), "estimate step references local-board estimate");
 });
 
+test("specialty optional-step prompts teach the strict-routing Recording command", async () => {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const specialtyPromptPaths = [
+    "optional-steps/design/security_threat_model.md",
+    "optional-steps/design/ui_component_review.md",
+    "optional-steps/design/ux_interaction_review.md",
+    "optional-steps/impl/security_audit.md",
+    "optional-steps/impl/ui_visual_review.md",
+  ];
+
+  for (const relativePath of specialtyPromptPaths) {
+    const text = await readFile(path.join(repoRoot, "plans", "prompts", relativePath), "utf8");
+    assert.ok(
+      text.includes("--executor <executor> --model <model> --evidence"),
+      `${relativePath} teaches --model in the Recording command`,
+    );
+    assert.ok(
+      text.includes("omit `--model`"),
+      `${relativePath} documents the omit-when-null parenthetical`,
+    );
+  }
+});
+
 test("design-review prompt describes the real persistence flow, not a phantom section", async () => {
   const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   const stepText = await readFile(
