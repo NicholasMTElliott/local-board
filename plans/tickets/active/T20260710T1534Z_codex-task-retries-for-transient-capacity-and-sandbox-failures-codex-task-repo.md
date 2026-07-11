@@ -1,7 +1,7 @@
 ---
 id: T20260710T1534Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P3
 parent: null
 children: []
@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-11T20:37:59Z
+updated: 2026-07-11T20:38:34Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -746,3 +746,5 @@ Original question history (for context): five sol@xhigh design-review rounds; ro
 - 2026-07-11T20:34:59Z: Code review r1 (codex-task:read-only@gpt-5.6-terra, high): FAIL. 1) [High] codex-task.mjs:92-100 - --retries added to parseArgs but NOT to VALUE_TAKING_FLAGS (documented as mirroring the parser); 'codex-task --prompt noop --retries --uninstall' treats --uninstall as an installer command before validation and can remove installed tool/skill dirs instead of rejecting the invalid retry value. Fix: add --retries to VALUE_TAKING_FLAGS + regression test near tests/cli-smoke.test.mjs:566 asserting --retries --uninstall exits 2 with retry validation error, no installer mode. All other Trigger-A/descope checks statically consistent. Looping to implementation.
 
 - 2026-07-11T20:34:59Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku].
+
+- 2026-07-11T20:38:34Z: Ensured git branch local-board/T20260710T1534Z-codex-task-retries-for-transient-capacity-and-sandbox-failures-codex-task-repo (already-current).
