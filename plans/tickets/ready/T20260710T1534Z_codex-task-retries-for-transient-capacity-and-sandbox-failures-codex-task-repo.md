@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-11T20:34:59Z
+updated: 2026-07-11T20:37:59Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -671,6 +671,21 @@ known-limitation item as specified.
 - Windows sandbox clean-exit (`blocked`) case remains a manual re-dispatch,
   documented; a reliable automatic path needs a structured tool-failure
   record from codex's event output (candidate future ticket, out of scope).
+
+### Code review round 1 fix
+
+Code review round 1 verdict: FAIL, one High. `VALUE_TAKING_FLAGS`
+(`codex-task.mjs`, the installer-dispatch pre-scan mirror list) was missing
+`--retries`, so an invalid `--retries` value that spells a real installer
+flag (e.g. `--retries --uninstall`) was misread as installer mode before
+arg validation ran and forwarded to `install.mjs --uninstall` instead of
+being rejected — could remove installed tool/skill directories on a typo'd
+invocation. Fixed by adding `'--retries'` to `VALUE_TAKING_FLAGS`; added a
+regression test (`tests/cli-smoke.test.mjs`) asserting `--retries
+--uninstall` exits 2 with the retry validation error and never reaches
+installer mode (verified failing pre-fix via a standalone repro before
+patching). `npm run check` pass; `npm test` **34/34 pass** (33 + 1 new).
+Commit `2f8a8a6` on `T20260710T1534Z-retries` (codex-task repo).
 
 ## Review Findings
 
