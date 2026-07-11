@@ -13,7 +13,7 @@ estimateBasis: T20260710T1532Z
 workStartedAt: 2026-07-11T20:57:06Z
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
-updated: 2026-07-11T20:57:06Z
+updated: 2026-07-11T21:00:35Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -175,6 +175,23 @@ Real non-ENOENT IO errors (EACCES) are not simulated portably on Windows; the no
 None blocking. (If the reviewer wants `clearActiveStepStrict` exported from `active-steps.js` now for a follow-up ticket rather than kept internal until its first caller lands, that is a trivial one-line addition -- defaulting to exported, mirroring `clearActiveStepIf`.)
 
 ## Implementation Notes
+
+### Implementation
+
+Added `clearActiveStepStrict(root, ticketId, predicate, options)` to `src/active-steps.js`, factored via a new private `clearActiveStepWith(readLedger, root, ticketId, predicate, options)` helper. `clearActiveStepIf` was rewritten as a one-line delegate to the helper with `readLedgerSelfHeal`; the helper body is a literal copy of the prior `clearActiveStepIf` body, so `clearActiveStepIf`'s behavior is byte-identical (confirmed by the full existing test suite passing unchanged, plus the new self-heal regression test). `clearActiveStepStrict` delegates to the same helper with `readLedgerStrict`. No caller wired (non-goal upheld): the new export has zero call sites outside its own tests.
+
+Added 9 tests in `test/active-steps.test.js` (healthy match/no-match, missing entry, missing file/ENOENT, corrupt JSON throw + bytes untouched, non-object top-level throw + bytes untouched, `clearActiveStepIf` corrupt-ledger legacy regression (no throw, returns false, bytes untouched), predicate-throws (no write, lock released, proven via a follow-on clear succeeding), and lock-concurrency parity using the existing `__afterRead` idiom).
+
+Added a systemPatterns.md note (in the existing active-steps ledger paragraph's vicinity) covering the two read modes, two clear modes, and the lock decision (beginStep stays lock-free; correction lane blocked pending ticket-lock sharing or a composable clear-under-held-lock primitive; ticket-before-ledger ordering if ever adopted).
+
+### Verification
+
+- `npm run check`: pass.
+- `node --test`: 585 pass, 1 pre-existing skip, 0 fail.
+
+### Deviations
+
+None from the approved r2 design.
 
 ## Review Findings
 
