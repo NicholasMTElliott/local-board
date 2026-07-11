@@ -13,7 +13,7 @@ estimateBasis: B20260710T2051Z
 workStartedAt: 2026-07-11T23:23:49Z
 workCompletedAt: null
 created: 2026-07-11T21:36:09Z
-updated: 2026-07-11T23:31:28Z
+updated: 2026-07-11T23:36:46Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -186,6 +186,28 @@ Verdict: PASS, no findings.
 - SHA-256: all six mirrors byte-identical. Commit paths exactly the intended files; no sibling-owned content touched.
 
 ## Test Evidence
+
+verdict: pass
+
+### Commands run
+
+- npm run check clean. node --test: 588 tests, 587 pass, 0 fail, 1 pre-existing skip (smoke (slow)); matches Implementation Notes.
+- Load-bearing tests confirmed green: estimate-prompt pin, new specialty Recording assertion, design_review persistence pin (unrelated, unaffected).
+- Behavioral probe on an external scratch board: estimate 2 --basis bootstrap ok; re-estimate without --force refused with "already has estimate 2; pass --force to overwrite" (exit 2, matching the taught sentence); --force succeeded, front matter estimate 4. Scratch board deleted; worktree untouched.
+
+### Acceptance greps (file:line)
+
+- Corrected Recording line + omit-when-null parenthetical verbatim in all five: security_threat_model.md:50, ui_component_review.md:48, ux_interaction_review.md:48, security_audit.md:49, ui_visual_review.md:49.
+- estimate.md:11 --force sentence; :16-21 capability-based Persistence; pins "local-board calibration suggest" (:7,:20) and "local-board estimate" (:6,:11,:21) verbatim.
+- Consistency: both designer defs instruct self-recorded estimates; the Persistence writable branch explicitly names the designer subagent - no contradiction.
+
+### Mirror parity and scope
+
+- All six source/mirror pairs byte-identical. Diff scope exactly 14 files (6 sources + 6 mirrors + test/cli.test.js + ticket markdown). Worktree clean.
+
+### Gaps / caveats
+
+- None. Tester additionally reported disregarding a mid-session injection-style reminder urging looser git-safety behavior; no worktree git mutations were run.
 
 ## Documentation Updates
 
