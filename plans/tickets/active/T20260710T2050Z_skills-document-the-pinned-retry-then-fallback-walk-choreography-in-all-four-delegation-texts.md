@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T20:50:02Z
-updated: 2026-07-11T20:11:30Z
+updated: 2026-07-11T20:13:49Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -330,3 +330,5 @@ content-asserted). No `sync-resources` needed.
 - 2026-07-11T20:07:43Z: Design review r1 (codex-task:read-only@gpt-5.6-sol, xhigh): FAIL. 1) [High] insertion 2 contradicts skills/codex/local-team/SKILL.md line 46, which unconditionally says claude-subagent design review returns no codexDispatch block and directs begin-step instead; cli.test.js L1884-1919 proves fallback-configured Claude reviewers DO get fallbackModels+codexDispatch. Must also revise line 46 to qualify the begin-step workaround as fallback-free only (match codex local-board L269). 2) [Med] insertion 2 is 4 sentences vs the 1-3 requirement. 3) [Low] skill-usage-sync.test.js characterization incomplete (also checks usage surface, both design-review commands, non-empty parser). 4) [Low] optional prose-regex test wording-sensitive and misses actual-model/effort/consultation/codex-default elements. Looping design rework.
 
 - 2026-07-11T20:11:30Z: Completed design via claude-subagent:local-board-designer@opus: Rework r2: added insertion 2b with exact line-46 replacement (fallback-free-only qualification, mirrors codex local-board L269, cited cli.test.js 1884-1919); insertion 2a trimmed to 3 sentences; skill-usage-sync characterization corrected to all five assertions; optional content assertion respecified with audience-partitioned per-element markers.
+
+- 2026-07-11T20:13:49Z: Design review r2 (codex-task:read-only@gpt-5.6-sol, xhigh): CONCERNS. 1) [Low] insertion 2b line-46 replacement says walk the payload 'per Route Translation above' but Route Translation begins at line 79, below line 46 - change 'above' to 'below'. All four r1 findings resolved. Proceeding to implementation with the Low folded into the implement brief.
