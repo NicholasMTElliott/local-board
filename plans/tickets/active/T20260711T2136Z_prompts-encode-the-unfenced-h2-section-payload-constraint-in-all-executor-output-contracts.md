@@ -13,8 +13,8 @@ estimateBasis: T20260710T2050Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:09:19Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-11T23:10:34Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # prompts: encode the unfenced-H2 section-payload constraint in all executor output contracts
@@ -222,3 +222,5 @@ adjust punctuation to match each file's surrounding voice without changing meani
 ## Run Log
 
 - 2026-07-11T23:09:19Z: Completed design via claude-subagent:local-board-designer@opus: Canonical H3+/fence warning sentence for reviewer/tester Output blocks (6 files), requirementBody tailoring (3 files), design.md L17-18 + designer defs body-only reword; guard semantics verified against src/tickets.js SECTION_HEADING_RE L1211/L1318 (H2-only, fence-aware); no prose pins on targets (sole prompt pin is estimate.md cli.test.js:3357); 4 plans/prompts files need sync, 5 agents/ files do not; disjoint anchors from T2137Z (ban lines, decompose L9) and T2138Z (Include list).
+
+- 2026-07-11T23:10:34Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (prose-only prompt/agent edits)
