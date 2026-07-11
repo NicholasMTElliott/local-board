@@ -7,13 +7,13 @@ parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/B20260710T2050Z-design-review-fallback-free-claude-subagent-dispatch-is-rejected-by-the-routing-validator-hook-d7-carve-out
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T20:50:02Z
-updated: 2026-07-10T20:50:16Z
+updated: 2026-07-11T19:52:56Z
 completedSteps: []
 routingApprovals: []
 ---
