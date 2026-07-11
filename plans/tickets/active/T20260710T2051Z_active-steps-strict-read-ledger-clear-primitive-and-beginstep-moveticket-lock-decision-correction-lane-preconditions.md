@@ -13,8 +13,8 @@ estimateBasis: T20260710T1532Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
-updated: 2026-07-11T20:41:50Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-11T20:42:52Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # active-steps: strict-read ledger clear primitive and beginStep/moveTicket lock decision (correction-lane preconditions)
@@ -180,3 +180,5 @@ None blocking. (If the reviewer wants `clearActiveStepStrict` exported from `act
 ## Run Log
 
 - 2026-07-11T20:41:50Z: Completed design via claude-subagent:local-board-designer@opus: clearActiveStepStrict(root,ticketId,predicate,options) locked RMW reusing existing private readLedgerStrict; shared clearActiveStepWith helper keeps clearActiveStepIf byte-identical; missing FILE = no-op success (ENOENT = legitimate initial state), strict throws only on corrupt/unreadable; lock decision REJECT sharing ticket lock with beginStep (fail-open rationale + ticket-before-ledger ordering rule recorded for future adopters); 8 test cases incl. corrupt-throws-bytes-untouched and self-heal regression; systemPatterns note.
+
+- 2026-07-11T20:42:52Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (internal ledger primitive + lock decision; no UI/auth/external surface)
