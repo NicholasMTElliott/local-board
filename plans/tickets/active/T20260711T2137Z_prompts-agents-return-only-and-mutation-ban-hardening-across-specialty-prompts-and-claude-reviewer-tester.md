@@ -13,8 +13,8 @@ estimateBasis: T20260711T2136Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:41:05Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-11T23:41:29Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", security_threat_model:inline]
 routingApprovals: []
 ---
 # prompts/agents: return-only and mutation-ban hardening across specialty prompts and claude reviewer/tester
@@ -241,3 +241,5 @@ None. Requirement wording is explicit for all four items.
 - 2026-07-11T23:40:18Z: Completed design via claude-subagent:local-board-designer@opus: Four disjoint edits: claude reviewer/tester ban broadened to all mutating commands (matches codex generic ban; T2136Z Output warnings untouched); canonical return-only paragraph appended to five specialty Output Contracts (before Recording, avoiding B2136Z pinned substrings); decompose.md L9 reworded per Requirement (L18 untouched); codex gatecheck fenced json replaced with claude inline Shape form. No prose pins on targets; 6 plans/prompts files need sync, 3 agents/ files do not.
 
 - 2026-07-11T23:41:05Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: security_threat_model (design addresses a prompt-injection attack surface on return-only agents)
+
+- 2026-07-11T23:41:29Z: Completed security_threat_model via inline: CONCERNS: [Med] enumerated ban under-covers the mutating surface (misses set - which can force status - link-parent/link-child, block/unblock, approve-inline, start-work, worktree-*); recommend generic any-mutating-command formulation with the enumeration as examples plus an explicit read-only allow-list. Accepted residual: prompt-text mitigation is advisory (permission/hook enforcement is a ticket non-goal). Direction and remaining items sound.
