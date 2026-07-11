@@ -13,7 +13,7 @@ estimateBasis: B20260710T2050Z
 workStartedAt: 2026-07-11T20:44:50Z
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
-updated: 2026-07-11T20:44:50Z
+updated: 2026-07-11T20:47:57Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -249,6 +249,33 @@ the brief; if the orchestrator wants it excluded, drop that one sentence from Ch
 unchanged.
 
 ## Implementation Notes
+
+Implemented option (a) as designed (r1-patched), verbatim replacement text applied to
+`plans/prompts/steps/design_review.md`'s "Return-only — you persist nothing" paragraph:
+dropped the phantom `## Design Review` section claim, named the real recorder
+(`design-review-complete`, which stamps the completion token and appends the verdict to
+the Run Log), and folded in the spawn-denial guidance with the verdict-first-compatible
+fallback (unreadable inputs listed as findings-context, never a fourth verdict token).
+
+Ran `npm run sync-resources`; `resources/prompts/steps/design_review.md` now matches
+`plans/prompts/steps/design_review.md` byte-for-byte (git diff of both files identical).
+
+Added a new content-assertion test in `test/cli.test.js` ("design-review prompt describes
+the real persistence flow, not a phantom section"), modeled on the existing
+estimate-prompt assertion: positive check for `design-review-complete`, negative check for
+the removed phrase `records the \`## Design Review\` section`, and a normalized-whitespace
+check for the folded-in spawn-denial guidance (`denies process spawning`).
+
+No changes to `agents/`, `src/`, templates, config, or `SKILL*.md` — none needed per the
+design's cross-reference audit.
+
+Verification: `npm run check` (syntax checks) clean; full `node --test` suite: 577 tests,
+576 pass, 1 pre-existing skip (the racing-CLI smoke test), 0 fail.
+
+Commit `8e2b08c` on branch
+`local-board/B20260710T2051Z-prompts-design-review-md-instructs-recording-a-design-review-section-the-section-command-cannot-create`,
+staged by explicit path (`plans/prompts/steps/design_review.md`,
+`resources/prompts/steps/design_review.md`, `test/cli.test.js`).
 
 ## Review Findings
 
