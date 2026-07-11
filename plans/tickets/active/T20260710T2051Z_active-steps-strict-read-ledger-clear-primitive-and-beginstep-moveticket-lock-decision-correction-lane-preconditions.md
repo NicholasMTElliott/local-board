@@ -1,7 +1,7 @@
 ---
 id: T20260710T2051Z
 type: task
-status: ready_for_design
+status: designing
 priority: P4
 parent: null
 children: []
@@ -13,7 +13,7 @@ estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
-updated: 2026-07-11T20:35:01Z
+updated: 2026-07-11T20:35:30Z
 completedSteps: []
 routingApprovals: []
 ---
