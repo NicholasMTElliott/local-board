@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-11T20:13:50Z
 workCompletedAt: null
 created: 2026-07-10T20:50:02Z
-updated: 2026-07-11T20:24:40Z
+updated: 2026-07-11T20:27:46Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -366,6 +366,39 @@ Verdict: PASS, no findings.
 - CLI Commands fences and both single-ticket skills untouched by the diff. New skill-usage-sync content assertion is additive, audience-partitioned, and matches the inserted prose.
 
 ## Test Evidence
+
+verdict: pass
+
+### Commands run
+
+- git status/log/show: commit 725c68d touches exactly SKILL_TEAM.md, skills/codex/local-team/SKILL.md, test/skill-usage-sync.test.js; worktree clean.
+- npm run check — pass. node --test (full suite) — 572 tests, 571 pass, 0 fail, 1 pre-existing skip (smoke (slow)); matches Implementation Notes.
+- node --test test/skill-usage-sync.test.js — 6/6 pass incl. the new "all four skill texts document the pinned-retry-then-fallback-walk choreography" assertion.
+
+### Acceptance criteria coverage (citations)
+
+All six elements (pinned retry once, ordered walk, actual-model evidence, effort carry-over, consultation-payload walk, exhaustion to approve-inline/questions) present in each file's audience dialect:
+- SKILL.md:373 (native, pre-existing, untouched).
+- skills/codex/local-board/SKILL.md:87-93 (Fallback Model Walk, pre-existing, untouched; never-codex-default at :91).
+- SKILL_TEAM.md:64 (new native insertion; covers begin-step + all three consultation payloads).
+- skills/codex/local-team/SKILL.md:83 (new codex insertion; never-codex-default included).
+Never-codex-default correctly absent from both native files.
+
+### Line-46 correction
+
+skills/codex/local-team/SKILL.md:46 now qualifies the begin-step workaround as fallback-FREE only and points to "Route Translation below" (Route Translation at :79). Grep confirms no residual unconditional no-codexDispatch claim anywhere in the file.
+
+### Fence integrity
+
+git diff mainline...HEAD across all four skill files: only the two prose insertions + line-46 edit; SKILL.md and skills/codex/local-board/SKILL.md byte-identical to mainline. Neither parallel skill contains a CLI Commands heading, so no fence existed to touch.
+
+### Test-quality notes
+
+New assertion is heading-scoped and audience-partitioned per design; no over-broad regex risk. Optional non-required design suggestion (configuredFallbackModels bullet in SKILL_TEAM.md begin-step list) not added - does not block. Full suite deterministic, ~41s.
+
+### Gaps / caveats
+
+None.
 
 ## Documentation Updates
 
