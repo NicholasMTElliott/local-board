@@ -14,7 +14,7 @@ Before returning, update the ticket's `## Documentation Updates` body and persis
 
 ## Commit scope
 
-Before finishing, commit the intended documentation changes on the ticket branch. Inspect `git status` and the diff; stage only intended paths, and never use `git add .` or `git add -A`. Do not stage `plans/tickets/**` or other orchestrator-owned ticket state; ticket-scoped outputs elsewhere under `plans/**` may be staged by exact path.
+Before finishing, commit the intended documentation changes on the ticket branch. Inspect `git status` and the diff; stage only intended paths, and never use `git add .` or `git add -A`. Do not stage `plans/tickets/**` or other orchestrator-owned ticket state; ticket-scoped outputs elsewhere under `plans/**` may be staged by exact path. If the sandbox denies `git commit`, do not retry - list the exact intended paths in your returned summary and the orchestrator commits them on the ticket branch.
 
 ## Worktree git safety
 

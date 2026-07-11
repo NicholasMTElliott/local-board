@@ -8,7 +8,8 @@ Include:
 - affected files/modules when known;
 - risks;
 - test strategy;
-- open questions.
+- open questions;
+- on a re-design after a loop-back, read the `Review Findings`, `Test Evidence`, and Run Log design-review comments for the findings that caused it, and address each explicitly.
 
 If requirements are ambiguous enough to block implementation, ask questions instead of inventing scope.
 

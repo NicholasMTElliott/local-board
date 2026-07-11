@@ -191,8 +191,9 @@ executors are pure work units.
      (with `approve-inline` first when an executor had to run inline in a pinch).
      The section payload is body-only: omit the target `## Heading`, and fence
      literal top-level `## ` samples.
-   - Self-writing result → the executor already committed in the worktree;
-     orchestrator records `complete-step` evidence.
+   - Self-writing result → the executor either committed in the worktree or,
+     when sandboxed git commit is denied, returned the exact intended paths for
+     the orchestrator to commit; orchestrator records `complete-step` evidence.
    - Choose the next non-terminal status from the `transitions` guidance returned
      by `begin-step`/`query-ticket` and `move`; terminal `done` moves are handled
      by Closeout.

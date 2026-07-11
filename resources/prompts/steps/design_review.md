@@ -2,7 +2,8 @@
 
 Read-only review of a ticket's `## Technical Design` against its `## Requirement`
 and acceptance criteria, before the ticket may advance to implementation. Routed
-to a codex reviewer (default pin gpt-5.6-sol @ xhigh reasoning). The point is to
+to a codex reviewer per the design-review agent profile in
+`plans/local-board.config.jsonc`. The point is to
 catch design-level defects now, while a re-design is cheap — not to loop back from
 review or test after the work is built.
 
