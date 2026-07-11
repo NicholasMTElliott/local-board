@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-11T20:06:02Z
+updated: 2026-07-11T20:10:03Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -658,3 +658,5 @@ Original question history (for context): five sol@xhigh design-review rounds; ro
 - 2026-07-11T20:05:07Z: Completed design via claude-subagent:local-board-designer@opus: Descope pass per user option-2 decision: Trigger B fully removed (section, findSandboxWrapperMarker, clean-exit retry branch, tests 20-23, FAKE_CODEX_BLOCK_* knobs); Trigger A kept as rounds-1-4 hardened (classifyFailure last-lines first-match, durable exclusions first, pre-attempt rmSync lastMessagePath, gated attempts, option-b structural equivalence, tests 1-19); SKILL.md known-limitation item added; descope note recorded; stale line refs refreshed against sibling repo.
 
 - 2026-07-11T20:06:02Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (CLI retry flag; auth failures explicitly non-retryable; no UI/API/PII surface)
+
+- 2026-07-11T20:10:03Z: Design review r6 (codex-task:read-only@gpt-5.6-sol, xhigh; descope-scoped): FAIL. 1) [High] Excision incomplete: Trigger B material retained at Technical Design lines 75-94, 464-465, 527-535, 585-592, 614-618 (clean-exit sandbox-marker retry, tests 20-23, FAKE_CODEX_BLOCK_* knobs preserved as historical detail) - violates the ANSWERED directive; allowed remnant is only a concise attribution note (option-2 decision 2026-07-11, warn against re-adding without structured tool-failure data). 2) [Low] Spawn-error bullet cites codex-task.mjs:778-787 for child.on(error) which is at line 501; 778-787 is the main() catch/emit path - cite both or relabel. Looping design rework.
