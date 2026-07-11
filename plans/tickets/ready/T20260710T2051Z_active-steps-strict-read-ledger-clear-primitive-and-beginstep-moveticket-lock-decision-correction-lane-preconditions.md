@@ -262,3 +262,5 @@ healthy match clears (others intact); healthy present-entry predicate mismatch n
 - 2026-07-11T21:04:02Z: Ensured git branch local-board/T20260710T2051Z-active-steps-strict-read-ledger-clear-primitive-and-beginstep-moveticket-lock-decision-correction-lane-preconditions (already-current).
 
 - 2026-07-11T21:06:54Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. Full suite 585/586 pass 0 fail 1 pre-existing skip; targeted 55/55; all nine design cases named and passing; contract cited by line; five clearActiveStepIf callers unchanged; zero src/ strict callers; lock decision + residual recorded in design L122-145 and systemPatterns; test diff purely additive.
+
+- 2026-07-11T21:07:02Z: Ensured git branch local-board/T20260710T2051Z-active-steps-strict-read-ledger-clear-primitive-and-beginstep-moveticket-lock-decision-correction-lane-preconditions (already-current).
