@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-11T20:13:50Z
 workCompletedAt: null
 created: 2026-07-10T20:50:02Z
-updated: 2026-07-11T20:21:30Z
+updated: 2026-07-11T20:24:39Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -356,6 +356,14 @@ change).
 No deviations from the r2 design.
 
 ## Review Findings
+
+### Review round 1 (codex-task:read-only@gpt-5.6-terra, high, static)
+
+Verdict: PASS, no findings.
+
+- SKILL_TEAM.md:64 matches the approved three-sentence native insertion at the required anchor; covers pinned retry, ordered fallback walk, actual-model evidence, effort carry-over, consultation payloads, exhaustion path.
+- skills/codex/local-team/SKILL.md:46 and :83 correctly qualify the begin-step workaround as fallback-free-only and document the sanitized codexDispatch walk including the never-codex-default rule; no conflicting old claim remains anywhere in the file.
+- CLI Commands fences and both single-ticket skills untouched by the diff. New skill-usage-sync content assertion is additive, audience-partitioned, and matches the inserted prose.
 
 ## Test Evidence
 
