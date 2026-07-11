@@ -13,7 +13,7 @@ estimateBasis: T20260710T2050Z
 workStartedAt: 2026-07-11T23:18:33Z
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:26:23Z
+updated: 2026-07-11T23:29:59Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -267,6 +267,34 @@ Verdict: PASS, no findings.
 - All four mirrors byte-identical; merge-base diff exactly the 16 expected files + ticket relocation; no prose deletions or contradictions.
 
 ## Test Evidence
+
+verdict: pass
+
+### Commands run
+
+- npm run check clean. node --test: 587 tests, 586 pass, 0 fail, 1 pre-existing skip (smoke (slow)); matches Implementation Notes exactly.
+
+### Acceptance greps (12 designed sentences, file:line cited)
+
+- Group 1 canonical warning verbatim in all six: code_reviewer.md:21, steps/test.md:19, claude reviewer :39 / tester :37, codex reviewer :38 / tester :36.
+- Group 2 requirementBody extension in all three: claude decomposer :35, codex decomposer :36, decompose.md:18.
+- Group 3 body-only reword in all three: design.md:17-19, claude designer :39-40, codex designer :26 (appended clarification per design).
+
+### Behavioral probe (throwaway board outside the worktree)
+
+- lb-probe temp board: unfenced H2 payload rejected exit 2 with the exact guard message (fence-any-literal wording); H3 payload succeeded cleanly; probe board deleted. No commands against the real board.
+
+### Sibling-zone integrity
+
+- decompose.md link rule (L9 area) untouched; design.md Include list untouched; claude reviewer/tester Rules ban lines (L23/L22) outside the diff hunks, unchanged by direct read.
+
+### Mirror parity and scope
+
+- All four plans/prompts vs resources/prompts pairs byte-identical. Diff scope exactly 17 paths (12 sources + 4 mirrors + ticket markdown).
+
+### Gaps / caveats
+
+None. No isolation fallback needed.
 
 ## Documentation Updates
 
