@@ -14,7 +14,7 @@ workStartedAt: 2026-07-11T23:23:49Z
 workCompletedAt: null
 created: 2026-07-11T21:36:09Z
 updated: 2026-07-11T23:31:27Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
 # prompts: specialty and estimate commands as taught fail under strict routing (--model, --force, role-conditional persistence)
@@ -212,3 +212,5 @@ Verdict: PASS, no findings.
 - 2026-07-11T23:29:17Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (prompt prose + content-assertion test)
 
 - 2026-07-11T23:29:18Z: Ensured git branch local-board/B20260711T2136Z-prompts-specialty-and-estimate-commands-as-taught-fail-under-strict-routing-model-force-role-conditional-persistence (already-current).
+
+- 2026-07-11T23:31:27Z: Completed review via codex-task:read-only@gpt-5.6-terra: r1 PASS no findings: canonical Recording lines match SKILL composition, estimate.md edits accurate and capability-consistent, new assertion clean, mirrors SHA-identical, scope exact.
