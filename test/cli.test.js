@@ -3362,6 +3362,28 @@ test("estimation prompts are present and reference the estimate pipeline", async
   assert.ok(stepText.includes("local-board estimate"), "estimate step references local-board estimate");
 });
 
+test("design-review prompt describes the real persistence flow, not a phantom section", async () => {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const stepText = await readFile(
+    path.join(repoRoot, "plans", "prompts", "steps", "design_review.md"),
+    "utf8",
+  );
+  assert.ok(stepText.trim().length > 0, "design_review step prompt is non-empty");
+  assert.ok(
+    stepText.includes("design-review-complete"),
+    "design_review step references design-review-complete as the real recorder",
+  );
+  assert.ok(
+    !stepText.includes("records the `## Design Review` section"),
+    "design_review step must not instruct recording a phantom Design Review section",
+  );
+  const normalized = stepText.replace(/\s+/g, " ");
+  assert.ok(
+    normalized.includes("denies process spawning"),
+    "design_review step includes the spawn-denial guidance",
+  );
+});
+
 async function runCli(args) {
   const stdout = [];
   const stderr = [];
