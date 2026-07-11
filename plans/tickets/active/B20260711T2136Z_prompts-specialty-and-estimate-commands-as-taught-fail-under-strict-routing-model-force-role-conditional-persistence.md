@@ -1,7 +1,7 @@
 ---
 id: B20260711T2136Z
 type: bug
-status: ready_for_implementation
+status: implementing
 priority: P3
 parent: null
 children: []
@@ -10,10 +10,10 @@ blocks: []
 branch: local-board/B20260711T2136Z-prompts-specialty-and-estimate-commands-as-taught-fail-under-strict-routing-model-force-role-conditional-persistence
 estimate: 2
 estimateBasis: B20260710T2051Z
-workStartedAt: null
+workStartedAt: 2026-07-11T23:23:49Z
 workCompletedAt: null
 created: 2026-07-11T21:36:09Z
-updated: 2026-07-11T23:23:48Z
+updated: 2026-07-11T23:23:49Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -185,3 +185,5 @@ None blocking.
 - 2026-07-11T23:23:47Z: Design review r2 (codex-task:read-only@gpt-5.6-sol, xhigh): PASS. Capability-based Persistence classification verified against both designer defs; scaffold attribution verified at src/config.js:1161-1182 with board-local inline/null confirmed via resolveOptionalStepAgent; unchanged sections coherent.
 
 - 2026-07-11T23:23:48Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: r1 FAIL (persistence route misclassification High + attribution Med) reworked; r2 PASS both fixes verified, no new inconsistencies
+
+- 2026-07-11T23:23:49Z: Ensured git branch local-board/B20260711T2136Z-prompts-specialty-and-estimate-commands-as-taught-fail-under-strict-routing-model-force-role-conditional-persistence (already-current).
