@@ -614,6 +614,23 @@ test("checkDispatch (B20260710T2050Z, D7 fix): a fallback-free design-review act
     });
     assert.equal(modelOmitted.code, 0);
     assert.equal(modelOmitted.body.reason, "model-unverifiable");
+
+    // Scan mode (no --ticket): checkDispatchByScan must resolve the same
+    // fallback-free design-review stamp by route/model when the caller
+    // doesn't know the ticket id up front.
+    const scanPinned = await checkDispatch(root, { agent: "local-board-reviewer", model: "sonnet" });
+    assert.equal(scanPinned.code, 0);
+    assert.equal(scanPinned.body.reason, "match");
+    assert.equal(scanPinned.body.ticket, "T-design-review-no-fallback");
+    assert.deepEqual(scanPinned.body.expected, { agent: "local-board-reviewer", model: "sonnet" });
+
+    const scanWrongModel = await checkDispatch(root, { agent: "local-board-reviewer", model: "opus" });
+    assert.equal(scanWrongModel.code, 1);
+    assert.deepEqual(scanWrongModel.body, { ok: false, reason: "no-active-step-for-agent" });
+
+    const scanWrongAgent = await checkDispatch(root, { agent: "local-board-designer", model: "sonnet" });
+    assert.equal(scanWrongAgent.code, 1);
+    assert.deepEqual(scanWrongAgent.body, { ok: false, reason: "no-active-step-for-agent" });
   });
 });
 
