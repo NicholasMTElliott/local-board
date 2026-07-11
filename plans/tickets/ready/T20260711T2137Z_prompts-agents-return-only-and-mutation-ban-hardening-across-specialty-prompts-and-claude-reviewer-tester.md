@@ -13,7 +13,7 @@ estimateBasis: T20260711T2136Z
 workStartedAt: 2026-07-11T23:48:46Z
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:55:58Z
+updated: 2026-07-11T23:59:14Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", security_threat_model:inline, "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -286,6 +286,37 @@ Verdict: PASS, no findings.
 - Commit scope exact (54ba8d1: six prompt sources + ticket notes; 31235da: three agent defs + six mirrors); composed diff contains only the fifteen files + moved ticket markdown. Allow-listed CLI commands verified read-only by their implementation paths.
 
 ## Test Evidence
+
+verdict: pass
+
+### Commands run
+
+- npm run check clean. node --test: 588 tests, 587 pass, 0 fail, 1 pre-existing skip; targeted cli + resources-sync 78/78 incl. the specialty Recording assertion and both mirror suites.
+- git diff/show scope: exactly 16 files (9 sources + 6 mirrors + ticket markdown); commit split 54ba8d1 (6 prompt sources + notes) / 31235da (3 agent defs + 6 mirrors).
+
+### Acceptance criteria (file:line)
+
+- (a) Generic scoped ban at claude reviewer :23 and tester :22: mutation categories ticket/ledger/worktree/repo/config/install; "such as" list incl. set/create/start-work/approve-inline/link/block/worktree/design-review-complete/init/install marked illustrative-not-exhaustive; read-only allow-list (query-ticket, query-next, list, state-report, schema, validate, where); scoped to project board/this worktree; tester carries the isolated-probe-fixture carve-out. Single-hunk diffs; nothing else touched.
+- (b) Return-only paragraph byte-identical in all five specialty prompts (:48/:46/:46/:47/:47), inserted between the FAIL bullet and Recording; pinned Recording text untouched in all five.
+- (c) decompose.md:9 reworded to defer to Persistence; L18 byte-unchanged (only the L9 hunk exists).
+- (d) codex gatecheck def: no fenced block remains (triple-backtick grep empty); inline Shape line :32 byte-identical to the claude variant :46; may-be-empty line preserved.
+
+### Threat-scenario spot-check
+
+The injection example "local-board set <id> status done" is covered by name: set appears verbatim in both such-as lists, plus the generic mutation clause.
+
+### Consistency
+
+- Probe carve-out aligns with test.md worktree-git-safety guidance; no conflict.
+- T2136Z Output warnings byte-unchanged (no hunk touches the Output sections).
+
+### Mirror parity
+
+All six source/mirror pairs byte-identical.
+
+### Gaps / caveats
+
+None. Strictly read-only verification; worktree clean.
 
 ## Documentation Updates
 
