@@ -13,8 +13,8 @@ estimateBasis: B20260710T2050Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
-updated: 2026-07-11T20:35:21Z
-completedSteps: []
+updated: 2026-07-11T20:36:25Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
 # prompts: design_review.md instructs recording a Design Review section the section command cannot create
@@ -233,3 +233,5 @@ unchanged.
 ## Questions
 
 ## Run Log
+
+- 2026-07-11T20:36:25Z: Completed design via claude-subagent:local-board-designer@opus: Option (a) chosen: reword design_review.md persistence paragraph to the real comment + design-review-complete flow; option (b) rejected because validateTicketShape's missing-section check has no closed-status exemption (would fail ~40 legacy tickets). Files: prompt + resources mirror via sync-resources + new cli.test.js content pin (design-review-complete present, phantom section phrase absent). Spawn-denial warning folded into same paragraph. No src/template change.
