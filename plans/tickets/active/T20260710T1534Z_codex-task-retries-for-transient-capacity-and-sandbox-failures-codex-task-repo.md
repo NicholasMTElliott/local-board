@@ -1,7 +1,7 @@
 ---
 id: T20260710T1534Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P3
 parent: null
 children: []
@@ -13,7 +13,7 @@ estimateBasis: T20260710T1533Z
 workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
-updated: 2026-07-11T20:19:14Z
+updated: 2026-07-11T20:19:27Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -631,3 +631,5 @@ Original question history (for context): five sol@xhigh design-review rounds; ro
 - 2026-07-11T20:19:13Z: Design review r7 (codex-task:read-only@gpt-5.6-sol, xhigh; descope-scoped): PASS, no findings. Trigger B excised, Trigger A hardening intact, clean exits unambiguously no-retry, SKILL.md limitation correctly scoped, sibling refs current.
 
 - 2026-07-11T20:19:14Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: r7 PASS (descope revision): excision complete, Trigger A intact, no-retry on clean exit unambiguous, SKILL.md item scoped, refs current
+
+- 2026-07-11T20:19:27Z: Ensured git branch local-board/T20260710T1534Z-codex-task-retries-for-transient-capacity-and-sandbox-failures-codex-task-repo (already-current).
