@@ -7,13 +7,13 @@ parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260711T2138Z-prompts-operational-reality-gaps-sandbox-commit-fallback-orchestrator-obligations-loop-back-re-design-guidance-routing-pin-drift
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T21:36:20Z
+updated: 2026-07-11T23:04:32Z
 completedSteps: []
 routingApprovals: []
 ---
