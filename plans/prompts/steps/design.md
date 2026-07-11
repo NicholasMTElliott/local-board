@@ -15,9 +15,10 @@ If requirements are ambiguous enough to block implementation, ask questions inst
 
 ## Output and Persistence
 
-Persist the complete `## Technical Design` section body as Markdown with
-`section --file`, creating the temp file with the Write tool, never with shell
-redirection.
+Persist the `Technical Design` section body only - do not include the heading
+line itself (local-board manages the heading), and fence any literal ## sample
+lines - as Markdown with `section --file`, creating the temp file with the Write
+tool, never with shell redirection.
 
 - When this step is delegated to the `local-board-designer` subagent, that
   subagent writes its own `Technical Design` section (it has a scoped Write tool)

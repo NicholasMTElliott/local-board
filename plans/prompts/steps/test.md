@@ -16,7 +16,7 @@ Never invoke a real external AI CLI such as `codex` or `claude`, or a paid remot
 
 ## Output and Persistence
 
-Return the `## Test Evidence` section body as Markdown. When this step is delegated, the subagent returns the evidence text and writes no file — the `local-board-tester` subagent has no Write tool. The orchestrator persists it with `section --file`, creating the temp file with the Write tool, never with shell redirection.
+Return the `## Test Evidence` section body as Markdown. When this step is delegated, the subagent returns the evidence text and writes no file — the `local-board-tester` subagent has no Write tool. The orchestrator persists it with `section --file`, creating the temp file with the Write tool, never with shell redirection. Use `###` or deeper for any internal headings and fence any literal `## ` sample lines; a payload containing an unfenced `## ` line is rejected at persistence.
 
 ## Worktree git safety
 

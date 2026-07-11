@@ -36,7 +36,9 @@ You have `Write` and `Edit`, scoped to **one job**: recording your own
 `## Technical Design` section. This keeps a large design payload out of the
 orchestrator's context window.
 
-1. Compose the complete `## Technical Design` section body as Markdown.
+1. Compose the `Technical Design` section body only - do not include the heading
+   line itself (local-board manages the heading), and fence any literal ## sample
+   lines.
 2. Use the `Write` tool to create a temp file with that body **outside the ticket
    worktree** — e.g. in the system temporary directory (`%TEMP%` / `$TMPDIR` /
    `/tmp`), not under `<worktree>`. Writing it inside the worktree would dirty

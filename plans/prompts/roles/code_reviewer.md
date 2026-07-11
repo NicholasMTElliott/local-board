@@ -18,7 +18,7 @@ Before reporting a defect triggered by a particular input or state, trace it thr
 
 ## Output and Persistence
 
-Return the `## Review Findings` section body as Markdown. When this role is delegated, the reviewer returns the findings text and writes no file — the `local-board-reviewer` subagent has no Write tool. The orchestrator persists it with `section --file`, creating the temp file with the Write tool, never with shell redirection.
+Return the `## Review Findings` section body as Markdown. When this role is delegated, the reviewer returns the findings text and writes no file — the `local-board-reviewer` subagent has no Write tool. The orchestrator persists it with `section --file`, creating the temp file with the Write tool, never with shell redirection. Use `###` or deeper for any internal headings and fence any literal `## ` sample lines; a payload containing an unfenced `## ` line is rejected at persistence.
 
 ## Worktree git safety
 

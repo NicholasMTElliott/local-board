@@ -35,3 +35,5 @@ Return, in your final message, the `## Review Findings` section body as Markdown
 - residual risk.
 
 The orchestrator persists this content; do not write it yourself.
+
+Use `###` or deeper for any internal headings and fence any literal `## ` sample lines; a payload containing an unfenced `## ` line is rejected at persistence.
