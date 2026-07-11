@@ -14,7 +14,7 @@ workStartedAt: 2026-07-11T20:13:50Z
 workCompletedAt: null
 created: 2026-07-10T20:50:02Z
 updated: 2026-07-11T20:24:39Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
 # skills: document the pinned-retry-then-fallback-walk choreography in all four Delegation texts
@@ -392,3 +392,5 @@ Verdict: PASS, no findings.
 - 2026-07-11T20:21:30Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (prose-only skill docs + content-assertion test)
 
 - 2026-07-11T20:21:30Z: Ensured git branch local-board/T20260710T2050Z-skills-document-the-pinned-retry-then-fallback-walk-choreography-in-all-four-delegation-texts (already-current).
+
+- 2026-07-11T20:24:39Z: Completed review via codex-task:read-only@gpt-5.6-terra: r1 PASS no findings: both insertions match approved text at anchors, line-46 fallback-free qualification correct with no residual old claim, fences and single-ticket skills untouched, new content assertion additive and accurate.
