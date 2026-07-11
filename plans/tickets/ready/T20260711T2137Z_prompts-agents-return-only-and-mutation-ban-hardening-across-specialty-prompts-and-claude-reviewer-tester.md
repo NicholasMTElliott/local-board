@@ -7,13 +7,13 @@ parent: null
 children: []
 blockedBy: []
 blocks: []
-branch: null
+branch: local-board/T20260711T2137Z-prompts-agents-return-only-and-mutation-ban-hardening-across-specialty-prompts-and-claude-reviewer-tester
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T21:36:20Z
+updated: 2026-07-11T23:35:29Z
 completedSteps: []
 routingApprovals: []
 ---
