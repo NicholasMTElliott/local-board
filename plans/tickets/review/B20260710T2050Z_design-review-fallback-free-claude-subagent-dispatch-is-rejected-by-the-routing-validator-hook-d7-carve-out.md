@@ -13,7 +13,7 @@ estimateBasis: B20260710T1533Z
 workStartedAt: 2026-07-11T20:04:07Z
 workCompletedAt: null
 created: 2026-07-10T20:50:02Z
-updated: 2026-07-11T20:13:14Z
+updated: 2026-07-11T20:20:36Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -232,6 +232,19 @@ written here).
 - `node --test`: 576 tests, 575 pass, 0 fail, 1 skipped (pre-existing `smoke (slow)` skip, unrelated to this ticket), 34.8s.
 
 ## Review Findings
+
+### Review round 1 — full review (codex-task:read-only@gpt-5.6-terra, high, static)
+
+Verdict: CONCERNS.
+
+- [Medium] test/active-steps.test.js:574 — the new fallback-free design-review checkDispatch matrix covered only checkDispatchForTicket (ticketId always passed); checkDispatchByScan had no coverage for the new stamp. Production scan logic was verified correct (absent fallbackModels reads as null into modelAccepted); the gap was test-only.
+- Confirmed clean: unconditional stamp for claude-subagent routes; D6-conditional fallbackModels spread (7-key fallback-free record, no placeholder keys); codex-task routes stamp nothing (absent-ledger and sentinel-bytes assertions); payload JSON surface unchanged; no-clobber/idempotent-rewrite semantics; identity-scoped recordDesignReview clear; stale comments updated.
+
+### Review round 2 — focused re-review (codex-task:read-only@gpt-5.6-terra, medium, static)
+
+Verdict: PASS.
+
+- Fix commit e5636e3 adds three no-ticket-id checkDispatch calls that route through checkDispatchByScan: pinned-model acceptance, wrong-model rejection, wrong-agent rejection (scan rejection shape no-active-step-for-agent asserted). Commit touches only test/active-steps.test.js. Medium resolved.
 
 ## Test Evidence
 
