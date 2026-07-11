@@ -13,7 +13,7 @@ estimateBasis: B20260710T1533Z
 workStartedAt: 2026-07-11T20:04:07Z
 workCompletedAt: null
 created: 2026-07-10T20:50:02Z
-updated: 2026-07-11T20:20:37Z
+updated: 2026-07-11T20:23:50Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -247,6 +247,36 @@ Verdict: PASS.
 - Fix commit e5636e3 adds three no-ticket-id checkDispatch calls that route through checkDispatchByScan: pinned-model acceptance, wrong-model rejection, wrong-agent rejection (scan rejection shape no-active-step-for-agent asserted). Commit touches only test/active-steps.test.js. Medium resolved.
 
 ## Test Evidence
+
+verdict: pass
+
+### Commands run
+
+- npm run check — all node --check syntax checks pass.
+- node --test (full suite) — tests 576, pass 575, fail 0, skipped 1 (pre-existing smoke (slow), unrelated), ~40s.
+- node --test test/cli.test.js test/active-steps.test.js — tests 118, pass 118, fail 0, ~14.5s.
+- git diff --stat mainline...HEAD / git status --short — worktree clean. No spawn issues; isolation fallback not needed.
+
+### Acceptance criteria coverage (static trace)
+
+1. Fallback-free claude-subagent design-review stamps: src/cli.js:1383 guard is now route.startsWith("claude-subagent:") with the designReviewFallbackModels clause dropped; record at src/cli.js:1384-1393 includes fallbackModels only via conditional spread (src/cli.js:1390) — fallback-free profile stamps the 7-key beginStep-shape record. Verified test/cli.test.js:1911-1925 (Object.hasOwn false, exact key-set assertion).
+2. check-dispatch accepts pinned reviewer, rejects wrong model/agent: checkDispatchForTicket src/active-steps.js:225-285 (expectedFallbackModels = record.fallbackModels ?? null at :238; wrong model model-mismatch :280-281; wrong agent agent-mismatch :266-269); scan mode mirrors (src/active-steps.js:287-313). Tested test/active-steps.test.js:574-635 (ticket-scoped + scan-mode matrices, e5636e3).
+3. codex-task route writes nothing: guard skips entirely; test/cli.test.js:1774-1827 asserts absent ledger stays absent (existsSync false) and pre-seeded sentinel ledger bytes unchanged.
+4. recordDesignReview clears the fallback-free stamp: test/cli.test.js:2201-2251 (stamp, clear, follow-up check-dispatch reverts to agent-mismatch).
+5. npm run check / node --test pass: confirmed above; matches Implementation Notes exactly.
+
+### Production-file scope
+
+git diff --name-only mainline...HEAD: src/cli.js (only production source), test/active-steps.test.js, test/cli.test.js, ticket markdown. Matches design's Affected files.
+
+### Review-finding closure
+
+- r1 Medium (scan-mode coverage gap, test-only) fixed in e5636e3 (test/active-steps.test.js:618-633). r2 focused re-review PASS.
+
+### Gaps / caveats
+
+- No plans/prompts or agents text changed; sync-resources correctly not required (confirmed by diff scope).
+- No test-quality concerns: exact-shape assertions (sorted key sets, byte-identical sentinel), nothing weakened.
 
 ## Documentation Updates
 
