@@ -13,7 +13,7 @@ estimateBasis: T20260710T2050Z
 workStartedAt: 2026-07-11T23:12:17Z
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:22:48Z
+updated: 2026-07-11T23:25:56Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -142,6 +142,28 @@ Verdict: CONCERNS.
 - Verified clean: all four groups match designed text/anchors; four resource mirrors SHA-256-identical to sources; commits dd3acd8/6019a19 touch only designed paths (+ ticket file in the planning auto-commit); design_review.md content-assertion strings present/absent as required; sibling anchor zones untouched.
 
 ## Test Evidence
+
+verdict: pass
+
+### Commands run
+
+- npm run check pass. node --test full suite: 587 tests, 586 pass, 0 fail, 1 pre-existing skip (smoke (slow)).
+- Targeted: cli.test.js incl. the design-review persistence assertion (L3365) pass; resources-sync 4/4 incl. byte-for-byte mirror check.
+- git show/name-only on dd3acd8, 6019a19, 58c2c13; diffs of all four source/mirror pairs; clean tree before/after.
+
+### Acceptance criteria coverage
+
+1. Sandbox-commit-fallback sentence present and audience-worded: document.md:17 (returned summary), codex documenter def :28 and codex implementer def :28 (your Output).
+2. Both orchestrator obligations at orchestrator.md:14-15 (return-only persistence via Write + section --file; loop-back strips evidence AND consultations, re-run both).
+3. design.md:12 Include bullet references Review Findings, Test Evidence, Run Log design-review comments; no other "Design Review" match in the file (no phantom section reference).
+4. design_review.md:4-6 routing line now cites the design-review agent profile in plans/local-board.config.jsonc; grep finds no model/effort names in prose.
+5. Em-dash Low fixed: no U+2014 in either edited file; ASCII " - " confirmed.
+6. Mirror parity: all four plans/prompts vs resources/prompts pairs identical.
+7. Diff scope: 11 files = 6 designed sources + 4 mirrors (agents/codex correctly unmirrored) + ticket markdown; commits contain no strays.
+
+### Gaps / caveats
+
+None. No isolation fallback needed; no probe edits made.
 
 ## Documentation Updates
 
