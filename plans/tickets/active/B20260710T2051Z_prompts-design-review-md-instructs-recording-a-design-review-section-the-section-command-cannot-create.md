@@ -1,7 +1,7 @@
 ---
 id: B20260710T2051Z
 type: bug
-status: ready_for_design
+status: designing
 priority: P3
 parent: null
 children: []
@@ -13,7 +13,7 @@ estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
-updated: 2026-07-11T20:30:42Z
+updated: 2026-07-11T20:31:03Z
 completedSteps: []
 routingApprovals: []
 ---
