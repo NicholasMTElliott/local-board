@@ -13,7 +13,7 @@ estimateBasis: B20260710T2051Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-11T21:36:09Z
-updated: 2026-07-11T23:10:34Z
+updated: 2026-07-11T23:18:57Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -177,3 +177,5 @@ None blocking.
 - 2026-07-11T23:09:33Z: Completed design via claude-subagent:local-board-designer@opus: Canonical Recording line with --model + omit-when-null parenthetical across five specialty prompts (matches SKILL.md L273 server-side composition); estimate.md step-6 --force sentence + new Persistence section mirroring decompose.md return-only branch; pinned substrings verified intact (cli.test.js:3361-3362); new substring-level content assertion for the five prompts; sync-resources for all six mirrored files; paragraph-disjoint from T2137Z.
 
 - 2026-07-11T23:10:34Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (prompt edits + content-assertion test)
+
+- 2026-07-11T23:18:57Z: Design review r1 (codex-task:read-only@gpt-5.6-sol, xhigh): FAIL. 1) [High] proposed estimate.md Persistence section misclassifies routes: 'delegated or return-only executor' would sweep in the WRITABLE claude-subagent:local-board-designer (which is explicitly instructed to run calibration suggest + estimate itself); following it the designer would return points instead of recording, blocking design completion. Classify by capability: return-only routes return points/basis/rationale; writable routes (designer subagent, orchestrator, inline) run the command. 2) [Med] strict-routing premise misattributed: THIS board's five specialty profiles resolve inline@null (no pins); the gpt-5.6-sol pins for security_threat_model/security_audit live in the src/config.js init scaffold - attribute the premise there. Verified correct: Recording command + null parenthetical, --force guidance, pin survival, assertion conventions, sync coverage, T2137Z paragraph-disjointness. Looping design rework.
