@@ -754,3 +754,5 @@ Original question history (for context): five sol@xhigh design-review rounds; ro
 - 2026-07-11T20:40:22Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: security_audit (delta is an input-validation / flag-confusion fix on untrusted CLI args)
 
 - 2026-07-11T20:41:18Z: Completed security_audit via inline: PASS: flag-confusion vector fixed and regression-tested (VALUE_TAKING_FLAGS + exit-2 test); --retries strictly validated (integer regex + non-negative); classifier regexes simple, input is tool stderr bounded by MAX_TAIL_SCAN; rmSync paths internally derived; no secrets/crypto/dependency changes. Note (non-blocking): --retries has no upper bound - local self-inflicted resource use only.
+
+- 2026-07-11T20:42:31Z: Ensured git branch local-board/T20260710T1534Z-codex-task-retries-for-transient-capacity-and-sandbox-failures-codex-task-repo (already-current).
