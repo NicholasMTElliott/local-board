@@ -13,8 +13,8 @@ estimateBasis: T20260711T2136Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:39:32Z
-completedSteps: []
+updated: 2026-07-11T23:40:18Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
 # prompts/agents: return-only and mutation-ban hardening across specialty prompts and claude reviewer/tester
@@ -237,3 +237,5 @@ None. Requirement wording is explicit for all four items.
 ## Questions
 
 ## Run Log
+
+- 2026-07-11T23:40:18Z: Completed design via claude-subagent:local-board-designer@opus: Four disjoint edits: claude reviewer/tester ban broadened to all mutating commands (matches codex generic ban; T2136Z Output warnings untouched); canonical return-only paragraph appended to five specialty Output Contracts (before Recording, avoiding B2136Z pinned substrings); decompose.md L9 reworded per Requirement (L18 untouched); codex gatecheck fenced json replaced with claude inline Shape form. No prose pins on targets; 6 plans/prompts files need sync, 3 agents/ files do not.
