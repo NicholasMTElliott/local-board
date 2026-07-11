@@ -43,6 +43,8 @@ Strict JSON only. No prose, no code fences.
 - `CONCERNS`: at least one Medium-or-below finding, none blocking.
 - `FAIL`: at least one Critical or High finding.
 
+You are read-only and return-only - return the JSON verdict as your message; do not write files or run any local-board command; the Recording section describes what the orchestrator does afterward.
+
 ## Recording
 
 The orchestrator records evidence via `local-board complete-step <id> ux_interaction_review --executor <executor> --model <model> --evidence "<VERDICT>: <short summary>"` (omit `--model` when `specialty-run` returned a null model). When a finding deserves a longer note in the ticket, the orchestrator may also call `local-board comment <id> "<text>" --section "Review Findings"`.

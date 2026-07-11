@@ -13,7 +13,7 @@ estimateBasis: T20260711T2136Z
 workStartedAt: 2026-07-11T23:48:46Z
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:48:46Z
+updated: 2026-07-11T23:51:29Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", security_threat_model:inline, "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -254,6 +254,26 @@ by `cli.test.js:3365-3386`). No further rebase coordination is needed.
 None. Requirement wording is explicit for all four items.
 
 ## Implementation Notes
+
+### Implementer summary
+
+Implemented all four items of the r1-patched design.
+
+1. `agents/claude/local-board-reviewer.md` and `agents/claude/local-board-tester.md`: replaced the section-only ban with a generic prohibition on any local-board command that mutates ticket/ledger/worktree/repository/configuration/installation state, with a non-exhaustive `such as ...` command list and an explicit read-only allow-list (`query-ticket`, `query-next`, `list`, `state-report`, `schema`, `validate`, `where`). Scoped to the project board / this ticket's worktree. Tester variant carries the isolated-probe-fixture carve-out (mutations permitted only against a verified isolated temporary probe board/fixture, never the project board/worktree/user-home/install state). Output-section warning lines (reviewer L39, tester L37) left untouched.
+2. Five specialty prompts (`plans/prompts/optional-steps/design/security_threat_model.md`, `ui_component_review.md`, `ux_interaction_review.md`, `plans/prompts/optional-steps/impl/security_audit.md`, `ui_visual_review.md`): appended the canonical return-only paragraph as the final line of each Output Contract section, after the FAIL bullet and before the Recording heading. Recording lines (pinned by `cli.test.js:3365-3386`) untouched.
+3. `plans/prompts/steps/decompose.md` L9: reworded from an unconditional "link parent and children in front matter" imperative to "parent/child links are recorded in front matter (by whoever the Persistence section below assigns)". L18/Persistence section untouched.
+4. `agents/codex/local-board-gatecheck.md`: replaced the fenced ```json Shape block with the inline-backtick Shape form already used by the claude sibling (`agents/claude/local-board-gatecheck.md` L46), including the `, ...` ellipsis. "The array may be empty." line preserved.
+5. Ran `npm run sync-resources`; mirrored 6 `plans/prompts` files into `resources/prompts` byte-for-byte (5 specialty prompts + decompose.md). The 3 `agents/*` files need no sync.
+
+### Test evidence
+
+- `npm run check`: all `node --check` targets pass.
+- `node --test` (full suite): 588 tests, 587 pass, 1 pre-existing skip (`smoke (slow): two racing local-board CLI processes...`), 0 fail.
+- Targeted re-run of `test/cli.test.js` and `test/resources-sync.test.js`: 78/78 pass, including the Recording-line pin assertion ("specialty optional-step prompts teach the strict-routing Recording command") and the byte-for-byte resources mirror checks.
+
+### Deviations
+
+None. Implementation matches the r1-patched Technical Design exactly.
 
 ## Review Findings
 
