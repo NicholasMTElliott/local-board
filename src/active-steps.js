@@ -125,13 +125,17 @@ export async function clearActiveStep(root, ticketId, options = {}) {
 // a stale `design` gate-complete clearing a fresh `implement` gate-check
 // stamp). Missing entry or a predicate that returns false is a no-op,
 // matching `clearActiveStep`'s best-effort semantics.
-export async function clearActiveStepIf(root, ticketId, predicate, options = {}) {
+//
+// Shared by `clearActiveStepIf` (self-healing read) and `clearActiveStepStrict`
+// (T20260710T2051Z: fail-closed read) -- the locked read-modify-write is
+// identical; only the read function differs, injected by the caller.
+async function clearActiveStepWith(readLedger, root, ticketId, predicate, options) {
   const filePath = await ledgerPath(root);
   let cleared = false;
   await withFileLock(
     `${filePath}.lock`,
     async () => {
-      const current = await readLedgerSelfHeal(filePath);
+      const current = await readLedger(filePath);
       const existing = current[ticketId];
       if (existing === undefined || !predicate(existing)) {
         return;
@@ -147,6 +151,26 @@ export async function clearActiveStepIf(root, ticketId, predicate, options = {})
     options.lock,
   );
   return cleared;
+}
+
+export async function clearActiveStepIf(root, ticketId, predicate, options = {}) {
+  return clearActiveStepWith(readLedgerSelfHeal, root, ticketId, predicate, options);
+}
+
+// Fail-closed identity-aware clear (T20260710T2051Z): same locked
+// read-modify-write as `clearActiveStepIf`, but reads with `readLedgerStrict`
+// instead of `readLedgerSelfHeal`. A genuinely-missing entry (including a
+// genuinely-missing ledger FILE -- ENOENT is the ordinary state of a board on
+// which no `begin-step` has ever stamped) is a no-op success, `false`,
+// evaluated AFTER lock acquisition (lock contention/stale-break failures
+// still throw as usual). A corrupt or otherwise unreadable ledger throws
+// during the read, before any write, so `withFileLock`'s `finally` releases
+// the lock and the ledger bytes are left untouched. This primitive is a
+// necessary-but-not-sufficient precondition for a future fail-closed
+// authoring-correction lane (see systemPatterns.md); it has no caller yet --
+// wiring it in is an explicit non-goal of T20260710T2051Z.
+export async function clearActiveStepStrict(root, ticketId, predicate, options = {}) {
+  return clearActiveStepWith(readLedgerStrict, root, ticketId, predicate, options);
 }
 
 // Consultation-only, no-clobber stamp (B20260710T1225Z review fix, re-review

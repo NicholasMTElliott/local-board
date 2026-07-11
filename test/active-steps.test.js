@@ -14,6 +14,7 @@ import {
   checkDispatch,
   clearActiveStep,
   clearActiveStepIf,
+  clearActiveStepStrict,
   ledgerPath,
   readActiveSteps,
   stampActiveStep,
@@ -1760,6 +1761,151 @@ test("clearActiveStepIf clears only when the predicate matches the current entry
 
     // Missing entry is a no-op, not an error.
     assert.equal(await clearActiveStepIf(root, "T-never-stamped", () => true), false);
+  });
+});
+
+// --- clearActiveStepStrict (T20260710T2051Z): fail-closed clear ---
+
+test("clearActiveStepStrict on a healthy ledger: predicate match deletes the target entry and leaves other tickets intact", async () => {
+  await withBoard(async (root) => {
+    await stampActiveStep(root, "T1", { ticket: "T1", kind: "action", action: "design", route: "r1", model: "opus" });
+    await stampActiveStep(root, "T2", { ticket: "T2", kind: "action", action: "implement", route: "r2", model: "sonnet" });
+
+    const cleared = await clearActiveStepStrict(root, "T1", (record) => record.kind === "action");
+    assert.equal(cleared, true);
+
+    const steps = await readActiveSteps(root);
+    assert.equal(Object.hasOwn(steps, "T1"), false);
+    assert.equal(steps.T2.action, "implement", "unrelated ticket's entry must survive");
+  });
+});
+
+test("clearActiveStepStrict on a healthy ledger: predicate mismatch for a present entry is a no-op", async () => {
+  await withBoard(async (root) => {
+    await stampActiveStep(root, "T1", { ticket: "T1", kind: "action", action: "design", route: "r1", model: "opus" });
+
+    const notCleared = await clearActiveStepStrict(root, "T1", (record) => record.kind === "gate");
+    assert.equal(notCleared, false);
+    assert.ok(Object.hasOwn(await readActiveSteps(root), "T1"), "predicate mismatch must leave the entry intact");
+  });
+});
+
+test("clearActiveStepStrict on a genuinely-missing entry is a no-op success, ledger bytes unchanged", async () => {
+  await withBoard(async (root) => {
+    await stampActiveStep(root, "T2", { ticket: "T2", kind: "action", action: "implement", route: "r2", model: "sonnet" });
+    const filePath = await ledgerPath(root);
+    const before = await readFile(filePath, "utf8");
+
+    const cleared = await clearActiveStepStrict(root, "T-never-stamped", () => true);
+    assert.equal(cleared, false);
+
+    const after = await readFile(filePath, "utf8");
+    assert.equal(after, before, "ledger bytes must be unchanged by a no-op clear");
+  });
+});
+
+test("clearActiveStepStrict on a missing ledger FILE (ENOENT) is a no-op success and creates no file", async () => {
+  await withBoard(async (root) => {
+    // The no-op-success guarantee holds AFTER lock acquisition -- lock
+    // contention/a failed stale-break would still throw, as with every other
+    // ledger op; this test only exercises the ordinary case where the lock
+    // is freely acquired and the ledger file simply does not exist yet.
+    const filePath = await ledgerPath(root);
+
+    const cleared = await clearActiveStepStrict(root, "T1", () => true);
+    assert.equal(cleared, false);
+
+    await assert.rejects(readFile(filePath, "utf8"), { code: "ENOENT" }, "no ledger file must be created by the no-op clear");
+  });
+});
+
+test("clearActiveStepStrict on a corrupt (invalid JSON) ledger throws and leaves the raw bytes untouched", async () => {
+  await withBoard(async (root) => {
+    const filePath = await ledgerPath(root);
+    await mkdir(path.dirname(filePath), { recursive: true });
+    const corrupt = "{not valid json";
+    await writeFile(filePath, corrupt, "utf8");
+
+    await assert.rejects(clearActiveStepStrict(root, "T1", () => true), /is corrupt/);
+
+    const after = await readFile(filePath, "utf8");
+    assert.equal(after, corrupt, "the corrupt bytes must be byte-identical before and after the throw");
+  });
+});
+
+test("clearActiveStepStrict on a non-object top-level ledger throws and leaves the raw bytes untouched", async () => {
+  await withBoard(async (root) => {
+    const filePath = await ledgerPath(root);
+    await mkdir(path.dirname(filePath), { recursive: true });
+    const arrayShape = "[]";
+    await writeFile(filePath, arrayShape, "utf8");
+
+    await assert.rejects(clearActiveStepStrict(root, "T1", () => true), /expected a JSON object/);
+    assert.equal(await readFile(filePath, "utf8"), arrayShape);
+
+    const scalarShape = "42";
+    await writeFile(filePath, scalarShape, "utf8");
+    await assert.rejects(clearActiveStepStrict(root, "T1", () => true), /expected a JSON object/);
+    assert.equal(await readFile(filePath, "utf8"), scalarShape);
+  });
+});
+
+test("legacy regression: clearActiveStepIf on a corrupt ledger self-heals -- does not throw, returns false, and leaves the raw corrupt bytes byte-identical", async () => {
+  await withBoard(async (root) => {
+    const filePath = await ledgerPath(root);
+    await mkdir(path.dirname(filePath), { recursive: true });
+    const corrupt = "{not valid json";
+    await writeFile(filePath, corrupt, "utf8");
+
+    const cleared = await clearActiveStepIf(root, "T1", () => true);
+    assert.equal(cleared, false, "self-healing clear must not throw and must report nothing-to-clear");
+
+    const after = await readFile(filePath, "utf8");
+    assert.equal(after, corrupt, "self-heal reads the corruption as {} in-memory only -- it must not rewrite the file");
+
+    // stampActiveStep, by contrast, does overwrite corruption with valid JSON.
+    await stampActiveStep(root, "T1", { ticket: "T1", kind: "action", action: "design", route: "r", model: "opus" });
+    const steps = await readActiveSteps(root);
+    assert.equal(steps.T1.action, "design");
+  });
+});
+
+test("clearActiveStepStrict: a predicate that throws propagates the error, performs no write, and releases the ledger lock", async () => {
+  await withBoard(async (root) => {
+    await stampActiveStep(root, "T1", { ticket: "T1", kind: "action", action: "design", route: "r1", model: "opus" });
+    const filePath = await ledgerPath(root);
+    const before = await readFile(filePath, "utf8");
+
+    await assert.rejects(
+      clearActiveStepStrict(root, "T1", () => {
+        throw new Error("predicate boom");
+      }),
+      /predicate boom/,
+    );
+
+    const after = await readFile(filePath, "utf8");
+    assert.equal(after, before, "a predicate throw must not write the ledger");
+
+    // Prove the lock was released (not leaked) by `withFileLock`'s `finally`:
+    // a follow-on operation on the same ledger must acquire the lock and
+    // succeed.
+    const cleared = await clearActiveStepStrict(root, "T1", (record) => record.kind === "action");
+    assert.equal(cleared, true, "the ledger lock must have been released after the predicate threw");
+  });
+});
+
+test("clearActiveStepStrict serializes a concurrent stamp via the ledger lock: neither update is lost", async () => {
+  await withBoard(async (root) => {
+    await stampActiveStep(root, "T1", { ticket: "T1", kind: "action", action: "design", route: "r1", model: "opus" });
+
+    await Promise.all([
+      clearActiveStepStrict(root, "T1", (record) => record.kind === "action", { __afterRead: () => delay(60) }),
+      stampActiveStep(root, "T2", { ticket: "T2", action: "implement", route: "r2", model: "sonnet" }),
+    ]);
+
+    const steps = await readActiveSteps(root);
+    assert.equal(Object.hasOwn(steps, "T1"), false, "T1 must be cleared");
+    assert.equal(steps.T2.action, "implement", "T2's entry must survive the concurrent clear");
   });
 });
 
