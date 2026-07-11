@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
 updated: 2026-07-11T20:54:15Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", security_audit:inline, "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", security_audit:inline, "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # codex-task: --retries for transient capacity and sandbox failures (../codex-task repo)
@@ -831,3 +831,5 @@ Original question history (for context): five sol@xhigh design-review rounds; ro
 - 2026-07-11T20:46:22Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. codex-task 34/34 pass; descope confirmed (no FAKE_CODEX_BLOCK, no tests 20-23, test 13 = non-zero-exit wrapper); spot-probes: --retries --uninstall exit 2 no installer, -1 rejected, help documents flag; clean-exit break at :902 pre-classification; rmSync at :880-881 every attempt; SKILL.md items cited; diff scope = 3 expected files.
 
 - 2026-07-11T20:46:37Z: Ensured git branch local-board/T20260710T1534Z-codex-task-retries-for-transient-capacity-and-sandbox-failures-codex-task-repo (already-current).
+
+- 2026-07-11T20:54:15Z: Completed document via codex-task:workspace-write: codex-task repo: SKILL.md (8aeec88) + README.md + 4 memory-bank files (446f084, orchestrator-committed - sandbox denies git) document --retries, gated attempts, transient scope, blocked-run manual re-dispatch limitation. Documentation Updates section persisted.
