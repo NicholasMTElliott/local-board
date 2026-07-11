@@ -13,8 +13,8 @@ estimateBasis: B20260710T1533Z
 workStartedAt: 2026-07-11T20:04:07Z
 workCompletedAt: null
 created: 2026-07-10T20:50:02Z
-updated: 2026-07-11T20:12:27Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet"]
+updated: 2026-07-11T20:13:13Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # design-review: fallback-free claude-subagent dispatch is rejected by the routing-validator hook (D7 carve-out)
@@ -252,3 +252,5 @@ written here).
 - 2026-07-11T20:04:07Z: Ensured git branch local-board/B20260710T2050Z-design-review-fallback-free-claude-subagent-dispatch-is-rejected-by-the-routing-validator-hook-d7-carve-out (already-current).
 
 - 2026-07-11T20:12:27Z: Completed implement via claude-subagent:local-board-implementer@sonnet: commandDesignReviewCheck stamps unconditionally for claude-subagent routes; fallbackModels D6-conditional spread; 7-key fallback-free shape; stale comments updated; tests: flipped known-limitation, existsSync-absent + sentinel-bytes codex-route, one-slot premature/normal, consecutive-call rewrite regression, recordDesignReview clear, checkDispatch matrix. npm run check pass; node --test 575/576 pass 0 fail 1 pre-existing skip. Commit 0fa37d4.
+
+- 2026-07-11T20:13:13Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (ledger-stamp guard fix; no auth/UI surface)
