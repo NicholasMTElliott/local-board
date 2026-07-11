@@ -8,12 +8,12 @@ children: []
 blockedBy: []
 blocks: []
 branch: local-board/B20260710T2051Z-prompts-design-review-md-instructs-recording-a-design-review-section-the-section-command-cannot-create
-estimate: null
-estimateBasis: null
+estimate: 2
+estimateBasis: B20260710T2050Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
-updated: 2026-07-11T20:31:03Z
+updated: 2026-07-11T20:31:52Z
 completedSteps: []
 routingApprovals: []
 ---
