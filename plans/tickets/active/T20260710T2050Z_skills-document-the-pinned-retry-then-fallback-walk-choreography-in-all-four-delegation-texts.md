@@ -14,7 +14,7 @@ workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T20:50:02Z
 updated: 2026-07-11T20:13:49Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
 # skills: document the pinned-retry-then-fallback-walk choreography in all four Delegation texts
@@ -332,3 +332,5 @@ content-asserted). No `sync-resources` needed.
 - 2026-07-11T20:11:30Z: Completed design via claude-subagent:local-board-designer@opus: Rework r2: added insertion 2b with exact line-46 replacement (fallback-free-only qualification, mirrors codex local-board L269, cited cli.test.js 1884-1919); insertion 2a trimmed to 3 sentences; skill-usage-sync characterization corrected to all five assertions; optional content assertion respecified with audience-partitioned per-element markers.
 
 - 2026-07-11T20:13:49Z: Design review r2 (codex-task:read-only@gpt-5.6-sol, xhigh): CONCERNS. 1) [Low] insertion 2b line-46 replacement says walk the payload 'per Route Translation above' but Route Translation begins at line 79, below line 46 - change 'above' to 'below'. All four r1 findings resolved. Proceeding to implementation with the Low folded into the implement brief.
+
+- 2026-07-11T20:13:49Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: r2 CONCERNS: single Low (directional cross-ref above->below in insertion 2b); r1 High/Med/Low all resolved; proceed with Low carried to implementation
