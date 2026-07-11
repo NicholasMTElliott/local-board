@@ -13,8 +13,8 @@ estimateBasis: T20260711T2136Z
 workStartedAt: 2026-07-11T23:48:46Z
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:51:29Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", security_threat_model:inline, "design-review:codex-task:read-only@gpt-5.6-sol"]
+updated: 2026-07-11T23:52:50Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", security_threat_model:inline, "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet"]
 routingApprovals: []
 ---
 # prompts/agents: return-only and mutation-ban hardening across specialty prompts and claude reviewer/tester
@@ -298,3 +298,5 @@ None. Implementation matches the r1-patched Technical Design exactly.
 - 2026-07-11T23:48:46Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: r1 CONCERNS (2 Med ban-wording + 1 Low pin analysis, aligned with security_threat_model specialty) all patched; proceed
 
 - 2026-07-11T23:48:46Z: Ensured git branch local-board/T20260711T2137Z-prompts-agents-return-only-and-mutation-ban-hardening-across-specialty-prompts-and-claude-reviewer-tester (already-current).
+
+- 2026-07-11T23:52:50Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Generic scoped mutation ban in claude reviewer/tester (such-as list, read-only allow-list, probe-fixture carve-out); return-only paragraph in all five specialty Output Contracts; decompose.md L9 reworded; codex gatecheck fenced json replaced with inline form; 6 mirrors synced. Recording pins + L18 bullet + T2136Z warnings byte-unchanged. npm run check clean; node --test 587/588 pass 1 pre-existing skip; targeted cli+resources-sync 78/78. Commits 54ba8d1 + 31235da.
