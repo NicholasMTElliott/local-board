@@ -13,7 +13,7 @@ estimateBasis: T20260710T2050Z
 workStartedAt: 2026-07-11T23:12:17Z
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:18:02Z
+updated: 2026-07-11T23:22:47Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -133,6 +133,13 @@ Ran `npm run sync-resources` to mirror the four `plans/prompts/**` edits into `r
 No deviations from the approved design.
 
 ## Review Findings
+
+### Review round 1 (codex-task:read-only@gpt-5.6-terra, high, static)
+
+Verdict: CONCERNS.
+
+- [Low] document.md:17 and orchestrator.md:15 used an em-dash delimiter where the approved design specified ASCII " - ". Fixed in 58c2c13 (sources + mirrors, targeted suites 77/77 green).
+- Verified clean: all four groups match designed text/anchors; four resource mirrors SHA-256-identical to sources; commits dd3acd8/6019a19 touch only designed paths (+ ticket file in the planning auto-commit); design_review.md content-assertion strings present/absent as required; sibling anchor zones untouched.
 
 ## Test Evidence
 
