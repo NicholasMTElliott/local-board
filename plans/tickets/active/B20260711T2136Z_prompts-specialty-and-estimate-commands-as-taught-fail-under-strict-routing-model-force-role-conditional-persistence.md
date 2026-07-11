@@ -13,7 +13,7 @@ estimateBasis: B20260710T2051Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-11T21:36:09Z
-updated: 2026-07-11T23:21:19Z
+updated: 2026-07-11T23:23:47Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -181,3 +181,5 @@ None blocking.
 - 2026-07-11T23:18:57Z: Design review r1 (codex-task:read-only@gpt-5.6-sol, xhigh): FAIL. 1) [High] proposed estimate.md Persistence section misclassifies routes: 'delegated or return-only executor' would sweep in the WRITABLE claude-subagent:local-board-designer (which is explicitly instructed to run calibration suggest + estimate itself); following it the designer would return points instead of recording, blocking design completion. Classify by capability: return-only routes return points/basis/rationale; writable routes (designer subagent, orchestrator, inline) run the command. 2) [Med] strict-routing premise misattributed: THIS board's five specialty profiles resolve inline@null (no pins); the gpt-5.6-sol pins for security_threat_model/security_audit live in the src/config.js init scaffold - attribute the premise there. Verified correct: Recording command + null parenthetical, --force guidance, pin survival, assertion conventions, sync coverage, T2137Z paragraph-disjointness. Looping design rework.
 
 - 2026-07-11T23:21:19Z: Completed design via claude-subagent:local-board-designer@opus: Rework r2: Persistence section reclassified by capability (return-only codex-task:read-only returns points/basis/rationale; writable routes incl. designer subagent, orchestrator, inline run estimate themselves, matching both designer agent defs); routing premise reattributed to src/config.js init scaffold pins (~L1161-1182) with board-local inline/null noted; reviewer-approved items untouched.
+
+- 2026-07-11T23:23:47Z: Design review r2 (codex-task:read-only@gpt-5.6-sol, xhigh): PASS. Capability-based Persistence classification verified against both designer defs; scaffold attribution verified at src/config.js:1161-1182 with board-local inline/null confirmed via resolveOptionalStepAgent; unchanged sections coherent.
