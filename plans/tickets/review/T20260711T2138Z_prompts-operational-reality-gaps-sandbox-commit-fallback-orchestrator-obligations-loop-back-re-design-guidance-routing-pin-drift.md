@@ -1,7 +1,7 @@
 ---
 id: T20260711T2138Z
 type: task
-status: implementing
+status: ready_for_review
 priority: P4
 parent: null
 children: []
