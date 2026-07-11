@@ -8,8 +8,8 @@ children: []
 blockedBy: []
 blocks: []
 branch: local-board/T20260711T2138Z-prompts-operational-reality-gaps-sandbox-commit-fallback-orchestrator-obligations-loop-back-re-design-guidance-routing-pin-drift
-estimate: null
-estimateBasis: null
+estimate: 2
+estimateBasis: T20260710T2050Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
