@@ -13,8 +13,8 @@ estimateBasis: T20260711T2136Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:48:45Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", security_threat_model:inline]
+updated: 2026-07-11T23:48:46Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", security_threat_model:inline, "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
 # prompts/agents: return-only and mutation-ban hardening across specialty prompts and claude reviewer/tester
@@ -274,3 +274,5 @@ None. Requirement wording is explicit for all four items.
 - 2026-07-11T23:46:03Z: Design review r1 (codex-task:read-only@gpt-5.6-sol, xhigh): CONCERNS. 1) [Med] item-1 parenthetical reads as exhaustive but the mutating surface also includes create, start-work, worktree-add/remove, fast-forward, begin-step, approve-inline, set, link/unlink, block/unblock, design-review-complete, init, install (and gate-check/specialty-run/design-review-check stamp state) - use a generic prohibition over ticket/ledger/worktree/repo/config/install mutations, mark enumeration non-exhaustive, add explicit read-only allow-list (matches security_threat_model specialty finding). 2) [Med] unqualified ban conflicts with legitimate tester probes (test.md L14-26; cli.test.js runs mutating flows on isolated temp boards) - scope the ban to the project board/current worktree; isolated temporary fixtures may be mutated; install/user-home stays prohibited. 3) [Low] pin analysis stale post-rebase: cli.test.js:3365-3386 pins the adjacent Recording prose (no collision with the insertion, but state it accurately). Verified sound: anchors, codex generic bans, T2136Z warnings untouched, insertion points, decompose reword, gatecheck forms, sync scope. Designer patching; proceedable after patch.
 
 - 2026-07-11T23:48:45Z: Completed design via claude-subagent:local-board-designer@opus: Rework: generic mutation prohibition (ticket/ledger/worktree/repo/config/install) with non-exhaustive such-as list + explicit read-only allow-list; ban scoped to project board/ticket worktree with tester probe-fixture carve-out mirrored to reviewer; pin analysis corrected (Recording prose pinned post-B2136Z, insertion non-colliding).
+
+- 2026-07-11T23:48:46Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: r1 CONCERNS (2 Med ban-wording + 1 Low pin analysis, aligned with security_threat_model specialty) all patched; proceed
