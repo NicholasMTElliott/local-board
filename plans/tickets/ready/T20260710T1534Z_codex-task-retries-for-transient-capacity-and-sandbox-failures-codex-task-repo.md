@@ -14,7 +14,7 @@ workStartedAt: 2026-07-10T17:45:37Z
 workCompletedAt: null
 created: 2026-07-10T15:32:23Z
 updated: 2026-07-11T20:46:22Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", security_audit:inline, "review:codex-task:read-only@gpt-5.6-terra"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", security_audit:inline, "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet"]
 routingApprovals: []
 ---
 # codex-task: --retries for transient capacity and sandbox failures (../codex-task repo)
@@ -811,3 +811,5 @@ Original question history (for context): five sol@xhigh design-review rounds; ro
 - 2026-07-11T20:43:50Z: Completed review via codex-task:read-only@gpt-5.6-terra: r1 FAIL (1 High: --retries missing from VALUE_TAKING_FLAGS - installer-dispatch bypass) fixed in 2f8a8a6; security_audit inline PASS; r2 focused re-review PASS (fix + regression test verified, scope limited).
 
 - 2026-07-11T20:43:51Z: Ensured git branch local-board/T20260710T1534Z-codex-task-retries-for-transient-capacity-and-sandbox-failures-codex-task-repo (already-current).
+
+- 2026-07-11T20:46:22Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. codex-task 34/34 pass; descope confirmed (no FAKE_CODEX_BLOCK, no tests 20-23, test 13 = non-zero-exit wrapper); spot-probes: --retries --uninstall exit 2 no installer, -1 rejected, help documents flag; clean-exit break at :902 pre-classification; rmSync at :880-881 every attempt; SKILL.md items cited; diff scope = 3 expected files.
