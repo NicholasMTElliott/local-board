@@ -13,7 +13,7 @@ estimateBasis: T20260710T2050Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:15:49Z
+updated: 2026-07-11T23:18:32Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -47,7 +47,10 @@ From the prompt-library review of 2026-07-11 (items 6, 7, 8): the CLI now reject
 
 ### Summary
 
-Documentation-only change across nine prompt/agent files. Add a short warning to
+Documentation-only change across twelve target files: 4 under `plans/prompts/`
+(`roles/code_reviewer.md`, `steps/test.md`, `steps/decompose.md`, `steps/design.md`)
+and 8 under `agents/` (the claude and codex reviewer, tester, decomposer, and
+designer defs). Add a short warning to
 every executor output contract that authors a section payload or `requirementBody`,
 telling authors to use `###`+ for internal headings and to fence any literal
 double-hash sample lines, because the CLI persistence guard rejects an unfenced
@@ -61,8 +64,12 @@ payload with the fence-aware `contentLines` helper and throws if any content lin
 matches `SECTION_HEADING_RE = /^## (.+?)\s*$/` (L1211). Precise consequences, which
 the warning must state correctly:
 
-- A line beginning with exactly two hashes plus a space is rejected (leading,
-  trailing, or embedded).
+- A column-zero line of the form two-hashes-space-then-content is rejected
+  (leading, trailing, or embedded). The regex is line-anchored and requires at
+  least one content character after the space, so two edge cases do NOT match and
+  are accepted by the guard: a delimiter-only double-hash line (two hashes and a
+  space with no following content) and an indented double-hash line (any leading
+  whitespace before the hashes defeats the `^##` anchor).
 - Three-or-more-hash headings are legal: the regex anchor requires a space as the
   third character, and an H3 line has a hash there, so it never matches.
 - A double-hash line inside a triple-backtick / tilde fence is legal: `contentLines`
@@ -79,7 +86,15 @@ the warning must state correctly:
 One canonical sentence, reused verbatim for group 1 and lightly re-tailored for
 group 2 (audience: `requirementBody` authors). Written so it contains no
 line-leading double-hash and fences nothing (the double-hash tokens sit inside
-inline backticks, which is legal in both the prompt file and any payload):
+inline backticks, which is legal in both the prompt file and any payload).
+
+Deliberate scope note: the sentence's "an unfenced `## ` line is rejected"
+phrasing is intentionally a simpler and slightly STRICTER authoring rule than the
+exact runtime guard. The guard ignores the two edge cases above (delimiter-only and
+indented double-hash lines), but authors should still never emit any column-zero
+double-hash line; teaching the simpler rule avoids a false sense that "sometimes a
+double-hash line is fine". This is a chosen over-approximation, not an error in the
+description of the guard.
 
 Group 1 (reviewer/tester payloads):
 `Use `###` or deeper for any internal headings and fence any literal `## ` sample
@@ -125,8 +140,12 @@ orchestrator persistence branch) with the group-2 sentence. Anchors:
 
 Replace the phrasing that tells the author to persist a "complete double-hash
 Technical Design section body" (which reads as "include the heading line"). The
-replacement must not carry an unfenced double-hash token; the chosen wording avoids
-the token entirely rather than fencing it:
+replacement clause does contain a mid-line double-hash token (`... fence any literal
+## sample lines`), but that is persistable and prompt-legal because the guard's
+regex is line-anchored: the token sits mid-line, not at column zero, so it never
+matches `^## `. So the goal is not to avoid the token entirely but to keep every
+double-hash token off the start of a line (here it is preceded by "fence any
+literal "):
 
 Replacement clause: `the section body only - do not include the heading line itself
 (local-board manages the heading), and fence any literal ## sample lines.`
@@ -161,19 +180,21 @@ Anchors:
 
 ### Content-assertion and sync exposure (verified against `test/`)
 
-- No test pins the prose of any of the nine target files. All hits for
+- No test pins the prose of any of the twelve target files. All hits for
   `local-board-reviewer`/`-tester`/`-designer`/`-decomposer` in `test/active-steps.test.js`
   and `test/cli.test.js` are route-name string pins (e.g.
   `claude-subagent:local-board-designer`), unaffected by added sentences.
-- The only prompt-content assertion is on a non-target file:
-  `test/cli.test.js:3357-3361` asserts `plans/prompts/steps/estimate.md` includes
-  `local-board calibration suggest`. Not touched here.
+- Prompt-content assertions exist but target non-target files: `test/cli.test.js:3356-3362`
+  asserts `plans/prompts/steps/estimate.md` includes `local-board calibration
+  suggest`/`local-board estimate`, and `test/cli.test.js:3365+` asserts
+  `plans/prompts/steps/design_review.md` describes the real persistence flow. Neither
+  file is edited here.
 - `test/skill-usage-sync.test.js` targets `SKILL.md` / `SKILL_TEAM.md` and skill
   files, none of which are targets here.
 - `test/resources-sync.test.js` byte-mirrors `plans/prompts` to `resources/prompts`.
   The four `plans/prompts/**` targets (`roles/code_reviewer.md`, `steps/test.md`,
   `steps/decompose.md`, `steps/design.md`) therefore REQUIRE
-  `npm run sync-resources` after editing, or that test fails. The five `agents/**`
+  `npm run sync-resources` after editing, or that test fails. The eight `agents/**`
   targets have no mirror and need no sync.
 
 ### Risks and edge cases
@@ -195,8 +216,9 @@ Anchors:
 - Full `node --test` per AGENTS.md (prompt/agent text is asserted by content tests),
   not just guard suites.
 - `npm run check`.
-- Spot-verify the two edited `plans/prompts` files equal their `resources/prompts`
-  mirrors (implicitly covered by `resources-sync.test.js`).
+- Spot-verify all four edited `plans/prompts` files (`roles/code_reviewer.md`,
+  `steps/test.md`, `steps/decompose.md`, `steps/design.md`) equal their
+  `resources/prompts` mirrors (implicitly covered by `resources-sync.test.js`).
 
 ### Documentation impact
 
@@ -226,3 +248,5 @@ adjust punctuation to match each file's surrounding voice without changing meani
 - 2026-07-11T23:10:34Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (prose-only prompt/agent edits)
 
 - 2026-07-11T23:15:49Z: Design review r1 (codex-task:read-only@gpt-5.6-sol, xhigh): CONCERNS. 1) [Med] file counts wrong: Requirement names 12 targets (4 prompts + 8 agent defs); design says nine/five in places though the group lists cover all 12 - correct the counts. 2) [Med] warning sentence overstates the guard: /^## (.+?)\s*$/ rejects only column-zero H2 lines with content after the delimiter (delimiter-only and indented lines pass) - either match the guard precisely or frame the broader wording as an authoring rule, not runtime behavior. 3) [Low] group-3 self-compliance rationale says avoids the token entirely but the clause contains a mid-line two-hash token (persistable since regex is line-anchored) - fix the rationale wording. 4) [Low] assertion claim incomplete: cli.test.js:3365 also pins design_review.md content (conclusion unchanged - no target-prose pins). Anchors and sibling disjointness verified accurate. Designer patching; proceedable after patch without a new round.
+
+- 2026-07-11T23:18:32Z: Completed design via claude-subagent:local-board-designer@opus: Rework: counts corrected to 12 targets (4 prompts + 8 agents) everywhere incl. test-strategy mirror check; guard precision added (column-zero two-hash-space-content only; canonical sentence explicitly framed as stricter authoring rule); group-3 rationale fixed (line-anchored regex, mid-line token fine); assertion inventory corrected (estimate + design_review pins, none on targets).
