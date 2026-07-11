@@ -775,3 +775,5 @@ Original question history (for context): five sol@xhigh design-review rounds; ro
 - 2026-07-11T20:42:31Z: Ensured git branch local-board/T20260710T1534Z-codex-task-retries-for-transient-capacity-and-sandbox-failures-codex-task-repo (already-current).
 
 - 2026-07-11T20:43:50Z: Completed review via codex-task:read-only@gpt-5.6-terra: r1 FAIL (1 High: --retries missing from VALUE_TAKING_FLAGS - installer-dispatch bypass) fixed in 2f8a8a6; security_audit inline PASS; r2 focused re-review PASS (fix + regression test verified, scope limited).
+
+- 2026-07-11T20:43:51Z: Ensured git branch local-board/T20260710T1534Z-codex-task-retries-for-transient-capacity-and-sandbox-failures-codex-task-repo (already-current).
