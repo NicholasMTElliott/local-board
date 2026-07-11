@@ -13,7 +13,7 @@ estimateBasis: T20260710T1532Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
-updated: 2026-07-11T20:42:52Z
+updated: 2026-07-11T20:47:33Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -182,3 +182,5 @@ None blocking. (If the reviewer wants `clearActiveStepStrict` exported from `act
 - 2026-07-11T20:41:50Z: Completed design via claude-subagent:local-board-designer@opus: clearActiveStepStrict(root,ticketId,predicate,options) locked RMW reusing existing private readLedgerStrict; shared clearActiveStepWith helper keeps clearActiveStepIf byte-identical; missing FILE = no-op success (ENOENT = legitimate initial state), strict throws only on corrupt/unreadable; lock decision REJECT sharing ticket lock with beginStep (fail-open rationale + ticket-before-ledger ordering rule recorded for future adopters); 8 test cases incl. corrupt-throws-bytes-untouched and self-heal regression; systemPatterns note.
 
 - 2026-07-11T20:42:52Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (internal ledger primitive + lock decision; no UI/auth/external surface)
+
+- 2026-07-11T20:47:33Z: Design review r1 (codex-task:read-only@gpt-5.6-sol, xhigh): FAIL. 1) [High] Lock-rejection rationale evaluated only against today's moveTicket; for the future correction lane (strict clear under ticket lock) beginStep must share the ticket lock across resolution+stamping or it can stamp the old action around a lateral correction; strict clear releases the ledger lock on return so it cannot provide atomic clear+publication - either adopt ticket-lock sharing (ticket-before-ledger ordering) or explicitly record that the correction lane stays blocked pending a composable transaction primitive; the claim that strict clear alone enables the real fix is incorrect. 2) [Med] Overstated fail-open: checkDispatch returns code 1 on mismatch (only the hook fails open on ambiguity/code 2); specialty-run stampActiveStepNoClobber reports conflicts, does not overwrite. 3) [Low] Strengthen corrupt-ledger regression (clearActiveStepIf returns false + raw bytes unchanged), add predicate-throws case (no write, lock released), qualify missing-file success as post-lock-acquisition. Verified clean: readLedgerStrict exists w/ stated semantics incl. Windows ENOENT, helper factoring sound, caller enumeration complete, no reentrancy cycle, non-goal upheld. Looping design rework.
