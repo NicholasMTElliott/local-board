@@ -13,7 +13,7 @@ estimateBasis: T20260710T2050Z
 workStartedAt: 2026-07-11T23:18:33Z
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:18:33Z
+updated: 2026-07-11T23:22:29Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -232,6 +232,29 @@ None blocking. The exact insertion wording is specified above; implementer may
 adjust punctuation to match each file's surrounding voice without changing meaning.
 
 ## Implementation Notes
+
+Implemented the r1-patched design across 12 target files (4 `plans/prompts/**`, 8 `agents/**`), plus 4 synced `resources/prompts/**` mirrors.
+
+### Group 1 (6 files) — reviewer/tester output contracts
+
+Appended the canonical sentence `Use \`###\` or deeper for any internal headings and fence any literal \`## \` sample lines; a payload containing an unfenced \`## \` line is rejected at persistence.` to the Output/Persistence blocks of `plans/prompts/roles/code_reviewer.md`, `plans/prompts/steps/test.md`, `agents/claude/local-board-reviewer.md`, `agents/claude/local-board-tester.md`, `agents/codex/local-board-reviewer.md`, `agents/codex/local-board-tester.md`. Placed in the Output section per design, not on the claude Rules ban line (sibling T20260711T2137Z owns that line).
+
+### Group 2 (3 files) — decomposer `requirementBody`
+
+Extended the `requirementBody:` bullet in `agents/claude/local-board-decomposer.md` and `agents/codex/local-board-decomposer.md`, and the orchestrator Persistence branch in `plans/prompts/steps/decompose.md` (did not touch the L9 link rule, sibling-owned), with: `use \`###\` or deeper for internal headings (e.g. \`### Acceptance Criteria\`) and never include an unfenced \`## \` line; the persistence guard rejects it.`
+
+### Group 3 (3 files) — designer heading ambiguity
+
+Replaced `plans/prompts/steps/design.md`'s "Persist the complete `## Technical Design` section body" phrasing (Output and Persistence block; Include list untouched, sibling T20260711T2138Z owns it) and `agents/claude/local-board-designer.md` step 1 with: persist "the section body only - do not include the heading line itself (local-board manages the heading), and fence any literal ## sample lines." `agents/codex/local-board-designer.md`'s Persist rule already avoided the offending token, so the same clarification was appended rather than replacing anything.
+
+### Verification
+
+- `npm run sync-resources` mirrored the 4 `plans/prompts/**` sources to `resources/prompts/**`; the 8 `agents/**` files have no mirror.
+- `npm run check`: pass.
+- `node --test`: 587 tests, 586 pass, 1 pre-existing skip (smoke), 0 fail.
+- Committed 16 files (12 sources + 4 mirrors) by explicit path on the ticket branch; no `plans/tickets/**` or wholesale `plans/**` staged.
+
+No deviations from the r1-patched design.
 
 ## Review Findings
 
