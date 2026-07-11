@@ -13,7 +13,7 @@ estimateBasis: T20260710T2050Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:10:34Z
+updated: 2026-07-11T23:15:49Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -224,3 +224,5 @@ adjust punctuation to match each file's surrounding voice without changing meani
 - 2026-07-11T23:09:19Z: Completed design via claude-subagent:local-board-designer@opus: Canonical H3+/fence warning sentence for reviewer/tester Output blocks (6 files), requirementBody tailoring (3 files), design.md L17-18 + designer defs body-only reword; guard semantics verified against src/tickets.js SECTION_HEADING_RE L1211/L1318 (H2-only, fence-aware); no prose pins on targets (sole prompt pin is estimate.md cli.test.js:3357); 4 plans/prompts files need sync, 5 agents/ files do not; disjoint anchors from T2137Z (ban lines, decompose L9) and T2138Z (Include list).
 
 - 2026-07-11T23:10:34Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (prose-only prompt/agent edits)
+
+- 2026-07-11T23:15:49Z: Design review r1 (codex-task:read-only@gpt-5.6-sol, xhigh): CONCERNS. 1) [Med] file counts wrong: Requirement names 12 targets (4 prompts + 8 agent defs); design says nine/five in places though the group lists cover all 12 - correct the counts. 2) [Med] warning sentence overstates the guard: /^## (.+?)\s*$/ rejects only column-zero H2 lines with content after the delimiter (delimiter-only and indented lines pass) - either match the guard precisely or frame the broader wording as an authoring rule, not runtime behavior. 3) [Low] group-3 self-compliance rationale says avoids the token entirely but the clause contains a mid-line two-hash token (persistable since regex is line-anchored) - fix the rationale wording. 4) [Low] assertion claim incomplete: cli.test.js:3365 also pins design_review.md content (conclusion unchanged - no target-prose pins). Anchors and sibling disjointness verified accurate. Designer patching; proceedable after patch without a new round.
