@@ -13,7 +13,7 @@ estimateBasis: B20260710T2051Z
 workStartedAt: 2026-07-11T23:23:49Z
 workCompletedAt: null
 created: 2026-07-11T21:36:09Z
-updated: 2026-07-11T23:23:49Z
+updated: 2026-07-11T23:27:33Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -163,6 +163,16 @@ All six edited files live under `plans/prompts` and are mirrored byte-for-byte i
 None blocking.
 
 ## Implementation Notes
+
+Implemented the r2-approved design exactly:
+
+1. Fixed the Recording line in all five specialty prompts (`security_threat_model.md`, `ui_component_review.md`, `ux_interaction_review.md`, `security_audit.md`, `ui_visual_review.md`) to the canonical form `--executor <executor> --model <model> --evidence "..."` plus the `(omit \`--model\` when \`specialty-run\` returned a null model)` parenthetical, matching `SKILL.md` L273's server-side composition. Only the Recording sentence changed; step tokens preserved per file.
+2. `plans/prompts/steps/estimate.md`: appended the `--force` re-estimation sentence to step 6, and added a new capability-based `## Persistence` section (return-only routes return points/basis/rationale; writable routes — designer subagent, orchestrator, inline — run `local-board estimate` themselves). Verified both pinned substrings (`local-board calibration suggest`, `local-board estimate`) survive verbatim via grep post-edit.
+3. Added a new content-assertion test in `test/cli.test.js` ("specialty optional-step prompts teach the strict-routing Recording command") asserting the `--executor <executor> --model <model> --evidence` token order and the `omit \`--model\`` parenthetical across all five specialty prompt files.
+4. Ran `npm run sync-resources` to refresh all six mirrors under `resources/prompts`.
+5. Verification: `npm run check` passed; full `node --test` passed 587/588 (1 pre-existing skip, "smoke (slow)" race test), including the new assertion and the existing estimate-prompt pins.
+
+No deviations from the approved design.
 
 ## Review Findings
 
