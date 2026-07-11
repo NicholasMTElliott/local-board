@@ -1,7 +1,7 @@
 ---
 id: B20260711T2136Z
 type: bug
-status: ready_for_docs
+status: done
 priority: P3
 parent: null
 children: []
@@ -11,9 +11,9 @@ branch: local-board/B20260711T2136Z-prompts-specialty-and-estimate-commands-as-t
 estimate: 2
 estimateBasis: B20260710T2051Z
 workStartedAt: 2026-07-11T23:23:49Z
-workCompletedAt: null
+workCompletedAt: 2026-07-11T23:39:10Z
 created: 2026-07-11T21:36:09Z
-updated: 2026-07-11T23:38:59Z
+updated: 2026-07-11T23:39:10Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
