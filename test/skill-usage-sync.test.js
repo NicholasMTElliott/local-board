@@ -132,3 +132,86 @@ test("usage names and skill block names are non-empty (guards against a silently
     assert.ok(blockNames.length > 0, `${file} CLI Commands block should list at least one command`);
   }
 });
+
+// The pinned-retry-then-fallback-walk choreography (T20260710T2050Z): every
+// Delegation-equivalent section across the four skill texts (native
+// single-ticket, native parallel, codex single-ticket, codex parallel) must
+// describe the same operational elements, in each audience's own dialect
+// (native `configuredFallbackModels`/`configuredEffort` field names vs codex
+// sanitized `codexDispatch.*` field names).
+const FALLBACK_WALK_SECTIONS = [
+  { file: path.join(ROOT, "SKILL.md"), heading: "## Delegation", audience: "native" },
+  { file: path.join(ROOT, "SKILL_TEAM.md"), heading: "## Execution profiles", audience: "native" },
+  {
+    file: path.join(ROOT, "skills", "codex", "local-board", "SKILL.md"),
+    heading: "### Fallback Model Walk",
+    audience: "codex",
+  },
+  {
+    file: path.join(ROOT, "skills", "codex", "local-team", "SKILL.md"),
+    heading: "## Route Translation",
+    audience: "codex",
+  },
+];
+
+// Slice `source` from `heading` up to (but not including) the next
+// TOP-LEVEL "## " heading. A "### " subheading does not end the section —
+// e.g. SKILL.md's fallback-walk paragraph lives inside the
+// "### Persisting Delegated Output" subsection of "## Delegation".
+function extractHeadingSection(source, heading, label) {
+  const idx = source.indexOf(heading);
+  assert.ok(idx >= 0, `${label} is missing heading "${heading}"`);
+  const rest = source.slice(idx + heading.length);
+  const nextTopHeading = rest.match(/\n##(?!#) /);
+  return nextTopHeading ? rest.slice(0, nextTopHeading.index) : rest;
+}
+
+test("all four skill texts document the pinned-retry-then-fallback-walk choreography", async () => {
+  for (const { file, heading, audience } of FALLBACK_WALK_SECTIONS) {
+    const source = await readFile(file, "utf8");
+    const section = extractHeadingSection(source, heading, file);
+
+    assert.match(
+      section,
+      /retry the pin(?:ned model)? once/i,
+      `${file}: missing the pinned-model-retry-once wording in "${heading}"`,
+    );
+
+    assert.match(section, /\bin order\b/i, `${file}: missing the ordered-walk "in order" wording in "${heading}"`);
+    assert.match(section, /fallback/i, `${file}: "${heading}" does not mention "fallback"`);
+
+    assert.ok(
+      section.includes("--model <fallbackModel>"),
+      `${file}: missing the actual-model evidence wording "--model <fallbackModel>" in "${heading}"`,
+    );
+
+    if (audience === "native") {
+      assert.match(
+        section,
+        /carr(?:y|ying) the configured effort over unchanged/i,
+        `${file}: missing the native effort-carry-over wording in "${heading}"`,
+      );
+    } else {
+      assert.match(
+        section,
+        /carr(?:y|ying)[^.]*codexDispatch\.effort[^.]*unchanged/i,
+        `${file}: missing the codex effort-carry-over wording (codexDispatch.effort) in "${heading}"`,
+      );
+    }
+
+    assert.match(section, /gate-check/, `${file}: "${heading}" is missing "gate-check"`);
+    assert.match(section, /specialty-run/, `${file}: "${heading}" is missing "specialty-run"`);
+    assert.match(section, /design-review-check/, `${file}: "${heading}" is missing "design-review-check"`);
+
+    assert.match(section, /approve-inline/, `${file}: "${heading}" is missing "approve-inline"`);
+    assert.match(section, /questions/, `${file}: "${heading}" is missing "questions"`);
+
+    if (audience === "codex") {
+      assert.match(
+        section,
+        /never\b[^.]*@?codex-default/i,
+        `${file}: "${heading}" is missing the never-@codex-default guard for an exhausted fallback walk`,
+      );
+    }
+  }
+});
