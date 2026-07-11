@@ -14,7 +14,7 @@ workStartedAt: null
 workCompletedAt: null
 created: 2026-07-10T20:50:03Z
 updated: 2026-07-11T20:57:05Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
 # active-steps: strict-read ledger clear primitive and beginStep/moveTicket lock decision (correction-lane preconditions)
@@ -195,3 +195,5 @@ None blocking. (If the reviewer wants `clearActiveStepStrict` exported from `act
 - 2026-07-11T20:51:23Z: Completed design via claude-subagent:local-board-designer@opus: Rework r2: lock rejection kept but re-argued against correction-lane concurrency (strict clear is fail-closed but not composable; lane REMAINS BLOCKED pending ticket-lock sharing or clear-under-held-lock primitive; overstatements retracted); accurate-mechanics note (check-dispatch denies code 1 on mismatch, hook-only fail-open on code 2; no-clobber reports conflicts); tests strengthened (corrupt returns false + bytes unchanged, predicate-throws, post-lock qualification); systemPatterns note synced.
 
 - 2026-07-11T20:57:05Z: Design review r2 (codex-task:read-only@gpt-5.6-sol, xhigh): PASS. Rejection properly scoped with correction-lane race, non-composable strict clear, two future serialization options, and blocked residual explicit; mechanics accurate; strengthened tests confirmed; unchanged sections coherent.
+
+- 2026-07-11T20:57:05Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: r1 FAIL (lock rationale) reworked to option (b) honest residual; r2 PASS all findings resolved, no new inconsistencies
