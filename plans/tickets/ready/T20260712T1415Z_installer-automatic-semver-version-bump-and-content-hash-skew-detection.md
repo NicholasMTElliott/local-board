@@ -13,8 +13,8 @@ estimateBasis: T20260710T1532Z
 workStartedAt: 2026-07-12T15:11:07Z
 workCompletedAt: null
 created: 2026-07-12T14:15:09Z
-updated: 2026-07-12T20:36:18Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+updated: 2026-07-12T20:40:51Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # installer: automatic semver version bump and content-hash skew detection
@@ -833,6 +833,25 @@ None. Worktree clean after both rounds; probes confined to throwaway repos with 
 
 ## Documentation Updates
 
+### Audit Summary
+
+Audited the existing implementation-era docs against the final shipped contract, especially the loop-back fix that makes `fast-forward` invoke the version bump without an explicit range and makes plain no-range `local-board version-bump` the recovery path.
+
+### Files Edited
+
+- `README.md`: added the `version-bump` CLI surface, documented flag-gated auto-bump closeout behavior and no-range recovery, and corrected the release note so it no longer says the version stays pinned until publish-time conflict.
+- `docs/Install.md`: added an explicit `install --status` exit/verdict table for `0` current, `3` skewed, `4` not-installed, and `5` indeterminate.
+- `memory-bank/systemPatterns.md`: added the terse closeout note that root `fast-forward` may auto-commit a semver bump for installable payload changes when `git.autoVersionBump` is true.
+
+### Files Audited And Already Accurate
+
+- `docs/Workflow.md`: already reflects the no-range `fast-forward` invocation, marker-based range self-resolution, no-range recovery, explicit `--range` as one-off/manual override, and status JSON shape.
+- `memory-bank/techContext.md`: already reflects `PAYLOAD_SPEC`, contentHash/status exits, no-range automatic invocation, marker/CAS ancestry idempotence, and no-range recovery.
+
+### Verification
+
+No tests or local-board commands run, per task instruction. Documentation-only audit/edit.
+
 ## Questions
 
 ## Run Log
@@ -890,3 +909,5 @@ None. Worktree clean after both rounds; probes confined to throwaway repos with 
 - 2026-07-12T20:36:17Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass (round 2 after loop-back fix). Full suite 639/640 pass 0 fail 1 pre-existing skip; decisive in-checkout probe: plain git merge --no-ff -> bump fires (1.0.0->1.0.1, marker at bump commit), no-range re-run already-bumped, planning-only no-payload-change; stale comments and design reconciliation confirmed. Round-1 blocker closed.
 
 - 2026-07-12T20:36:18Z: Ensured git branch local-board/T20260712T1415Z-installer-automatic-semver-version-bump-and-content-hash-skew-detection (already-current).
+
+- 2026-07-12T20:40:51Z: Completed document via codex-task:workspace-write: Docs audited against the FINAL no-range contract: README stale pinned-version wording replaced with flag-gated auto-bump + no-range recovery + version-bump surfaced; docs/Install.md gained the install --status exit/verdict table; systemPatterns closeout note added; Workflow.md + techContext.md already aligned (fixed in 1c66b3b). Documentation Updates section written. Orchestrator committed (sandbox denies git).
