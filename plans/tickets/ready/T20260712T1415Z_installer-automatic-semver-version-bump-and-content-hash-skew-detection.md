@@ -1,7 +1,7 @@
 ---
 id: T20260712T1415Z
 type: task
-status: ready_for_review
+status: ready_for_test
 priority: P3
 parent: null
 children: []
