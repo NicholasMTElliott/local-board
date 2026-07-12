@@ -24,6 +24,7 @@ plans/local-board.config.jsonc workflow and routing config
 resources/            packaged prompt/template mirror synced from plans/ via npm run sync-resources (sync writes LF; mirror comparison is line-ending-insensitive)
 src/                  parser, validator, writer, git workflow, priority picker, CLI
 src/install.js       installer behind local-board install (human-facing reference: docs/Install.md)
+src/version-bump.js   semver bump logic shared by fast-forward (auto) and version-bump (manual)
 src/codex-detect.js  codex-task availability helper; detection-only, fail-open
 skills/codex/         Codex skill templates and metadata
 scripts/              maintainer tooling, not packaged
@@ -50,6 +51,33 @@ SKILL.md              installable orchestration skill template
 - Claude target adds consent-sensitive `Bash(local-board *)` to
   `~/.claude/settings.json`; hooks are opt-in with `--hooks`; uninstall removes
   that exact allow rule, leaving user-modified rules in place.
+- `PAYLOAD_SPEC` (`src/install.js`) is the single copy=hash=bump-trigger set
+  (`package.json`, `README.md`, `SKILL.md`, `SKILL_TEAM.md?`, `bin/`, `src/`,
+  `agents/`, `skills/`, `hooks/`, `resources/prompts`→`prompts`,
+  `resources/templates`→`templates`; `install.mjs` excluded). `computePayloadHash`
+  is a source-layout-only SHA-256 (sorted POSIX paths, CRLF-normalized; `null`
+  on the flattened `~/.local-board` snapshot). `install-info.json` gains
+  `contentHash` + per-target `targets` (merge-not-overwrite write;
+  `reconcileTargets` is footprint-driven — current/legacy skill+team dirs,
+  re-validated every call, deleted targets dropped, unknown seeded
+  `contentHash: null`). `install --status [--json]`: verdict
+  current/skewed/not-installed/indeterminate, exit 0/3/4/5. `where --json`
+  gains `contentHash`.
+- `git.autoVersionBump` (default `false`; this repo's own config sets `true`)
+  gates an automatic semver bump inside `fastForwardDefaultBranch`
+  (`src/worktrees.js`) when a fast-forward advances over installable-payload
+  changes; `versionBump` key is present in its return ONLY when the flag is
+  on. `src/version-bump.js`'s `runVersionBump(root, {range?, level?, config})`
+  is shared by fast-forward and the manual `local-board version-bump
+  [--level] [--range <a>..<b>]` command; level = max(bug→patch,
+  task/story→minor, epic→major) over merge subjects in range (shared
+  `MERGE_SUBJECT_RE`, hand-kept in lockstep with `tickets.js`'s
+  `TICKET_ID_RE` — NOT derived at module load, which would hit an
+  install.js↔worktrees.js↔tickets.js import cycle's TDZ). Idempotence: single
+  CAS-owned marker ref `refs/local-board/version-bump-head` at the bump
+  commit, tested by `merge-base --is-ancestor`. Dirty `package.json` refuses
+  (exit 2, no write); commit failure rolls back the file and leaves the
+  marker unmoved.
 - `worktrees.location` controls ticket worktree placement: sibling default, inside `.worktrees`, or explicit non-`plans/` path.
 - `package.json` `files` allowlist defines the npm package surface.
 - Agent profiles support `{ route, model?, effort?, fallbackModels?, prompt? }`; optional-step agents also accept `{ route, model?, effort?, fallbackModels? }` (string form unchanged). `fallbackModels` is an ordered string array that requires `model`, is rejected on inline routes, is surfaced/emitted only when configured, and is accepted by strict routing evidence alongside the pinned model (`codex-default` wildcard remains). `effort` is shape-validated like `model`, rejected on inline routes, surfaced by `begin-step`/`specialty-run`, and passed through `codexDispatch` without sanitization; effort is dispatch-only and excluded from evidence tokens and the active-steps ledger. Specialty names must not collide with effective `workflow.statusActions` values.

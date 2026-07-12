@@ -588,6 +588,18 @@ Auto-merge only runs after `move ... done` passes strict routing validation. It 
 
 In parallel orchestration, a `done` slot is not refilled until the default checkout has been reconciled with `fast-forward`, the full suite has passed on the merged default branch, and any unexpected failures have been fixed forward.
 
+## Automatic Version Bump
+
+`git.autoVersionBump` (default `false`) gates an automatic semver bump inside `fast-forward` itself: when `true` and a `fast-forward` call advances the default branch over a range that touches any installable payload path (skills, agents, prompts, hooks, `src/`, `bin/`, `README.md`, `SKILL.md` — the same set `local-board install` copies and `install --status` hashes; `install.mjs` is excluded), it computes a semver level from the merged ticket types in that range (`bug` → patch, `task`/`story` → minor, `epic` → major; max over a multi-merge range; unparseable/unresolved merges fall back to a flat patch), rewrites `package.json`, and commits it as `chore: bump version <X.Y.Z>`. Idempotence is a single-owner, compare-and-swap-written marker ref (`refs/local-board/version-bump-head`) pointing at the resulting bump commit; "already processed" is tested by ancestry, not by commit subject, so a same-clone re-run and a fresh clone both correctly no-op.
+
+**Setting `git.autoVersionBump: true` — including by blind-copying another repo's config — authorizes `local-board` to rewrite and commit THIS repo's own `package.json` version on every payload-changing `fast-forward`.** Leave it `false`/absent unless this repo IS the package being versioned. `local-board`'s own `plans/local-board.config.jsonc` sets it `true`; every scaffolded/consumer repo defaults `false` and is unaffected. The default is boolean-validated (`normalizeGit`); a non-boolean value throws.
+
+`fast-forward --json`'s return object gains a `versionBump` key only when the flag is on (omitted entirely when off or absent — byte-identical to the pre-feature shape). When present: `{ bumped, from, to, level, reason }`, `reason` one of `bumped | not-enabled | not-advanced | no-payload-change | already-bumped | dirty-package-json | not-on-default`.
+
+Manual escape hatch and recovery: `local-board version-bump [--level major|minor|patch] [--range <a>..<b>] [--json]` shares the same underlying logic. `--level` forces the level and skips the merge-subject scan/ticket lookup. `--range <a>..<b>` is the exact recovery path `fast-forward` prints if the bump commit fails partway (the checkout has already been reset to the new tip by that point, so re-running `fast-forward` cannot retry the range itself). Without `--range`, the base resolves marker → last `chore: bump version` commit → repo root commit. A dirty `package.json` at entry is refused (`dirty-package-json`, exit `2`, no write); a commit failure restores `package.json` to its pre-write bytes and leaves the marker unmoved, so a re-run recomputes the same target rather than double-incrementing. Exit codes: `0` on success (a bump or an intentional no-op), `2` on a precondition refusal (`not-enabled`, `not-on-default`, `dirty-package-json`).
+
+Known limitation: `git.autoMerge: true` single-checkout repos advance the default checkout without a subsequent `fast-forward`, so the auto-bump never fires there (not this repo's own config). Such repos should use the manual `version-bump` command; `install --status`'s hash-skew check is the safety net either way.
+
 ## Durable Planning State (commit at each transition)
 
 `git.commitPlanningOnTransition`: when `true` (the scaffold default for new

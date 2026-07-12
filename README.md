@@ -42,6 +42,8 @@ Installed skill and agent text always invokes the `local-board` command on `PATH
 
 See [docs/Install.md](docs/Install.md) for every path the installer writes per target and the `~/.claude/settings.json` consent side effect.
 
+Every install records a content hash (`sha256:...`, additive `contentHash`/`targets` keys in `install-info.json`) alongside the version. Run `local-board install --status` to check whether the installed skills/agents/prompts have drifted from the current package source — reports per-target `current`/`skewed` plus a global verdict (`current`/`skewed`/`not-installed`/`indeterminate`), exit codes `0`/`3`/`4`/`5`. See [docs/Install.md](docs/Install.md#content-hash-and-skew-status).
+
 **`npx local-board` is not supported.** A first run of `npx` needs network access to fetch the package, which sandboxed environments (including the Codex sandbox) deny. Install the package globally first, as above.
 
 `node ./bin/local-board.js install` and `node install.mjs` remain available as deprecated aliases for running the installer from a checkout, but they still require a prior `npm install -g .` or `npm link` from that checkout — the installer's PATH check fails fast otherwise, and rendered skills need the `local-board` command on `PATH` to be invoked correctly.
