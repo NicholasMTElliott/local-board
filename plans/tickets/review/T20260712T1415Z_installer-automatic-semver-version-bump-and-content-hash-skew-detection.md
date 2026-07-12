@@ -13,7 +13,7 @@ estimateBasis: T20260710T1532Z
 workStartedAt: 2026-07-12T15:11:07Z
 workCompletedAt: null
 created: 2026-07-12T14:15:09Z
-updated: 2026-07-12T20:27:36Z
+updated: 2026-07-12T20:27:37Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -857,3 +857,5 @@ fast-forward must invoke runVersionBump WITHOUT a range (marker-based base resol
 - 2026-07-12T20:26:31Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Loop-back fix 1c66b3b: fastForwardDefaultBranch invokes runVersionBump with no range (marker->last-bump->root self-resolution covers in-checkout merges; recovery hint now plain no-range version-bump); comment + Workflow.md + techContext.md aligned; 2 new in-checkout regression tests (payload bump with advanced:false, planning-only no-payload-change); not-advanced expectations corrected to no-payload-change where the wider range legitimately scans scaffold commits; 3 external-advance tests byte-unchanged. npm run check clean; node --test 639/640 pass 1 pre-existing skip. Original implementation evidence: commits 1631fba/7e3c78e/53b7679, +53 tests.
 
 - 2026-07-12T20:27:36Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (call-shape delta + tests; injection previously assessed clean; surface reduced)
+
+- 2026-07-12T20:27:37Z: Ensured git branch local-board/T20260712T1415Z-installer-automatic-semver-version-bump-and-content-hash-skew-detection (already-current).
