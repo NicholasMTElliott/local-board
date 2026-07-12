@@ -1,7 +1,7 @@
 ---
 id: T20260712T1415Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P3
 parent: null
 children: []
@@ -10,7 +10,7 @@ blocks: []
 branch: local-board/T20260712T1415Z-installer-automatic-semver-version-bump-and-content-hash-skew-detection
 estimate: 4
 estimateBasis: T20260710T1532Z
-workStartedAt: null
+workStartedAt: 2026-07-12T15:11:07Z
 workCompletedAt: null
 created: 2026-07-12T14:15:09Z
 updated: 2026-07-12T15:11:07Z
@@ -620,3 +620,5 @@ opt-in/idempotent/quoting/uninstall/`--no-hooks`/non-Claude. All remain valid
 - 2026-07-12T15:09:33Z: Design review r4 (codex-task:read-only@gpt-5.6-sol, xhigh; final budget round): FAIL on a single editorial contradiction - Decision 5 L416 says advance marker to tip while L403-409 correctly require bump commit B; implementing L416 literally recreates the r3 double-bump. Reviewer prescribed the exact fix (replace tip with the resulting bump commit B, one shared CAS owner) and verified EVERYTHING else: ancestry operand direction correct, same-clone no-op and fresh-clone traces pass, first-write CAS semantics correct, footprint/verdict rules fully pass with all four migration tests present, exit codes coherent. Orchestrator disposition: one-word editorial fix applied per prescription; proceeding to implementation without a fifth round (the authoritative contract lines already state the correct behavior; no open design judgment remains).
 
 - 2026-07-12T15:11:07Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: 4 rounds: r1 FAIL (3 High structural: consumer-repo hook safety, per-clone non-portability, multi-target false-current) -> hooks dropped for config-gated fast-forward integration; r2 FAIL (migration High + 4 contract Med) -> reconcileTargets + explicit contracts; r3 FAIL (marker double-bump + footprint gaps) -> CAS-to-B ancestry marker + legacy-dir footprints; r4: all traces pass, single editorial tip/B contradiction fixed per reviewer prescription, verified by orchestrator read. Proceeding.
+
+- 2026-07-12T15:11:07Z: Ensured git branch local-board/T20260712T1415Z-installer-automatic-semver-version-bump-and-content-hash-skew-detection (already-current).
