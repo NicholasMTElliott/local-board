@@ -13,7 +13,7 @@ estimateBasis: T20260710T1532Z
 workStartedAt: 2026-07-12T15:11:07Z
 workCompletedAt: null
 created: 2026-07-12T14:15:09Z
-updated: 2026-07-12T20:27:37Z
+updated: 2026-07-12T20:31:53Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -785,12 +785,20 @@ the *manual* command's first-run case is, as of this fix, exactly what the
 
 ## Review Findings
 
-### Review round 1 (codex-task:read-only@gpt-5.6-terra, high, static)
+### Review round 1 - full review (codex-task:read-only@gpt-5.6-terra, high, static)
 
-Verdict: PASS, no findings.
+Verdict: PASS, no findings. All four-round-hardened design contracts verified in code: marker CAS-to-B with ancestry already-processed; footprint reconciliation (current+legacy dirs, per-call re-validation, empty map = not-installed); PAYLOAD_SPEC as single copy/hash/bump-trigger source; flag-off fast-forward shape key-omitted; install --status exits 0/3/4/5 worst-of; version-bump JSON/exit/dirty/rollback; normalizeGit gate; injection handling (ticket ids regex-validated, git args refs/hashes only). Mandated regression tests present; skill edits advisory-only.
 
-- Verified against the four-round-hardened design contracts: marker CAS-to-B with ancestry already-processed test; footprint reconciliation (current+legacy dirs, per-call re-validation, empty map = not-installed); PAYLOAD_SPEC as the single copy/hash/bump-trigger source; flag-off fast-forward shape key-omitted and byte-identical; install --status exits 0/3/4/5 with worst-of global; version-bump JSON/exit/dirty/rollback flow; normalizeGit boolean gate with scaffold default false; injection handling (ticket ids regex-validated, git args refs/hashes only).
-- Mandated regression tests present (same-clone no-op, fresh-clone, CAS-concurrent-fail, migration matrix incl. stale-claude + --target=codex); skill edits limited to the two advisory paragraphs, no fence changes, no plans/prompts edits.
+### Test-stage loop-back (orchestrator finding)
+
+Automatic bump never fired for in-checkout merges (fast-forward passed an equal previousHead..newHead range; every real closeout runs that way). Fixed in 1c66b3b: no-range invocation with marker-based self-resolution; two in-checkout regression tests; recovery hint corrected; Technical Design reconciled by the designer.
+
+### Review round 2 - focused re-review of the fix (codex-task:read-only@gpt-5.6-terra, medium, static)
+
+Verdict: CONCERNS (2 Low stale comments), fixed in 5f49c2e.
+
+- Verified: range genuinely omitted with no behavioral riders; rollback-before-marker preserves no-range retry equivalence; same-clone idempotence holds with marker-at-B; planning-only stays no-payload-change; the two expectation corrections are legitimate wider-range consequences still asserting no bump; both new tests use plain in-checkout git merge --no-ff with advanced:false; three external-advance tests unchanged; docs/design alignment accurate.
+- [Low x2] Stale comments in src/version-bump.js:78-83 and src/worktrees.js:288-289 contradicted the no-range contract - corrected in 5f49c2e (comment-only, targeted suites 68/68).
 
 ## Test Evidence
 
