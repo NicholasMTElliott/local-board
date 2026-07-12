@@ -875,7 +875,18 @@ test("fast-forward with git.autoVersionBump=true reports no-payload-change (no c
   });
 });
 
-test("fast-forward with git.autoVersionBump=true reports not-advanced when nothing moved", { skip: !GIT_AVAILABLE }, async () => {
+// versionBump's no-range self-resolved base (marker -> last bump commit ->
+// root commit) scans the WHOLE history back to the repo root, not just
+// fast-forward's own before/after pair -- so on this fixture (withRepo's own
+// setup commits: README.md, then the scaffolded plans/.gitignore) the
+// no-marker/no-prior-bump base is the root (README-only) commit, and the
+// range to HEAD covers only the scaffold-init commit, which touches no
+// installable path. The correct reason is therefore no-payload-change, not
+// not-advanced (which src/version-bump.js's own unit coverage in
+// test/version-bump.test.js exercises directly, e.g. the fresh-clone
+// no-re-bump regression). This still proves the property this test names:
+// "nothing installable has happened yet" never spuriously bumps.
+test("fast-forward with git.autoVersionBump=true does not spuriously bump when nothing installable has happened yet (advanced stays false; no prior bump/marker)", { skip: !GIT_AVAILABLE }, async () => {
   await withRepo(async (root) => {
     await enableAutoVersionBump(root);
 
@@ -883,7 +894,74 @@ test("fast-forward with git.autoVersionBump=true reports not-advanced when nothi
     assert.equal(clean.code, 0, clean.stderr);
     const result = JSON.parse(clean.stdout);
     assert.equal(result.advanced, false);
-    assert.deepEqual(result.versionBump, { bumped: false, from: null, to: null, level: null, reason: "not-advanced" });
+    assert.deepEqual(result.versionBump, { bumped: false, from: null, to: null, level: null, reason: "no-payload-change" });
+  });
+});
+
+// The three tests above use the EXTERNAL-ADVANCE topology (a detached
+// worktree pushes a ref this checkout then adopts via reflog-tree-match),
+// where cleanCheckoutHead legitimately resolves previousHead !== newHead.
+// The two tests below cover the PRIMARY real-workflow topology instead: the
+// merge lands directly IN the project root checkout (`git merge --no-ff` on
+// the default branch, exactly what every closeout skill contract does)
+// before `fast-forward` ever runs. That topology always resolves
+// previousHead === newHead (nothing EXTERNAL advanced this checkout) and
+// `advanced: false` — a range built from that pair is always empty, which is
+// exactly the acceptance gap fastForwardDefaultBranch's no-range
+// runVersionBump call (marker -> last bump commit -> root, tip = HEAD) now
+// closes. Regression per ticket T20260712T1415Z test-stage finding.
+test("fast-forward with git.autoVersionBump=true bumps when the merge lands IN the checkout (git merge --no-ff on the default branch; advanced stays false)", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, baseBranch) => {
+    await enableAutoVersionBump(root);
+    await writeFile(path.join(root, "package.json"), `${JSON.stringify({ name: "fixture", version: "1.0.0" }, null, 2)}\n`, "utf8");
+    await git(root, ["add", "package.json"]);
+    await git(root, ["commit", "-m", "Add package.json"]);
+
+    await git(root, ["switch", "-c", "feature/in-checkout"]);
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src", "feature.js"), "// feature\n", "utf8");
+    await git(root, ["add", "src"]);
+    await git(root, ["commit", "-m", "Implement feature"]);
+    await git(root, ["switch", baseBranch]);
+    await git(root, ["merge", "--no-ff", "feature/in-checkout", "-m", "Merge feature/in-checkout"]);
+
+    const advanced = await runCli(["--root", root, "fast-forward", "--json"]);
+    assert.equal(advanced.code, 0, advanced.stderr);
+    const result = JSON.parse(advanced.stdout);
+    // Confirms the topology: nothing external moved this checkout, so the
+    // top-level advanced flag is false even though a real bump must fire.
+    assert.equal(result.advanced, false);
+    assert.equal(result.versionBump.bumped, true);
+    assert.equal(result.versionBump.reason, "bumped");
+    assert.equal(result.versionBump.from, "1.0.0");
+    assert.equal(result.versionBump.to, "1.0.1");
+
+    const pkg = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
+    assert.equal(pkg.version, "1.0.1");
+    const headSubject = await gitOutput(root, ["log", "-1", "--pretty=%s"]);
+    assert.match(headSubject, /^chore: bump version 1\.0\.1$/);
+    const marker = await gitOutput(root, ["rev-parse", "refs/local-board/version-bump-head"]);
+    const head = await gitOutput(root, ["rev-parse", "HEAD"]);
+    assert.equal(marker, head);
+  });
+});
+
+test("fast-forward with git.autoVersionBump=true reports no-payload-change when an in-checkout merge (git merge --no-ff) touches only plans/", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, baseBranch) => {
+    await enableAutoVersionBump(root);
+
+    await git(root, ["switch", "-c", "feature/planning-only"]);
+    await writeFile(path.join(root, "plans", "note.md"), "note\n", "utf8");
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Planning-only change"]);
+    await git(root, ["switch", baseBranch]);
+    await git(root, ["merge", "--no-ff", "feature/planning-only", "-m", "Merge feature/planning-only"]);
+
+    const advanced = await runCli(["--root", root, "fast-forward", "--json"]);
+    assert.equal(advanced.code, 0, advanced.stderr);
+    const result = JSON.parse(advanced.stdout);
+    assert.equal(result.advanced, false);
+    assert.deepEqual(result.versionBump, { bumped: false, from: null, to: null, level: null, reason: "no-payload-change" });
   });
 });
 

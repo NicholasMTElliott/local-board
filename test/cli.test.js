@@ -3572,7 +3572,11 @@ test("CLI fast-forward --json omits versionBump when the flag is off; includes i
     assert.equal(on.code, 0, on.stderr);
     const onParsed = JSON.parse(on.stdout);
     assert.equal(Object.hasOwn(onParsed, "versionBump"), true);
-    assert.equal(onParsed.versionBump.reason, "not-advanced");
+    // versionBump self-resolves its range from the repo root (no marker, no
+    // prior bump commit yet) to HEAD; the only commit in that range here is
+    // enableAutoVersionBumpCli's own config-flag commit, which touches only
+    // plans/local-board.config.jsonc -- not an installable path.
+    assert.equal(onParsed.versionBump.reason, "no-payload-change");
   });
 });
 

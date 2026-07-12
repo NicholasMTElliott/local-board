@@ -268,11 +268,32 @@ export async function listTicketWorktrees(root) {
 // (reason one of bumped | not-advanced | no-payload-change | already-bumped |
 // dirty-package-json | not-on-default | not-enabled); `runVersionBump` alone
 // owns the idempotence marker (CAS-advances it to the resulting bump commit
-// on success). A version-bump failure (e.g. the commit step) is wrapped with
-// the exact recovery command before it propagates: the checkout is already
-// reset to `newHead` by this point, so a second `fast-forward` cannot retry
-// the range itself (see cleanCheckoutHead/reset above) — recovery goes
-// through `local-board version-bump --range <previousHead>..<newHead>`.
+// on success).
+//
+// `runVersionBump` is called WITHOUT an explicit range (no `{ previousHead,
+// newHead }`), deliberately NOT this call's own `previousHead`/`newHead`
+// pair. In this repo's actual closeout the merge lands IN the project root
+// checkout (an orchestrator `git merge --no-ff` on the default branch)
+// before `fast-forward` ever runs; `cleanCheckoutHead`'s reflog-tree-match
+// then resolves `previousHead === newHead` (nothing EXTERNAL advanced this
+// checkout), so a range built from that pair is always empty and the bump
+// would never fire in the primary workflow — only the external-advance
+// topology (a detached worktree pushing a ref this checkout then adopts)
+// ever produced a non-empty range here. Omitting the range instead lets
+// `runVersionBump` self-resolve base..tip as marker -> last bump commit ->
+// root commit, with tip = current HEAD (already reconciled by the
+// `reset --hard` below) — a range that is a SUPERSET of any external advance
+// and also correctly covers an in-checkout merge, since it is anchored to
+// the marker/repo history rather than to this one call's before/after pair.
+// The manual `local-board version-bump --range <a>..<b>` command keeps the
+// explicit-range option for the recovery path below and other one-off use.
+//
+// A version-bump failure (e.g. the commit step) is wrapped with a recovery
+// hint before it propagates. Because the marker is left UNMOVED on failure
+// (see runVersionBump) and this call already omits an explicit range, a
+// plain no-range `local-board version-bump` re-run resolves the exact same
+// base..HEAD range and recomputes the same target — no `--range` argument is
+// needed for recovery.
 export async function fastForwardDefaultBranch(root, options = {}) {
   const defaultBranch = await resolveDefaultBranch(root, options.defaultBranch ?? null);
   const current = await currentBranch(root);
@@ -294,11 +315,11 @@ export async function fastForwardDefaultBranch(root, options = {}) {
   const config = options.config ?? null;
   if (config?.git?.autoVersionBump === true) {
     try {
-      result.versionBump = await runVersionBump(root, { range: { previousHead, newHead }, config });
+      result.versionBump = await runVersionBump(root, { config });
     } catch (error) {
       throw new Error(
         `${error.message}\nfast-forward advanced ${defaultBranch} to ${newHead}, but the version bump failed; ` +
-          `recover with: local-board version-bump --range ${previousHead}..${newHead}`,
+          `recover with: local-board version-bump`,
       );
     }
   }

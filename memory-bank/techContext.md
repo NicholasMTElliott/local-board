@@ -65,11 +65,17 @@ SKILL.md              installable orchestration skill template
   gains `contentHash`.
 - `git.autoVersionBump` (default `false`; this repo's own config sets `true`)
   gates an automatic semver bump inside `fastForwardDefaultBranch`
-  (`src/worktrees.js`) when a fast-forward advances over installable-payload
-  changes; `versionBump` key is present in its return ONLY when the flag is
-  on. `src/version-bump.js`'s `runVersionBump(root, {range?, level?, config})`
-  is shared by fast-forward and the manual `local-board version-bump
-  [--level] [--range <a>..<b>]` command; level = max(bug→patch,
+  (`src/worktrees.js`); `versionBump` key is present in its return ONLY when
+  the flag is on. It calls `runVersionBump` WITHOUT an explicit range (not
+  its own `previousHead`/`newHead`): this repo's real closeout merges IN the
+  project root checkout, so `previousHead === newHead` (`advanced: false`)
+  even when a real bump is due — a range built from that pair is always
+  empty. `src/version-bump.js`'s `runVersionBump(root, {range?, level?,
+  config})` self-resolves base..tip as marker → last bump commit → root
+  commit when no range is given (tip = current HEAD), a superset of any
+  external-advance range; it is shared by fast-forward and the manual
+  `local-board version-bump [--level] [--range <a>..<b>]` command (`--range`
+  is for one-off/explicit use only now). Level = max(bug→patch,
   task/story→minor, epic→major) over merge subjects in range (shared
   `MERGE_SUBJECT_RE`, hand-kept in lockstep with `tickets.js`'s
   `TICKET_ID_RE` — NOT derived at module load, which would hit an
@@ -77,7 +83,8 @@ SKILL.md              installable orchestration skill template
   CAS-owned marker ref `refs/local-board/version-bump-head` at the bump
   commit, tested by `merge-base --is-ancestor`. Dirty `package.json` refuses
   (exit 2, no write); commit failure rolls back the file and leaves the
-  marker unmoved.
+  marker unmoved (a no-range re-run recomputes the same target — the
+  recovery path).
 - `worktrees.location` controls ticket worktree placement: sibling default, inside `.worktrees`, or explicit non-`plans/` path.
 - `package.json` `files` allowlist defines the npm package surface.
 - Agent profiles support `{ route, model?, effort?, fallbackModels?, prompt? }`; optional-step agents also accept `{ route, model?, effort?, fallbackModels? }` (string form unchanged). `fallbackModels` is an ordered string array that requires `model`, is rejected on inline routes, is surfaced/emitted only when configured, and is accepted by strict routing evidence alongside the pinned model (`codex-default` wildcard remains). `effort` is shape-validated like `model`, rejected on inline routes, surfaced by `begin-step`/`specialty-run`, and passed through `codexDispatch` without sanitization; effort is dispatch-only and excluded from evidence tokens and the active-steps ledger. Specialty names must not collide with effective `workflow.statusActions` values.
