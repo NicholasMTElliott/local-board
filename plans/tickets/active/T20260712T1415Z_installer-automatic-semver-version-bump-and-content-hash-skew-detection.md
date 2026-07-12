@@ -1,7 +1,7 @@
 ---
 id: T20260712T1415Z
 type: task
-status: ready_for_design
+status: designing
 priority: P3
 parent: null
 children: []
