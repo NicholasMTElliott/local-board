@@ -13,7 +13,7 @@ estimateBasis: T20260710T1532Z
 workStartedAt: 2026-07-12T15:11:07Z
 workCompletedAt: null
 created: 2026-07-12T14:15:09Z
-updated: 2026-07-12T16:14:39Z
+updated: 2026-07-12T16:14:40Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -737,3 +737,5 @@ Implemented per the 4-round-hardened Technical Design; no design deviations.
 - 2026-07-12T16:13:19Z: Completed implement via claude-subagent:local-board-implementer@sonnet: PAYLOAD_SPEC + hash + reconcileTargets + status in src/install.js; new src/version-bump.js with CAS-to-B ancestry marker; flag-gated versionBump in fastForwardDefaultBranch (flag-off shape byte-identical, exact-shape test green); normalizeGit; CLI command + where/fast-forward JSON; this repo opted in via committed config; advisory reworded in 2 skills; docs x4. Tests: +53 (23 new version-bump, 16 install, 3 worktrees, 8 cli, 3 config); npm run check clean; node --test 637/638 pass 1 pre-existing skip. One deviation: MERGE_SUBJECT_RE hand-copied from TICKET_ID_RE class to avoid real import-cycle TDZ, lockstep guard test enforces identity. Commits 1631fba/7e3c78e/53b7679 (+7dc80d0 notes auto-commit).
 
 - 2026-07-12T16:14:39Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (ticket ids regex-validated, never in git args; git ops use refs/hashes; hash is fingerprint; no UI). Injection angle explicitly assessed clean; reviewer prompt carries a cross-check item.
+
+- 2026-07-12T16:14:40Z: Ensured git branch local-board/T20260712T1415Z-installer-automatic-semver-version-bump-and-content-hash-skew-detection (already-current).
