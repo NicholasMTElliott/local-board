@@ -869,3 +869,5 @@ fast-forward must invoke runVersionBump WITHOUT a range (marker-based base resol
 - 2026-07-12T20:27:37Z: Ensured git branch local-board/T20260712T1415Z-installer-automatic-semver-version-bump-and-content-hash-skew-detection (already-current).
 
 - 2026-07-12T20:31:54Z: Completed review via codex-task:read-only@gpt-5.6-terra: r1 full PASS (all hardened contracts verified); post-loop-back r2 focused CONCERNS (2 Low stale comments) fixed in 5f49c2e; fix verified: no-range invocation clean, idempotence/rollback traces hold, new in-checkout tests genuine, external-advance tests unchanged.
+
+- 2026-07-12T20:31:54Z: Ensured git branch local-board/T20260712T1415Z-installer-automatic-semver-version-bump-and-content-hash-skew-detection (already-current).
