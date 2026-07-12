@@ -888,3 +888,5 @@ None. Worktree clean after both rounds; probes confined to throwaway repos with 
 - 2026-07-12T20:31:54Z: Ensured git branch local-board/T20260712T1415Z-installer-automatic-semver-version-bump-and-content-hash-skew-detection (already-current).
 
 - 2026-07-12T20:36:17Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass (round 2 after loop-back fix). Full suite 639/640 pass 0 fail 1 pre-existing skip; decisive in-checkout probe: plain git merge --no-ff -> bump fires (1.0.0->1.0.1, marker at bump commit), no-range re-run already-bumped, planning-only no-payload-change; stale comments and design reconciliation confirmed. Round-1 blocker closed.
+
+- 2026-07-12T20:36:18Z: Ensured git branch local-board/T20260712T1415Z-installer-automatic-semver-version-bump-and-content-hash-skew-detection (already-current).
