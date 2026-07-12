@@ -6,7 +6,7 @@ Rules:
 - epics create stories;
 - stories create tasks;
 - each child has clear acceptance criteria;
-- link parent and children in front matter;
+- parent/child links are recorded in front matter (by whoever the Persistence section below assigns);
 - preserve priority unless there is a clear reason to adjust;
 - add dependencies when sequencing matters.
 
