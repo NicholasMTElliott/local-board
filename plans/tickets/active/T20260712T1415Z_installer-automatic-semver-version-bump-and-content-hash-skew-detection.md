@@ -8,12 +8,12 @@ children: []
 blockedBy: []
 blocks: []
 branch: local-board/T20260712T1415Z-installer-automatic-semver-version-bump-and-content-hash-skew-detection
-estimate: null
-estimateBasis: null
+estimate: 4
+estimateBasis: T20260710T1532Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-12T14:15:09Z
-updated: 2026-07-12T14:15:23Z
+updated: 2026-07-12T14:15:35Z
 completedSteps: []
 routingApprovals: []
 ---
