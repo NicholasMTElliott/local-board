@@ -13,7 +13,7 @@ estimateBasis: T20260710T1532Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-12T14:15:09Z
-updated: 2026-07-12T15:09:33Z
+updated: 2026-07-12T15:10:18Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -413,9 +413,11 @@ specified):
      into a bump commit.
   2. Stage and commit ONLY `package.json` by explicit pathspec
      (`git commit -- package.json`), never `git add -A`.
-  3. On a successful commit, advance the marker ref to `tip`. If the commit fails
-     after the file write, restore `package.json` to its pre-write bytes and do
-     NOT advance the marker, leaving a clean tree; because the target version is a
+  3. On a successful commit, advance the marker ref to the resulting bump commit
+     `B` (via the same single shared `git update-ref <ref> B <oldvalue>` CAS
+     owner). If the commit fails after the file write, restore `package.json` to
+     its pre-write bytes and do NOT advance the marker, leaving a clean tree;
+     because the target version is a
      pure function of the (explicit or re-resolvable) range and the marker did not
      move, a re-run recomputes the SAME target rather than incrementing again.
 
