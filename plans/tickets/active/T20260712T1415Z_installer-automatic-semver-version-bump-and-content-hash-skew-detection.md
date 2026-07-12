@@ -13,7 +13,7 @@ estimateBasis: T20260710T1532Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-12T14:15:09Z
-updated: 2026-07-12T14:49:56Z
+updated: 2026-07-12T14:54:53Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -50,11 +50,13 @@ From the 2026-07-12 install-process test: package.json has been pinned at 0.1.0 
 ## Technical Design
 
 Automatic semver version bump plus a content-hash skew check for the installed
-payload. Reworked after design review r1 (FAIL, 3 High / 5 Medium) - the git-hook
-mechanism is dropped entirely; the bump now rides an existing deterministic
-closeout CLI op (`fast-forward`) behind an opt-in config gate, per-target install
-metadata resolves the multi-target staleness gap, and the shared inventory /
-grammar / command-contract Mediums are closed below. `install.mjs` is a thin shim
+payload. Reworked through design reviews r1 and r2 - the git-hook mechanism is
+dropped entirely; the bump rides an existing deterministic closeout CLI op
+(`fast-forward`) behind an opt-in, boolean-validated config gate; per-target
+install metadata WITH legacy discover-then-seed migration resolves multi-target
+staleness for both new and pre-feature records; and the range/marker/recovery,
+config-validation, null-hash, and flag-off-shape contracts are pinned down below.
+`install.mjs` is a thin shim
 over `src/install.js`, which `src/cli.js` and (new) `src/version-bump.js` also
 import, so one shared payload inventory backs copy, hash, and bump-trigger with no
 duplication.
@@ -98,6 +100,16 @@ Replacement: a single deterministic closeout CLI op does the bump.
   `package.json`, which for an opted-in repo is that repo's own package by
   construction. Because the default is off, existing `fast-forward` behaviour and
   tests are unchanged when the flag is absent.
+- Validation (Medium 2): `git` keys are currently unvalidated in `loadConfig`.
+  Add a `normalizeGit(merged)` following the exact `normalizeWorktrees` idiom
+  (`src/config.js:694`) - called in `loadConfig`'s normalize `try` block - that
+  throws `git.autoVersionBump must be a boolean; got <JSON>` for a non-boolean and
+  otherwise leaves the value as-is (scoped to this new key so existing untyped git
+  keys are untouched). Documented plainly in Install.md/Workflow.md: setting
+  `git.autoVersionBump: true` - including by blind-copying another repo's config -
+  AUTHORIZES `local-board` to rewrite and commit THIS repo's own `package.json`
+  version on every payload-changing `fast-forward`; leave it `false`/absent unless
+  this repo IS the package being versioned.
 - Automatic-in-workflow (resolves High 2): with the flag on, every `fast-forward`
   reconciliation that advanced the default branch over installable-payload
   changes performs the bump - no reliance on hooks, no per-clone install, no
@@ -106,23 +118,42 @@ Replacement: a single deterministic closeout CLI op does the bump.
 - Kept for manual use: a standalone `local-board version-bump` command (contract
   in Decision 5) for one-off/major/minor overrides and recovery.
 
-Bump gating inside `fastForwardDefaultBranch` (all guarded so a non-opted repo is
-untouched):
+Bump gating inside `fastForwardDefaultBranch` (ordered so a non-opted repo is
+byte-identical to today):
 
-1. If `advanced` is false (`previousHead === newHead`), skip.
-2. If `git.autoVersionBump !== true`, skip.
-3. Compute `git diff --name-only previousHead newHead`; if no path satisfies
-   `isInstallablePath` (Decision 3), skip (this is exactly the "planning-only
-   auto-commits do not bump" criterion - `plans/` is not installable).
-4. Determine the level (Decision 2), rewrite `package.json`, and commit ONLY
-   `package.json` (Decision 5 recovery contract). The bump commit is a plain
-   (non-merge) commit, so it never re-enters a merge-subject scan; the next
-   `fast-forward` starts from a `previousHead` at/after it, so the same range is
-   never re-processed (no double increment).
+1. If `git.autoVersionBump !== true` (the default), return WITHOUT any
+   `versionBump` key at all (Medium 5: the flag-off return object is unchanged;
+   the key exists ONLY when the flag is on). Every step below is flag-on only.
+2. If `advanced` is false (`previousHead === newHead`), return `versionBump:
+   { bumped: false, reason: "not-advanced" }`.
+3. `git diff --name-only <previousHead> <newHead>`; if no path satisfies
+   `isInstallablePath` (Decision 3), `versionBump: { bumped: false, reason:
+   "no-payload-change" }` (exactly the "planning-only auto-commits do not bump"
+   criterion - `plans/` is not installable).
+4. Idempotence via a persisted processed-head marker, NOT the HEAD subject
+   (Medium 3: a same-subject non-bump commit must never falsely suppress). The
+   marker is a git ref `refs/local-board/version-bump-head` recording the last
+   `newHead` a bump successfully processed. If it already equals `<newHead>`,
+   no-op (`reason: "already-bumped"`). Otherwise call
+   `runVersionBump(root, { range: { previousHead, newHead }, config })`
+   (explicit range - Medium 3 signature fix), which determines the level
+   (Decision 2), rewrites `package.json`, commits ONLY `package.json`, and on
+   commit success advances the marker ref to `<newHead>`.
 
-`fastForwardDefaultBranch` returns an added `versionBump: { bumped, from, to,
-level } | null`; `commandFastForward` surfaces it in text/`--json`. The pure logic
-lives in `src/version-bump.js`; `worktrees.js` only calls it.
+Recovery soundness (Medium 3): `fast-forward` has already `reset --hard`ed the
+tree to `<newHead>`, so a SECOND `fast-forward` run computes `advanced: false` and
+cannot recover a failed range. Therefore the marker ref is advanced ONLY after a
+successful commit, and on a commit failure `runVersionBump` rolls the
+`package.json` write back (Decision 5) and `fast-forward` surfaces the exact
+failed range in its error with the recovery instruction `local-board version-bump
+--range <previousHead>..<newHead>`. Recovery runs through the manual command with
+that explicit range, never through a re-run of `fast-forward`. The marker (a ref,
+not a commit subject) is the sole idempotence key.
+
+`fastForwardDefaultBranch` includes `versionBump` ONLY when the flag is on
+(key omitted otherwise); `commandFastForward` surfaces it in text/`--json` when
+present. The pure/range logic lives in `src/version-bump.js`; `worktrees.js` only
+calls it and moves the marker ref.
 
 Note on `autoMerge: true` repos (not this repo's config): the single-checkout
 auto-merge-then-switch path advances the default checkout without a subsequent
@@ -231,13 +262,14 @@ bump also changes `contentHash`; both signals then agree - intentional.
 ### Decision 4 - per-target install metadata + per-target status (resolves High 3)
 
 r1 recorded a single global version/hash, so `install --target=codex` rewrote it
-while the Claude skill dir stayed stale ("false-current"). Fix: record per-target
-metadata and derive a worst-of verdict.
+while the Claude skill dir stayed stale ("false-current"). r2's naive merge
+re-created the defect for LEGACY records: a pre-feature `install-info.json` has no
+`targets` map, so seeding only the selected target left stale Claude untracked and
+global read `current` again. Fix per the reviewer: DISCOVER-then-seed migration.
 
-`writeInstallInfo` is changed to MERGE (read existing `install-info.json` if
-present, update only the just-installed targets) rather than overwrite, and adds a
-`targets` map. Existing top-level keys are unchanged; `contentHash` and `targets`
-are additive (structural-equivalence preserved):
+`writeInstallInfo` is changed to MERGE, not overwrite, and adds a `targets` map.
+Existing top-level keys are unchanged; `contentHash` and `targets` are additive
+(structural-equivalence preserved):
 
 ```text
 {
@@ -246,72 +278,111 @@ are additive (structural-equivalence preserved):
   contentHash: "sha256:<hex>",          // additive: the snapshot's payload hash (last install)
   targets: {                            // additive: per-target skew state
     claude: { version, contentHash, installedAt },
-    codex:  { version, contentHash, installedAt }
+    codex:  { version|null, contentHash: "sha256:..."|null, installedAt|null }
   }
 }
 ```
 
-Each selected target's entry is (re)written on that install; untouched targets'
-entries are preserved. So after `--target=codex`, `targets.claude` still holds the
-hash from the earlier Claude install; when the source has since changed,
-`targets.claude.contentHash !== current` => that target reports `skewed`.
+Migration rule (single shared helper used by BOTH the install write and the
+`--status` read, so they cannot diverge):
+`reconcileTargets(existing, home)`:
+
+1. Start from `existing.targets` if present, else `{}`.
+2. For every target whose install footprint exists on disk (probe
+   `buildTargets(home)[i].skillDir` / `teamSkillDir` for existence) but which is
+   NOT yet in the map, seed `{ version: existing.version ?? null,
+   contentHash: null, installedAt: existing.installedAt ?? null }`. `contentHash:
+   null` means UNKNOWN - never treated as `current` (Decision 5). This is the
+   discover-then-seed step that captures a legacy stale Claude install so it is
+   accounted for.
+3. (Install only) overwrite the just-installed targets with their fresh
+   `{ version, contentHash, installedAt }`.
+
+So a legacy record + a subsequent `install --target=codex`: step 2 seeds
+`targets.claude = { contentHash: null, ... }` (discovered on disk), step 3 writes
+a fresh `targets.codex`; `--status` then reports Claude `skewed` (null hash),
+codex `current`, GLOBAL `skewed`. The false-current path is closed for legacy
+records too.
 
 ### Decision 5 - status surface, `version-bump` command, and exit contracts (resolves Medium 7)
 
 `install --status [--json]` (a flag on `install`, via `runInstall` ->
-`performStatus`). Recomputes `computePayloadHash(SCRIPT_DIR)` (current source) and
-compares per target against `<home>/.local-board/install-info.json`.
-
-Per-target verdict, then a GLOBAL verdict = worst of them (skew dominates):
+`performStatus`). Recomputes `computePayloadHash(SCRIPT_DIR)` (current source),
+runs the shared `reconcileTargets(existing, home)` (Decision 4) against
+`<home>/.local-board/install-info.json`, and derives a per-target then a global
+worst-of verdict.
 
 ```text
 {
-  verdict,                       // "current" | "skewed" | "not-installed"
+  verdict,                       // "current" | "skewed" | "not-installed" | "indeterminate"
   skewed,                        // boolean (verdict === "skewed")
-  current: { version, contentHash },
-  targets: {                     // one entry per recorded target
+  current: { version, contentHash },   // contentHash may be null (see below)
+  targets: {                     // one entry per reconciled target
     <id>: { version, contentHash, installedAt, verdict }
   }
 }
 ```
 
-- A target is `skewed` when its recorded `contentHash` differs from `current`, OR
-  the record predates this feature and has no `contentHash`.
-- Global `verdict`: `not-installed` when no `install-info.json`/no `targets`;
-  `skewed` when any target is skewed; else `current`.
-- Exit codes (scriptable; verified clean by review): `0` current, `3` skewed, `4`
-  not-installed. `2` stays reserved for usage/parse errors. `--json` always prints
-  the report regardless of exit code. `--status` reuses `resolveHome` (so `--home`
-  is the test seam).
+- Current-hash null (Medium 4): if `computePayloadHash(SCRIPT_DIR)` returns `null`
+  (a non-source/flattened layout - not reachable for a correctly on-PATH CLI, but
+  handled explicitly), the command does NOT compare null==null. It returns global
+  `verdict: "indeterminate"`, exit `5`, and message "cannot determine current
+  payload hash: not a source layout"; no target is ever reported `current`.
+- Per-target verdict (current hash is a real digest): `current` ONLY when the
+  target's recorded `contentHash` is a non-null digest EQUAL to `current`;
+  otherwise `skewed` (this includes a null/absent recorded hash - "unknown is
+  never current", covering the discover-then-seed legacy entries).
+- Global verdict reconciliation (Medium 1 self-contradiction fixed):
+  - `not-installed` (exit 4) ONLY when there is no `install-info.json` AND
+    `reconcileTargets` discovers no on-disk target footprint - i.e. truly absent.
+  - `skewed` (exit 3) when at least one reconciled target is `skewed` - this
+    INCLUDES a legacy record whose discovered targets carry unknown (null) hashes.
+  - `current` (exit 0) only when every reconciled target is `current`.
+- Exit codes (scriptable; 3/4 verified clean by review): `0` current, `3` skewed,
+  `4` not-installed, `5` indeterminate. `2` stays reserved for usage/parse errors.
+  `--json` always prints the report regardless of exit code. `--status` reuses
+  `resolveHome` (so `--home` is the test seam).
 
 `where --json` additionally gains `contentHash` (source-only per Decision 3;
-`null` on a flattened layout).
+`null` on a flattened layout, which is an explicit, defined value there).
 
-`local-board version-bump` command contract (Medium 7 - fully specified):
+`local-board version-bump` command contract (Medium 7 + Medium 3 - fully
+specified):
 
 - Usage: `local-board [--root <path>] version-bump [--level major|minor|patch]
-  [--allow-main-root] [--json]`. Root-scoped mutation on the default checkout.
-- Behaviour: same range-scan/level logic as Decision 1/2 when invoked without
-  `--level` (scans the merge span since the previous bump commit on the default
-  branch). `--level` forces the level and skips the range scan (the major/minor
-  escape hatch).
+  [--range <a>..<b>] [--allow-main-root] [--json]`. Root-scoped mutation on the
+  default checkout. Shares `runVersionBump(root, { range?, level?, config, now })`
+  with `fast-forward`.
+- Range resolution (Medium 3 first-run base): the level is derived by scanning
+  merge subjects in a range `base..HEAD`:
+  - `--range <a>..<b>` supplies the base and tip explicitly (this is the recovery
+    path `fast-forward` prints after a commit failure).
+  - Else `base` = the processed-head marker ref `refs/local-board/version-bump-head`
+    if it exists; else the last `chore: bump version` commit on the default
+    branch; else (genuine first run, no marker and no prior bump) the root commit
+    `git rev-list --max-parents=0 HEAD` (whole-history base). `tip` = `HEAD`.
+  - `--level` forces the level and skips the range scan entirely (major/minor
+    escape hatch); no ticket lookup is done.
 - JSON shape: `{ bumped: boolean, from: "X.Y.Z", to: "X.Y.Z"|null,
   level: "major"|"minor"|"patch"|null, reason }` where `reason` is one of
   `bumped | not-enabled | not-advanced | no-payload-change | not-on-default |
   dirty-package-json | already-bumped`.
 - Exit codes: `0` on success (bump or intentional no-op); `2` on precondition/
   usage error.
+- Idempotence (Medium 3): keyed on the marker ref, NOT the HEAD commit subject
+  (which could falsely suppress an unrelated same-subject commit). If the marker
+  already equals the resolved `tip`, no-op (`reason: already-bumped`).
 - Dirty/partial-failure recovery (never double-increment, never sweep user edits):
   1. Refuse (`reason: dirty-package-json`, exit 2, no write) if `package.json`
-     has uncommitted changes at entry - so a user's in-flight edit is never
-     folded into a bump commit.
+     has uncommitted changes at entry - a user's in-flight edit is never folded
+     into a bump commit.
   2. Stage and commit ONLY `package.json` by explicit pathspec
      (`git commit -- package.json`), never `git add -A`.
-  3. If the commit step fails after the file write, restore `package.json` to its
-     pre-write bytes before surfacing the error, leaving a clean tree so a re-run
-     recomputes the same target rather than incrementing again.
-  4. If `HEAD` is already a `chore: bump version` commit, no-op
-     (`reason: already-bumped`).
+  3. On a successful commit, advance the marker ref to `tip`. If the commit fails
+     after the file write, restore `package.json` to its pre-write bytes and do
+     NOT advance the marker, leaving a clean tree; because the target version is a
+     pure function of the (explicit or re-resolvable) range and the marker did not
+     move, a re-run recomputes the SAME target rather than incrementing again.
 
 ### Decision 6 - skill advisory rewording (unchanged from r1; reviewer verified clean)
 
@@ -336,17 +407,22 @@ advisory: warn and continue; never treat it as a hard gate or block the ticket.
 
 - `src/install.js`: `PAYLOAD_SPEC`; refactor `performInstall` copies to iterate
   it; `isSourceLayout`, `collectPayloadEntries`, `computePayloadHash`,
-  `isInstallablePath`; `writeInstallInfo` merge + `contentHash` + `targets`;
-  `parseArgs` `--status`; `performStatus` (per-target, worst-verdict);
-  `runInstall` dispatch; `printHelp`.
+  `isInstallablePath`; `reconcileTargets(existing, home)` (shared by write and
+  status); `writeInstallInfo` merge + `contentHash` + `targets`; `parseArgs`
+  `--status`; `performStatus` (per-target, worst-verdict, indeterminate/null
+  handling); `runInstall` dispatch; `printHelp`.
 - `src/version-bump.js` (new): `mapBumpLevel`, `maxLevel`, `nextVersion`,
-  `selectBump`, `MERGE_SUBJECT_RE`, `runVersionBump(root, { level, config, now })`
-  (imports `isInstallablePath`/`computePayloadHash` from install.js to stay
-  single-source).
+  `selectBump`, `MERGE_SUBJECT_RE`, `runVersionBump(root, { range, level, config,
+  now })` (accepts the explicit `{ previousHead, newHead }` range; imports
+  `isInstallablePath`/`computePayloadHash` from install.js to stay single-source).
 - `src/worktrees.js`: `fastForwardDefaultBranch` calls `runVersionBump` under the
-  `git.autoVersionBump` gate; returns `versionBump`.
+  `git.autoVersionBump` gate with the computed `{ previousHead, newHead }` range;
+  advances the `refs/local-board/version-bump-head` marker on success; includes
+  `versionBump` in its return ONLY when the flag is on (key omitted otherwise).
 - `src/config.js`: add `git.autoVersionBump: false` to `DEFAULT_CONFIG` and the
-  scaffolded config template + comment.
+  scaffolded config template + comment; add `normalizeGit(merged)` (boolean check
+  on `autoVersionBump`, `normalizeWorktrees` idiom) to `loadConfig`'s normalize
+  block.
 - `plans/local-board.config.jsonc`: set `git.autoVersionBump: true` (local-board
   opts itself in).
 - `src/cli.js`: dispatch `version-bump` -> `commandVersionBump`; `commandFastForward`
@@ -379,28 +455,42 @@ opt-in/idempotent/quoting/uninstall/`--no-hooks`/non-Claude. All remain valid
   `runVersionBump` on a throwaway git repo: range touching `src/` bumps and commits
   `chore: bump version...`; range touching only `plans/` no-ops; multi-merge range
   takes the MAX level; merged-then-archived ticket still resolves its type;
-  unresolved id falls back to patch; not-on-default no-op; second run on a bump
-  HEAD no-op (idempotent); dirty `package.json` refused (no write); commit-failure
-  path restores `package.json` (no double increment); `--level major` forces major
-  and skips the range scan; user edits to other files are never in the bump commit.
-- `test/worktrees` (fast-forward suite): flag `false`/absent => NO bump and
-  identical prior return shape (regression); flag `true` + advanced over `src/` =>
-  bump commit + `versionBump` populated; flag `true` but not advanced / only
-  `plans/` => no bump; non-git and generic-consumer repos (flag default false) =>
-  never bump.
+  unresolved id falls back to patch; not-on-default no-op; `--range <a>..<b>`
+  first-run base and explicit-range recovery; first-run base falls back to the
+  root commit when no marker and no prior bump exist; marker-ref idempotence: a
+  re-run with the marker at `tip` no-ops, and an unrelated commit whose subject
+  starts `chore: bump version` does NOT falsely suppress a real bump; dirty
+  `package.json` refused (no write); commit-failure path restores `package.json`
+  AND does not advance the marker (a re-run recomputes the same target - no double
+  increment); `--level major` forces major and skips the range scan; user edits to
+  other files are never in the bump commit.
+- `test/config.test.js` (extend): `git.autoVersionBump` defaults `false`; a
+  non-boolean value throws the `normalizeGit` message; `true` loads unchanged.
+- `test/worktrees` (fast-forward suite): flag absent/`false` => return object has
+  NO `versionBump` key (byte-identical flag-off shape regression - Medium 5); flag
+  `true` + advanced over `src/` => bump commit + marker advanced + `versionBump`
+  present; flag `true` but not advanced / only `plans/` => `versionBump.bumped
+  false` with the right reason, no commit; non-git and generic-consumer repos
+  (flag default false) => never bump.
 - `test/install.test.js` (extend): `install-info.json` carries `contentHash`
   matching `^sha256:[0-9a-f]{64}$` and a `targets` map; determinism (two installs
   same source => same hash); CRLF insensitivity (packaged copy with a payload file
   rewritten to CRLF hashes identically to LF); MULTI-TARGET staleness: install
   `claude`, mutate a payload file in a packaged source copy, install `--target=
   codex` from the mutated copy => `install --status` reports `claude` skewed,
-  `codex` current, GLOBAL `skewed`/exit 3; fresh install => `current`/exit 0; no
-  `install-info.json` => `not-installed`/exit 4; pre-feature record (no
-  `contentHash`/no `targets`) => `skewed`; `computePayloadHash` on a flattened
+  `codex` current, GLOBAL `skewed`/exit 3; LEGACY MIGRATION: hand-write a
+  pre-feature `install-info.json` (no `targets`, no `contentHash`) plus an existing
+  Claude skill dir, then `install --target=codex` => `reconcileTargets` seeds
+  `targets.claude` with `contentHash: null`, `--status` reports Claude `skewed`,
+  codex `current`, GLOBAL `skewed`/exit 3 (the r2 regression guard); fresh install
+  => `current`/exit 0; truly absent (no `install-info.json`, no target dirs) =>
+  `not-installed`/exit 4; current-hash-null (flattened layout seam) => verdict
+  `indeterminate`/exit 5, no target `current`; `computePayloadHash` on a flattened
   layout returns `null` and `where --json` emits `contentHash: null`.
 - `test/cli.test.js` (extend): `version-bump` dispatch + `--json` shape + exit
-  codes; usage lists `version-bump`; `fast-forward --json` includes `versionBump`;
-  `where --json` includes `contentHash`.
+  codes + `--range`/`--level`; usage lists `version-bump`; `fast-forward --json`
+  includes `versionBump` only when the flag is on; `where --json` includes
+  `contentHash`.
 - Note: r1 hook-specific test gaps (user hooks, `core.hooksPath`, fresh-clone hook
   absence) are MOOT - no hook is installed.
 - Regression: FULL `node --test` (skills/prompts are production artifacts per
@@ -410,11 +500,13 @@ opt-in/idempotent/quoting/uninstall/`--no-hooks`/non-Claude. All remain valid
 ### Docs
 
 - `README.md`: `contentHash`/`targets` in `install-info.json`; `install --status`.
-- `docs/Install.md`: `contentHash`, per-target `targets`, `install --status`
-  verdicts + exit codes (0/3/4).
+- `docs/Install.md`: `contentHash`, per-target `targets`, legacy-record
+  migration, `install --status` verdicts + exit codes (0/3/4/5).
 - `docs/Workflow.md`: closeout - `fast-forward` auto-bumps when
-  `git.autoVersionBump` is on; `version-bump --level` major/minor escape hatch;
-  the `autoMerge: true` limitation.
+  `git.autoVersionBump` is on; the plain statement that enabling the flag (incl.
+  by blind-copying a config) authorizes bumping this repo's own `package.json`;
+  `version-bump --level`/`--range` escape hatch and commit-failure recovery; the
+  `autoMerge: true` limitation.
 - `memory-bank/techContext.md`: versioning mechanism (fast-forward + config gate)
   and hash-skew command.
 - No new `docs/*.md`, so the README Documentation Index is unchanged.
@@ -422,8 +514,14 @@ opt-in/idempotent/quoting/uninstall/`--no-hooks`/non-Claude. All remain valid
 ### Risks and open questions
 
 - `git.autoVersionBump` default `false` is the sole safety gate for consumers;
-  correct by construction (opt-in, committed config, no `.git/` dependency), and
-  regression-guarded by the flag-off fast-forward tests.
+  correct by construction (opt-in, committed config, no `.git/` dependency),
+  boolean-validated by `normalizeGit`, and regression-guarded by the flag-off
+  fast-forward tests (which assert the `versionBump` key is absent).
+- The `refs/local-board/version-bump-head` marker ref is the idempotence + recovery
+  anchor. Its risk: if a user deletes it, a subsequent `fast-forward` could
+  re-scan an already-processed range; mitigated because the range base also falls
+  back to the last `chore: bump version` commit, so a deleted marker degrades to
+  at most one redundant no-op/patch, not an unbounded loop. Documented.
 - `autoMerge: true` single-checkout repos skip the auto-bump (no post-merge
   `fast-forward`); covered by manual `version-bump` + hash-skew status. Documented.
 - Merge subjects that deviate from `Merge <id>...` degrade to a flat patch, never a
