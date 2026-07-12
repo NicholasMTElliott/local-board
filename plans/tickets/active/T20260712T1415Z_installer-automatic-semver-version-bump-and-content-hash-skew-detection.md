@@ -13,7 +13,7 @@ estimateBasis: T20260710T1532Z
 workStartedAt: 2026-07-12T15:11:07Z
 workCompletedAt: null
 created: 2026-07-12T14:15:09Z
-updated: 2026-07-12T20:14:44Z
+updated: 2026-07-12T20:19:58Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -89,9 +89,11 @@ Replacement: a single deterministic closeout CLI op does the bump.
 
 - Integration point: `fastForwardDefaultBranch` (`src/worktrees.js:261`). It
   already runs in the project root on the default branch after every merge, in
-  ALL FOUR closeout contracts, and it already knows `previousHead`/`newHead`/
-  `advanced`. No new skill step and no CLI-Commands-fence change is required
-  (avoiding the byte-identical fence-sync burden the reviewer flagged).
+  ALL FOUR closeout contracts. It does NOT use its own `previousHead`/`newHead`/
+  `advanced` values to drive the bump (those are equal/`false` for the in-checkout
+  closeout - see step 2); it simply invokes `runVersionBump` no-range. No new skill
+  step and no CLI-Commands-fence change is required (avoiding the byte-identical
+  fence-sync burden the reviewer flagged).
 - Repo-safety gate (resolves High 1): the bump fires only when a new opt-in
   config flag `git.autoVersionBump` is `true`. It defaults `false` in
   `DEFAULT_CONFIG` (`src/config.js` git block) and in the scaffolded config, so
@@ -126,21 +128,26 @@ byte-identical to today):
 1. If `git.autoVersionBump !== true` (the default), return WITHOUT any
    `versionBump` key at all (Medium 5: the flag-off return object is unchanged;
    the key exists ONLY when the flag is on). Every step below is flag-on only.
-2. If `advanced` is false (`previousHead === newHead`), return `versionBump:
-   { bumped: false, reason: "not-advanced" }`.
-3. `git diff --name-only <previousHead> <newHead>`; if no path satisfies
-   `isInstallablePath` (Decision 3), `versionBump: { bumped: false, reason:
-   "no-payload-change" }` (exactly the "planning-only auto-commits do not bump"
-   criterion - `plans/` is not installable).
-4. Idempotence via a single-owner processed-head marker ref
-   `refs/local-board/version-bump-head`, NOT the HEAD subject. "Already processed"
-   is tested by ANCESTRY, not equality or subject match. Read the marker value
-   `Mold` at entry; if `<newHead>` is an ancestor-or-equal of `Mold`
-   (`git merge-base --is-ancestor <newHead> Mold`), no-op
-   (`reason: "already-bumped"`). Otherwise call `runVersionBump(root, { range:
-   { previousHead, newHead }, config })` (explicit range), which determines the
-   level (Decision 2), rewrites `package.json`, and commits ONLY `package.json` as
-   commit `B` (parent `<newHead>`).
+2. Otherwise invoke `runVersionBump(root, { config })` WITHOUT a range. WHY (the
+   in-checkout-closeout correction): this repo's real closeout is a
+   `git merge --no-ff` performed IN the default checkout, so the ref is already
+   advanced in-place by the time `fast-forward` runs and `cleanCheckoutHead` sees
+   no external move - `previousHead === newHead` and `advanced` is `false`. Passing
+   that EQUAL `previousHead..newHead` range made the automatic bump a PERMANENT
+   no-op (`not-advanced`) for the primary workflow (every real closeout prints
+   `advanced: false`). `fast-forward` therefore does NOT gate on `advanced` and
+   does NOT pass a range; `runVersionBump` resolves its own base from the marker
+   (Decision 5: marker -> last bump commit -> root) and works over `base..HEAD`,
+   which covers in-checkout merges AND external advances alike.
+3. `runVersionBump` then applies its own contract (Decision 5): idempotence by
+   marker ANCESTRY over the resolved tip `HEAD` (no-op `already-bumped` when `HEAD`
+   is an ancestor-or-equal of the marker `refs/local-board/version-bump-head`, so
+   an empty `base..HEAD` is a clean no-op); `git diff --name-only base..HEAD`
+   filtered by `isInstallablePath` (Decision 3) - if nothing installable changed,
+   `no-payload-change` (satisfying "planning-only auto-commits do not bump" -
+   `plans/` is not installable); otherwise it determines the level (Decision 2),
+   rewrites `package.json`, and commits ONLY `package.json` as commit `B`
+   (parent `HEAD`).
 
 Marker advance = compare-and-swap to B, the ONE marker owner (this is the r3
 double-bump fix). After the commit succeeds, advance the marker to `B` (the bump
@@ -155,14 +162,15 @@ against the value read at entry (for first creation the old-value is the empty
 string, asserting the ref is absent) - so this single code path is the sole owner
 and a concurrent mover aborts safely.
 
-Recovery soundness: `fast-forward` has already `reset --hard`ed the tree to
-`<newHead>`, so a SECOND `fast-forward` run computes `advanced: false` and cannot
-recover a failed range. On a commit failure `runVersionBump` rolls the
-`package.json` write back (Decision 5), leaves the marker UNMOVED, and
-`fast-forward` surfaces the exact failed range with the recovery instruction
-`local-board version-bump --range <previousHead>..<newHead>`. Recovery runs
-through the manual command with that explicit range, never a `fast-forward`
-re-run.
+Recovery soundness: on a commit failure `runVersionBump` rolls the `package.json`
+write back (Decision 5) and leaves the marker UNMOVED, so the state is clean and
+the bump is simply un-applied. Because the automatic path is no-range and
+idempotent, recovery is a plain `local-board version-bump` (no `--range` needed):
+it re-resolves the SAME `base..HEAD` from the still-unmoved marker and retries
+without any double-increment; `fast-forward`'s error message points there.
+Re-running `fast-forward` itself also retries, since it too invokes the no-range
+path against the unmoved marker. (`--range` remains solely the manual override /
+targeted-recovery surface, not something `fast-forward` supplies.)
 
 `fastForwardDefaultBranch` includes `versionBump` ONLY when the flag is on
 (key omitted otherwise); `commandFastForward` surfaces it in text/`--json` when
@@ -176,16 +184,17 @@ for local-board's own workflow (`autoMerge: false`); such repos use the manual
 `version-bump` command, and the hash-skew status is the safety net either way.
 Documented as a known limitation, not a silent gap.
 
-### Decision 2 - semver mapping over the advanced range (shared grammar, no new front-matter field) (resolves Medium 4)
+### Decision 2 - semver mapping over the resolved base..HEAD range (shared grammar, no new front-matter field) (resolves Medium 4)
 
 Types are `epic | story | task | bug` (`src/tickets.js`). Mapping: `bug -> patch`,
 `task | story -> minor`, `epic -> major`.
 
-The advanced range can span several merges (parallel reconciliation), so the level
-is computed across the WHOLE range and reduced to the max (`major > minor >
-patch`), applied as ONE bump:
+The resolved `base..HEAD` range (base = marker -> last bump commit -> root; see
+Decision 5) can span several merges - in-checkout closeout commits and, in
+parallel reconciliation, external advances - so the level is computed across the
+WHOLE range and reduced to the max (`major > minor > patch`), applied as ONE bump:
 
-- `git log --merges --format=%s previousHead..newHead` yields merge subjects.
+- `git log --merges --format=%s base..HEAD` yields merge subjects.
 - Extract ids with the shared grammar's character class, not a `T`-only regex:
   `MERGE_SUBJECT_RE = /^Merge\s+([ESBT]\d{8}T\d{4}Z)\b/` (derived from and
   cross-referenced to `TICKET_ID_RE` so B/S/E merges - present in history - are
@@ -451,16 +460,19 @@ advisory: warn and continue; never treat it as a hard gate or block the ticket.
   `--status`; `performStatus` (per-target, worst-verdict, indeterminate/null
   handling); `runInstall` dispatch; `printHelp`.
 - `src/version-bump.js` (new): `mapBumpLevel`, `maxLevel`, `nextVersion`,
-  `selectBump`, `MERGE_SUBJECT_RE`, `runVersionBump(root, { range, level, config,
-  now })` (accepts the explicit `{ previousHead, newHead }` range; imports
-  `isInstallablePath`/`computePayloadHash` from install.js to stay single-source).
-- `src/worktrees.js`: `fastForwardDefaultBranch` calls `runVersionBump` under the
-  `git.autoVersionBump` gate with the computed `{ previousHead, newHead }` range;
-  compare-and-swap-advances the `refs/local-board/version-bump-head` marker to the
-  RESULTING bump commit `B` (not the merge tip) on success, via
-  `git update-ref <ref> B <oldvalue>`; includes `versionBump` in its return ONLY
-  when the flag is on (key omitted otherwise). `runVersionBump`/the marker helper
-  are the single owner of the ref.
+  `selectBump`, `MERGE_SUBJECT_RE`, `runVersionBump(root, { range?, level, config,
+  now })`. `range` is OPTIONAL and used only by the manual `--range` override /
+  targeted recovery; when omitted (the automatic path) it resolves its own base
+  via the marker (marker -> last bump commit -> root) over `base..HEAD`. Imports
+  `isInstallablePath`/`computePayloadHash` from install.js to stay single-source.
+- `src/worktrees.js`: `fastForwardDefaultBranch` calls `runVersionBump(root,
+  { config })` under the `git.autoVersionBump` gate WITHOUT a range (no-range
+  invocation - it must NOT pass `previousHead..newHead`, which is equal for the
+  in-checkout closeout and would no-op forever). The bump path compare-and-swap-
+  advances the `refs/local-board/version-bump-head` marker to the RESULTING bump
+  commit `B` (not the merge tip) on success, via `git update-ref <ref> B
+  <oldvalue>`; `versionBump` is in the return ONLY when the flag is on (key omitted
+  otherwise). `runVersionBump`/the marker helper are the single owner of the ref.
 - `src/config.js`: add `git.autoVersionBump: false` to `DEFAULT_CONFIG` and the
   scaffolded config template + comment; add `normalizeGit(merged)` (boolean check
   on `autoVersionBump`, `normalizeWorktrees` idiom) to `loadConfig`'s normalize
@@ -514,11 +526,15 @@ opt-in/idempotent/quoting/uninstall/`--no-hooks`/non-Claude. All remain valid
 - `test/config.test.js` (extend): `git.autoVersionBump` defaults `false`; a
   non-boolean value throws the `normalizeGit` message; `true` loads unchanged.
 - `test/worktrees` (fast-forward suite): flag absent/`false` => return object has
-  NO `versionBump` key (byte-identical flag-off shape regression - Medium 5); flag
-  `true` + advanced over `src/` => bump commit + marker advanced + `versionBump`
-  present; flag `true` but not advanced / only `plans/` => `versionBump.bumped
-  false` with the right reason, no commit; non-git and generic-consumer repos
-  (flag default false) => never bump.
+  NO `versionBump` key (byte-identical flag-off shape regression - Medium 5).
+  IN-CHECKOUT closeout (the primary-workflow regression the test loop-back
+  required): on a flag-on board, `git merge --no-ff` a payload branch IN the
+  default checkout (so `fast-forward` sees `advanced: false`), then `fast-forward`
+  => the bump FIRES (no-range base..HEAD covers the in-place merge), commits `B`,
+  and advances the marker; a planning-only in-checkout merge => `no-payload-change`,
+  no commit. Also cover the external-advance topology (detached-worktree merge +
+  ref update) => bump fires. Non-git and generic-consumer repos (flag default
+  false) => never bump.
 - `test/install.test.js` (extend): `install-info.json` carries `contentHash`
   matching `^sha256:[0-9a-f]{64}$` and a `targets` map; determinism (two installs
   same source => same hash); CRLF insensitivity (packaged copy with a payload file
