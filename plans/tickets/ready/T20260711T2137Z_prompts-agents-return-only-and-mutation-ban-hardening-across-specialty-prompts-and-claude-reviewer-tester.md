@@ -13,8 +13,8 @@ estimateBasis: T20260711T2136Z
 workStartedAt: 2026-07-11T23:48:46Z
 workCompletedAt: null
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-11T23:59:15Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", security_threat_model:inline, "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+updated: 2026-07-12T00:01:13Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", security_threat_model:inline, "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # prompts/agents: return-only and mutation-ban hardening across specialty prompts and claude reviewer/tester
@@ -320,6 +320,23 @@ None. Strictly read-only verification; worktree clean.
 
 ## Documentation Updates
 
+### Documentation review
+
+No docs prose edits needed. Checked `docs/Workflow.md`,
+`docs/PerStepOrchestration.md`, and `memory-bank/systemPatterns.md` for stale
+statements that the Claude reviewer/tester mutation ban covered only the
+`section` command.
+
+`docs/Workflow.md` does not document the reviewer/tester command ban at that
+depth. `docs/PerStepOrchestration.md` describes reviewer/tester/gate-check/codex
+read-only routes as return-only, with the orchestrator owning state mutations,
+which remains accurate. `memory-bank/systemPatterns.md` already describes
+return-only agents generically and notes the broad Bash-grant mutation risk
+without limiting the ban to `section`.
+
+Per wrapper instruction, did not edit `plans/prompts`, `resources/`, `agents/`,
+skills, or tests; did not run tests or local-board commands.
+
 ## Questions
 
 ## Run Log
@@ -351,3 +368,5 @@ None. Strictly read-only verification; worktree clean.
 - 2026-07-11T23:59:14Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: pass. 587/588 pass 0 fail 1 pre-existing skip; targeted 78/78; ban wording verified per design incl. set named verbatim (threat-scenario covered); return-only paragraphs in all five; L18 and T2136Z warnings byte-unchanged; gatecheck fence removed; mirrors identical; scope exactly 16 files.
 
 - 2026-07-11T23:59:15Z: Ensured git branch local-board/T20260711T2137Z-prompts-agents-return-only-and-mutation-ban-hardening-across-specialty-prompts-and-claude-reviewer-tester (already-current).
+
+- 2026-07-12T00:01:13Z: Completed document via codex-task:workspace-write: Doc audit: Workflow.md (no such depth), PerStepOrchestration.md + systemPatterns.md (already broad and accurate) - no narrative changes; Documentation Updates section records the audit.
