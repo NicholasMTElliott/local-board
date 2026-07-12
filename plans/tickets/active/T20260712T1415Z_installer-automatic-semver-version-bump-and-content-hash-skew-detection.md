@@ -13,7 +13,7 @@ estimateBasis: T20260710T1532Z
 workStartedAt: 2026-07-12T15:11:07Z
 workCompletedAt: null
 created: 2026-07-12T14:15:09Z
-updated: 2026-07-12T20:20:22Z
+updated: 2026-07-12T20:24:14Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -607,7 +607,10 @@ opt-in/idempotent/quoting/uninstall/`--no-hooks`/non-Claude. All remain valid
 
 ## Implementation Notes
 
-Implemented per the 4-round-hardened Technical Design; no design deviations.
+Implemented per the 4-round-hardened Technical Design; one loop-back fix from
+the test stage (see "Test-stage loop-back fix" below) diverges from Decision
+1's literal range-passing wording — documented there for the designer to
+reconcile the Technical Design text; not edited by the implementer.
 
 ### `src/install.js`
 - `PAYLOAD_SPEC` is the single copy=hash=bump-trigger definition (`package.json`,
@@ -637,9 +640,10 @@ Implemented per the 4-round-hardened Technical Design; no design deviations.
   identical. This is the one place implementation diverged from the design's literal
   "derived from TICKET_ID_RE" phrasing, for a concrete, tested reason.
 - `runVersionBump(root, { range?, level?, config, now? })` is the single shared
-  entry point for both the automatic (fast-forward, explicit range) and manual
-  (`version-bump` command, range optionally resolved: marker → last
-  `chore: bump version` commit → root commit) callers. It owns the full contract
+  entry point for both the automatic (fast-forward) and manual (`version-bump`
+  command) callers. With no explicit `range` (the normal case for BOTH callers as
+  of the test-stage fix below), base resolves marker → last `chore: bump version`
+  commit → root commit, tip = current `HEAD`. It owns the full contract
   internally: not-enabled → not-on-default → already-bumped (ancestry against the
   marker) → not-advanced → no-payload-change → level (forced or merge-subject scan,
   max-reduced) → dirty-package-json refusal → write+commit (pathspec-limited to
@@ -647,17 +651,18 @@ Implemented per the 4-round-hardened Technical Design; no design deviations.
 - Marker: `refs/local-board/version-bump-head`, single CAS owner
   (`advanceVersionBumpMarker`, `git update-ref <ref> <new> <old>`, empty old =
   must-not-exist). Commit failure restores `package.json`'s pre-write bytes and
-  leaves the marker unmoved (no double-increment on retry).
+  leaves the marker unmoved (no double-increment on retry; a plain no-range
+  `version-bump` re-run recomputes the same target).
 
 ### `src/worktrees.js`
 - `fastForwardDefaultBranch(root, { defaultBranch, config })`: when
-  `config.git.autoVersionBump === true`, calls `runVersionBump` with the explicit
-  `{previousHead, newHead}` range and attaches the result as `versionBump`; the key
-  is omitted entirely when the flag is off/absent (byte-identical flag-off shape —
-  regression-tested). A `runVersionBump` failure is wrapped with the exact
-  `local-board version-bump --range <previousHead>..<newHead>` recovery command
-  before propagating (the checkout is already reset to `newHead` by that point, so
-  re-running `fast-forward` cannot retry the range).
+  `config.git.autoVersionBump === true`, calls `runVersionBump` WITHOUT an
+  explicit range (see "Test-stage loop-back fix") and attaches the result as
+  `versionBump`; the key is omitted entirely when the flag is off/absent
+  (byte-identical flag-off shape — regression-tested). A `runVersionBump`
+  failure is wrapped with a recovery hint (`local-board version-bump`, no
+  `--range` needed — the marker is left unmoved on failure and the no-range
+  self-resolved range recomputes the identical target) before propagating.
 
 ### `src/config.js`
 - `DEFAULT_CONFIG.git.autoVersionBump: false`; scaffold template documents the
@@ -685,38 +690,98 @@ Implemented per the 4-round-hardened Technical Design; no design deviations.
   skewed`). Team skills don't carry the paragraph (unchanged). No CLI-Commands-fence
   edit, so no `npm run sync-resources` was needed (no `plans/prompts` edits at all).
 
+### Test-stage loop-back fix: fast-forward now calls runVersionBump with NO range
+
+Orchestrator-adjudicated blocking finding (test stage, first pass): the
+original implementation had `fastForwardDefaultBranch` pass its own
+`{previousHead, newHead}` as `runVersionBump`'s explicit range. In this repo's
+REAL closeout the merge lands directly in the project root checkout
+(`git merge --no-ff` on the default branch, per every closeout skill
+contract) before `fast-forward` ever runs, so `cleanCheckoutHead`'s
+reflog-tree-match always resolves `previousHead === newHead`
+(`advanced: false` — nothing EXTERNAL moved this checkout). A range built
+from that equal pair is always empty, so the automatic bump never fired in
+the primary workflow; only the test suite's external-advance topology
+(a detached worktree pushing a ref this checkout then adopts via
+`update-ref`) exercised a non-empty range, which is why it read green.
+
+Fix: `fastForwardDefaultBranch` now calls `runVersionBump(root, { config })`
+with NO range at all, letting it self-resolve base..tip as marker → last
+bump commit → root commit, tip = current `HEAD` (already reconciled by
+`fast-forward`'s own `reset --hard`). That range is a superset of any
+external-advance pair and also correctly covers an in-checkout merge. The
+manual `local-board version-bump --range <a>..<b>` keeps the explicit-range
+option for one-off/recovery use, but recovery from a `fast-forward`-triggered
+failure is now a plain no-range `local-board version-bump` (the marker is
+left unmoved on failure, so the self-resolved range recomputes the identical
+target — the error message and docs/Workflow.md were updated accordingly).
+
+Consequence for two existing tests: with the wider self-resolved range, a
+fast-forward call on a freshly-scaffolded repo (no marker, no prior bump)
+now scans back to the repo root rather than just its own before/after pair,
+so a call where "nothing installable happened yet" correctly reports
+`no-payload-change` (the scaffold-init commit isn't a payload change either)
+rather than `not-advanced`. Updated
+`test/worktrees.test.js`'s "nothing moved" test and
+`test/cli.test.js`'s flag-on-after-enabling test to the new (correct) reason;
+`not-advanced` itself remains covered directly in
+`test/version-bump.test.js` (the fresh-clone-detects-last-bump-commit
+regression). The three pre-existing external-advance-topology
+`autoVersionBump` fast-forward tests in `test/worktrees.test.js` are
+UNCHANGED and still pass byte-for-byte (same assertions, same expected
+values) — proving the fix is additive, not a behavior swap for that
+topology.
+
+**Design note for reconciliation (not edited here, per instruction):**
+Technical Design Decision 1 describes `fastForwardDefaultBranch` calling
+`runVersionBump(root, { range: { previousHead, newHead }, config })`
+(an explicit range). The as-implemented, test-verified contract is
+`runVersionBump(root, { config })` (no range) for the automatic path;
+`--range` is manual/recovery-only. The base/marker resolution chain
+(marker → last bump commit → root commit) Decision 1 already specifies for
+the *manual* command's first-run case is, as of this fix, exactly what the
+*automatic* path also uses.
+
 ### Tests
-- `test/version-bump.test.js` (new, 23 cases): pure-helper unit tests +
-  git-repo-backed `runVersionBump` end-to-end coverage (bump/no-payload-change/
-  dirty/not-on-default/not-enabled, B/S/E/T + done/archived ticket-type resolution,
-  multi-merge MAX level, unresolved-id patch fallback, explicit-range-verbatim,
-  first-run root-commit base, same-clone/fresh-clone marker no-op regressions,
-  unrelated-`chore: bump version`-subject non-suppression, CAS-concurrent-fail,
-  `--level` override, bump-commit content isolation, commit-failure rollback) plus
-  the `MERGE_SUBJECT_RE`/`TICKET_ID_RE` lockstep guard.
+- `test/version-bump.test.js` (23 cases, unchanged by this loop-back — the
+  no-range self-resolution contract was already its default-path coverage,
+  including a direct `not-advanced` regression): pure-helper unit
+  tests + git-repo-backed `runVersionBump` end-to-end coverage (bump/
+  no-payload-change/dirty/not-on-default/not-enabled, B/S/E/T + done/archived
+  ticket-type resolution, multi-merge MAX level, unresolved-id patch fallback,
+  explicit-range-verbatim, first-run root-commit base, same-clone/fresh-clone
+  marker no-op regressions, unrelated-`chore: bump version`-subject
+  non-suppression, CAS-concurrent-fail, `--level` override, bump-commit content
+  isolation, commit-failure rollback, `MERGE_SUBJECT_RE`/`TICKET_ID_RE`
+  lockstep).
 - `test/install.test.js` (+16): contentHash shape/determinism/CRLF-insensitivity,
   flattened-layout null, `install-info.json` merge-preserves-unknown-keys, and the
   full `install --status` matrix (not-installed/current/indeterminate/multi-target
   staleness/legacy-migration/legacy-dir-only/team-only/deleted-target/
   no-footprint-not-installed).
-- `test/worktrees.test.js` (+3): fast-forward bump/no-payload-change/not-advanced
-  under `git.autoVersionBump: true`; the pre-existing flag-off exact-shape test is
-  unmodified and still passes (regression proof).
+- `test/worktrees.test.js` (+5 net: the original 3 external-advance-topology
+  autoVersionBump tests, unchanged; +2 NEW in-checkout-merge-topology tests
+  covering the loop-back fix -- bump fires on a plain `git merge --no-ff`
+  landing directly on the default branch with `advanced: false`, and a
+  planning-only in-checkout merge reports `no-payload-change`): the
+  pre-existing flag-off exact-shape fast-forward test is unmodified and still
+  passes.
 - `test/cli.test.js` (+8): `version-bump` dispatch/`--json`/`--level`/`--range`/exit
   codes, usage-lists-version-bump, `fast-forward --json` key presence/absence
   across the flag, `where --json` contentHash shape.
 - `test/config.test.js` (+3): `git.autoVersionBump` default-false, non-boolean
   rejection, `true` passthrough.
-- Full suite: `npm run check` clean; `node --test` → 638 tests, 637 pass, 1
-  pre-existing skip (smoke), 0 fail.
+- Full suite (post-loop-back-fix): `npm run check` clean; `node --test` → 640
+  tests, 639 pass, 1 pre-existing skip (smoke), 0 fail.
 
 ### Debugging note (no code implication)
-- One new `test/cli.test.js` fast-forward test intermittently looked like a git
-  "racy" false-dirty report while under construction; root cause was a genuine
-  test-authoring bug (a helper mutated `plans/local-board.config.jsonc` without
-  committing it, so the *second* `fast-forward` call in that test correctly refused
-  a truly dirty tree) — fixed by committing the config flip in the test helper. No
-  product-code change resulted from this investigation.
+- One `test/cli.test.js` fast-forward test intermittently looked like a git
+  "racy" false-dirty report while under construction (pre-loop-back-fix);
+  root cause was a genuine test-authoring bug (a helper mutated
+  `plans/local-board.config.jsonc` without committing it, so the *second*
+  `fast-forward` call in that test correctly refused a truly dirty tree) —
+  fixed by committing the config flip in the test helper. No product-code
+  change resulted from this investigation.
 
 ## Review Findings
 
