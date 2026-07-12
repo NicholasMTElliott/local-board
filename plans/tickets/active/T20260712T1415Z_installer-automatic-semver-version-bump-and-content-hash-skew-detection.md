@@ -13,7 +13,7 @@ estimateBasis: T20260710T1532Z
 workStartedAt: 2026-07-12T15:11:07Z
 workCompletedAt: null
 created: 2026-07-12T14:15:09Z
-updated: 2026-07-12T20:19:58Z
+updated: 2026-07-12T20:20:22Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -786,3 +786,5 @@ fast-forward must invoke runVersionBump WITHOUT a range (marker-based base resol
 - 2026-07-12T20:14:36Z: Invalidated downstream evidence on loop-back to ready_for_implementation: removed completedSteps [implement:claude-subagent:local-board-implementer@sonnet, gate:implement:claude-subagent:local-board-gatecheck@haiku, review:codex-task:read-only@gpt-5.6-terra, test:claude-subagent:local-board-tester@sonnet].
 
 - 2026-07-12T20:14:44Z: Ensured git branch local-board/T20260712T1415Z-installer-automatic-semver-version-bump-and-content-hash-skew-detection (already-current).
+
+- 2026-07-12T20:20:22Z: Completed design via claude-subagent:local-board-designer@opus: Post-loop-back reconciliation: Decision 1/2 + test strategy corrected to the no-range fast-forward invocation contract (in-checkout closeout makes previousHead===newHead, so marker-based base resolution marker->last-bump->root over base..HEAD is the automatic path; --range is manual/recovery only; recovery after commit failure is plain no-range version-bump); in-checkout regression tests added to the plan. Marker/CAS/ancestry and footprint contracts unchanged. Original 4-round design evidence stands.
