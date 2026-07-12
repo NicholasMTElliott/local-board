@@ -77,6 +77,7 @@ node ./bin/local-board.js worktree-add T20260514T1234Z --json
 node ./bin/local-board.js worktree-list --json
 node ./bin/local-board.js worktree-remove T20260514T1234Z --json
 node ./bin/local-board.js fast-forward --json
+node ./bin/local-board.js version-bump --json
 node ./bin/local-board.js begin-step T20260514T1234Z [--harness <claude|codex>] --json
 node ./bin/local-board.js complete-step T20260514T1234Z review --executor codex-task:read-only [--model <model>] [--override --reason <text>] --evidence "Review notes added."
 node ./bin/local-board.js approve-inline T20260514T1234Z review --reason "User approved fallback."
@@ -105,6 +106,8 @@ Workflow routing lives in `plans/local-board.config.jsonc`. Comments and trailin
 Ticket dependencies use `blockedBy`/`blocks` while the dependent ticket stays in its intended ready status. `status: blocked` is reserved for non-ticket blockers.
 
 When `git.autoMerge` is `true`, `move ... done` commits planning-only closeout changes and merges the recorded ticket branch into the configured or detected default branch after strict routing validation passes.
+
+When `git.autoVersionBump` is `true`, `fast-forward` may also commit a semver bump to this repo's own `package.json` after installable payload changes. The flag defaults off for consumer boards; this repo opts in. `local-board version-bump [--level major|minor|patch] [--range <a>..<b>]` is the manual one-off/recovery command, and the normal recovery path needs no `--range`.
 
 When `retention.archiveOnMoveDone` is `true`, `move ... done` also archives older done tickets after the configured retention window. Archived tickets remain closed for dependency checks.
 
@@ -172,7 +175,7 @@ Issues and pull requests are welcome. Run `npm run check`, `npm test`, and `npm 
 
 ## Releasing
 
-Run `npm run check && npm test` (also enforced by the `prepublishOnly` script, so a broken tree cannot be published), inspect the publishable contents with `npm pack --dry-run`, then a maintainer with npm credentials runs `npm publish` (requires OTP) and tags the release. Version stays at the last published value unless the package name/version is already taken at publish time.
+Run `npm run check && npm test` (also enforced by the `prepublishOnly` script, so a broken tree cannot be published), inspect the publishable contents with `npm pack --dry-run`, confirm `package.json` carries the intended version, then a maintainer with npm credentials runs `npm publish` (requires OTP) and tags the release. In this repo, `git.autoVersionBump` normally advances that version during payload-changing `fast-forward` closeout.
 
 ## License
 

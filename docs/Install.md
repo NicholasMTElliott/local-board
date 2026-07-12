@@ -159,6 +159,13 @@ Global verdict (worst-of, in order):
 3. `skewed` (exit `3`) — any reconciled target is `skewed`.
 4. `current` (exit `0`) — every reconciled target is `current`.
 
+| Exit | Global verdict | Meaning |
+|---|---|---|
+| `0` | `current` | Every reconciled target has a non-null hash matching the current source hash. |
+| `3` | `skewed` | At least one reconciled target is stale or has an unknown recorded hash. |
+| `4` | `not-installed` | No current-or-legacy target footprint exists. |
+| `5` | `indeterminate` | The current source hash is `null`, so no target can be proven current. |
+
 `--json` always prints the full report, regardless of exit code. `2` stays
 reserved for usage/parse errors. `--status` reuses the same home resolution
 as install/uninstall, so `--home <dir>` works as a test seam here too.
