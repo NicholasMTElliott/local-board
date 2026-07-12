@@ -13,7 +13,7 @@ estimateBasis: T20260710T1532Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-12T14:15:09Z
-updated: 2026-07-12T15:01:04Z
+updated: 2026-07-12T15:06:08Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -50,13 +50,15 @@ From the 2026-07-12 install-process test: package.json has been pinned at 0.1.0 
 ## Technical Design
 
 Automatic semver version bump plus a content-hash skew check for the installed
-payload. Reworked through design reviews r1 and r2 - the git-hook mechanism is
-dropped entirely; the bump rides an existing deterministic closeout CLI op
-(`fast-forward`) behind an opt-in, boolean-validated config gate; per-target
-install metadata WITH legacy discover-then-seed migration resolves multi-target
-staleness for both new and pre-feature records; and the range/marker/recovery,
-config-validation, null-hash, and flag-off-shape contracts are pinned down below.
-`install.mjs` is a thin shim
+payload. Reworked through design reviews r1-r3 - the git-hook mechanism is dropped
+entirely; the bump rides an existing deterministic closeout CLI op (`fast-forward`)
+behind an opt-in, boolean-validated config gate; idempotence is a single-owner,
+CAS-written marker ref that points at the resulting bump commit and is tested by
+ANCESTRY (closing the r3 same-clone double-bump); install metadata is per-target
+with a FOOTPRINT-driven reconciliation over current-and-legacy dirs that
+re-validates every entry against disk (closing r3 false-current); and the
+range/recovery, config-validation, null-hash, and flag-off-shape contracts are
+pinned down below. `install.mjs` is a thin shim
 over `src/install.js`, which `src/cli.js` and (new) `src/version-bump.js` also
 import, so one shared payload inventory backs copy, hash, and bump-trigger with no
 duplication.
@@ -130,25 +132,37 @@ byte-identical to today):
    `isInstallablePath` (Decision 3), `versionBump: { bumped: false, reason:
    "no-payload-change" }` (exactly the "planning-only auto-commits do not bump"
    criterion - `plans/` is not installable).
-4. Idempotence via a persisted processed-head marker, NOT the HEAD subject
-   (Medium 3: a same-subject non-bump commit must never falsely suppress). The
-   marker is a git ref `refs/local-board/version-bump-head` recording the last
-   `newHead` a bump successfully processed. If it already equals `<newHead>`,
-   no-op (`reason: "already-bumped"`). Otherwise call
-   `runVersionBump(root, { range: { previousHead, newHead }, config })`
-   (explicit range - Medium 3 signature fix), which determines the level
-   (Decision 2), rewrites `package.json`, commits ONLY `package.json`, and on
-   commit success advances the marker ref to `<newHead>`.
+4. Idempotence via a single-owner processed-head marker ref
+   `refs/local-board/version-bump-head`, NOT the HEAD subject. "Already processed"
+   is tested by ANCESTRY, not equality or subject match. Read the marker value
+   `Mold` at entry; if `<newHead>` is an ancestor-or-equal of `Mold`
+   (`git merge-base --is-ancestor <newHead> Mold`), no-op
+   (`reason: "already-bumped"`). Otherwise call `runVersionBump(root, { range:
+   { previousHead, newHead }, config })` (explicit range), which determines the
+   level (Decision 2), rewrites `package.json`, and commits ONLY `package.json` as
+   commit `B` (parent `<newHead>`).
 
-Recovery soundness (Medium 3): `fast-forward` has already `reset --hard`ed the
-tree to `<newHead>`, so a SECOND `fast-forward` run computes `advanced: false` and
-cannot recover a failed range. Therefore the marker ref is advanced ONLY after a
-successful commit, and on a commit failure `runVersionBump` rolls the
-`package.json` write back (Decision 5) and `fast-forward` surfaces the exact
-failed range in its error with the recovery instruction `local-board version-bump
---range <previousHead>..<newHead>`. Recovery runs through the manual command with
-that explicit range, never through a re-run of `fast-forward`. The marker (a ref,
-not a commit subject) is the sole idempotence key.
+Marker advance = compare-and-swap to B, the ONE marker owner (this is the r3
+double-bump fix). After the commit succeeds, advance the marker to `B` (the bump
+commit, now HEAD), NOT to the merge tip `<newHead>`. Advancing to the merge tip
+`M` was the r3 defect: a later no-range `version-bump` then resolved `M..HEAD`,
+saw B's own `package.json` change, and fallback-patch-bumped AGAIN on the
+originating clone. Because `B` is a descendant of `M`, a marker at `B` covers BOTH
+the processed tip `M` and the resulting bump `B` under the ancestry test - no
+subject matching, and the same-clone re-bump is closed. The write is
+`git update-ref refs/local-board/version-bump-head B <Mold>` - a compare-and-swap
+against the value read at entry (for first creation the old-value is the empty
+string, asserting the ref is absent) - so this single code path is the sole owner
+and a concurrent mover aborts safely.
+
+Recovery soundness: `fast-forward` has already `reset --hard`ed the tree to
+`<newHead>`, so a SECOND `fast-forward` run computes `advanced: false` and cannot
+recover a failed range. On a commit failure `runVersionBump` rolls the
+`package.json` write back (Decision 5), leaves the marker UNMOVED, and
+`fast-forward` surfaces the exact failed range with the recovery instruction
+`local-board version-bump --range <previousHead>..<newHead>`. Recovery runs
+through the manual command with that explicit range, never a `fast-forward`
+re-run.
 
 `fastForwardDefaultBranch` includes `versionBump` ONLY when the flag is on
 (key omitted otherwise); `commandFastForward` surfaces it in text/`--json` when
@@ -283,26 +297,39 @@ Existing top-level keys are unchanged; `contentHash` and `targets` are additive
 }
 ```
 
-Migration rule (single shared helper used by BOTH the install write and the
-`--status` read, so they cannot diverge):
-`reconcileTargets(existing, home)`:
+Migration/reconciliation rule (single shared helper used by BOTH the install
+write and the `--status` read, so they cannot diverge). `reconcileTargets(
+existing, home)` is FOOTPRINT-DRIVEN and re-validates every entry against disk on
+each call:
 
-1. Start from `existing.targets` if present, else `{}`.
-2. For every target whose install footprint exists on disk (probe
-   `buildTargets(home)[i].skillDir` / `teamSkillDir` for existence) but which is
-   NOT yet in the map, seed `{ version: existing.version ?? null,
-   contentHash: null, installedAt: existing.installedAt ?? null }`. `contentHash:
-   null` means UNKNOWN - never treated as `current` (Decision 5). This is the
-   discover-then-seed step that captures a legacy stale Claude install so it is
-   accounted for.
-3. (Install only) overwrite the just-installed targets with their fresh
-   `{ version, contentHash, installedAt }`.
+1. Compute the footprint set: for each target in `buildTargets(home)`, it "has a
+   footprint" when ANY of its current OR legacy skill/team directories exists -
+   `skillDir`, `teamSkillDir`, every entry of `legacySkillDirs`, and every entry
+   of `legacyTeamSkillDirs` (r3 fix (a): legacy-dir-only and team-only installs
+   were previously undiscovered because only `skillDir`/`teamSkillDir` were
+   probed).
+2. Build the result keyed ONLY by targets that have a footprint:
+   - if `existing.targets[id]` is present, retain its stored
+     `{ version, contentHash, installedAt }`;
+   - else seed `{ version: existing.version ?? null, contentHash: null,
+     installedAt: existing.installedAt ?? null }` (`contentHash: null` = UNKNOWN,
+     never `current` per Decision 5 - captures a legacy stale install).
+3. Re-validation (r3 fix (b)): any `existing.targets` entry whose id has NO
+   footprint is DROPPED - a target whose directories were deleted never lingers as
+   `current` on a stored hash.
+4. (Install write only) overwrite the just-installed targets with their fresh
+   `{ version, contentHash, installedAt }` (their dirs now exist, so they are in
+   the footprint set).
 
-So a legacy record + a subsequent `install --target=codex`: step 2 seeds
-`targets.claude = { contentHash: null, ... }` (discovered on disk), step 3 writes
-a fresh `targets.codex`; `--status` then reports Claude `skewed` (null hash),
-codex `current`, GLOBAL `skewed`. The false-current path is closed for legacy
-records too.
+Empty-map verdict (r3 fix (c)): when the reconciled map is empty (no target has
+any current-or-legacy footprint), the state is `not-installed` - even if an
+`install-info.json` file exists - never a vacuous `current`.
+
+So a legacy record + `install --target=codex`: step 2 seeds `targets.claude`
+(discovered via its skill/legacy dirs) with `contentHash: null`, step 4 writes a
+fresh `targets.codex`; `--status` reports Claude `skewed`, codex `current`, GLOBAL
+`skewed`. A deleted Claude install (fix (b)) drops out entirely and can never
+report `current`.
 
 ### Decision 5 - status surface, `version-bump` command, and exit contracts (resolves Medium 7)
 
@@ -332,12 +359,14 @@ worst-of verdict.
   target's recorded `contentHash` is a non-null digest EQUAL to `current`;
   otherwise `skewed` (this includes a null/absent recorded hash - "unknown is
   never current", covering the discover-then-seed legacy entries).
-- Global verdict reconciliation (Medium 1 self-contradiction fixed):
-  - `not-installed` (exit 4) ONLY when there is no `install-info.json` AND
-    `reconcileTargets` discovers no on-disk target footprint - i.e. truly absent.
-  - `skewed` (exit 3) when at least one reconciled target is `skewed` - this
-    INCLUDES a legacy record whose discovered targets carry unknown (null) hashes.
-  - `current` (exit 0) only when every reconciled target is `current`.
+- Global verdict (order matters):
+  - `not-installed` (exit 4) when `reconcileTargets` returns an EMPTY map (no
+    target has any current-or-legacy footprint) - whether or not an
+    `install-info.json` file exists (no vacuous `current`).
+  - else `indeterminate` (exit 5) when the current source hash is null.
+  - else `skewed` (exit 3) when any reconciled target is `skewed` (incl. legacy
+    null-hash entries).
+  - else `current` (exit 0) when every reconciled target is `current`.
 - Exit codes (scriptable; 3/4 verified clean by review): `0` current, `3` skewed,
   `4` not-installed, `5` indeterminate. `2` stays reserved for usage/parse errors.
   `--json` always prints the report regardless of exit code. `--status` reuses
@@ -353,25 +382,31 @@ specified):
   [--range <a>..<b>] [--allow-main-root] [--json]`. Root-scoped mutation on the
   default checkout. Shares `runVersionBump(root, { range?, level?, config, now })`
   with `fast-forward`.
-- Range resolution (Medium 3 first-run base): the level is derived by scanning
-  merge subjects in a range `base..HEAD`:
-  - `--range <a>..<b>` supplies the base and tip explicitly (this is the recovery
-    path `fast-forward` prints after a commit failure).
-  - Else `base` = the processed-head marker ref `refs/local-board/version-bump-head`
-    if it exists; else the last `chore: bump version` commit on the default
-    branch; else (genuine first run, no marker and no prior bump) the root commit
-    `git rev-list --max-parents=0 HEAD` (whole-history base). `tip` = `HEAD`.
-  - `--level` forces the level and skips the range scan entirely (major/minor
-    escape hatch); no ticket lookup is done.
+- Range resolution (first-run base): the level is derived by scanning merge
+  subjects in `base..tip`:
+  - `--range <a>..<b>` supplies base and tip explicitly (the recovery path
+    `fast-forward` prints after a commit failure).
+  - Else `tip` = `HEAD` and `base` = the marker ref if it exists (it points at the
+    last bump commit `B`, so a no-range run immediately after an auto bump resolves
+    `B..HEAD` = empty and no-ops - the same-clone regression guard); else the last
+    `chore: bump version` commit on the default branch (fresh clones with no marker
+    are safe this way - they detect `B` and do not re-bump); else (genuine first
+    run: no marker, no prior bump) the root commit `git rev-list --max-parents=0
+    HEAD`.
+  - `--level` forces the level and skips the range scan and ticket lookup.
 - JSON shape: `{ bumped: boolean, from: "X.Y.Z", to: "X.Y.Z"|null,
   level: "major"|"minor"|"patch"|null, reason }` where `reason` is one of
   `bumped | not-enabled | not-advanced | no-payload-change | not-on-default |
   dirty-package-json | already-bumped`.
 - Exit codes: `0` on success (bump or intentional no-op); `2` on precondition/
   usage error.
-- Idempotence (Medium 3): keyed on the marker ref, NOT the HEAD commit subject
-  (which could falsely suppress an unrelated same-subject commit). If the marker
-  already equals the resolved `tip`, no-op (`reason: already-bumped`).
+- Idempotence (marker ancestry, subject-free): no-op (`reason: already-bumped`)
+  when the resolved `tip` is an ancestor-or-equal of the marker
+  (`git merge-base --is-ancestor <tip> <marker>`), so both the processed merge tip
+  `M` and the resulting bump commit `B` are recognized as done without any
+  commit-subject match. A successful manual bump advances the marker to its own new
+  bump commit by the same `git update-ref <ref> <new> <oldvalue>` compare-and-swap
+  that the automatic path uses (single owner).
 - Dirty/partial-failure recovery (never double-increment, never sweep user edits):
   1. Refuse (`reason: dirty-package-json`, exit 2, no write) if `package.json`
      has uncommitted changes at entry - a user's in-flight edit is never folded
@@ -407,8 +442,10 @@ advisory: warn and continue; never treat it as a hard gate or block the ticket.
 
 - `src/install.js`: `PAYLOAD_SPEC`; refactor `performInstall` copies to iterate
   it; `isSourceLayout`, `collectPayloadEntries`, `computePayloadHash`,
-  `isInstallablePath`; `reconcileTargets(existing, home)` (shared by write and
-  status); `writeInstallInfo` merge + `contentHash` + `targets`; `parseArgs`
+  `isInstallablePath`; `reconcileTargets(existing, home)` (footprint-driven -
+  probes current AND legacy skill/team dirs, re-validates and drops entries with no
+  footprint; shared by write and status); `writeInstallInfo` merge + `contentHash`
+  + `targets`; `parseArgs`
   `--status`; `performStatus` (per-target, worst-verdict, indeterminate/null
   handling); `runInstall` dispatch; `printHelp`.
 - `src/version-bump.js` (new): `mapBumpLevel`, `maxLevel`, `nextVersion`,
@@ -417,8 +454,11 @@ advisory: warn and continue; never treat it as a hard gate or block the ticket.
   `isInstallablePath`/`computePayloadHash` from install.js to stay single-source).
 - `src/worktrees.js`: `fastForwardDefaultBranch` calls `runVersionBump` under the
   `git.autoVersionBump` gate with the computed `{ previousHead, newHead }` range;
-  advances the `refs/local-board/version-bump-head` marker on success; includes
-  `versionBump` in its return ONLY when the flag is on (key omitted otherwise).
+  compare-and-swap-advances the `refs/local-board/version-bump-head` marker to the
+  RESULTING bump commit `B` (not the merge tip) on success, via
+  `git update-ref <ref> B <oldvalue>`; includes `versionBump` in its return ONLY
+  when the flag is on (key omitted otherwise). `runVersionBump`/the marker helper
+  are the single owner of the ref.
 - `src/config.js`: add `git.autoVersionBump: false` to `DEFAULT_CONFIG` and the
   scaffolded config template + comment; add `normalizeGit(merged)` (boolean check
   on `autoVersionBump`, `normalizeWorktrees` idiom) to `loadConfig`'s normalize
@@ -457,13 +497,18 @@ opt-in/idempotent/quoting/uninstall/`--no-hooks`/non-Claude. All remain valid
   takes the MAX level; merged-then-archived ticket still resolves its type;
   unresolved id falls back to patch; not-on-default no-op; `--range <a>..<b>`
   first-run base and explicit-range recovery; first-run base falls back to the
-  root commit when no marker and no prior bump exist; marker-ref idempotence: a
-  re-run with the marker at `tip` no-ops, and an unrelated commit whose subject
-  starts `chore: bump version` does NOT falsely suppress a real bump; dirty
-  `package.json` refused (no write); commit-failure path restores `package.json`
-  AND does not advance the marker (a re-run recomputes the same target - no double
-  increment); `--level major` forces major and skips the range scan; user edits to
-  other files are never in the bump commit.
+  root commit when no marker and no prior bump exist; marker contract (ancestry,
+  subject-free): after an auto bump the marker points at the bump commit `B` via
+  `update-ref` compare-and-swap, a no-range `version-bump` on the SAME clone
+  immediately afterward is a no-op (the r3 double-bump regression test), a FRESH
+  clone with no marker does NOT re-bump the already-bumped range (detects `B` as
+  the last bump commit - the fresh-clone regression test), an unrelated commit
+  whose subject starts `chore: bump version` does NOT falsely suppress a real bump,
+  and a concurrent marker move fails the CAS safely; dirty `package.json` refused
+  (no write); commit-failure path restores `package.json` AND does not advance the
+  marker (a re-run recomputes the same target - no double increment); `--level
+  major` forces major and skips the range scan; user edits to other files are
+  never in the bump commit.
 - `test/config.test.js` (extend): `git.autoVersionBump` defaults `false`; a
   non-boolean value throws the `normalizeGit` message; `true` loads unchanged.
 - `test/worktrees` (fast-forward suite): flag absent/`false` => return object has
@@ -482,8 +527,16 @@ opt-in/idempotent/quoting/uninstall/`--no-hooks`/non-Claude. All remain valid
   pre-feature `install-info.json` (no `targets`, no `contentHash`) plus an existing
   Claude skill dir, then `install --target=codex` => `reconcileTargets` seeds
   `targets.claude` with `contentHash: null`, `--status` reports Claude `skewed`,
-  codex `current`, GLOBAL `skewed`/exit 3 (the r2 regression guard); fresh install
-  => `current`/exit 0; truly absent (no `install-info.json`, no target dirs) =>
+  codex `current`, GLOBAL `skewed`/exit 3 (the r2 regression guard); FOOTPRINT
+  reconciliation (r3): legacy-DIRECTORY-only install (only a `legacySkillDirs`
+  path such as `local-board-orchestrator` on disk, no current `skillDir`) is
+  discovered and seeded null => target `skewed`; DELETED-target (stored
+  `targets.claude` with a real hash but all its skill/team/legacy dirs removed) is
+  DROPPED from the reconciled map and never reports `current`; TEAM-only footprint
+  (only `teamSkillDir` or a `legacyTeamSkillDirs` path exists) is discovered;
+  install-info-with-NO-directories (file present, zero footprints) => reconciled map
+  empty => `not-installed`/exit 4 (never a vacuous `current`); fresh install =>
+  `current`/exit 0; truly absent (no `install-info.json`, no target dirs) =>
   `not-installed`/exit 4; current-hash-null (flattened layout seam) => verdict
   `indeterminate`/exit 5, no target `current`; `computePayloadHash` on a flattened
   layout returns `null` and `where --json` emits `contentHash: null`.
@@ -517,11 +570,12 @@ opt-in/idempotent/quoting/uninstall/`--no-hooks`/non-Claude. All remain valid
   correct by construction (opt-in, committed config, no `.git/` dependency),
   boolean-validated by `normalizeGit`, and regression-guarded by the flag-off
   fast-forward tests (which assert the `versionBump` key is absent).
-- The `refs/local-board/version-bump-head` marker ref is the idempotence + recovery
-  anchor. Its risk: if a user deletes it, a subsequent `fast-forward` could
-  re-scan an already-processed range; mitigated because the range base also falls
-  back to the last `chore: bump version` commit, so a deleted marker degrades to
-  at most one redundant no-op/patch, not an unbounded loop. Documented.
+- The `refs/local-board/version-bump-head` marker ref (single-owner, CAS-written,
+  pointing at the bump commit `B`) is the idempotence + recovery anchor and is what
+  closes the r3 same-clone double-bump (marker at `B` covers both `M` and `B` by
+  ancestry). Residual risk: if a user deletes the ref, a subsequent run re-derives
+  the base from the last `chore: bump version` commit, so a deleted marker degrades
+  to at most one redundant no-op, not an unbounded loop. Documented.
 - `autoMerge: true` single-checkout repos skip the auto-bump (no post-merge
   `fast-forward`); covered by manual `version-bump` + hash-skew status. Documented.
 - Merge subjects that deviate from `Merge <id>...` degrade to a flat patch, never a
