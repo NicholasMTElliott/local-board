@@ -13,7 +13,7 @@ estimateBasis: T20260710T1532Z
 workStartedAt: 2026-07-12T15:11:07Z
 workCompletedAt: null
 created: 2026-07-12T14:15:09Z
-updated: 2026-07-12T15:11:07Z
+updated: 2026-07-12T16:10:30Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -590,6 +590,117 @@ opt-in/idempotent/quoting/uninstall/`--no-hooks`/non-Claude. All remain valid
   seam.
 
 ## Implementation Notes
+
+Implemented per the 4-round-hardened Technical Design; no design deviations.
+
+### `src/install.js`
+- `PAYLOAD_SPEC` is the single copy=hash=bump-trigger definition (`package.json`,
+  `README.md`, `SKILL.md`, `SKILL_TEAM.md?`, `bin/`, `src/`, `agents/`, `skills/`,
+  `hooks/`, `resources/prompts`→`prompts`, `resources/templates`→`templates`);
+  `install.mjs` is not a member. `performInstall`'s copies now iterate it.
+- `isSourceLayout`, `collectPayloadEntries`, `computePayloadHash` (SHA-256, sorted
+  POSIX relPath, CRLF→LF normalized, `null` on a flattened/non-source layout),
+  `isInstallablePath` are exported and shared with `src/version-bump.js`.
+- `reconcileTargets(existingInfo, home)` is footprint-driven (current AND legacy
+  skill/team dirs), re-validates every entry against disk on every call, seeds
+  unknown/legacy entries `contentHash: null`, and is shared by the install-write
+  path and `install --status`.
+- `writeInstallInfo` merges (spreads existing top-level keys, then overwrites the
+  well-known ones) rather than overwriting; additive `contentHash` + `targets`.
+- `install --status [--json]` (`performStatus`): per-target + global worst-of
+  verdict, exit 0/3/4/5 (current/skewed/not-installed/indeterminate).
+
+### `src/version-bump.js` (new)
+- Pure helpers `mapBumpLevel`, `maxLevel` (empty→patch), `nextVersion`,
+  `selectBump`; `MERGE_SUBJECT_RE` is a hand-written literal matching
+  `tickets.js`'s `TICKET_ID_RE` character class rather than derived from it at
+  module load — `tickets.js` imports `worktrees.js` (`ticketWorktreeMintOffsetMinutes`)
+  and `worktrees.js` now imports this module, so a top-level read of `TICKET_ID_RE`
+  here hit that import cycle's temporal-dead-zone (`ReferenceError`). A lockstep
+  guard test (`test/version-bump.test.js`) asserts the two character classes stay
+  identical. This is the one place implementation diverged from the design's literal
+  "derived from TICKET_ID_RE" phrasing, for a concrete, tested reason.
+- `runVersionBump(root, { range?, level?, config, now? })` is the single shared
+  entry point for both the automatic (fast-forward, explicit range) and manual
+  (`version-bump` command, range optionally resolved: marker → last
+  `chore: bump version` commit → root commit) callers. It owns the full contract
+  internally: not-enabled → not-on-default → already-bumped (ancestry against the
+  marker) → not-advanced → no-payload-change → level (forced or merge-subject scan,
+  max-reduced) → dirty-package-json refusal → write+commit (pathspec-limited to
+  `package.json`) → marker CAS-advance to the new bump commit.
+- Marker: `refs/local-board/version-bump-head`, single CAS owner
+  (`advanceVersionBumpMarker`, `git update-ref <ref> <new> <old>`, empty old =
+  must-not-exist). Commit failure restores `package.json`'s pre-write bytes and
+  leaves the marker unmoved (no double-increment on retry).
+
+### `src/worktrees.js`
+- `fastForwardDefaultBranch(root, { defaultBranch, config })`: when
+  `config.git.autoVersionBump === true`, calls `runVersionBump` with the explicit
+  `{previousHead, newHead}` range and attaches the result as `versionBump`; the key
+  is omitted entirely when the flag is off/absent (byte-identical flag-off shape —
+  regression-tested). A `runVersionBump` failure is wrapped with the exact
+  `local-board version-bump --range <previousHead>..<newHead>` recovery command
+  before propagating (the checkout is already reset to `newHead` by that point, so
+  re-running `fast-forward` cannot retry the range).
+
+### `src/config.js`
+- `DEFAULT_CONFIG.git.autoVersionBump: false`; scaffold template documents the
+  blind-copy-authorizes-a-bump consequence and also defaults `false`.
+- `normalizeGit(merged)` (called from `loadConfig`) validates `git.autoVersionBump`
+  is a boolean when the `git` block is present; every other `git` key stays
+  untyped (unchanged, scoped to this one field per the `normalizeWorktrees` idiom).
+
+### `src/cli.js`
+- `version-bump` command dispatch (`commandVersionBump`): `--level`, `--range <a>..<b>`
+  (resolved via `git rev-parse`), `--json`; exit 0 for bumped/no-op reasons, exit 2
+  for `not-enabled`/`not-on-default`/`dirty-package-json`.
+- `commandFastForward` now loads and passes the full `config` through; surfaces
+  `versionBump` in text output when present.
+- `commandWhere` gains `contentHash` (source-only; `null` on a flattened layout).
+- Usage text lists `version-bump` and `install --status`; not added to any skill's
+  `## CLI Commands` fence (sync suite tolerates the subset).
+
+### `plans/local-board.config.jsonc`
+- `git.autoVersionBump: true` — this repo opts itself in (the committed authorization).
+
+### Skills
+- `SKILL.md` / `skills/codex/local-board/SKILL.md`: version-skew advisory reworded
+  to the design's canonical two-signal sentence (version string OR `install --status
+  skewed`). Team skills don't carry the paragraph (unchanged). No CLI-Commands-fence
+  edit, so no `npm run sync-resources` was needed (no `plans/prompts` edits at all).
+
+### Tests
+- `test/version-bump.test.js` (new, 23 cases): pure-helper unit tests +
+  git-repo-backed `runVersionBump` end-to-end coverage (bump/no-payload-change/
+  dirty/not-on-default/not-enabled, B/S/E/T + done/archived ticket-type resolution,
+  multi-merge MAX level, unresolved-id patch fallback, explicit-range-verbatim,
+  first-run root-commit base, same-clone/fresh-clone marker no-op regressions,
+  unrelated-`chore: bump version`-subject non-suppression, CAS-concurrent-fail,
+  `--level` override, bump-commit content isolation, commit-failure rollback) plus
+  the `MERGE_SUBJECT_RE`/`TICKET_ID_RE` lockstep guard.
+- `test/install.test.js` (+16): contentHash shape/determinism/CRLF-insensitivity,
+  flattened-layout null, `install-info.json` merge-preserves-unknown-keys, and the
+  full `install --status` matrix (not-installed/current/indeterminate/multi-target
+  staleness/legacy-migration/legacy-dir-only/team-only/deleted-target/
+  no-footprint-not-installed).
+- `test/worktrees.test.js` (+3): fast-forward bump/no-payload-change/not-advanced
+  under `git.autoVersionBump: true`; the pre-existing flag-off exact-shape test is
+  unmodified and still passes (regression proof).
+- `test/cli.test.js` (+8): `version-bump` dispatch/`--json`/`--level`/`--range`/exit
+  codes, usage-lists-version-bump, `fast-forward --json` key presence/absence
+  across the flag, `where --json` contentHash shape.
+- `test/config.test.js` (+3): `git.autoVersionBump` default-false, non-boolean
+  rejection, `true` passthrough.
+- Full suite: `npm run check` clean; `node --test` → 638 tests, 637 pass, 1
+  pre-existing skip (smoke), 0 fail.
+
+### Debugging note (no code implication)
+- One new `test/cli.test.js` fast-forward test intermittently looked like a git
+  "racy" false-dirty report while under construction; root cause was a genuine
+  test-authoring bug (a helper mutated `plans/local-board.config.jsonc` without
+  committing it, so the *second* `fast-forward` call in that test correctly refused
+  a truly dirty tree) — fixed by committing the config flip in the test helper. No
+  product-code change resulted from this investigation.
 
 ## Review Findings
 
