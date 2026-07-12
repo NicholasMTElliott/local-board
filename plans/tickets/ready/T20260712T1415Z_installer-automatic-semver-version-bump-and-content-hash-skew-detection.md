@@ -13,8 +13,8 @@ estimateBasis: T20260710T1532Z
 workStartedAt: 2026-07-12T15:11:07Z
 workCompletedAt: null
 created: 2026-07-12T14:15:09Z
-updated: 2026-07-12T20:14:35Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
+updated: 2026-07-12T20:14:36Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet"]
 routingApprovals: []
 ---
 # installer: automatic semver version bump and content-hash skew detection
@@ -764,3 +764,5 @@ fast-forward must invoke runVersionBump WITHOUT a range (marker-based base resol
 - 2026-07-12T16:17:49Z: Completed review via codex-task:read-only@gpt-5.6-terra: r1 PASS no findings: all review-earned contracts verified in code (marker CAS-to-B, footprints, PAYLOAD_SPEC, flag-off shape, status exits, bump flow, config gate, injection handling); mandated tests present; skill edits advisory-only.
 
 - 2026-07-12T16:17:50Z: Ensured git branch local-board/T20260712T1415Z-installer-automatic-semver-version-bump-and-content-hash-skew-detection (already-current).
+
+- 2026-07-12T20:14:36Z: Completed test via claude-subagent:local-board-tester@sonnet: verdict: fail (orchestrator-adjudicated). Suite 637/638 green and all probed contracts hold, but the automatic bump never fires for in-checkout merges - the repo's actual closeout - because fast-forward passes an equal range (advanced:false path); acceptance criterion automatic-in-normal-workflow unmet. Loop-back with prescribed fix (no-range invocation from fast-forward + in-checkout regression tests).
