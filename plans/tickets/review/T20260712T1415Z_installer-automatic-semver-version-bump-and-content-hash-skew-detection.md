@@ -13,7 +13,7 @@ estimateBasis: T20260710T1532Z
 workStartedAt: 2026-07-12T15:11:07Z
 workCompletedAt: null
 created: 2026-07-12T14:15:09Z
-updated: 2026-07-12T16:14:40Z
+updated: 2026-07-12T16:17:49Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -703,6 +703,13 @@ Implemented per the 4-round-hardened Technical Design; no design deviations.
   product-code change resulted from this investigation.
 
 ## Review Findings
+
+### Review round 1 (codex-task:read-only@gpt-5.6-terra, high, static)
+
+Verdict: PASS, no findings.
+
+- Verified against the four-round-hardened design contracts: marker CAS-to-B with ancestry already-processed test; footprint reconciliation (current+legacy dirs, per-call re-validation, empty map = not-installed); PAYLOAD_SPEC as the single copy/hash/bump-trigger source; flag-off fast-forward shape key-omitted and byte-identical; install --status exits 0/3/4/5 with worst-of global; version-bump JSON/exit/dirty/rollback flow; normalizeGit boolean gate with scaffold default false; injection handling (ticket ids regex-validated, git args refs/hashes only).
+- Mandated regression tests present (same-clone no-op, fresh-clone, CAS-concurrent-fail, migration matrix incl. stale-claude + --target=codex); skill edits limited to the two advisory paragraphs, no fence changes, no plans/prompts edits.
 
 ## Test Evidence
 
