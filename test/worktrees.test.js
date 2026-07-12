@@ -784,6 +784,109 @@ test("fast-forward refuses with a dirty worktree", { skip: !GIT_AVAILABLE }, asy
   });
 });
 
+// Flips the scaffolded config's git.autoVersionBump from its false default
+// to true, committing the change (mirroring how this repo's own
+// plans/local-board.config.jsonc opts itself in). Ticket T20260712T1415Z.
+async function enableAutoVersionBump(root) {
+  const configPath = path.join(root, "plans", "local-board.config.jsonc");
+  const current = await readFile(configPath, "utf8");
+  const updated = current.replace('"autoVersionBump": false', '"autoVersionBump": true');
+  assert.notEqual(updated, current, "expected to find autoVersionBump: false in the scaffolded config");
+  await writeFile(configPath, updated, "utf8");
+  await git(root, ["add", "plans"]);
+  await git(root, ["commit", "-m", "Enable autoVersionBump for test"]);
+}
+
+test("fast-forward with git.autoVersionBump=true bumps and commits chore: bump version, advancing the marker, when the range touches an installable path", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, baseBranch, worktreesRoot) => {
+    await enableAutoVersionBump(root);
+    await writeFile(path.join(root, "package.json"), `${JSON.stringify({ name: "fixture", version: "1.0.0" }, null, 2)}\n`, "utf8");
+    await git(root, ["add", "package.json"]);
+    await git(root, ["commit", "-m", "Add package.json"]);
+
+    const ticketPath = await createTicket(root, "task", "Version bump via fast-forward", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-22T16:00:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add version-bump ticket"]);
+    const previousHead = await gitOutput(root, ["rev-parse", "HEAD"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const add = await runCli(["--root", root, "worktree-add", ticketId, "--json"]);
+    assert.equal(add.code, 0, add.stderr);
+    const worktreePath = path.join(worktreesRoot, ticketId);
+    await mkdir(path.join(worktreePath, "src"), { recursive: true });
+    await writeFile(path.join(worktreePath, "src", "feature.js"), "// feature\n", "utf8");
+    await git(worktreePath, ["add", "plans", "src/feature.js"]);
+    await git(worktreePath, ["commit", "-m", `Implement ${ticketId}`]);
+    const newHead = await gitOutput(worktreePath, ["rev-parse", "HEAD"]);
+    await git(worktreePath, ["update-ref", `refs/heads/${baseBranch}`, newHead, previousHead]);
+
+    const advanced = await runCli(["--root", root, "fast-forward", "--json"]);
+    assert.equal(advanced.code, 0, advanced.stderr);
+    const result = JSON.parse(advanced.stdout);
+    assert.equal(result.advanced, true);
+    assert.equal(result.versionBump.bumped, true);
+    assert.equal(result.versionBump.reason, "bumped");
+    assert.equal(result.versionBump.from, "1.0.0");
+    assert.equal(result.versionBump.to, "1.0.1");
+
+    const pkg = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
+    assert.equal(pkg.version, "1.0.1");
+    const headSubject = await gitOutput(root, ["log", "-1", "--pretty=%s"]);
+    assert.match(headSubject, /^chore: bump version 1\.0\.1$/);
+    const marker = await gitOutput(root, ["rev-parse", "refs/local-board/version-bump-head"]);
+    const head = await gitOutput(root, ["rev-parse", "HEAD"]);
+    assert.equal(marker, head);
+  });
+});
+
+test("fast-forward with git.autoVersionBump=true reports no-payload-change (no commit) when the advanced range touches only plans/", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, baseBranch, worktreesRoot) => {
+    await enableAutoVersionBump(root);
+
+    const ticketPath = await createTicket(root, "task", "Planning-only fast-forward", {
+      status: "ready_for_implementation",
+      now: new Date("2026-05-22T16:10:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add planning-only ticket"]);
+    const previousHead = await gitOutput(root, ["rev-parse", "HEAD"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const add = await runCli(["--root", root, "worktree-add", ticketId, "--json"]);
+    assert.equal(add.code, 0, add.stderr);
+    const worktreePath = path.join(worktreesRoot, ticketId);
+    await writeFile(path.join(worktreePath, "plans", "note.md"), "note\n", "utf8");
+    await git(worktreePath, ["add", "plans"]);
+    await git(worktreePath, ["commit", "-m", `Planning-only change for ${ticketId}`]);
+    const newHead = await gitOutput(worktreePath, ["rev-parse", "HEAD"]);
+    await git(worktreePath, ["update-ref", `refs/heads/${baseBranch}`, newHead, previousHead]);
+
+    const advanced = await runCli(["--root", root, "fast-forward", "--json"]);
+    assert.equal(advanced.code, 0, advanced.stderr);
+    const result = JSON.parse(advanced.stdout);
+    assert.equal(result.advanced, true);
+    assert.deepEqual(result.versionBump, { bumped: false, from: null, to: null, level: null, reason: "no-payload-change" });
+
+    // No extra bump commit landed on top of the fast-forwarded tip.
+    assert.equal(await gitOutput(root, ["rev-parse", "HEAD"]), newHead);
+  });
+});
+
+test("fast-forward with git.autoVersionBump=true reports not-advanced when nothing moved", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root) => {
+    await enableAutoVersionBump(root);
+
+    const clean = await runCli(["--root", root, "fast-forward", "--json"]);
+    assert.equal(clean.code, 0, clean.stderr);
+    const result = JSON.parse(clean.stdout);
+    assert.equal(result.advanced, false);
+    assert.deepEqual(result.versionBump, { bumped: false, from: null, to: null, level: null, reason: "not-advanced" });
+  });
+});
+
 test("worktree-add places worktrees under .worktrees when location is inside, stamps a branch, and is idempotent", { skip: !GIT_AVAILABLE }, async () => {
   await withRepo(async (root, _baseBranch, worktreesRoot) => {
     const ticketPath = await createTicket(root, "task", "Inside layout ticket", {

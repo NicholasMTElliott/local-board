@@ -350,6 +350,9 @@ test("where --json self-locates version, promptsDir, templatesDir, and agentsDir
   assert.ok(statSync(info.agentsDir).isDirectory());
   assert.ok(statSync(path.join(info.promptsDir, "steps", "gate-check.md")).isFile());
   assert.ok(statSync(path.join(info.agentsDir, "local-board-designer.md")).isFile());
+  // Additive contentHash (ticket T20260712T1415Z): source-layout-only, so a
+  // dev-clone/npm-global CLI (always a source layout) reports a real digest.
+  assert.match(info.contentHash, /^sha256:[0-9a-f]{64}$/);
 });
 
 test("where (non-JSON) prints the same labelled fields", async () => {
@@ -3405,6 +3408,172 @@ test("design-review prompt describes the real persistence flow, not a phantom se
     normalized.includes("denies process spawning"),
     "design_review step includes the spawn-denial guidance",
   );
+});
+
+// ---------------------------------------------------------------------------
+// version-bump CLI surface (ticket T20260712T1415Z)
+// ---------------------------------------------------------------------------
+
+const CLI_GIT_AVAILABLE = await hasCliGit();
+
+async function hasCliGit() {
+  try {
+    await execFileAsync("git", ["--version"], { encoding: "utf8" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function cliGit(root, args) {
+  await execFileAsync("git", ["-C", root, ...args], { encoding: "utf8" });
+}
+
+async function cliGitOutput(root, args) {
+  const { stdout } = await execFileAsync("git", ["-C", root, ...args], { encoding: "utf8" });
+  return stdout.trim();
+}
+
+async function withVersionBumpRepo(fn) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "local-board-cli-vb-"));
+  try {
+    await cliGit(root, ["init"]);
+    await cliGit(root, ["config", "gc.auto", "0"]);
+    await cliGit(root, ["config", "gc.autoDetach", "false"]);
+    await cliGit(root, ["config", "user.email", "local-board@example.test"]);
+    await cliGit(root, ["config", "user.name", "local-board test"]);
+    await writeFile(
+      path.join(root, "package.json"),
+      `${JSON.stringify({ name: "fixture", version: "1.0.0" }, null, 2)}\n`,
+      "utf8",
+    );
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await writeFile(path.join(root, "src", "index.js"), "// index\n", "utf8");
+
+    const initResult = await runCli(["--root", root, "init", "--json"]);
+    assert.equal(initResult.code, 0, initResult.stderr);
+
+    await cliGit(root, ["add", "package.json", "src", "plans", ".gitignore"]);
+    await cliGit(root, ["commit", "-m", "Initial commit"]);
+    const defaultBranch = await cliGitOutput(root, ["branch", "--show-current"]);
+    await fn(root, defaultBranch);
+  } finally {
+    await removeFixtureDir(root);
+  }
+}
+
+// Flips the scaffolded config's git.autoVersionBump from its false default to
+// true and commits it: version-bump/runVersionBump itself doesn't require a
+// clean tree (only package.json's own cleanliness matters to it), but
+// `fast-forward`'s own clean-working-tree preflight (cleanCheckoutHead,
+// src/worktrees.js) does -- an uncommitted config edit would otherwise make a
+// subsequent fast-forward call correctly (not spuriously) refuse as dirty.
+async function enableAutoVersionBumpCli(root) {
+  const configPath = path.join(root, "plans", "local-board.config.jsonc");
+  const current = await readFile(configPath, "utf8");
+  const updated = current.replace('"autoVersionBump": false', '"autoVersionBump": true');
+  assert.notEqual(updated, current, "expected to find autoVersionBump: false in the scaffolded config");
+  await writeFile(configPath, updated, "utf8");
+  await cliGit(root, ["add", "plans"]);
+  await cliGit(root, ["commit", "-m", "Enable autoVersionBump for test"]);
+}
+
+test("CLI version-bump --json bumps (no explicit range: first-run root-commit base) and reports the JSON shape; exit 0", { skip: !CLI_GIT_AVAILABLE }, async () => {
+  await withVersionBumpRepo(async (root) => {
+    await enableAutoVersionBumpCli(root);
+    await writeFile(path.join(root, "src", "feature.js"), "// feature\n", "utf8");
+    await cliGit(root, ["add", "src"]);
+    await cliGit(root, ["commit", "-m", "Add feature"]);
+
+    const result = await runCli(["--root", root, "version-bump", "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.bumped, true);
+    assert.equal(parsed.from, "1.0.0");
+    assert.equal(parsed.to, "1.0.1");
+    assert.equal(parsed.level, "patch");
+    assert.equal(parsed.reason, "bumped");
+  });
+});
+
+test("CLI version-bump --level major forces the level regardless of the merge-subject scan", { skip: !CLI_GIT_AVAILABLE }, async () => {
+  await withVersionBumpRepo(async (root) => {
+    await enableAutoVersionBumpCli(root);
+    await writeFile(path.join(root, "src", "feature.js"), "// feature\n", "utf8");
+    await cliGit(root, ["add", "src"]);
+    await cliGit(root, ["commit", "-m", "Add feature"]);
+
+    const result = await runCli(["--root", root, "version-bump", "--level", "major", "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.level, "major");
+    assert.equal(parsed.to, "2.0.0");
+  });
+});
+
+test("CLI version-bump --range <a>..<b> resolves the given refs and uses that range explicitly", { skip: !CLI_GIT_AVAILABLE }, async () => {
+  await withVersionBumpRepo(async (root) => {
+    await enableAutoVersionBumpCli(root);
+    const before = await cliGitOutput(root, ["rev-parse", "HEAD"]);
+    await writeFile(path.join(root, "src", "feature.js"), "// feature\n", "utf8");
+    await cliGit(root, ["add", "src"]);
+    await cliGit(root, ["commit", "-m", "Add feature"]);
+    const after = await cliGitOutput(root, ["rev-parse", "HEAD"]);
+
+    const result = await runCli(["--root", root, "version-bump", "--range", `${before}..${after}`, "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.bumped, true);
+    assert.equal(parsed.to, "1.0.1");
+  });
+});
+
+test("CLI version-bump exits 2 with reason not-enabled when git.autoVersionBump is not opted in", { skip: !CLI_GIT_AVAILABLE }, async () => {
+  await withVersionBumpRepo(async (root) => {
+    const result = await runCli(["--root", root, "version-bump", "--json"]);
+    assert.equal(result.code, 2);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.bumped, false);
+    assert.equal(parsed.reason, "not-enabled");
+  });
+});
+
+test("CLI version-bump exits 2 with reason dirty-package-json and writes nothing when package.json has uncommitted changes", { skip: !CLI_GIT_AVAILABLE }, async () => {
+  await withVersionBumpRepo(async (root) => {
+    await enableAutoVersionBumpCli(root);
+    await writeFile(path.join(root, "src", "feature.js"), "// feature\n", "utf8");
+    await cliGit(root, ["add", "src"]);
+    await cliGit(root, ["commit", "-m", "Add feature"]);
+    const dirtyText = `${JSON.stringify({ name: "fixture", version: "1.0.0", dirty: true }, null, 2)}\n`;
+    await writeFile(path.join(root, "package.json"), dirtyText, "utf8");
+
+    const result = await runCli(["--root", root, "version-bump", "--json"]);
+    assert.equal(result.code, 2);
+    const parsed = JSON.parse(result.stdout);
+    assert.equal(parsed.reason, "dirty-package-json");
+    assert.equal(await readFile(path.join(root, "package.json"), "utf8"), dirtyText);
+  });
+});
+
+test("CLI usage listing includes version-bump", async () => {
+  const result = await runCli(["bogus-command"]);
+  assert.equal(result.code, 2);
+  assert.match(result.stderr, /version-bump/);
+});
+
+test("CLI fast-forward --json omits versionBump when the flag is off; includes it once git.autoVersionBump is enabled", { skip: !CLI_GIT_AVAILABLE }, async () => {
+  await withVersionBumpRepo(async (root) => {
+    const off = await runCli(["--root", root, "fast-forward", "--json"]);
+    assert.equal(off.code, 0, off.stderr);
+    assert.equal(Object.hasOwn(JSON.parse(off.stdout), "versionBump"), false);
+
+    await enableAutoVersionBumpCli(root);
+    const on = await runCli(["--root", root, "fast-forward", "--json"]);
+    assert.equal(on.code, 0, on.stderr);
+    const onParsed = JSON.parse(on.stdout);
+    assert.equal(Object.hasOwn(onParsed, "versionBump"), true);
+    assert.equal(onParsed.versionBump.reason, "not-advanced");
+  });
 });
 
 async function runCli(args) {
