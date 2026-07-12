@@ -14,7 +14,7 @@ workStartedAt: 2026-07-12T15:11:07Z
 workCompletedAt: null
 created: 2026-07-12T14:15:09Z
 updated: 2026-07-12T16:17:49Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
 # installer: automatic semver version bump and content-hash skew detection
@@ -746,3 +746,5 @@ Verdict: PASS, no findings.
 - 2026-07-12T16:14:39Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (ticket ids regex-validated, never in git args; git ops use refs/hashes; hash is fingerprint; no UI). Injection angle explicitly assessed clean; reviewer prompt carries a cross-check item.
 
 - 2026-07-12T16:14:40Z: Ensured git branch local-board/T20260712T1415Z-installer-automatic-semver-version-bump-and-content-hash-skew-detection (already-current).
+
+- 2026-07-12T16:17:49Z: Completed review via codex-task:read-only@gpt-5.6-terra: r1 PASS no findings: all review-earned contracts verified in code (marker CAS-to-B, footprints, PAYLOAD_SPEC, flag-off shape, status exits, bump flow, config gate, injection handling); mandated tests present; skill edits advisory-only.
