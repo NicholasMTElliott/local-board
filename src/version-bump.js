@@ -76,9 +76,11 @@ export function selectBump({ changedPaths, levels }) {
 }
 
 // Shared range/dirty/commit/marker contract, reused verbatim by both
-// fastForwardDefaultBranch (explicit `range`) and the manual `version-bump`
-// CLI command (range resolved internally: marker -> last bump commit ->
-// root). See the ticket's Technical Design, Decisions 1, 2, and 5.
+// fastForwardDefaultBranch and the manual `version-bump` CLI command. Both
+// callers normally omit `range`, letting it resolve internally: marker ->
+// last bump commit -> root, tip = current HEAD. An explicit `range` is
+// accepted for the manual command's targeted one-off `--range` use only.
+// See the ticket's Technical Design, Decisions 1, 2, and 5.
 //
 // `options`: { range?: { previousHead, newHead }, level?, config, now? }.
 // `config` is a loaded local-board config (config.git.autoVersionBump,

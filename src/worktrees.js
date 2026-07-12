@@ -286,7 +286,8 @@ export async function listTicketWorktrees(root) {
 // and also correctly covers an in-checkout merge, since it is anchored to
 // the marker/repo history rather than to this one call's before/after pair.
 // The manual `local-board version-bump --range <a>..<b>` command keeps the
-// explicit-range option for the recovery path below and other one-off use.
+// explicit-range option, but only for targeted one-off manual use — not for
+// recovery, which is the plain no-range invocation described below.
 //
 // A version-bump failure (e.g. the commit step) is wrapped with a recovery
 // hint before it propagates. Because the marker is left UNMOVED on failure
