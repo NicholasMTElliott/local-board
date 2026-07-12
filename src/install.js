@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { execSync } from "node:child_process";
 import {
   copyFileSync,
@@ -21,6 +22,102 @@ import { parseJsonc } from "./config.js";
 // resources/). This module lives at <root>/src/install.js, so the root is one
 // level up from this file's directory.
 const SCRIPT_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+// The SINGLE definition of the installer's copy set. It drives (a) what
+// performInstall copies into the runtime install dir, (b) what
+// collectPayloadEntries/computePayloadHash hash, and (c) what
+// isInstallablePath treats as a version-bump trigger — one spec, three
+// consumers, so they can never drift apart (ticket T20260712T1415Z Decision
+// 3). `source` is always POSIX-style and repo-root-relative; `target`
+// (dir entries only) is the renamed install-dir-relative path (currently only
+// resources/prompts -> prompts and resources/templates -> templates) and does
+// NOT affect the hash, which keys on `source`. `install.mjs` is deliberately
+// NOT a member: the installer does not copy it, so it is not installable for
+// bump/hash purposes (a change to the 9-line shim alone never bumps).
+export const PAYLOAD_SPEC = [
+  { type: "file", source: "package.json" },
+  { type: "file", source: "README.md" },
+  { type: "file", source: "SKILL.md" },
+  { type: "file", source: "SKILL_TEAM.md", optional: true },
+  { type: "dir", source: "bin" },
+  { type: "dir", source: "src" },
+  { type: "dir", source: "agents" },
+  { type: "dir", source: "skills" },
+  { type: "dir", source: "hooks" },
+  { type: "dir", source: "resources/prompts", target: "prompts" },
+  { type: "dir", source: "resources/templates", target: "templates" },
+];
+
+// True when `root` is a SOURCE layout (has resources/prompts) as opposed to a
+// flattened runtime snapshot (~/.local-board, which has prompts/ directly and
+// no resources/ at all — T20260707T1322Z). computePayloadHash is defined only
+// over the source layout; both sides of every comparison in this codebase use
+// a source layout (see Decision 3 in the ticket's Technical Design).
+export function isSourceLayout(root) {
+  return existsSync(join(root, "resources", "prompts"));
+}
+
+// Enumerates every file the installer copies (and therefore hashes),
+// expanding PAYLOAD_SPEC dir entries recursively. relPath is `source`-relative
+// (POSIX separators), NOT the renamed `target` path, and entries are sorted
+// by relPath for deterministic hash input ordering. Missing entries (optional
+// files not present, or a dir absent in a stripped/packaged tree) contribute
+// nothing, mirroring performInstall's own existsSync-gated copy behaviour.
+export function collectPayloadEntries(root) {
+  const entries = [];
+  for (const spec of PAYLOAD_SPEC) {
+    const absSource = join(root, ...spec.source.split("/"));
+    if (!existsSync(absSource)) {
+      continue;
+    }
+    if (spec.type === "file") {
+      entries.push({ relPath: spec.source, absPath: absSource });
+    } else {
+      collectDirEntries(absSource, spec.source, entries);
+    }
+  }
+  entries.sort((left, right) => (left.relPath < right.relPath ? -1 : left.relPath > right.relPath ? 1 : 0));
+  return entries;
+}
+
+function collectDirEntries(absDir, relPrefix, entries) {
+  for (const entry of readdirSync(absDir, { withFileTypes: true })) {
+    const absPath = join(absDir, entry.name);
+    const relPath = `${relPrefix}/${entry.name}`;
+    if (entry.isDirectory()) {
+      collectDirEntries(absPath, relPath, entries);
+    } else if (entry.isFile()) {
+      entries.push({ relPath, absPath });
+    }
+  }
+}
+
+// Deterministic SHA-256 over the payload the installer copies from `root`:
+// source-layout-only (null on a flattened runtime snapshot — see
+// isSourceLayout), sorted POSIX-relPath order, CRLF-normalized content so the
+// digest is stable across OS/checkout line-ending representations (the same
+// hazard sync-resources.mjs's normalizeEol already handles). Each entry
+// contributes `relPath + "\0" + normalize(content) + "\0"` to the digest.
+export function computePayloadHash(root) {
+  if (!isSourceLayout(root)) {
+    return null;
+  }
+  const hash = createHash("sha256");
+  for (const entry of collectPayloadEntries(root)) {
+    const normalized = readFileSync(entry.absPath, "utf8").replace(/\r\n/g, "\n");
+    hash.update(`${entry.relPath}\0${normalized}\0`);
+  }
+  return `sha256:${hash.digest("hex")}`;
+}
+
+// True when a repo-root-relative relPath (either separator style) falls
+// under any PAYLOAD_SPEC source root. The single shared definition of
+// "installable" for the copy set, the hash set, and the version-bump trigger
+// set (src/version-bump.js imports this) — see Decision 3.
+export function isInstallablePath(relPath) {
+  const normalized = relPath.replace(/\\/g, "/");
+  return PAYLOAD_SPEC.some((spec) => normalized === spec.source || normalized.startsWith(`${spec.source}/`));
+}
 
 // The single Claude permission rule the installer manages. Uninstall removes
 // an entry from permissions.allow ONLY when it equals this string, so a
@@ -139,6 +236,9 @@ export function runInstall(argv, options = {}) {
     performUninstall(targets, home, installDir);
     return 0;
   }
+  if (args.status) {
+    return performStatus(args, home, installDir);
+  }
   performInstall(args, targets, home, installDir, options, homeOverridden);
   return 0;
 }
@@ -206,28 +306,34 @@ function performInstall(args, targets, home, installDir, options = {}, homeOverr
     );
   }
 
+  // Read + reconcile BEFORE any of this run's copies/writes land, so the
+  // footprint check reflects the world as it stood prior to this install (a
+  // target being freshly installed this run has no footprint yet here, and
+  // is added explicitly below once its directories actually exist — see
+  // Decision 4 in the ticket's Technical Design).
+  const existingInfo = readExistingInstallInfo(installDir);
+  const baseTargets = reconcileTargets(existingInfo, home);
+
   mkdirSync(installDir, { recursive: true });
-  copyFileSync(join(SCRIPT_DIR, "package.json"), join(installDir, "package.json"));
-  copyFileSync(join(SCRIPT_DIR, "README.md"), join(installDir, "README.md"));
-  copyFileSync(join(SCRIPT_DIR, "SKILL.md"), join(installDir, "SKILL.md"));
-  if (existsSync(join(SCRIPT_DIR, "SKILL_TEAM.md"))) {
-    copyFileSync(join(SCRIPT_DIR, "SKILL_TEAM.md"), join(installDir, "SKILL_TEAM.md"));
+  for (const spec of PAYLOAD_SPEC) {
+    const target = spec.target ?? spec.source;
+    const absSource = join(SCRIPT_DIR, ...spec.source.split("/"));
+    if (spec.type === "file") {
+      // Optional files (SKILL_TEAM.md) are skipped when absent, matching the
+      // pre-refactor behaviour; required files copy unconditionally and throw
+      // naturally (ENOENT) if genuinely missing from the package.
+      if (spec.optional && !existsSync(absSource)) {
+        continue;
+      }
+      copyFileSync(absSource, join(installDir, target));
+    } else if (existsSync(absSource)) {
+      // Dirs are skipped silently when absent (a stripped/packaged tree may
+      // omit e.g. hooks/), matching the pre-refactor copyDir behaviour.
+      cpSync(absSource, join(installDir, target), { recursive: true, force: true });
+    }
   }
-  copyDir("bin", "bin", installDir);
-  copyDir("src", "src", installDir);
-  copyDir("agents", "agents", installDir);
-  copyDir("skills", "skills", installDir);
-  copyDir("hooks", "hooks", installDir);
-  copyDir(join("resources", "prompts"), "prompts", installDir);
-  copyDir(join("resources", "templates"), "templates", installDir);
 
   const scriptPath = join(installDir, "bin", "local-board.js").replace(/\\/g, "/");
-  writeInstallInfo(installDir, {
-    nodeVersion,
-    version,
-    scriptPath,
-    teamSkillInstalled: existsSync(join(SCRIPT_DIR, "SKILL_TEAM.md")),
-  });
 
   console.log(`local-board installer`);
   console.log(`node ${nodeVersion}`);
@@ -260,6 +366,29 @@ function performInstall(args, targets, home, installDir, options = {}, homeOverr
   if (!hooksEnabled && selected.some((target) => target.settingsPath !== null)) {
     console.log(`Run 'local-board install --hooks' to enable Claude Code dispatch-enforcement hooks`);
   }
+
+  // Hash is computed against this run's own source (SCRIPT_DIR, always a
+  // source layout), not the just-written flattened installDir snapshot — see
+  // isSourceLayout/computePayloadHash. The just-installed targets' entries are
+  // overwritten with fresh info unconditionally (their dirs now exist, so
+  // they are in the footprint set); every other reconciled target's stored
+  // entry is carried through unchanged (Decision 4, step 4).
+  const contentHash = computePayloadHash(SCRIPT_DIR);
+  const now = new Date().toISOString();
+  const finalTargets = { ...baseTargets };
+  for (const target of selected) {
+    finalTargets[target.id] = { version, contentHash, installedAt: now };
+  }
+  writeInstallInfo(installDir, {
+    existingInfo,
+    nodeVersion,
+    version,
+    scriptPath,
+    teamSkillInstalled: existsSync(join(SCRIPT_DIR, "SKILL_TEAM.md")),
+    contentHash,
+    targets: finalTargets,
+    now,
+  });
 
   // Detection-only, informational codex-task hint. Only after a claude-target
   // install; best-effort against the project config in cwd (a config that
@@ -350,13 +479,82 @@ function renderSkill(sourcePath, scriptPath, version) {
     .replace(/<<VERSION>>/g, () => version);
 }
 
-function writeInstallInfo(installDir, { nodeVersion, version, scriptPath, teamSkillInstalled }) {
+// Reads install-info.json if present and parsable; returns null on ENOENT
+// or malformed JSON (never throws) so a first install, or a corrupt file,
+// both degrade to "no prior info" rather than failing the install.
+function readExistingInstallInfo(installDir) {
+  const infoPath = join(installDir, "install-info.json");
+  if (!existsSync(infoPath)) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(readFileSync(infoPath, "utf8"));
+    return typeof parsed === "object" && parsed !== null ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+// Footprint-driven target reconciliation, shared by the install-write path
+// (performInstall, via writeInstallInfo's `targets` argument) and the
+// install-status read path (performStatus) — Decision 4 in the ticket's
+// Technical Design. A target is included ONLY when it has a footprint: any
+// of its current-or-legacy skill/team directories exists on disk right now
+// (buildTargets legacy dirs included, not just the current skillDir/
+// teamSkillDir — r3's fix for legacy-dir-only and team-only installs going
+// undiscovered). Every entry is re-validated against disk on EVERY call, so a
+// deleted target's stale stored hash is dropped, never reported `current`.
+// A target with a footprint but no stored `existingInfo.targets` entry
+// (a pre-feature/legacy install-info.json, or a target that has never been
+// separately tracked) is seeded with `contentHash: null` — UNKNOWN, never
+// `current` — carrying forward only the top-level legacy `version`/
+// `installedAt` as a courtesy, never a hash (a null hash never compares equal
+// to a current hash, so a legacy record can never read as vacuously current).
+export function reconcileTargets(existingInfo, home) {
+  const targets = buildTargets(home);
+  const existingTargets =
+    existingInfo && typeof existingInfo === "object" && typeof existingInfo.targets === "object" && existingInfo.targets !== null
+      ? existingInfo.targets
+      : null;
+
+  const result = {};
+  for (const target of targets) {
+    const footprintDirs = [
+      target.skillDir,
+      target.teamSkillDir,
+      ...(Array.isArray(target.legacySkillDirs) ? target.legacySkillDirs : []),
+      ...(Array.isArray(target.legacyTeamSkillDirs) ? target.legacyTeamSkillDirs : []),
+    ].filter((dir) => typeof dir === "string" && dir !== "");
+    const hasFootprint = footprintDirs.some((dir) => existsSync(dir));
+    if (!hasFootprint) {
+      continue;
+    }
+    if (existingTargets && existingTargets[target.id] && typeof existingTargets[target.id] === "object") {
+      result[target.id] = { ...existingTargets[target.id] };
+    } else {
+      result[target.id] = {
+        version: existingInfo?.version ?? null,
+        contentHash: null,
+        installedAt: existingInfo?.installedAt ?? null,
+      };
+    }
+  }
+  return result;
+}
+
+// Merges (never overwrites) install-info.json: unknown existing top-level
+// keys survive untouched; the well-known keys below are always refreshed to
+// this install's values; `contentHash` and `targets` are additive
+// (Decision 4). `targets` is the caller-computed per-target map (reconciled
+// base plus this run's freshly-installed target entries).
+function writeInstallInfo(installDir, { existingInfo, nodeVersion, version, scriptPath, teamSkillInstalled, contentHash, targets, now }) {
   writeFileSync(
     join(installDir, "install-info.json"),
     `${JSON.stringify(
       {
+        ...(existingInfo ?? {}),
         name: "local-board",
-        installedAt: new Date().toISOString(),
+        installedAt: now,
         installDir,
         scriptPath,
         nodeVersion,
@@ -364,6 +562,8 @@ function writeInstallInfo(installDir, { nodeVersion, version, scriptPath, teamSk
         skillName: "local-board",
         teamSkillName: teamSkillInstalled ? "local-team" : null,
         claudeAgents: claudeAgentNames(),
+        contentHash,
+        targets,
       },
       null,
       2,
@@ -423,6 +623,74 @@ function performUninstall(targets, home, installDir) {
   uninstallClaudeAgents(home);
 }
 
+// `local-board install --status [--json]`: recomputes the current source's
+// payload hash (SCRIPT_DIR — the running CLI's own root, always a source
+// layout for an on-PATH CLI), reconciles stored per-target info against disk
+// footprint (reconcileTargets, shared with the install-write path), and
+// derives a per-target then a worst-of global verdict. Exit codes: 0 current,
+// 3 skewed, 4 not-installed, 5 indeterminate (current hash is null — not a
+// source layout); 2 stays reserved for usage/parse errors. --json always
+// prints the report regardless of exit code (Decision 5).
+function performStatus(args, home, installDir) {
+  const currentHash = computePayloadHash(SCRIPT_DIR);
+  const currentVersion = JSON.parse(readFileSync(join(SCRIPT_DIR, "package.json"), "utf8")).version;
+  const existingInfo = readExistingInstallInfo(installDir);
+  const reconciled = reconcileTargets(existingInfo, home);
+  const targetIds = Object.keys(reconciled).sort();
+
+  let verdict;
+  let exitCode;
+  if (targetIds.length === 0) {
+    verdict = "not-installed";
+    exitCode = 4;
+  } else if (currentHash === null) {
+    verdict = "indeterminate";
+    exitCode = 5;
+  } else {
+    const anySkewed = targetIds.some((id) => reconciled[id].contentHash !== currentHash);
+    verdict = anySkewed ? "skewed" : "current";
+    exitCode = anySkewed ? 3 : 0;
+  }
+
+  const targetsReport = {};
+  for (const id of targetIds) {
+    const entry = reconciled[id];
+    const isCurrent = currentHash !== null && entry.contentHash === currentHash;
+    targetsReport[id] = {
+      version: entry.version,
+      contentHash: entry.contentHash,
+      installedAt: entry.installedAt,
+      verdict: isCurrent ? "current" : "skewed",
+    };
+  }
+
+  const report = {
+    verdict,
+    skewed: verdict === "skewed",
+    current: { version: currentVersion, contentHash: currentHash },
+    targets: targetsReport,
+  };
+
+  if (args.json) {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    console.log(`verdict: ${report.verdict}`);
+    console.log(`current version: ${report.current.version} contentHash: ${report.current.contentHash}`);
+    for (const id of targetIds) {
+      const target = targetsReport[id];
+      console.log(`${id}: ${target.verdict} version: ${target.version} contentHash: ${target.contentHash}`);
+    }
+    if (verdict === "indeterminate") {
+      console.log("cannot determine current payload hash: not a source layout");
+    }
+    if (verdict === "not-installed") {
+      console.log("not installed: no target has a current or legacy install footprint");
+    }
+  }
+
+  return exitCode;
+}
+
 function uninstallClaudeAgents(home) {
   const targetDir = join(home, ".claude", "agents");
   if (!existsSync(targetDir)) {
@@ -437,14 +705,6 @@ function uninstallClaudeAgents(home) {
   }
 }
 
-function copyDir(sourceRelative, targetRelative, installDir) {
-  const source = join(SCRIPT_DIR, sourceRelative);
-  if (!existsSync(source)) {
-    return;
-  }
-  cpSync(source, join(installDir, targetRelative), { recursive: true, force: true });
-}
-
 function parseArgs(argv, knownIds) {
   const parsed = {
     all: false,
@@ -453,6 +713,8 @@ function parseArgs(argv, knownIds) {
     help: false,
     listTargets: false,
     uninstall: false,
+    status: false,
+    json: false,
     hooks: undefined,
     home: null,
   };
@@ -463,6 +725,8 @@ function parseArgs(argv, knownIds) {
     else if (arg === "--help" || arg === "-h") parsed.help = true;
     else if (arg === "--list-targets") parsed.listTargets = true;
     else if (arg === "--uninstall") parsed.uninstall = true;
+    else if (arg === "--status") parsed.status = true;
+    else if (arg === "--json") parsed.json = true;
     else if (arg === "--hooks") parsed.hooks = true;
     else if (arg === "--no-hooks") parsed.hooks = false;
     else if (arg === "--home") {
@@ -527,6 +791,7 @@ Usage:
   node install.mjs --list-targets
   node install.mjs --uninstall
   node install.mjs --home <dir>
+  node install.mjs --status [--json]
 
 --hooks installs Claude Code dispatch-enforcement hooks (dispatch ledger,
 routing validator, evidence gate, approve-inline consent) into the Claude
@@ -536,7 +801,12 @@ target's settings.json. Off by default; --no-hooks removes them.
 directory (os.homedir()). This is the supported sandbox/testing seam; it also
 skips the on-PATH precheck, since a relocated home has no PATH expectation.
 <dir> must be non-empty; a relative <dir> is resolved against the current
-directory, not against the installer's own location.`);
+directory, not against the installer's own location.
+
+--status recomputes a content hash over the current package's payload and
+compares it to the hash recorded at install time for each target, reporting
+current/skewed/not-installed/indeterminate. Exit codes: 0 current, 3 skewed,
+4 not-installed, 5 indeterminate.`);
 }
 
 function patchSettings(settingsPath, allowRule) {

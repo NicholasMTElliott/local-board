@@ -14,6 +14,7 @@ import {
   ticketBranchName,
 } from "./git.js";
 import { resolveMainRoot } from "./lock.js";
+import { runVersionBump } from "./version-bump.js";
 
 export async function addTicketWorktree(root, ticketId) {
   const repoRoot = await gitOutput(root, ["rev-parse", "--show-toplevel"]);
@@ -258,6 +259,20 @@ export async function listTicketWorktrees(root) {
     }));
 }
 
+// `options.config`, when supplied, gates an automatic version bump behind
+// `git.autoVersionBump` (default false — see ticket T20260712T1415Z, Decision
+// 1). The `versionBump` key is included in the return object ONLY when the
+// flag is true (omitted entirely otherwise, byte-identical to the pre-feature
+// shape — a regression this repo's own config, and every consumer default,
+// depend on). When included, it is `runVersionBump`'s own result object
+// (reason one of bumped | not-advanced | no-payload-change | already-bumped |
+// dirty-package-json | not-on-default | not-enabled); `runVersionBump` alone
+// owns the idempotence marker (CAS-advances it to the resulting bump commit
+// on success). A version-bump failure (e.g. the commit step) is wrapped with
+// the exact recovery command before it propagates: the checkout is already
+// reset to `newHead` by this point, so a second `fast-forward` cannot retry
+// the range itself (see cleanCheckoutHead/reset above) — recovery goes
+// through `local-board version-bump --range <previousHead>..<newHead>`.
 export async function fastForwardDefaultBranch(root, options = {}) {
   const defaultBranch = await resolveDefaultBranch(root, options.defaultBranch ?? null);
   const current = await currentBranch(root);
@@ -269,12 +284,26 @@ export async function fastForwardDefaultBranch(root, options = {}) {
   const previousHead = await cleanCheckoutHead(root, defaultBranch, newHead);
 
   await gitRun(root, ["reset", "--hard", "HEAD"]);
-  return {
+  const result = {
     defaultBranch,
     previousHead,
     newHead,
     advanced: previousHead !== newHead,
   };
+
+  const config = options.config ?? null;
+  if (config?.git?.autoVersionBump === true) {
+    try {
+      result.versionBump = await runVersionBump(root, { range: { previousHead, newHead }, config });
+    } catch (error) {
+      throw new Error(
+        `${error.message}\nfast-forward advanced ${defaultBranch} to ${newHead}, but the version bump failed; ` +
+          `recover with: local-board version-bump --range ${previousHead}..${newHead}`,
+      );
+    }
+  }
+
+  return result;
 }
 
 // Pure placement resolver, given the resolved location string. "sibling" and

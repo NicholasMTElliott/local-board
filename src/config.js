@@ -311,6 +311,7 @@ export const DEFAULT_CONFIG = {
     autoMerge: false,
     pruneMergedBranches: true,
     commitPlanningOnTransition: false,
+    autoVersionBump: false,
   },
   optionalSteps: {
     design: [],
@@ -361,6 +362,7 @@ export async function loadConfig(root = ".") {
     normalizeOptionalSteps(merged, configPath);
     normalizeEstimation(merged);
     normalizeWorktrees(merged);
+    normalizeGit(merged);
     normalizeAgents(merged);
   } catch (error) {
     throw new Error(`${configPath}: ${error.message}`);
@@ -711,6 +713,21 @@ function normalizeWorktrees(merged) {
     );
   }
   merged.worktrees = { location, guardWrongRoot };
+}
+
+// Validates only the one typed key this ticket adds (git.autoVersionBump);
+// every other `git` key stays untyped/unvalidated as before, matching the
+// normalizeWorktrees idiom scoped down to a single field. Absent/undefined
+// merges to the DEFAULT_CONFIG value (false) via mergeConfig already, so this
+// only ever throws when the key is present with a non-boolean value.
+function normalizeGit(merged) {
+  if (!isObject(merged.git)) {
+    return;
+  }
+  const { autoVersionBump } = merged.git;
+  if (typeof autoVersionBump !== "boolean") {
+    throw new Error(`git.autoVersionBump must be a boolean; got ${JSON.stringify(autoVersionBump)}`);
+  }
 }
 
 function validateOptionalStepEntry(entry, stage, seenNames, statusActionNames) {
@@ -1129,12 +1146,20 @@ export function defaultConfigJsonc() {
   // whose only uncommitted state is the ticket's own stage transitions; committing at each
   // transition makes that state recoverable. No-op when the working tree's planning paths
   // are already clean, so back-to-back CLI calls stay cheap.
+  // autoVersionBump: false (default; every consumer repo is inert). Setting this to true
+  // — including by blind-copying another repo's config — AUTHORIZES local-board to rewrite
+  // and commit THIS repo's own package.json version on every "fast-forward" that advances
+  // the default branch over installable-payload changes (skills/agents/prompts/hooks/src/
+  // bin/README/SKILL.md; see "local-board install --status" for the exact set). Only turn
+  // this on in a repo that IS the package being versioned. Manual override/recovery:
+  // "local-board version-bump [--level major|minor|patch] [--range <a>..<b>]".
   "git": {
     "defaultBranch": null,
     "commitPlanningChanges": true,
     "autoMerge": false,
     "pruneMergedBranches": true,
-    "commitPlanningOnTransition": true
+    "commitPlanningOnTransition": true,
+    "autoVersionBump": false
   },
 
   // Optional specialty review steps per stage. Each entry is shaped

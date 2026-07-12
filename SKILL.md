@@ -22,7 +22,7 @@ Do not search the filesystem for local-board source or scripts. Use the `local-b
 
 Operate in the user's current project unless they specify another root. Pass `--root <path>` for non-current projects.
 
-Version-skew check (advisory): this skill was installed from local-board `v<<VERSION>>`. If `local-board --version` prints a different version, the runtime was updated after this skill was installed — warn the user and suggest re-running `local-board install` to refresh the skills. This is advisory: warn and continue; never treat it as a hard gate or block the ticket.
+Version-skew check (advisory): this skill was installed from local-board `v<<VERSION>>`. Two signals indicate the runtime drifted from what these skills were built against: (1) `local-board --version` prints a version different from `v<<VERSION>>`, and (2) more reliably, `local-board install --status` reports `skewed` — it recomputes a content hash over the installed payload and compares it to the hash recorded at install time, so it catches drift even when the version number was not bumped (common on dev checkouts). If either fires, warn the user and suggest re-running `local-board install` to refresh the skills. This is advisory: warn and continue; never treat it as a hard gate or block the ticket.
 
 ## Core Loop
 
