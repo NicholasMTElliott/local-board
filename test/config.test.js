@@ -1386,6 +1386,35 @@ test("loadConfig rejects a non-boolean worktrees.guardWrongRoot", async () => {
   }
 });
 
+test("loadConfig defaults git.autoVersionBump to false when omitted (backward-compat disabled)", async () => {
+  await withRoot(async (root) => {
+    const configless = await loadConfig(root);
+    assert.equal(configless.git.autoVersionBump, false);
+
+    await writeConfig(root, `{ "git": { "defaultBranch": "main" } }`);
+    const config = await loadConfig(root);
+    assert.equal(config.git.autoVersionBump, false);
+  });
+});
+
+test("loadConfig rejects a non-boolean git.autoVersionBump", async () => {
+  const cases = [`"true"`, `1`, `null`, `{}`];
+  for (const rawValue of cases) {
+    await withRoot(async (root) => {
+      await writeConfig(root, `{ "git": { "autoVersionBump": ${rawValue} } }`);
+      await assert.rejects(loadConfig(root), /git\.autoVersionBump must be a boolean/, `case ${rawValue}`);
+    });
+  }
+});
+
+test("loadConfig accepts git.autoVersionBump: true unchanged", async () => {
+  await withRoot(async (root) => {
+    await writeConfig(root, `{ "git": { "autoVersionBump": true } }`);
+    const config = await loadConfig(root);
+    assert.equal(config.git.autoVersionBump, true);
+  });
+});
+
 test("loadConfig warns about unknown optionalSteps stage keys without throwing", async () => {
   await withRoot(async (root) => {
     await writeConfig(root, `{

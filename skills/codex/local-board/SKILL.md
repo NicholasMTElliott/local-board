@@ -26,7 +26,7 @@ Operate in the user's current project unless they specify another root. Pass `--
 2. If `plans/` is absent and the user asked to initialize, run `local-board init`.
 3. Run `local-board schema --json` when you need accepted statuses, priorities, actions, or agent values.
 4. Run `local-board validate`.
-5. Version-skew check (advisory): this skill was installed from local-board `v<<VERSION>>`. If `local-board --version` prints a different version, the runtime was updated after this skill was installed — warn the user and suggest re-running `local-board install` to refresh the skills. This is advisory: warn and continue; never treat it as a hard gate or block the ticket.
+5. Version-skew check (advisory): this skill was installed from local-board `v<<VERSION>>`. Two signals indicate the runtime drifted from what these skills were built against: (1) `local-board --version` prints a version different from `v<<VERSION>>`, and (2) more reliably, `local-board install --status` reports `skewed` — it recomputes a content hash over the installed payload and compares it to the hash recorded at install time, so it catches drift even when the version number was not bumped (common on dev checkouts). If either fires, warn the user and suggest re-running `local-board install` to refresh the skills. This is advisory: warn and continue; never treat it as a hard gate or block the ticket.
 
 Do not infer workflow state when `query-next` or `query-ticket` can answer it. Do not mutate ticket files directly. Use the CLI.
 

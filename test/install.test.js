@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildTargets, runInstall as runInstallInProcess } from "../src/install.js";
+import { buildTargets, computePayloadHash, isSourceLayout, runInstall as runInstallInProcess } from "../src/install.js";
 import { removeFixtureDir } from "./helpers/fixtures.js";
 
 const execFileAsync = promisify(execFile);
@@ -139,6 +139,25 @@ async function runInstallCli(home, args, envOptions = {}, cwd = path.resolve("."
     encoding: "utf8",
     env: installEnv(home, envOptions),
   });
+}
+
+// Non-zero-tolerant variant for `install --status`, whose verdicts are
+// scriptable via exit code (0/3/4/5) rather than always signalling failure.
+async function runInstallCliExit(home, args, envOptions = {}, cwd = path.resolve(".")) {
+  try {
+    const result = await execFileAsync(process.execPath, [CLI, "install", ...args], {
+      cwd,
+      encoding: "utf8",
+      env: installEnv(home, envOptions),
+    });
+    return { code: 0, stdout: result.stdout, stderr: result.stderr };
+  } catch (error) {
+    return {
+      code: typeof error.code === "number" ? error.code : 1,
+      stdout: error.stdout ?? "",
+      stderr: error.stderr ?? "",
+    };
+  }
 }
 
 function errorOutput(error) {
@@ -958,6 +977,286 @@ test("rendered SKILL.md CLI-invocation lines are byte-identical across install h
       assert.ok(linesA.length > 0);
       assert.deepEqual(linesA, linesB);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Content hash + install --status (ticket T20260712T1415Z)
+// ---------------------------------------------------------------------------
+
+test("install-info.json carries a contentHash matching the sha256 shape and a per-target targets map", async () => {
+  await withHome(async (home) => {
+    await runInstallCli(home, ["--target=claude"]);
+    const info = JSON.parse(await readFile(path.join(home, ".local-board", "install-info.json"), "utf8"));
+    assert.match(info.contentHash, /^sha256:[0-9a-f]{64}$/);
+    assert.ok(info.targets && typeof info.targets === "object");
+    assert.match(info.targets.claude.contentHash, /^sha256:[0-9a-f]{64}$/);
+    assert.equal(info.targets.claude.contentHash, info.contentHash);
+    assert.equal(typeof info.targets.claude.installedAt, "string");
+  });
+});
+
+test("computePayloadHash is deterministic: two installs from the same source produce the same hash", async () => {
+  await withHome(async (homeA) => {
+    await withHome(async (homeB) => {
+      await runInstallCli(homeA, ["--target=claude"]);
+      await runInstallCli(homeB, ["--target=claude"]);
+      const infoA = JSON.parse(await readFile(path.join(homeA, ".local-board", "install-info.json"), "utf8"));
+      const infoB = JSON.parse(await readFile(path.join(homeB, ".local-board", "install-info.json"), "utf8"));
+      assert.equal(infoA.contentHash, infoB.contentHash);
+    });
+  });
+});
+
+test("computePayloadHash is insensitive to CRLF vs LF line endings in a payload file", async () => {
+  const packagedDir = createPackagedCopy();
+  try {
+    const before = computePayloadHash(packagedDir);
+    const readmePath = path.join(packagedDir, "README.md");
+    const original = await readFile(readmePath, "utf8");
+    await writeFile(readmePath, original.replace(/\n/g, "\r\n"), "utf8");
+    const after = computePayloadHash(packagedDir);
+    assert.equal(before, after);
+  } finally {
+    await removeFixtureDir(packagedDir);
+  }
+});
+
+test("computePayloadHash returns null on a flattened (non-source) layout", async () => {
+  const flatRoot = await mkdtemp(path.join(os.tmpdir(), "local-board-flat-"));
+  try {
+    mkdirSync(path.join(flatRoot, "prompts"), { recursive: true });
+    mkdirSync(path.join(flatRoot, "templates"), { recursive: true });
+    assert.equal(isSourceLayout(flatRoot), false);
+    assert.equal(computePayloadHash(flatRoot), null);
+  } finally {
+    await removeFixtureDir(flatRoot);
+  }
+});
+
+test("writeInstallInfo merges: an unrelated pre-existing top-level key survives a re-install untouched", async () => {
+  await withHome(async (home) => {
+    await runInstallCli(home, ["--target=claude"]);
+    const infoPath = path.join(home, ".local-board", "install-info.json");
+    const before = JSON.parse(await readFile(infoPath, "utf8"));
+    before.someFutureKey = { keep: true };
+    await writeFile(infoPath, `${JSON.stringify(before, null, 2)}\n`, "utf8");
+
+    await runInstallCli(home, ["--target=claude"]);
+    const after = JSON.parse(await readFile(infoPath, "utf8"));
+    assert.deepEqual(after.someFutureKey, { keep: true });
+  });
+});
+
+test("install --status with nothing installed reports not-installed, exit 4", async () => {
+  await withHome(async (home) => {
+    const result = await runInstallCliExit(home, ["--status", "--json"]);
+    assert.equal(result.code, 4);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.verdict, "not-installed");
+    assert.deepEqual(report.targets, {});
+  });
+});
+
+test("install --status on a fresh single-target install reports current, exit 0", async () => {
+  await withHome(async (home) => {
+    const packagedDir = createPackagedCopy();
+    try {
+      const packaged = await import(pathToFileURL(path.join(packagedDir, "src", "install.js")).href);
+      const install = (argv) => packaged.runInstall(argv, { home, resolvesOnPath: () => true });
+
+      assert.equal(install(["--target=claude"]), 0);
+      const logs = captureConsoleLog(() => install(["--status", "--json"]));
+      assert.equal(logs.code, 0);
+      const report = JSON.parse(logs.lines.join("\n"));
+      assert.equal(report.verdict, "current");
+      assert.equal(report.targets.claude.verdict, "current");
+    } finally {
+      await removeFixtureDir(packagedDir);
+    }
+  });
+});
+
+test("install --status is indeterminate (exit 5) on the flattened runtime layout, never reporting a target current", async () => {
+  await withHome(async (home) => {
+    await runInstallCli(home, ["--target=claude"]);
+    const flattened = await import(pathToFileURL(path.join(home, ".local-board", "src", "install.js")).href);
+
+    const logs = captureConsoleLog(() =>
+      flattened.runInstall(["--status", "--json"], { home, resolvesOnPath: () => true }),
+    );
+    assert.equal(logs.code, 5);
+    const report = JSON.parse(logs.lines.join("\n"));
+    assert.equal(report.verdict, "indeterminate");
+    assert.equal(report.current.contentHash, null);
+    assert.ok(Object.values(report.targets).every((target) => target.verdict !== "current"));
+  });
+});
+
+test("install --status: multi-target staleness (install claude, mutate source, install --target=codex) reports claude skewed, codex current, global skewed/exit 3", async () => {
+  await withHome(async (home) => {
+    const packagedDir = createPackagedCopy();
+    try {
+      const packaged = await import(pathToFileURL(path.join(packagedDir, "src", "install.js")).href);
+      const install = (argv) => packaged.runInstall(argv, { home, resolvesOnPath: () => true });
+
+      assert.equal(install(["--target=claude"]), 0);
+
+      const readmePath = path.join(packagedDir, "README.md");
+      await writeFile(readmePath, `${await readFile(readmePath, "utf8")}\nmutated payload\n`, "utf8");
+
+      assert.equal(install(["--target=codex"]), 0);
+
+      const logs = captureConsoleLog(() => install(["--status", "--json"]));
+      assert.equal(logs.code, 3);
+      const report = JSON.parse(logs.lines.join("\n"));
+      assert.equal(report.verdict, "skewed");
+      assert.equal(report.targets.claude.verdict, "skewed");
+      assert.equal(report.targets.codex.verdict, "current");
+    } finally {
+      await removeFixtureDir(packagedDir);
+    }
+  });
+});
+
+test("install --status: legacy pre-feature install-info.json migrates via footprint discovery (targets.claude seeded contentHash null), reports claude skewed / codex current / global skewed", async () => {
+  await withHome(async (home) => {
+    const packagedDir = createPackagedCopy();
+    try {
+      const packaged = await import(pathToFileURL(path.join(packagedDir, "src", "install.js")).href);
+      const install = (argv) => packaged.runInstall(argv, { home, resolvesOnPath: () => true });
+
+      const installDir = path.join(home, ".local-board");
+      mkdirSync(installDir, { recursive: true });
+      writeFileSync(
+        path.join(installDir, "install-info.json"),
+        `${JSON.stringify({ name: "local-board", installedAt: "2020-01-01T00:00:00.000Z", version: "0.1.0" }, null, 2)}\n`,
+      );
+      const claudeSkillDir = path.join(home, ".claude", "skills", "local-board");
+      mkdirSync(claudeSkillDir, { recursive: true });
+      writeFileSync(path.join(claudeSkillDir, "SKILL.md"), "legacy skill\n", "utf8");
+
+      assert.equal(install(["--target=codex"]), 0);
+
+      const logs = captureConsoleLog(() => install(["--status", "--json"]));
+      assert.equal(logs.code, 3);
+      const report = JSON.parse(logs.lines.join("\n"));
+      assert.equal(report.verdict, "skewed");
+      assert.equal(report.targets.claude.verdict, "skewed");
+      assert.equal(report.targets.claude.contentHash, null);
+      assert.equal(report.targets.claude.version, "0.1.0");
+      assert.equal(report.targets.codex.verdict, "current");
+    } finally {
+      await removeFixtureDir(packagedDir);
+    }
+  });
+});
+
+test("install --status: footprint reconciliation discovers a legacy-directory-only install (no current skillDir) and reports it skewed", async () => {
+  await withHome(async (home) => {
+    const packagedDir = createPackagedCopy();
+    try {
+      const packaged = await import(pathToFileURL(path.join(packagedDir, "src", "install.js")).href);
+      const install = (argv) => packaged.runInstall(argv, { home, resolvesOnPath: () => true });
+
+      const legacyDir = path.join(home, ".claude", "skills", "local-board-orchestrator");
+      mkdirSync(legacyDir, { recursive: true });
+      writeFileSync(path.join(legacyDir, "SKILL.md"), "legacy\n", "utf8");
+
+      const logs = captureConsoleLog(() => install(["--status", "--json"]));
+      assert.equal(logs.code, 3);
+      const report = JSON.parse(logs.lines.join("\n"));
+      assert.equal(report.targets.claude.verdict, "skewed");
+      assert.equal(report.targets.claude.contentHash, null);
+    } finally {
+      await removeFixtureDir(packagedDir);
+    }
+  });
+});
+
+test("install --status: footprint reconciliation discovers a team-only install (teamSkillDir with no current skillDir)", async () => {
+  await withHome(async (home) => {
+    const packagedDir = createPackagedCopy();
+    try {
+      const packaged = await import(pathToFileURL(path.join(packagedDir, "src", "install.js")).href);
+      const install = (argv) => packaged.runInstall(argv, { home, resolvesOnPath: () => true });
+
+      const teamDir = path.join(home, ".claude", "skills", "local-team");
+      mkdirSync(teamDir, { recursive: true });
+      writeFileSync(path.join(teamDir, "SKILL.md"), "team only\n", "utf8");
+
+      const logs = captureConsoleLog(() => install(["--status", "--json"]));
+      assert.equal(logs.code, 3);
+      const report = JSON.parse(logs.lines.join("\n"));
+      assert.equal(report.targets.claude.verdict, "skewed");
+      assert.equal(report.targets.claude.contentHash, null);
+    } finally {
+      await removeFixtureDir(packagedDir);
+    }
+  });
+});
+
+test("install --status: a target whose directories were all deleted after being recorded is dropped from the reconciled map, never reported current", async () => {
+  await withHome(async (home) => {
+    const packagedDir = createPackagedCopy();
+    try {
+      const packaged = await import(pathToFileURL(path.join(packagedDir, "src", "install.js")).href);
+      const install = (argv) => packaged.runInstall(argv, { home, resolvesOnPath: () => true });
+
+      assert.equal(install(["--target=claude"]), 0);
+      assert.equal(install(["--target=codex"]), 0);
+
+      await removeFixtureDir(path.join(home, ".claude", "skills", "local-board"));
+      await removeFixtureDir(path.join(home, ".claude", "skills", "local-team"));
+
+      const logs = captureConsoleLog(() => install(["--status", "--json"]));
+      const report = JSON.parse(logs.lines.join("\n"));
+      assert.equal(report.targets.claude, undefined);
+      assert.equal(report.targets.codex.verdict, "current");
+      assert.equal(logs.code, 0);
+    } finally {
+      await removeFixtureDir(packagedDir);
+    }
+  });
+});
+
+test("install --status: install-info.json present but zero target footprints -> not-installed (never a vacuous current)", async () => {
+  await withHome(async (home) => {
+    const packagedDir = createPackagedCopy();
+    try {
+      const packaged = await import(pathToFileURL(path.join(packagedDir, "src", "install.js")).href);
+      const install = (argv) => packaged.runInstall(argv, { home, resolvesOnPath: () => true });
+
+      const installDir = path.join(home, ".local-board");
+      mkdirSync(installDir, { recursive: true });
+      writeFileSync(
+        path.join(installDir, "install-info.json"),
+        `${JSON.stringify(
+          {
+            name: "local-board",
+            version: "1.0.0",
+            contentHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            targets: {
+              claude: {
+                version: "1.0.0",
+                contentHash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                installedAt: "2020-01-01T00:00:00.000Z",
+              },
+            },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+
+      const logs = captureConsoleLog(() => install(["--status", "--json"]));
+      assert.equal(logs.code, 4);
+      const report = JSON.parse(logs.lines.join("\n"));
+      assert.equal(report.verdict, "not-installed");
+      assert.deepEqual(report.targets, {});
+    } finally {
+      await removeFixtureDir(packagedDir);
+    }
   });
 });
 

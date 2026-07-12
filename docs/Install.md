@@ -55,6 +55,7 @@ local-board install --hooks            # opt in to Claude Code hooks (below)
 local-board install --no-hooks         # remove the hooks entries
 local-board install --uninstall        # remove everything installable
 local-board install --home <dir>       # install under <dir> instead of the real home (see Testing / sandboxing)
+local-board install --status [--json]  # report install/version/content-hash skew (see Content hash and skew status below)
 ```
 
 ## Targets and what is written
@@ -98,11 +99,106 @@ other target renders from the repo-root `SKILL.md` / `SKILL_TEAM.md`, with
 | `~/.local-board/install-info.json` | generated (see below) |
 
 `install-info.json` records `name`, `installedAt`, `installDir`, `scriptPath`,
-`nodeVersion`, `version`, `skillName`, `teamSkillName`, `claudeAgents[]`.
+`nodeVersion`, `version`, `skillName`, `teamSkillName`, `claudeAgents[]`, and
+(additive) `contentHash` and `targets` — see "Content hash and skew status"
+below.
 
 This copy exists for hooks and provenance, not for day-to-day skill use.
 Codex executor prompts resolve from `local-board where --json`'s `agentsDir`
 field, not from `~/.local-board/`.
+
+## Content hash and skew status
+
+Every install records a deterministic SHA-256 hash (`sha256:<hex>`) over the
+exact payload it copies — `package.json`, `README.md`, `SKILL.md`,
+`SKILL_TEAM.md` (if present), `bin/`, `src/`, `agents/`, `skills/`, `hooks/`,
+and `resources/prompts`/`resources/templates` (renamed `prompts`/`templates`
+on install). `install.mjs` is deliberately NOT part of this set: the
+installer does not copy it, so a change to the 9-line shim alone never
+flips the hash. The hash is computed over sorted POSIX-style relative paths
+with CRLF normalized to LF, so it is identical across OS and checkout
+line-ending settings.
+
+`install-info.json` carries this hash twice:
+
+- `contentHash` at the top level: the hash of the payload as of the most
+  recent install (any target).
+- `targets.<id>.contentHash`: the hash recorded the last time THAT target
+  was (re)installed. A legacy pre-hash record, or a target discovered only
+  via footprint (below) without its own stored entry, is seeded
+  `contentHash: null` — an explicit "unknown", which never compares equal to
+  a current hash.
+
+`local-board install --status [--json]` recomputes the CURRENT source's hash
+(from the running CLI's own package root — always a source layout for an
+on-PATH install) and compares it against each target's recorded hash:
+
+```json
+{
+  "verdict": "current | skewed | not-installed | indeterminate",
+  "skewed": false,
+  "current": { "version": "1.2.3", "contentHash": "sha256:..." },
+  "targets": {
+    "claude": { "version": "1.2.3", "contentHash": "sha256:...", "installedAt": "...", "verdict": "current" }
+  }
+}
+```
+
+Per-target verdict: `current` only when the target's recorded hash is a
+non-null digest equal to the current hash; otherwise `skewed` (this includes
+a null/unknown recorded hash — unknown is never current).
+
+Global verdict (worst-of, in order):
+
+1. `not-installed` (exit `4`) — no target has ANY current-or-legacy
+   footprint (skill dir, team skill dir, or a legacy dir), whether or not
+   `install-info.json` exists. Never a vacuous `current`.
+2. `indeterminate` (exit `5`) — the current source hash is `null` (not a
+   source layout; not reachable for a correctly on-PATH CLI, but defined).
+   No target is ever reported `current` in this state.
+3. `skewed` (exit `3`) — any reconciled target is `skewed`.
+4. `current` (exit `0`) — every reconciled target is `current`.
+
+| Exit | Global verdict | Meaning |
+|---|---|---|
+| `0` | `current` | Every reconciled target has a non-null hash matching the current source hash. |
+| `3` | `skewed` | At least one reconciled target is stale or has an unknown recorded hash. |
+| `4` | `not-installed` | No current-or-legacy target footprint exists. |
+| `5` | `indeterminate` | The current source hash is `null`, so no target can be proven current. |
+
+`--json` always prints the full report, regardless of exit code. `2` stays
+reserved for usage/parse errors. `--status` reuses the same home resolution
+as install/uninstall, so `--home <dir>` works as a test seam here too.
+
+### Per-target tracking and legacy migration
+
+Each target's install state is tracked separately (`targets.<id>`), fixing a
+class of bug where installing one target (e.g. `--target=codex`) would make
+the *global* status read `current` even though another already-installed
+target (e.g. `claude`) was stale. Reconciliation (`reconcileTargets`, shared
+by the install-write path and `--status`) is footprint-driven and
+re-validates every entry against disk on every call:
+
+- A target is included only when it currently has a footprint: its current
+  skill dir, its current team skill dir, or any of its legacy dirs
+  (`local-board-orchestrator`, `local-board-team`) exists on disk right now.
+- A target with a footprint but no stored `targets.<id>` entry (a
+  pre-feature/legacy `install-info.json`, or a target whose directories
+  predate per-target tracking) is seeded with `contentHash: null` — always
+  `skewed`, never a false `current`.
+- A stored `targets.<id>` entry whose directories have all since been
+  deleted is dropped from the reconciled map (never lingers as stale
+  `current`).
+- Installing a target always overwrites its own entry with fresh
+  `{ version, contentHash, installedAt }` (its dirs now exist by
+  construction).
+
+## where --json
+
+`local-board where --json` additionally reports `contentHash` (the same
+source-only hash `install --status` compares against): `null` on a flattened
+`~/.local-board` runtime layout, which is never invoked as the CLI, so this
+is an explicit, defined value there rather than an error.
 
 ### Per-target skill directories (selected targets only)
 

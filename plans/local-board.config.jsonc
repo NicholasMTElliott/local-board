@@ -286,7 +286,14 @@
     // Commit planning-only changes after each mutating CLI command so an
     // aborted merge or a broad revert can never destroy ticket evidence.
     "commitPlanningOnTransition": true,
-    "autoMerge": false
+    "autoMerge": false,
+    // This repo IS the package being versioned, so it opts in: "fast-forward"
+    // auto-bumps package.json (semver mapped from merged ticket type, max over
+    // the advanced range) whenever it reconciles the default checkout over a
+    // range with installable-payload changes (skills/agents/prompts/hooks/src/
+    // bin/README/SKILL.md). Idempotent via a CAS-written marker ref. Manual
+    // override/recovery: "local-board version-bump [--level ...] [--range ...]".
+    "autoVersionBump": true
   },
 
   // Optional specialty review steps per stage. Each entry is shaped

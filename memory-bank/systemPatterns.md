@@ -224,6 +224,7 @@ rule (e.g. a narrowed pattern) is left in place.
 LLMs write designs, code, reviews, tests, docs, and questions. Deterministic tooling validates ticket schema, dependency eligibility, status transitions, branch names, and commits.
 Executor prompts/skills carry a targeted-revert-only git-safety rule: in ticket worktrees, no tree-wide reverts/cleans/stashes/resets/merges/rebases/branch switches; Codex dispatches are serial, never via shell `&`.
 When `git.autoMerge` is true, `move ... done` validates routing, requires the current branch to match ticket `branch`, refuses uncommitted non-planning changes, commits planning-only closeout changes, and merges into the default branch. When `git.pruneMergedBranches` is true (default), the merged ticket branch is then deleted with `git branch -d`; the worktree HEAD is detached first when the merge took the ref-only path so the branch is deletable.
+When `git.autoVersionBump` is true, root `fast-forward` may auto-commit a `package.json` semver bump after installable payload changes; default/scaffold remains false.
 When `retention.archiveOnMoveDone` is true, `move ... done` archives other done tickets older than the configured retention window. Archived tickets count as closed dependencies.
 `start-work` stamps `workStartedAt` once. `move ... done` stamps `workCompletedAt` only when `workStartedAt` is set. Archive does not touch wall-clock fields.
 When estimation is enabled, `complete-step design` refuses tasks and bugs without an estimate.

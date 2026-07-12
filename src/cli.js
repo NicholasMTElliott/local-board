@@ -44,7 +44,7 @@ import { checkDispatch, stampActiveStepNoClobber } from "./active-steps.js";
 import { translateCodexDispatch } from "./codex-dispatch.js";
 import { codexTaskWarning } from "./codex-detect.js";
 import { loadConfig, OPTIONAL_STEP_STAGES, resolveOptionalStepAgent } from "./config.js";
-import { buildTargets, resolvesOnPath, runInstall } from "./install.js";
+import { buildTargets, computePayloadHash, resolvesOnPath, runInstall } from "./install.js";
 import { initProject, packagedResourceDir } from "./scaffold.js";
 import {
   addTicketWorktree,
@@ -54,6 +54,8 @@ import {
   removeTicketWorktree,
 } from "./worktrees.js";
 import { resolveMaxTeammates } from "./team.js";
+import { gitOutput } from "./git.js";
+import { runVersionBump } from "./version-bump.js";
 
 export { commandWhere };
 
@@ -110,6 +112,9 @@ export async function main(argv) {
     }
     if (command === "fast-forward") {
       return await commandFastForward(root, args);
+    }
+    if (command === "version-bump") {
+      return await commandVersionBump(root, args);
     }
     if (command === "team-config") {
       return await commandTeamConfig(root, args);
@@ -244,8 +249,12 @@ async function commandWhere(root, args, packageRootOverride) {
   const promptsDir = packagedResourceDir("prompts", packageRoot);
   const templatesDir = packagedResourceDir("templates", packageRoot);
   const agentsDir = agentsDirFor(packageRoot);
+  // Source-layout-only (Decision 3, ticket T20260712T1415Z); null on the
+  // flattened ~/.local-board runtime snapshot, which is never invoked as the
+  // CLI (T20260707T1322Z) — an explicit, defined value there, not an error.
+  const contentHash = computePayloadHash(packageRoot);
 
-  const result = { version, packageRoot, promptsDir, templatesDir, agentsDir };
+  const result = { version, packageRoot, promptsDir, templatesDir, agentsDir, contentHash };
 
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));
@@ -255,6 +264,7 @@ async function commandWhere(root, args, packageRootOverride) {
     console.log(`promptsDir: ${result.promptsDir}`);
     console.log(`templatesDir: ${result.templatesDir}`);
     console.log(`agentsDir: ${result.agentsDir}`);
+    console.log(`contentHash: ${result.contentHash}`);
   }
 
   return 0;
@@ -579,13 +589,62 @@ async function commandFastForward(root, args) {
   ensureNoArgs(args);
 
   const config = await loadConfig(root);
-  const result = await fastForwardDefaultBranch(root, { defaultBranch: config.git.defaultBranch });
+  const result = await fastForwardDefaultBranch(root, { defaultBranch: config.git.defaultBranch, config });
   if (asJson) {
     console.log(JSON.stringify(result, null, 2));
   } else {
     console.log(`${result.defaultBranch} ${result.advanced ? "advanced" : "unchanged"} ${result.newHead}`);
+    if (result.versionBump) {
+      const vb = result.versionBump;
+      console.log(`versionBump: ${vb.bumped ? "bumped" : "no-op"} ${vb.from ?? "-"} -> ${vb.to ?? "-"} ${vb.reason}`);
+    }
   }
   return 0;
+}
+
+// `local-board version-bump` -- manual escape hatch / recovery path, sharing
+// runVersionBump's full contract with the automatic fast-forward trigger
+// (ticket T20260712T1415Z, Decision 5). Exit 0 on success (a bump OR an
+// intentional no-op); exit 2 on a precondition refusal (repo not opted in,
+// not on the default branch, or a dirty package.json).
+const VERSION_BUMP_PRECONDITION_REASONS = new Set(["not-enabled", "not-on-default", "dirty-package-json"]);
+
+async function commandVersionBump(root, args) {
+  const asJson = takeFlag(args, "--json");
+  const levelArg = takeOption(args, "--level");
+  const rangeArg = takeOption(args, "--range");
+  ensureNoArgs(args);
+
+  if (levelArg !== undefined && !["major", "minor", "patch"].includes(levelArg)) {
+    throw new Error("--level must be one of major, minor, patch");
+  }
+
+  const config = await loadConfig(root);
+  let range = null;
+  if (rangeArg !== undefined) {
+    const separatorIndex = rangeArg.indexOf("..");
+    if (separatorIndex === -1) {
+      throw new Error("--range must be in the form <a>..<b>");
+    }
+    const fromRef = rangeArg.slice(0, separatorIndex);
+    const toRef = rangeArg.slice(separatorIndex + 2);
+    if (fromRef.trim() === "" || toRef.trim() === "") {
+      throw new Error("--range must be in the form <a>..<b>");
+    }
+    range = {
+      previousHead: await gitOutput(root, ["rev-parse", fromRef]),
+      newHead: await gitOutput(root, ["rev-parse", toRef]),
+    };
+  }
+
+  const result = await runVersionBump(root, { range, level: levelArg ?? null, config });
+
+  if (asJson) {
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    console.log(`${result.bumped ? "bumped" : "no-op"} ${result.from ?? "-"} -> ${result.to ?? "-"} ${result.level ?? "-"} ${result.reason}`);
+  }
+  return VERSION_BUMP_PRECONDITION_REASONS.has(result.reason) ? 2 : 0;
 }
 
 async function commandTeamConfig(root, args) {
@@ -1743,13 +1802,14 @@ const USAGE_TEXT = `Usage:
   local-board [--root <path>] state-report [--json]
   local-board [--root <path>] schema [--json]
   local-board [--root <path>] init [--overwrite] [--json]
-  local-board install [--target=<ids>] [--all] [--no-<id>] [--list-targets] [--uninstall] [--home <dir>] (acts on user HOME; ignores --root)
+  local-board install [--target=<ids>] [--all] [--no-<id>] [--list-targets] [--uninstall] [--home <dir>] [--status [--json]] (acts on user HOME; ignores --root)
   local-board [--root <path>] create <type> <title> [--status <status>] [--priority <priority>] [--parent <id>]
   local-board [--root <path>] start-work <ticket-id> [--branch <branch>] [--allow-dirty] [--allow-main-root] [--json]
   local-board [--root <path>] worktree-add <ticket-id> [--json]
   local-board [--root <path>] worktree-remove <ticket-id> [--force] [--json]
   local-board [--root <path>] worktree-list [--json]
   local-board [--root <path>] fast-forward [--json]
+  local-board [--root <path>] version-bump [--level major|minor|patch] [--range <a>..<b>] [--allow-main-root] [--json]
   local-board team-config [--json]
   local-board [--root <path>] begin-step <ticket-id> [--action <action>] [--harness claude|codex] [--json]
   local-board [--root <path>] complete-step <ticket-id> <action> --executor <executor> [--model <model>] --evidence <text> [--override --reason <text>] [--allow-main-root] [--json]
