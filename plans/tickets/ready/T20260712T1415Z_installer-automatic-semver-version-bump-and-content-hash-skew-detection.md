@@ -13,7 +13,7 @@ estimateBasis: T20260710T1532Z
 workStartedAt: 2026-07-12T15:11:07Z
 workCompletedAt: null
 created: 2026-07-12T14:15:09Z
-updated: 2026-07-12T20:31:54Z
+updated: 2026-07-12T20:36:17Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -802,19 +802,34 @@ Verdict: CONCERNS (2 Low stale comments), fixed in 5f49c2e.
 
 ## Test Evidence
 
-verdict: fail
+verdict: pass
 
 ### Tester round 1 (claude-subagent:local-board-tester@sonnet)
 
-Tester's raw verdict was pass: npm run check clean; node --test 638 tests / 637 pass / 0 fail / 1 pre-existing skip; end-to-end probes green (bug merge patch-bump with marker at bump commit B, same-clone no-range no-op closing the r3 double-bump, task minor, max-level-wins, planning-only no-payload-change, flag-off shape key-omitted byte-identical); install --status probes current-0 / skewed-3 / not-installed-4 with per-target verdicts; acceptance traces cited (CAS src/version-bump.js:175-176, ancestry operand :106-108, footprints src/install.js:513-543, null-never-current :535-539, additive merge :550-572); test-quality spot-reads clean, no weakened tests.
+Raw verdict pass: npm run check clean; node --test 638/637/1 pre-existing skip; end-to-end probes green (bug merge patch-bump with marker at bump commit B, same-clone no-range no-op, task minor, max-level-wins, planning-only no-payload-change, flag-off shape key-omitted); install --status probes current-0 / skewed-3 / not-installed-4 per-target; acceptance traces cited (CAS src/version-bump.js:175-176, ancestry :106-108, footprints src/install.js:513-543, null-never-current :535-539, additive merge :550-572); no weakened tests.
 
-### Orchestrator finding (blocking): automatic bump never fires in this repo's real closeout
+### Round-1 orchestrator finding (blocking, since fixed)
 
-The tester's probe caveat - a plain in-checkout git merge --no-ff always yields advanced:false via the cleanCheckoutHead reflog-tree-match - traces to an acceptance failure. fastForwardDefaultBranch (src/worktrees.js:283-297) always passes range {previousHead, newHead}; after an in-checkout merge these are EQUAL (every fast-forward this session printed advanced:false), so runVersionBump returns noop("not-advanced") and the payload change is never processed - not on that call, and never later, because fast-forward always re-passes the equal range. The unit and probe coverage exercised only the external-advance topology (detached worktree + update-ref). The acceptance criterion "automatic in the normal workflow" fails for the primary workflow: orchestrator merges in the project root checkout, then runs fast-forward.
+The automatic bump never fired in this repo's real closeout: fast-forward passed range {previousHead, newHead} which are EQUAL after an in-checkout git merge --no-ff (every real closeout), so runVersionBump no-oped with not-advanced; all prior coverage used the external-advance topology only. Looped back to implementation; fixed in 1c66b3b (no-range invocation; marker-based base resolution; recovery hint corrected; two in-checkout regression tests) + 5f49c2e (stale comments); Technical Design Decision 1/2 reconciled by the designer.
 
-### Required fix (loop-back to implementation)
+### Tester round 2 (claude-subagent:local-board-tester@sonnet, focused re-verification)
 
-fast-forward must invoke runVersionBump WITHOUT a range (marker-based base resolution: marker -> last bump commit -> root covers marker..HEAD, a superset of any external advance), keeping --range for the manual recovery path only. Add the missing regression tests: flag-on board, in-checkout git merge --no-ff of a payload branch, fast-forward -> bump fires; planning-only in-checkout merge -> no-payload-change. Design's Decision 1 range-passing premise needs a matching correction.
+- Full suite: npm run check clean; node --test 640 tests, 639 pass, 0 fail, 1 pre-existing skip.
+- Decisive probe (throwaway scratchpad repo, exact-path cleanup verified): real CLI init; git.autoVersionBump true committed; feature branch touching src/index.js; PLAIN in-checkout git merge --no-ff "Merge B...: probe" on the checked-out default branch (the exact real closeout shape); fast-forward --json returned advanced false + versionBump {bumped true, 1.0.0 -> 1.0.1, level patch}; package.json bumped on disk; HEAD = "chore: bump version 1.0.1"; refs/local-board/version-bump-head == HEAD. Immediate no-range version-bump re-run: already-bumped no-op, exit 0. Planning-only in-checkout merge: no-payload-change.
+- Stale-comment fixes confirmed at src/version-bump.js:78-83 and src/worktrees.js:~288 (no explicit-range claims remain).
+- Technical Design Decision 1 genuinely reconciled to the no-range contract (states fast-forward does not gate on advanced and does not pass a range).
+
+### Acceptance criteria
+
+- Automatic in the normal workflow: verified live in the primary in-checkout topology (round-1 blocker closed).
+- Planning-only auto-commits never bump: verified live + in-suite.
+- Idempotence (no same-clone double-bump): verified live.
+- install --status current/skewed/not-installed/indeterminate with per-target verdicts and additive install-info: verified round 1.
+- npm run check and node --test pass: 640/639/1 skip/0 fail.
+
+### Gaps / caveats
+
+None. Worktree clean after both rounds; probes confined to throwaway repos with exact-path cleanup.
 
 ## Documentation Updates
 
