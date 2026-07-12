@@ -13,8 +13,8 @@ estimateBasis: T20260710T1532Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-12T14:15:09Z
-updated: 2026-07-12T14:23:28Z
-completedSteps: []
+updated: 2026-07-12T14:24:01Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
 # installer: automatic semver version bump and content-hash skew detection
@@ -342,3 +342,5 @@ requires block names to be a subset of usage, which still holds.
 ## Questions
 
 ## Run Log
+
+- 2026-07-12T14:24:01Z: Completed design via claude-subagent:local-board-designer@opus: Post-merge local-board version-bump command auto-wired via init-installed .git/hooks/post-merge (mainline-only, once per no-ff closeout; CI and branch-side bump rejected with rationale); type-mapped semver (bug patch / task-story minor / epic-breaking major) from merge subject -> ticket front matter with flat-patch fallback + --level escape hatch; SHA-256 over shared PAYLOAD_SPEC in src/install.js driving both copy and hash (sorted POSIX paths, CRLF-normalized); additive contentHash in install-info; install --status with current/skewed/not-installed at exit 0/3/4 + where --json contentHash; advisory reworded in SKILL.md + codex mirror; new version-bump.test.js + extended install/cli tests; README/Install/Workflow/techContext docs. Risk: init writing .git/hooks is new scope (manual fallback documented).
