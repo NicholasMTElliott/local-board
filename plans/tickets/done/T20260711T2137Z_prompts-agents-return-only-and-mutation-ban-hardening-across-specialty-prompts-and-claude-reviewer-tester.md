@@ -1,7 +1,7 @@
 ---
 id: T20260711T2137Z
 type: task
-status: ready_for_docs
+status: done
 priority: P3
 parent: null
 children: []
@@ -11,9 +11,9 @@ branch: local-board/T20260711T2137Z-prompts-agents-return-only-and-mutation-ban-
 estimate: 2
 estimateBasis: T20260711T2136Z
 workStartedAt: 2026-07-11T23:48:46Z
-workCompletedAt: null
+workCompletedAt: 2026-07-12T00:01:28Z
 created: 2026-07-11T21:36:10Z
-updated: 2026-07-12T00:01:13Z
+updated: 2026-07-12T00:01:28Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", security_threat_model:inline, "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
