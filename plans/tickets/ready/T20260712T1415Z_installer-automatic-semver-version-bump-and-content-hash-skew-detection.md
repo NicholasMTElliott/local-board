@@ -13,7 +13,7 @@ estimateBasis: T20260710T1532Z
 workStartedAt: 2026-07-12T15:11:07Z
 workCompletedAt: null
 created: 2026-07-12T14:15:09Z
-updated: 2026-07-12T16:17:50Z
+updated: 2026-07-12T20:14:35Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -712,6 +712,20 @@ Verdict: PASS, no findings.
 - Mandated regression tests present (same-clone no-op, fresh-clone, CAS-concurrent-fail, migration matrix incl. stale-claude + --target=codex); skill edits limited to the two advisory paragraphs, no fence changes, no plans/prompts edits.
 
 ## Test Evidence
+
+verdict: fail
+
+### Tester round 1 (claude-subagent:local-board-tester@sonnet)
+
+Tester's raw verdict was pass: npm run check clean; node --test 638 tests / 637 pass / 0 fail / 1 pre-existing skip; end-to-end probes green (bug merge patch-bump with marker at bump commit B, same-clone no-range no-op closing the r3 double-bump, task minor, max-level-wins, planning-only no-payload-change, flag-off shape key-omitted byte-identical); install --status probes current-0 / skewed-3 / not-installed-4 with per-target verdicts; acceptance traces cited (CAS src/version-bump.js:175-176, ancestry operand :106-108, footprints src/install.js:513-543, null-never-current :535-539, additive merge :550-572); test-quality spot-reads clean, no weakened tests.
+
+### Orchestrator finding (blocking): automatic bump never fires in this repo's real closeout
+
+The tester's probe caveat - a plain in-checkout git merge --no-ff always yields advanced:false via the cleanCheckoutHead reflog-tree-match - traces to an acceptance failure. fastForwardDefaultBranch (src/worktrees.js:283-297) always passes range {previousHead, newHead}; after an in-checkout merge these are EQUAL (every fast-forward this session printed advanced:false), so runVersionBump returns noop("not-advanced") and the payload change is never processed - not on that call, and never later, because fast-forward always re-passes the equal range. The unit and probe coverage exercised only the external-advance topology (detached worktree + update-ref). The acceptance criterion "automatic in the normal workflow" fails for the primary workflow: orchestrator merges in the project root checkout, then runs fast-forward.
+
+### Required fix (loop-back to implementation)
+
+fast-forward must invoke runVersionBump WITHOUT a range (marker-based base resolution: marker -> last bump commit -> root covers marker..HEAD, a superset of any external advance), keeping --range for the manual recovery path only. Add the missing regression tests: flag-on board, in-checkout git merge --no-ff of a payload branch, fast-forward -> bump fires; planning-only in-checkout merge -> no-payload-change. Design's Decision 1 range-passing premise needs a matching correction.
 
 ## Documentation Updates
 
