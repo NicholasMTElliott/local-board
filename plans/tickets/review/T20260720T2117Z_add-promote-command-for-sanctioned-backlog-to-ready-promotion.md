@@ -13,7 +13,7 @@ estimateBasis: T20260710T1222Z
 workStartedAt: 2026-07-20T23:00:35Z
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T23:17:35Z
+updated: 2026-07-20T23:19:41Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -429,17 +429,26 @@ implemented as specified (`--to` is the escape hatch; wording is exactly
 
 ## Review Findings
 
-Design review verdict (codex gpt-5.6-sol, xhigh): FAIL. Findings to resolve in the redesign, most severe first:
+Code review (codex gpt-5.6-terra, high effort): PASS — implementation satisfies the promote requirements and closes both prior High design findings under static review. No findings.
 
-1. [High] Source-state race: the backlog precondition is checked before moveTicket acquires its ticket lock. A concurrent mutation can move the ticket between preflight and move; moveTicket re-resolves but does not require from === backlog, and a same-target move is structurally allowed, so promote could succeed and falsely log "backlog -> ready_for_design" for an already-ready ticket. Fix: add an expected-source precondition evaluated inside moveTicket's existing lock (e.g. an options.expectFrom), derive the reported "from" from that locked read, and add a race/precondition test.
+(Design-round findings that drove the rework are preserved below for history.)
 
-2. [High] Lossy derivation: inverting workflow.statusActions is lossy — action values are not validated unique, so two statuses producing the same action overwrite each other and can select a status that is not furthest from done. Statuses absent from pipelineOrder get index -1 and the proposed failure handling does not reject an all-unranked candidate set. Fix: enumerate every (status, action) pair matching a required action, keep only ranked trigger statuses, pick the maximum rank, refuse when none remain. Add duplicate-action and all-unranked custom-pipeline tests.
+### Verification performed (code review)
 
-3. [Medium] Non-atomic audit: move and Run Log append are separate locked writes; a comment failure leaves the ticket promoted with no audit line and skips maybeCommitPlanning (dirty planning tree on commitPlanningOnTransition boards). Fix: append the promotion audit entry within the locked move mutation (single commit), and add a git integration test asserting the promotion commit contains both the relocation and the Run Log line with plans/ clean afterward.
+- Reviewed ticket requirement, reworked design, implementation notes, and prior design findings.
+- Reviewed ticket-owned changes in commit 9e425de against mainline.
+- Confirmed expectFrom is checked inside withTicketLock after the locked read and before gates/writes; successful promotion therefore has a locked backlog source.
+- Confirmed deriveEntryStatus enumerates all (status, action) pairs, filters to ranked trigger statuses, selects maximum pipeline rank, and refuses empty candidates; scaffold outcomes and duplicate/all-unranked tests present.
+- Confirmed the audit comment is written in the locked relocation mutation and the git integration test asserts one planning commit with clean plans/.
+- Confirmed trigger validation, blocker warning reuse, JSON shape, wrong-root guard, CLI dispatch/usage, and skill-block parity/REQUIRED_COMMANDS coverage.
+- git diff --check clean. Tests not re-run per instructions; relied on recorded 661-pass evidence and static test inspection.
 
-4. [Medium] Guard gap: test/skill-usage-sync.test.js REQUIRED_COMMANDS does not include promote — both SKILL blocks could omit it and still pass. Fix: add promote to REQUIRED_COMMANDS (or a direct presence assertion).
+### Design-round findings (resolved by the round-2 rework; verified in round-2 design review and this code review)
 
-Verified as correct by the reviewer (keep as-is): pipelineOrder is closest-to-done-first in both repo config and scaffold, so max-index derivation yields ready_for_decomposition for epic/story and ready_for_design for task/bug; closed-dependency warning semantics match isEligible; acceptance-criteria command cases otherwise covered.
+1. [High] Source-state race — resolved via moveTicket options.expectFrom inside the ticket lock.
+2. [High] Lossy statusActions inversion — resolved via pair-enumeration deriveEntryStatus with empty-set refusal.
+3. [Medium] Non-atomic Run Log audit — resolved via options.auditComment in the locked mutation, single planning commit.
+4. [Medium] promote missing from REQUIRED_COMMANDS — resolved in test/skill-usage-sync.test.js.
 
 ## Test Evidence
 
