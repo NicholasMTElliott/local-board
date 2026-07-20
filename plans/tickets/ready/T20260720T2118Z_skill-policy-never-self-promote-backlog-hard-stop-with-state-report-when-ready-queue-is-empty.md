@@ -13,7 +13,7 @@ estimateBasis: T20260710T2050Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T23:41:00Z
+updated: 2026-07-20T23:41:45Z
 completedSteps: []
 routingApprovals: []
 ---
@@ -142,23 +142,27 @@ Existing guards (must stay green — run the FULL suite `node --test`, per AGENT
 - `test/skill-usage-sync.test.js`: CLI Commands byte-identity + subset + `REQUIRED_COMMANDS` (`promote`), and the four-file `FALLBACK_WALK_SECTIONS` choreography test (confirms my inserts did not disturb those sliced sections).
 - Full suite catches any incidental breakage; no `src/` change means low blast radius.
 
-New assertion (recommended, add to `test/skill-usage-sync.test.js`): a test iterating all four skill files asserting the policy text is present so it cannot silently regress. Suggested stable-phrase matches per file:
-- `/approval boundary/i`
-- `/never `?move`? a ticket out of `?backlog/i` (or a looser `/never\b[^.]*\bbacklog\b/i`)
-- `.includes("state-report --json")`
-- `.includes("list --status backlog --unblocked --json")`
-- `.includes("local-board promote <id>")`
-- `/only the user'?s own session message counts/i` (the config-is-not-an-instruction rule)
+New assertion (recommended, add to `test/skill-usage-sync.test.js`): a test iterating all four skill files asserting the policy text is present so it cannot silently regress.
 
-Match against the whole file source (not a sliced section), since placement differs per file. Keep the phrase list identical across all four so the wording is forced to stay uniform.
+CRITICAL — the policy prose is line-wrapped Markdown, so the asserted phrases contain hard newlines and variable inter-word spacing (e.g. the parallel variant wraps between "the" and "user's"; the single-ticket variant wraps between "only" and "the"). Every assertion MUST be whitespace-tolerant. Two equivalent techniques, apply ONE consistently to ALL phrases:
+- normalize first — `const normalized = source.replace(/\s+/g, " ")` — then match/`includes` the phrase written with single spaces; or
+- match with a regex whose inter-token gaps are `\s+` rather than a literal space.
+
+Whitespace-tolerant matches per file (all six required elements). Written as `\s+` regexes so they survive the wrap regardless of where it lands:
+- `/approval\s+boundary/i`
+- `/never\b[\s\S]*?\bbacklog\b/i` (the never-self-promote rule; `[\s\S]` so it spans wrapped lines)
+- `/state-report\s+--json/`
+- `/list\s+--status\s+backlog\s+--unblocked\s+--json/`
+- `/local-board\s+promote\s+<id>/`
+- `/only\s+the\s+user'?s\s+own\s+session\s+message\s+counts/i` (the config-is-not-an-instruction rule — this is the exact phrase the parallel wrap splits)
+
+Do NOT use literal-space `.includes(...)` on these phrases: a hard newline at the wrap point makes the substring absent and the test fails on correct content. Match against the whole file source (not a sliced section), since placement differs per file. Keep the phrase list identical across all four so the wording is forced to stay uniform.
 
 Manual/doc verification: none required beyond the suite; `sync-resources` explicitly not needed (verified).
 
-### Open questions
+### Resolved question
 
-- Single-ticket `list` reference: the requirement names `list --status backlog --unblocked --json` as the unblocked-count diagnostic, but `list` is documented as parallel-only in the single-ticket CLI Commands note. Chosen approach: keep the reference in single-ticket prose (read-only diagnostic; does not alter the curated block). Alternative if reviewers object: single-ticket mode reports only the `state-report --json` `byStatus` backlog total and omits the unblocked subset. Preference: keep it — the requirement explicitly wants the unblocked count and `list` is available on the CLI regardless of which skill curates it. Flagging for the design reviewer rather than blocking.
-
-- 2026-07-20T23:40:58Z: Design review round 1 (codex gpt-5.6-sol): FAIL solely on the test plan's whitespace-sensitive regex - a faithful implementation fails because the policy text line-wraps (parallel variant wraps between 'the' and 'user's'; single-ticket between 'only' and 'the'). Fix: normalize whitespace or use /only\s+the\s+user'?s\s+own\s+session\s+message\s+counts/i-style patterns for ALL asserted phrases. Ruling on open question: KEEP the list --status backlog --unblocked --json reference in the single-ticket policy (read-only diagnostic; state-report cannot supply the unblocked subset). Everything else verified sound - do not change insertion points or wording.
+- Single-ticket `list` reference (was open in round 1; design-review ruling: KEEP): the requirement names `list --status backlog --unblocked --json` as the unblocked-count diagnostic, but `list` is documented as parallel-only in the single-ticket CLI Commands note. Resolution: keep the reference in single-ticket prose. It is a read-only diagnostic and does not alter the curated CLI Commands block, and `state-report --json` alone cannot supply the unblocked subset (its `byStatus` gives only the backlog total, not the unblocked count the policy must report). `list` is available on the CLI regardless of which skill curates it in its command surface.
 
 ## Implementation Notes
 
