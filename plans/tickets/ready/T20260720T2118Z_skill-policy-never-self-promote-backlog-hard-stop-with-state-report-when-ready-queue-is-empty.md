@@ -13,8 +13,8 @@ estimateBasis: T20260710T2050Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T23:41:45Z
-completedSteps: []
+updated: 2026-07-20T23:42:03Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
 # Skill policy: never self-promote backlog; hard stop with state-report when ready queue is empty
@@ -183,3 +183,5 @@ Manual/doc verification: none required beyond the suite; `sync-resources` explic
 - 2026-07-20T23:40:57Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: FAIL: High - proposed content-assertion regex is whitespace-sensitive and cannot match the line-wrapped policy text in either variant; use whitespace-tolerant matching. All else verified: insertion points clear of sliced sections, no fenced-block edits, wording unambiguous incl. goal-pressure case; open question ruled keep list --unblocked reference
 
 - 2026-07-20T23:41:00Z: Invalidated downstream evidence on loop-back to ready_for_design: removed completedSteps [design:claude-subagent:local-board-designer@opus, gate:design:claude-subagent:local-board-gatecheck@haiku, design-review:codex-task:read-only@gpt-5.6-sol].
+
+- 2026-07-20T23:42:03Z: Completed design via claude-subagent:local-board-designer@opus: Round 2: test plan now mandates whitespace-tolerant matching for all six policy phrases (\s+ patterns / normalize-first, explicit no-literal-space-includes warning); open question resolved KEEP list --unblocked ref per reviewer ruling; insertion points and wording unchanged
