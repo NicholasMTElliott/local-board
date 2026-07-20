@@ -13,8 +13,8 @@ estimateBasis: T20260710T1222Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T22:19:48Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", ux_interaction_review:inline, "design-review:codex-task:read-only@gpt-5.6-sol"]
+updated: 2026-07-20T22:19:49Z
+completedSteps: []
 routingApprovals: []
 ---
 # Add promote command for sanctioned backlog-to-ready promotion
@@ -368,3 +368,5 @@ Verified as correct by the reviewer (keep as-is): pipelineOrder is closest-to-do
 - 2026-07-20T22:08:20Z: Completed ux_interaction_review via inline: CONCERNS: refusal/warning/json flows consistent with CLI conventions; Low: no batch promote form (per-ticket loop acceptable v1); Low: ensure non-json success output confirms from->to transition
 
 - 2026-07-20T22:19:27Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: FAIL: High - backlog precondition raced (checked pre-lock; moveTicket must enforce expected-source under its lock); High - statusActions inversion lossy on duplicate actions + unranked statuses not refused; Medium - Run Log append not atomic with move (comment failure leaves promoted ticket unaudited, planning dirty); Medium - skill-usage-sync REQUIRED_COMMANDS lacks promote
+
+- 2026-07-20T22:19:49Z: Invalidated downstream evidence on loop-back to ready_for_design: removed completedSteps [design:claude-subagent:local-board-designer@opus, gate:design:claude-subagent:local-board-gatecheck@haiku, ux_interaction_review:inline, design-review:codex-task:read-only@gpt-5.6-sol].
