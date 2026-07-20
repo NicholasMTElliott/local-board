@@ -13,8 +13,8 @@ estimateBasis: T20260711T2137Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-20T21:16:01Z
-updated: 2026-07-20T22:06:14Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-20T22:06:59Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # Surface dependency state in list/query output and add --unblocked filter
@@ -237,3 +237,5 @@ prefers leniency (single-branch change, test flips accordingly).
 ## Run Log
 
 - 2026-07-20T22:06:14Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design written: shared openBlockers helper reused by eligibility; additive blockedBy/blockedByOpen/parent/children/blocks on both record shapes; --unblocked composes with --status, rejected with --ready; test matrix incl. missing-dep and additivity guard
+
+- 2026-07-20T22:06:59Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (no security/UI/UX triggers; additive CLI JSON fields)
