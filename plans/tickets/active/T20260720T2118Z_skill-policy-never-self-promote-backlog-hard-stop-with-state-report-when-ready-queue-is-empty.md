@@ -1,7 +1,7 @@
 ---
 id: T20260720T2118Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P1
 parent: null
 children: []
@@ -10,10 +10,10 @@ blocks: []
 branch: local-board/T20260720T2118Z-skill-policy-never-self-promote-backlog-hard-stop-with-state-report-when-ready-queue-is-empty
 estimate: 2
 estimateBasis: T20260710T2050Z
-workStartedAt: null
+workStartedAt: 2026-07-20T23:45:36Z
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T23:45:35Z
+updated: 2026-07-20T23:45:36Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -189,3 +189,5 @@ Manual/doc verification: none required beyond the suite; `sync-resources` explic
 - 2026-07-20T23:42:51Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (round 2; docs-only, no triggers)
 
 - 2026-07-20T23:45:35Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: PASS (round 2): whitespace-tolerant test plan verified against both wrapped variants (all six regexes evaluated); wording/insertion points unchanged; no new defects
+
+- 2026-07-20T23:45:36Z: Ensured git branch local-board/T20260720T2118Z-skill-policy-never-self-promote-backlog-hard-stop-with-state-report-when-ready-queue-is-empty (already-current).
