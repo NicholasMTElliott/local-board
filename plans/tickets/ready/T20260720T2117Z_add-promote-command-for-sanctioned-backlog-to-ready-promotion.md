@@ -1,7 +1,7 @@
 ---
 id: T20260720T2117Z
 type: task
-status: ready_for_design
+status: ready_for_implementation
 priority: P1
 parent: null
 children: []
