@@ -13,7 +13,7 @@ estimateBasis: T20260711T2137Z
 workStartedAt: 2026-07-20T22:13:03Z
 workCompletedAt: null
 created: 2026-07-20T21:16:01Z
-updated: 2026-07-20T23:05:41Z
+updated: 2026-07-20T23:13:09Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -310,6 +310,27 @@ Conclusion: the failure was a transient flake (temp-directory/parallelism race i
 - No files were modified during testing; `git status --short` empty at end.
 
 ## Documentation Updates
+
+Documentation updated for the five additive dependency fields (parent, children, blocks, blockedBy, blockedByOpen) on list/query JSON records and the new `list --unblocked` filter (composes with `--status`, rejected with `--ready`, exit 2). Authored by codex-task:workspace-write; suite verification and commit performed by the orchestrator because the codex sandbox blocked child-process spawns and the shared git metadata dir.
+
+### Files updated (commit 83b133d)
+
+- `README.md` — added the `list --status backlog --unblocked --json` example; documented the JSON dependency fields and `blockedByOpen` semantics in the CLI and dependency sections.
+- `docs/Workflow.md` — query output now lists dependency state; added the `--unblocked` inspection paragraph and command example.
+- `docs/PerStepOrchestration.md` — seed/refill loop notes point at `list --status <status> --unblocked --json` for non-ready promotion/dependency scouting.
+- `docs/CodexSupport.md` — Codex skill guidance mentions the non-ready dependency-candidate query in both single and team flows.
+- `memory-bank/systemPatterns.md` — one terse MVP CLI line recording the record-shape fields and `--unblocked` behavior.
+
+### Audited, no changes needed
+
+- `SKILL_TEAM.md`, `skills/codex/local-team/SKILL.md` — implementer's sentences already accurate; not duplicated.
+- `docs/TeamMode.md` — historical, superseded page.
+- `docs/TicketFormat.md` — covers front matter and dependency commands, not query output shape.
+
+### Verification
+
+- Full suite after doc edits: `node --test` — 646 tests, 645 pass, 0 fail, 1 skip (pre-existing `smoke (slow)`); content-assertion suites green.
+- No `plans/prompts` changes, so no `sync-resources` run needed.
 
 ## Questions
 
