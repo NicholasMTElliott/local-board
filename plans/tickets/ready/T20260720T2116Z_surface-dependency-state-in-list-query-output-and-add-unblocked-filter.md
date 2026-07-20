@@ -14,7 +14,7 @@ workStartedAt: 2026-07-20T22:13:03Z
 workCompletedAt: null
 created: 2026-07-20T21:16:01Z
 updated: 2026-07-20T23:13:09Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # Surface dependency state in list/query output and add --unblocked filter
@@ -351,3 +351,5 @@ Documentation updated for the five additive dependency fields (parent, children,
 - 2026-07-20T22:28:58Z: Completed review via codex-task:read-only@gpt-5.6-terra: CONCERNS: implementation correct vs acceptance criteria; 1 Low finding (children/blocks pass-through assertions missing) fixed forward in f899908, suite green 645/0; reviewer verified openBlockers semantics, additivity, --unblocked/--ready rejection, byId threading at all call sites
 
 - 2026-07-20T23:05:34Z: Completed test via claude-subagent:local-board-tester@sonnet: PASS: full suite 645/0/1 (one unrelated worktree-fixture flake cleared on rerun+isolation); all 4 acceptance criteria verified end-to-end against real CLI incl. --unblocked exact-subset selection, blockedByOpen explaining eligible:false, additive --ready fields, --ready --unblocked exit-2 rejection
+
+- 2026-07-20T23:13:09Z: Completed document via codex-task:workspace-write: Docs updated across README, docs/Workflow, docs/PerStepOrchestration, docs/CodexSupport, memory-bank/systemPatterns (commit 83b133d); suite green 645/0/1 post-edit; codex sandbox blocked commit/test so orchestrator verified+committed
