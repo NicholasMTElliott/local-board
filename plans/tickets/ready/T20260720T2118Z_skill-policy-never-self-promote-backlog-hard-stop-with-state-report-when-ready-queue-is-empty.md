@@ -13,8 +13,8 @@ estimateBasis: T20260710T2050Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T23:40:58Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
+updated: 2026-07-20T23:41:00Z
+completedSteps: []
 routingApprovals: []
 ---
 # Skill policy: never self-promote backlog; hard stop with state-report when ready queue is empty
@@ -177,3 +177,5 @@ Manual/doc verification: none required beyond the suite; `sync-resources` explic
 - 2026-07-20T23:36:27Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (docs-only policy text; no security/UI/UX triggers)
 
 - 2026-07-20T23:40:57Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: FAIL: High - proposed content-assertion regex is whitespace-sensitive and cannot match the line-wrapped policy text in either variant; use whitespace-tolerant matching. All else verified: insertion points clear of sliced sections, no fenced-block edits, wording unambiguous incl. goal-pressure case; open question ruled keep list --unblocked reference
+
+- 2026-07-20T23:41:00Z: Invalidated downstream evidence on loop-back to ready_for_design: removed completedSteps [design:claude-subagent:local-board-designer@opus, gate:design:claude-subagent:local-board-gatecheck@haiku, design-review:codex-task:read-only@gpt-5.6-sol].
