@@ -13,7 +13,7 @@ estimateBasis: T20260710T2050Z
 workStartedAt: 2026-07-20T23:45:36Z
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T23:49:24Z
+updated: 2026-07-20T23:56:18Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -183,6 +183,17 @@ Full suite: `node --test` — 662 passed, 1 skipped, 0 failed (includes the new 
 No deviations from the design.
 
 ## Review Findings
+
+Code review (codex gpt-5.6-terra, high effort): CONCERNS — policy wording and command references faithful; one Medium finding, fixed forward.
+
+1. [Medium] test/skill-usage-sync.test.js — the six guard regexes scanned each entire file, so policy-block deletions could pass: `state-report --json` and `local-board promote <id>` also occur in the single-ticket CLI Commands blocks; `/never\b[\s\S]*?\bbacklog\b/i` could match unrelated wording; no assertion covered the hard-stop sentence. Resolution: fixed forward in commit 7211602 — assertions now bind to the policy sentences themselves (empty-queue trigger + state-report span, session-instruction + promote span, the exact own-initiative prohibition sentence, and the STOP sentence), whitespace-tolerant; a negative check confirmed each tightened assertion fails when its bound sentence is deleted; suite green 662/0/1.
+
+Verification performed by reviewer:
+- Reviewed requirement, round-2 design, implementation notes, and commit f1b36e8.
+- Confirmed all four policy blocks contain the approval-boundary rationale, empty-queue diagnostic, unblocked-backlog query, explicit-session carve-out, promote path, and config/ticket-note exclusion.
+- Confirmed state-report, list --status backlog --unblocked --json, and promote are implemented by the CLI; state-report returns byStatus.
+- Confirmed the single-ticket CLI Commands blocks unchanged and mirrored; FALLBACK_WALK_SECTIONS and REQUIRED_COMMANDS untouched.
+- Confirmed the diff is confined to the four designed skill regions and the new assertion.
 
 ## Test Evidence
 
