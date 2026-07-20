@@ -224,6 +224,8 @@ None blocking. One minor call: rejection vs redundant-accept for `--ready --unbl
 design picks rejection per the rationale above; flip to accept-and-no-op if the orchestrator
 prefers leniency (single-branch change, test flips accordingly).
 
+- 2026-07-20T22:12:53Z: Design review (codex gpt-5.6-sol, CONCERNS): commandGateCheck, commandDesignReviewCheck, and commandSpecialtyRun currently destructure only { ticket } from findTicket, so board/byId are NOT in scope there. Implementer: either bind const { board, ticket } and pass byTicketId(board), or leave those three context builders on legacy fields and note the scope revision. All other design claims verified against source.
+
 ## Implementation Notes
 
 ## Review Findings
