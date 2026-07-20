@@ -13,8 +13,8 @@ estimateBasis: T20260710T1222Z
 workStartedAt: 2026-07-20T23:00:35Z
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T23:16:15Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
+updated: 2026-07-20T23:16:51Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet"]
 routingApprovals: []
 ---
 # Add promote command for sanctioned backlog-to-ready promotion
@@ -466,3 +466,5 @@ Verified as correct by the reviewer (keep as-is): pipelineOrder is closest-to-do
 - 2026-07-20T23:00:34Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: PASS (round 2): all four round-1 findings resolved - expectFrom inside withTicketLock span verified; pair-enumeration derivation correct for duplicate/custom pipelines; auditComment insertion point atomic pre-render; promote to REQUIRED_COMMANDS; no new findings
 
 - 2026-07-20T23:00:35Z: Ensured git branch local-board/T20260720T2117Z-add-promote-command-for-sanctioned-backlog-to-ready-promotion (already-current).
+
+- 2026-07-20T23:16:51Z: Completed implement via claude-subagent:local-board-implementer@sonnet: promote command: deriveEntryStatus pair-enumeration; moveTicket additive expectFrom (locked precondition) + auditComment (atomic Run Log); non-backlog/non-trigger refusals; open-dep stderr warning; SKILL blocks + REQUIRED_COMMANDS; peer branch merged clean; 16 new tests; node --test 661/0/1; commit 9e425de
