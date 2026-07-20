@@ -915,6 +915,17 @@ test("list (plain) and query-ticket both pass through parent/children/blocks fro
     assert.equal(queryRecord.parent, parentId);
     assert.deepEqual(queryRecord.blockedBy, [blockerId]);
     assert.deepEqual(queryRecord.blockedByOpen, [blockerId]);
+
+    // Non-empty children (on the parent) and blocks (on the blocker) pass
+    // through on the actionRecord shape too, not just parent/blockedBy on the
+    // child -- query both other tickets on both surfaces.
+    const parentQueryResult = await runCli(["--root", root, "query-ticket", parentId, "--json"]);
+    assert.equal(parentQueryResult.code, 0, parentQueryResult.stderr);
+    assert.deepEqual(JSON.parse(parentQueryResult.stdout).children, [childId]);
+
+    const blockerQueryResult = await runCli(["--root", root, "query-ticket", blockerId, "--json"]);
+    assert.equal(blockerQueryResult.code, 0, blockerQueryResult.stderr);
+    assert.deepEqual(JSON.parse(blockerQueryResult.stdout).blocks, [childId]);
   });
 });
 
