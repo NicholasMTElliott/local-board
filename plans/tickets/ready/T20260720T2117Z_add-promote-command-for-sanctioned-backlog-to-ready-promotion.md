@@ -14,7 +14,7 @@ workStartedAt: 2026-07-20T23:00:35Z
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
 updated: 2026-07-20T23:25:02Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet"]
 routingApprovals: []
 ---
 # Add promote command for sanctioned backlog-to-ready promotion
@@ -506,3 +506,5 @@ Full suite green, and every acceptance criterion verified end-to-end against the
 - 2026-07-20T23:17:35Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (workflow-state CLI code; no security/UI triggers)
 
 - 2026-07-20T23:19:41Z: Completed review via codex-task:read-only@gpt-5.6-terra: PASS: no findings; expectFrom locked placement, non-lossy derivation, atomic audit, REQUIRED_COMMANDS all verified against 9e425de; diff --check clean
+
+- 2026-07-20T23:25:02Z: Completed test via claude-subagent:local-board-tester@sonnet: PASS: suite 661/0/1; all 6 acceptance criteria live-verified on throwaway scaffold board (derivation, both refusals, stderr-only open-dep warning + ready exclusion, Run Log audit line, --json shape computed+override)
