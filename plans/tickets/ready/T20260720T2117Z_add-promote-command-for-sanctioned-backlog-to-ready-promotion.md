@@ -13,7 +13,7 @@ estimateBasis: T20260710T1222Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T22:19:49Z
+updated: 2026-07-20T22:23:53Z
 completedSteps: []
 routingApprovals: []
 ---
@@ -53,146 +53,165 @@ Backlog -> `ready_*` promotion is structurally allowed by `move` (the `enforceTr
 
 ### Summary
 
-Add a first-class `promote` command that performs a sanctioned, audited
-backlog -> `ready_*` transition. Today `move` structurally allows the
-`backlog -> ready_*` jump (`isStructurallyAllowed`), but nothing computes the
-correct entry status per ticket type, so an orchestrator has to reverse-engineer
-the rule and can promote a story straight past decomposition/design. `promote`
-centralizes that derivation, refuses off-policy targets, warns on open
-dependencies, and routes the real transition through `moveTicket` so folder
-relocation, `enforceTransitions`, planning auto-commit, and loop-back handling
-stay unchanged.
+Add a first-class `promote` command for a sanctioned, audited backlog -> `ready_*`
+transition. `move` already structurally allows the `backlog -> ready_*` jump
+(`isStructurallyAllowed`) but computes no correct entry status per type, so an
+orchestrator must reverse-engineer the rule and can skip decomposition/design.
+`promote` centralizes the derivation, refuses off-policy targets, warns on open
+dependencies, and performs the transition — including its audit line and its
+source-state precondition — atomically inside `moveTicket`'s existing lock.
 
-The command is deliberately thin: one new pure derivation helper in
-`src/tickets.js`, one new `commandPromote` in `src/cli.js`, one usage line, and
-the two curated SKILL blocks. No change to `moveTicket` itself.
+This revision reworks the four design-review findings (loop-back FAIL). The
+mechanism now hinges on a small, additive options surface on `moveTicket`
+(`expectFrom`, `auditComment`) so the source check and the Run Log line land
+under the same lock and in the same single write/commit as the relocation, with
+zero change to existing callers.
 
-### Related tickets and conflicts
+### What changed vs the previous design (loop-back deltas)
 
-- T20260720T2118Z (this ticket `blocks` it): the policy ticket that declares
-  promotion a user-authorized action. `promote` is the mechanism; the policy
-  ticket documents the human sanction. No code conflict; keep the "(user-directed)"
-  Run Log wording consistent with whatever that ticket lands on if it runs first.
-- No other in-flight tickets touch `commandMove` / `moveTicket` / the SKILL CLI
-  Commands blocks. The byte-identical SKILL mirror (enforced by
-  `test/skill-usage-sync.test.js`) is the only cross-file coupling.
+- Finding 1 (race): the backlog precondition is now enforced INSIDE
+  `moveTicket`'s lock via a new `options.expectFrom`, not by a pre-lock CLI
+  check alone. The reported `from` is sound because a successful move guarantees
+  the locked read matched `expectFrom`.
+- Finding 2 (lossy derivation): `deriveEntryStatus` no longer inverts
+  `statusActions` (which loses entries when two statuses share an action).
+  It enumerates every `(status, action)` pair, keeps only ranked trigger
+  statuses, takes the max pipeline rank, and refuses on an empty candidate set.
+- Finding 3 (atomic audit): the promotion Run Log line is appended within the
+  locked move mutation via a new `options.auditComment`, so relocation + audit
+  are one write and one planning commit. The CLI no longer makes a separate
+  `appendTicketComment` call.
+- Finding 4 (guard gap): `promote` is added to `REQUIRED_COMMANDS` in
+  `test/skill-usage-sync.test.js` so an omission from either SKILL block fails CI.
 
-### Entry-status derivation (config-derived, not hard-coded)
+Kept unchanged (reviewer-verified): the max-`pipelineOrder`-index rule and its
+scaffold outcomes (`ready_for_decomposition` for epic/story, `ready_for_design`
+for task/bug), the closed-dependency warning semantics matching `isEligible`,
+the `--to`/`TRIGGER_STATUSES` validation, the non-backlog refusal messaging, and
+the `--json` shape.
+
+### Additive `moveTicket` options surface (minimal, callers unchanged)
+
+Extend `moveTicket(root, ticketId, status, options)` with two optional keys.
+Both default to absent, so every existing caller (`commandMove`,
+`archiveDoneTickets`, `setTicketField` status path, tests) behaves byte-identically.
+
+1. `options.expectFrom` (string | undefined): when set, evaluated inside the
+   existing `withTicketLock` span, immediately after the locked `findTicket`
+   read and BEFORE any gate (`enforceTransitions`, gate-consultation,
+   design-review) and before any fs mutation. If `ticket.status !== expectFrom`,
+   throw a clear error naming the actual locked status and the expected source,
+   e.g.:
+
+```text
+promote refused: T... is in ready_for_design under lock, not backlog; the ticket
+changed state before promotion could run.
+```
+
+   Because `moveTicket` performs no fs mutation until the later mkdir/rename
+   block, a mismatch has zero side effects. On success the locked read is proven
+   to equal `expectFrom`, so the CLI can report `from = expectFrom` soundly —
+   this is the "derive the reported from from the locked read" requirement,
+   satisfied without changing `moveTicket`'s string return type.
+
+2. `options.auditComment` (string | undefined): when set, append
+   `- <iso>: <auditComment>` to the ticket body's `Run Log` section within the
+   same locked mutation, after the loop-back-invalidation append and before
+   `renderMarkdownTicket`/write. Reuses the `appendToSection` +
+   `formatIsoSeconds(now)` helpers already used by `moveTicket`'s override and
+   invalidation branches. This makes the relocation and the audit line a single
+   atomic write; the subsequent single `maybeCommitPlanning` therefore commits
+   both together and leaves `plans/` clean.
+
+`moveTicket`'s return value stays the target path string. No signature change for
+existing callers; the two keys are the only new surface.
+
+### Entry-status derivation (config-derived, non-lossy)
 
 Add an exported pure helper to `src/tickets.js`:
 
 ```text
-deriveEntryStatus(config, type) -> { status } | throws
+deriveEntryStatus(config, type) -> status | throws
 ```
 
-Rule (respects customized pipelines):
+Algorithm (no `statusActions` inversion):
 
-1. Take `config.routing.doneRequires[type]` (the ordered action list a type
-   needs to reach done: e.g. task/bug = `[design, implement, review, test,
-   document]`, epic/story = `[decompose]`).
-2. Invert `config.workflow.statusActions` (action -> producing `ready_*` status)
-   via the existing `invertStatusActions` pattern.
-3. Map each required action to its producing status, dropping any action with no
-   producing status (defensive: a custom `doneRequires` action absent from
-   `statusActions`).
-4. Choose the entry status as the one FURTHEST from done, i.e. the maximum
-   `config.workflow.pipelineOrder` index among the mapped statuses
-   (`pipelineOrder` is ordered closest-to-done first, so the largest index is the
-   pipeline entry point). On the scaffold this yields `ready_for_design` for
-   task/bug and `ready_for_decomposition` for epic/story.
+1. `required = new Set(config.routing.doneRequires[type] ?? [])`. If empty,
+   refuse (cannot derive; `--to` remains the manual path). Name the type.
+2. Enumerate EVERY `(status, action)` pair in
+   `Object.entries(config.workflow.statusActions)`; keep the `status` of any pair
+   whose `action` is in `required`. Enumerating pairs (not inverting) means two
+   statuses sharing one action both survive — no overwrite/loss.
+3. Filter that candidate set to statuses that are BOTH trigger statuses
+   (`TRIGGER_STATUSES.has(status)`) AND ranked in `config.workflow.pipelineOrder`
+   (index !== -1). Unranked statuses are discarded here, not silently ranked -1.
+4. If the filtered set is empty, refuse with a clear message (no required action
+   maps to a ranked trigger status). This closes the all-unranked gap.
+5. Return the status with the maximum `pipelineOrder` index. `pipelineOrder` is
+   ordered closest-to-done first (verified for both repo config and scaffold), so
+   the maximum index is the furthest-from-done pipeline entry point. On the
+   scaffold: task/bug -> `ready_for_design`, epic/story -> `ready_for_decomposition`.
 
-Why max-pipelineRank rather than simply `doneRequires[type][0]`: the two agree on
-the scaffold, but the pipeline-index approach also produces the correct entry on
-a board whose `doneRequires` list is authored out of pipeline order, and it uses
-all three config keys the requirement names (`pipelineOrder`, `statusActions`,
-`doneRequires`). This reuses the same derivation shape already present in
-`typeStatusAdvisory` (`conventionalAction`/`conventionalStatus`), so behavior is
-consistent with the create-time advisory.
+This uses all three config keys the requirement names (`doneRequires`,
+`statusActions`, `pipelineOrder`) and is robust to duplicate action values,
+reordered `doneRequires`, renamed actions, and trimmed pipelines.
 
-Failure modes (refuse with a clear, non-throwing CLI error):
-
-- `doneRequires[type]` missing or empty -> cannot derive; refuse and name the
-  type. (`--to` remains available as the manual escape.)
-- No required action maps to any `statusActions` status -> refuse similarly.
-
-Note on epics/stories with existing children: derivation is type-based, so an
-epic that already has children still derives `ready_for_decomposition` (its only
-required stage). That is acceptable — the decomposer confirms/no-ops — and the
-`--to` override covers any board that wants a different landing. Called out as an
-open question below rather than special-cased.
-
-### `--to` override validation
+### `--to` override validation (unchanged)
 
 - When `--to <status>` is supplied, skip derivation and use it as the target.
-- The target MUST be a trigger status: reuse `TRIGGER_STATUSES.has(status)`
-  (exported from `src/tickets.js`). If not, refuse before any fs mutation with a
-  message naming the offending value and listing that promotion targets are the
-  `ready_*` statuses. This is what makes `promote --to designing` refuse (an
-  active status, not a trigger).
-- No `--override`/`--reason` plumbing is needed on `promote`: backlog -> any
-  trigger is already in the structural allow-set, so `moveTicket` never refuses
-  it under `enforceTransitions`. (If a board somehow narrows this, that surfaces
-  as a normal `moveTicket` refusal — acceptable.)
+- Require `TRIGGER_STATUSES.has(status)`; else refuse before any lock/mutation,
+  naming the offending value and stating promotion targets the `ready_*`
+  statuses. This makes `promote --to designing` refuse (active, not a trigger).
+- No `--override`/`--reason` on `promote`: backlog -> any trigger is in the
+  structural allow-set, so `moveTicket` never refuses it under
+  `enforceTransitions`. `--to` intentionally permits an off-pipeline-entry
+  trigger (e.g. task straight to `ready_for_implementation`); it is the
+  sanctioned manual escape and is trigger-validated only. Downstream
+  done-gating still protects correctness.
 
-### Non-backlog source refusal
+### Non-backlog source refusal (two layers)
 
-- After `findTicket`, if `ticket.status !== "backlog"`, refuse with a message
-  naming the current status, e.g.:
+- Fast pre-lock CLI check for a friendly message: after `findTicket`, if
+  `ticket.status !== "backlog"`, refuse naming the current status:
 
 ```text
 promote refused: T... is in ready_for_design, not backlog; promote only
 promotes backlog tickets.
 ```
 
-- This runs before any warning or move, so a refused promote has zero side
-  effects. Covers the acceptance case "`promote` on a `ready_for_design` ticket
-  refuses".
+- Authoritative under-lock check: `moveTicket({ expectFrom: "backlog" })` re-checks
+  the same condition against the locked read, closing the preflight->move race
+  (finding 1). The status is read from front matter (canonical), not folder.
 
-### Open-dependency warning (stderr, non-fatal)
+### Open-dependency warning (stderr, non-fatal) (unchanged semantics)
 
-- Resolve open blockers from the already-loaded board: for each id in
-  `ticket.frontMatter.blockedBy`, the dependency is "open" when it is missing or
-  its status is not closed. Reuse the exact closed-status semantics
-  `isEligible`/`isClosedStatus` use (`CLOSED_STATUSES` = done/archived) so the
-  warning and ready-queue eligibility can never disagree.
-- If any are open, print a single `WARNING:`-prefixed line to stderr (matching
-  the existing `codexTaskWarning`/`typeStatusAdvisory` convention) naming the
-  open blocker ids and stating that the ticket will stay ineligible in
-  `list --ready` until they close. The promotion still proceeds and returns 0.
-- Expose a small helper for the blocker resolution rather than reaching into
-  private internals; either add an exported `openBlockers(ticket, byId)` to
-  `src/tickets.js` (preferred, testable in isolation) or compute inline in the
-  CLI using `byTicketId(board)`. Preference: exported helper.
+- From the already-loaded board, a dependency in `ticket.frontMatter.blockedBy`
+  is "open" when it is missing or its status is not closed, reusing the exact
+  `CLOSED_STATUSES`/`isClosedStatus` semantics `isEligible` uses, so the warning
+  and ready-queue eligibility cannot disagree.
+- If any are open, print one `WARNING:`-prefixed stderr line naming the open ids
+  and stating the ticket stays ineligible in `list --ready` until they close.
+  The promotion still proceeds and returns 0.
+- Add an exported pure `openBlockers(ticket, byId)` to `src/tickets.js` (testable
+  in isolation) rather than reaching into private internals.
 
-### Routing through `moveTicket` + Run Log line
+### Run Log line (now atomic with the move)
 
-- The transition itself is `moveTicket(root, ticketId, target)` — unchanged path,
-  so folder relocation (backlog -> ready), `updated` stamping, `enforceTransitions`,
-  loop-back invalidation (a no-op for a forward backlog move), and the
-  consultation-stamp sweep all apply as-is. Do NOT add a param to `moveTicket`.
-- Ordering: validate -> emit dependency warning -> `moveTicket` -> append Run Log
-  line -> `maybeCommitPlanning`. Append the Run Log line AFTER a successful move
-  (via `appendTicketComment(root, ticketId, "Run Log", <text>)`, which re-resolves
-  the ticket by id in its new `ready/` folder) so the audit line is only written
-  when the promotion actually happened. Two writes (move, then comment) mirror how
-  other CLI commands pair a mutation with `maybeCommitPlanning`; acceptable.
-- Run Log text records the from/to and the trigger, e.g.:
+- Passed as `auditComment` to `moveTicket`, recorded within the locked move
+  mutation. Text records from/to and the trigger, e.g.:
 
 ```text
 Promoted backlog -> ready_for_design (user-directed)
 ```
 
-  For an overridden target, keep the same shape with the chosen status. Consider
-  appending `(--to override)` vs `(computed)` is optional; the `--json` output is
-  the machine-readable source of truth, so keep the Run Log line simple and
-  human-readable.
-- Reuse `maybeCommitPlanning(root, { ticketId, command: "promote", detail: target })`
-  exactly as `commandMove` does via `moveAndMaybeMerge`, so
-  `git.commitPlanningOnTransition` behavior is identical.
+  Same shape for an overridden target (its chosen status). The machine-readable
+  computed-vs-override signal lives in `--json` (`targetSource`), so the Run Log
+  line stays simple prose.
+- The CLI issues exactly one mutation (`moveTicket`) then one
+  `maybeCommitPlanning(root, { ticketId, command: "promote", detail: target })`,
+  mirroring `commandMove`. No second write, no separate comment call.
 
-### `--json` output shape
-
-Emit (pretty-printed, like other commands):
+### `--json` output shape (unchanged)
 
 ```text
 {
@@ -201,141 +220,147 @@ Emit (pretty-printed, like other commands):
   "to": "ready_for_design",
   "targetSource": "computed",   // or "override" when --to was used
   "path": "<new ticket path>",
-  "openBlockedBy": ["T...."]      // present (possibly empty) so callers can branch
+  "openBlockedBy": ["T...."]      // present (possibly empty)
 }
 ```
 
-- `targetSource` is the required "computed-vs-overridden" signal.
-- `path` mirrors `move --json`'s ticket path for parity.
-- `openBlockedBy` lets a JSON caller see the same thing the stderr warning
-  conveys. Human (non-JSON) mode prints the new path (like `move`) plus the
-  stderr warning line when applicable.
+- `from` is `"backlog"`, sound because `expectFrom` proved the locked source.
+- `to` is the target; `targetSource` is the required computed-vs-overridden signal.
+- `path` is `moveTicket`'s returned target path. `openBlockedBy` mirrors the
+  stderr warning for JSON callers. Human mode prints the new path plus the stderr
+  warning when applicable, and a non-JSON success line confirming from -> to
+  (per the ux_interaction_review Low note).
+
+### Command wiring
+
+- Dispatch branch in `main`, near `move`:
+  `if (command === "promote") return await commandPromote(root, args, allowMainRoot);`
+- `commandPromote(root, args, allowMainRoot)`:
+  1. `const asJson = takeFlag(args, "--json");`
+  2. `const to = takeOption(args, "--to");`
+  3. `const ticketId = args.shift(); ensureNoArgs(args);`
+  4. arg guard: `promote requires: <ticket-id> [--to <status>] [--allow-main-root] [--json]`.
+  5. `await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });`
+  6. `loadConfig` + `findTicket` (board needed for blocker resolution; config for derivation).
+  7. pre-lock backlog refusal (friendly message).
+  8. target = `--to` (validated against `TRIGGER_STATUSES`) else
+     `deriveEntryStatus(config, ticket.type)`; `targetSource` set accordingly.
+  9. compute `openBlockers`; emit stderr warning if non-empty.
+  10. `path = await moveTicket(root, ticketId, target, { expectFrom: "backlog",
+      auditComment: "Promoted backlog -> " + target + " (user-directed)" });`
+  11. `await maybeCommitPlanning(...)`; print JSON or human output.
+
+### Affected files
+
+- `src/tickets.js`: `moveTicket` gains `expectFrom` + `auditComment` handling
+  inside the lock; new exported pure `deriveEntryStatus(config, type)` and
+  `openBlockers(ticket, byId)`. Export `byTicketId` if the CLI needs it and it
+  is not already exported.
+- `src/cli.js`: dispatch branch, `commandPromote`, one `USAGE_TEXT` line.
+- `SKILL.md` and `skills/codex/local-board/SKILL.md`: one byte-identical command
+  line each.
+- `test/skill-usage-sync.test.js`: add `promote` to `REQUIRED_COMMANDS`
+  (finding 4).
+- `test/`: new coverage (see test plan).
 
 ### Usage and skill-doc updates
 
-- Add one line to `USAGE_TEXT` in `src/cli.js` (drives `usageCommandNames`, so
-  the SKILL subset test passes automatically once the block matches):
+- Add to `USAGE_TEXT` near `move` (drives `usageCommandNames`, so the subset test
+  passes once the block matches):
 
 ```text
 local-board [--root <path>] promote <ticket-id> [--to <status>] [--allow-main-root] [--json]
 ```
 
-  Place it near `move` for discoverability. Include `--allow-main-root` because
-  `promote` is a per-ticket mutation and must call `assertInvocationRootForTicket`
-  like `move`/`set` (worktree wrong-root guard).
-- Add `promote` to BOTH curated CLI Commands `sh` blocks
-  (`SKILL.md` and `skills/codex/local-board/SKILL.md`) with byte-identical text,
-  e.g.:
+- Add to BOTH curated CLI Commands `sh` blocks, byte-identical, at the same
+  position:
 
 ```text
 local-board promote <ticket-id> [--to <status>] [--json]
 ```
 
-  Insert at the same position in both files.
-  `test/skill-usage-sync.test.js` enforces byte-identical blocks and subset-of-usage.
-- No `npm run sync-resources` needed for SKILL.md (that command mirrors
-  `plans/prompts` -> `resources/prompts`; SKILL files are not prompt resources).
-  Confirm during implementation that no resources mirror covers SKILL.md.
-
-### Command wiring
-
-- Add the dispatch branch in `main`:
-  `if (command === "promote") return await commandPromote(root, args, allowMainRoot);`
-  near the `move` branch.
-- `commandPromote(root, args, allowMainRoot)`:
-  1. `const asJson = takeFlag(args, "--json");`
-  2. `const to = takeOption(args, "--to");`
-  3. `const ticketId = args.shift(); ensureNoArgs(args);`
-  4. arg-count guard message: `promote requires: <ticket-id> [--to <status>] [--allow-main-root] [--json]`.
-  5. `await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });`
-  6. `loadConfig` + `findTicket` (need the board for blocker resolution and the
-     config for derivation).
-  7. backlog-source refusal; `--to` trigger validation OR `deriveEntryStatus`.
-  8. dependency warning; `moveTicket`; Run Log append; `maybeCommitPlanning`; output.
-
-### Affected files
-
-- `src/tickets.js`: new exported `deriveEntryStatus(config, type)` and (preferred)
-  `openBlockers(ticket, byId)`; both pure. Possibly export `byTicketId` if not
-  already exported and the CLI needs it.
-- `src/cli.js`: dispatch branch, `commandPromote`, one `USAGE_TEXT` line.
-- `SKILL.md` and `skills/codex/local-board/SKILL.md`: one command line each
-  (byte-identical).
-- `test/`: new coverage (see test plan). Likely `test/cli.test.js` (command
-  behavior) and `test/tickets.test.js` (derivation helper), plus the existing
-  `test/skill-usage-sync.test.js` re-passing.
+  `test/skill-usage-sync.test.js` enforces byte-identical blocks, subset-of-usage,
+  and (now) required-presence of `promote`.
+- No `npm run sync-resources`: that mirrors `plans/prompts` -> `resources/prompts`;
+  SKILL files are not prompt resources. Confirm during implementation.
 
 ### Risks and edge cases
 
-- Byte-identical SKILL drift: the single highest-probability failure. Edit both
-  blocks identically and run the FULL suite (`node --test`), not just the guard
-  suite (per AGENTS.md prompt/skill rule).
-- Custom-config derivation: guard the empty/unmappable `doneRequires` cases so a
-  weird board gets a clear refusal, not a crash or a wrong status.
-- `--to` to a trigger status that is not a valid entry for the type (e.g.
-  promoting a task straight to `ready_for_implementation`, skipping design):
-  `promote` intentionally permits this — `--to` is the sanctioned manual override.
-  Eligibility/done-gating still protects correctness downstream. Document that
-  `--to` is the escape hatch and is trigger-validated only.
-- Ticket already out of backlog but physically in the wrong folder: `findTicket`
-  reads front matter status (canonical), so the backlog check is on status, not
-  folder — correct and consistent with the rest of the codebase.
-- Two-write ordering (move then comment): if the comment write fails after a
-  successful move, the ticket is promoted but missing its Run Log line. This is
-  the same failure surface as any move+comment pairing already in the CLI;
-  acceptable and no worse than `move`.
+- `moveTicket` blast radius: `expectFrom`/`auditComment` are additive and
+  default-absent, but `moveTicket` is load-bearing. Place the `expectFrom` check
+  before all existing gates and the `auditComment` append alongside the existing
+  Run Log appends; run the FULL suite, not just guard suites (AGENTS.md).
+- Byte-identical SKILL drift remains the top presentation risk; edit both blocks
+  identically.
+- Custom-config derivation: empty `doneRequires` or all-unranked candidates
+  refuse cleanly (finding 2), never crash or pick a wrong status.
+- `--to` to a trigger that is not the type's entry point is permitted by design
+  (sanctioned override); downstream gating protects correctness.
+- `expectFrom` mismatch and `--to` validation both refuse with zero fs side
+  effects (pre-mutation), so a refused promote never dirties the tree.
 
 ### Test plan
 
 Derivation unit tests (`test/tickets.test.js`):
-- `deriveEntryStatus(scaffoldConfig, "epic")` and `"story"` -> `ready_for_decomposition`.
-- `deriveEntryStatus(scaffoldConfig, "task")` and `"bug"` -> `ready_for_design`.
-- A customized config (e.g. `doneRequires.task` reordered / a renamed
-  `statusActions` value / a trimmed pipeline) still yields the furthest-from-done
-  entry.
-- Empty/unmappable `doneRequires[type]` throws/refuses.
+- Scaffold: `deriveEntryStatus` -> `ready_for_decomposition` (epic, story),
+  `ready_for_design` (task, bug).
+- Duplicate-action config: two statuses mapping to the same required action —
+  assert the furthest-from-done one is chosen (no loss). (finding 2)
+- All-unranked config: required actions map only to statuses absent from
+  `pipelineOrder` — assert refusal, not a -1 pick. (finding 2)
+- Empty/missing `doneRequires[type]` -> refuse.
+- Reordered `doneRequires` / renamed `statusActions` still yields the max-rank entry.
 - `openBlockers` returns only non-closed (and missing) dependencies.
 
-Command tests (`test/cli.test.js`), against a scaffold-config board:
-- `promote <epic>` (no `--to`) lands `ready_for_decomposition`; `promote <task>`
-  lands `ready_for_design`; front matter status AND folder both updated; Run Log
-  line present.
-- `promote --to designing` refuses (not a trigger); assert message + no fs change.
-- `promote` on a `ready_for_design` ticket refuses (not backlog); assert message
-  names the current status + no fs change.
-- Open-dependency promote: ticket with an open `blockedBy` succeeds, prints the
-  stderr warning, exits 0, and afterwards `list --ready` / query-ready still
-  excludes it (stays ineligible).
-- `--json` shape: assert `ticket`, `from`, `to`, `targetSource` (`computed` vs
-  `override`), `path`, `openBlockedBy`.
+`moveTicket` unit tests (`test/tickets.test.js`):
+- `expectFrom` match (backlog) proceeds and relocates. (finding 1)
+- `expectFrom` mismatch (ticket already `ready_for_design`) refuses, names the
+  locked status, and leaves the file untouched at its original path. (finding 1)
+- `auditComment` lands the Run Log line in the SAME written file as the
+  relocation (single write; assert the moved file already contains the line).
+  (finding 3)
+- Existing callers with neither option behave byte-identically (regression).
+
+Command tests (`test/cli.test.js`), scaffold-config board:
+- `promote <epic>` -> `ready_for_decomposition`; `promote <task>` ->
+  `ready_for_design`; front matter status AND folder updated; Run Log line present.
+- `promote --to designing` refuses (not a trigger); message + no fs change.
+- `promote` on a `ready_for_design` ticket refuses (not backlog); message names
+  current status + no fs change.
+- Open-dependency promote succeeds, prints stderr warning, exits 0, and
+  query-ready / `list --ready` still excludes it.
+- `--json` asserts `ticket`, `from`, `to`, `targetSource` (computed vs override),
+  `path`, `openBlockedBy`.
 - `--to <valid trigger>` sets `targetSource: "override"` and lands that status.
-- `promote` honors `worktrees.guardWrongRoot` (wrong-root refusal unless
-  `--allow-main-root`), mirroring `move`.
+- Wrong-root guard honored (`worktrees.guardWrongRoot`) unless `--allow-main-root`.
+
+Git integration test (finding 3, in the git/transition test file that already
+exercises `commitPlanningOnTransition`):
+- On a `commitPlanningOnTransition` board, `promote` produces ONE commit that
+  contains both the ticket relocation (old path deleted, new `ready/` path added)
+  and the Run Log promotion line, and leaves `plans/` clean afterward
+  (`git status` porcelain empty for `plans/`).
 
 Suite-wide:
-- `test/skill-usage-sync.test.js` passes with both blocks updated.
-- Full `node --test` green (mandatory per AGENTS.md because SKILL/prompt-adjacent
-  curated text changed).
+- `test/skill-usage-sync.test.js` passes with both blocks updated and `promote`
+  in `REQUIRED_COMMANDS`.
+- Full `node --test` green (mandatory: curated SKILL text changed).
 
 ### Documentation impact
 
-- SKILL.md + codex mirror CLI Commands blocks (required, above).
-- USAGE_TEXT (required).
-- Consider a short mention in any human `docs/` workflow page that enumerates
-  lifecycle commands (e.g. wherever `move`/backlog promotion is described); low
-  priority, verify during implementation whether such a page exists and update
-  the README Documentation Index only if a new doc file is added (none expected).
+- SKILL.md + codex mirror CLI Commands blocks (required).
+- `USAGE_TEXT` (required).
+- If a human `docs/` lifecycle page enumerates `move`/backlog promotion, add a
+  one-line mention; verify during implementation. Update the README Documentation
+  Index only if a new doc file is added (none expected).
 
 ### Open questions
 
-1. Epic/story WITH existing children: is `ready_for_decomposition` still the
-   desired promote target, or should such a ticket be refused / routed elsewhere?
-   Current design derives decomposition regardless (with `--to` as the escape).
-   Confirm this is acceptable, or specify the alternate behavior.
-2. Run Log wording: requirement gives `Promoted backlog -> <status>
-   (user-directed)`. Confirm "(user-directed)" is the exact desired trigger
-   phrase (vs "(user-authorized)" or aligning with T20260720T2118Z's policy
-   language).
+1. Epic/story WITH existing children: `promote` still derives
+   `ready_for_decomposition` (its only required stage); `--to` is the escape.
+   Confirm acceptable or specify alternate routing.
+2. Run Log trigger phrase: requirement gives `(user-directed)`; confirm this
+   exact wording vs aligning with policy ticket T20260720T2118Z.
 
 ## Implementation Notes
 
