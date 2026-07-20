@@ -8,12 +8,12 @@ children: []
 blockedBy: []
 blocks: [T20260720T2118Z]
 branch: local-board/T20260720T2116Z-surface-dependency-state-in-list-query-output-and-add-unblocked-filter
-estimate: null
-estimateBasis: null
+estimate: 2
+estimateBasis: T20260711T2137Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-20T21:16:01Z
-updated: 2026-07-20T22:05:46Z
+updated: 2026-07-20T22:06:14Z
 completedSteps: []
 routingApprovals: []
 ---
