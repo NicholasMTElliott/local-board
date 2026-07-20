@@ -1,6 +1,6 @@
 {
   "name": "local-board",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Repo-native Markdown ticket board and CLI for orchestrating local AI agent workflows.",
   "type": "module",
   "license": "MIT",
