@@ -9,6 +9,7 @@ import {
   archiveDoneTickets,
   beginStep,
   blockTicket,
+  byTicketId,
   collectComments,
   completeStep,
   composeExecutor,
@@ -302,9 +303,18 @@ async function commandValidate(root, args) {
 async function commandList(root, args) {
   const asJson = takeFlag(args, "--json");
   const ready = takeFlag(args, "--ready");
+  const unblocked = takeFlag(args, "--unblocked");
   const status = takeOption(args, "--status");
   const limit = parseLimit(takeOption(args, "--limit"));
   ensureNoArgs(args);
+
+  if (unblocked && ready) {
+    throw new Error(
+      "--unblocked cannot be combined with --ready; --ready already returns only eligible (unblocked) " +
+        "tickets. Use --unblocked with --status <status> to inspect other states, e.g. list --status backlog " +
+        "--unblocked --json.",
+    );
+  }
 
   if (ready) {
     const records = (await queryReady(root))
@@ -323,10 +333,14 @@ async function commandList(root, args) {
   }
 
   const board = await discover(root);
-  const records = board.tickets
+  const byId = byTicketId(board);
+  let records = board.tickets
     .filter((ticket) => status === undefined || ticket.status === status)
-    .map((ticket) => ticketRecord(root, ticket))
-    .slice(0, limit ?? undefined);
+    .map((ticket) => ticketRecord(root, ticket, byId));
+  if (unblocked) {
+    records = records.filter((record) => record.blockedByOpen.length === 0);
+  }
+  records = records.slice(0, limit ?? undefined);
 
   if (asJson) {
     console.log(JSON.stringify(records, null, 2));
@@ -349,6 +363,11 @@ function readyListJsonRecord(record) {
     title: record.title,
     path: record.path,
     action: record.action,
+    parent: record.parent,
+    children: record.children,
+    blocks: record.blocks,
+    blockedBy: record.blockedBy,
+    blockedByOpen: record.blockedByOpen,
   };
 }
 
@@ -364,7 +383,7 @@ async function commandNext(root, args) {
     return 1;
   }
 
-  const record = ticketRecord(root, ticket);
+  const record = ticketRecord(root, ticket, byTicketId(board));
   if (asJson) {
     console.log(JSON.stringify(record, null, 2));
   } else {
@@ -1215,7 +1234,7 @@ async function commandGateCheck(root, args, allowMainRoot) {
   await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
 
   const config = await loadConfig(root);
-  const { ticket } = await findTicket(root, ticketId);
+  const { board, ticket } = await findTicket(root, ticketId);
 
   const catalog = (config.optionalSteps?.[stage] ?? []).map((entry) => {
     const normalized = {
@@ -1288,7 +1307,7 @@ async function commandGateCheck(root, args, allowMainRoot) {
     await maybeCommitPlanning(root, { ticketId: ticket.id, command: "gate-check", detail: stage });
   }
 
-  const baseRecord = ticketRecord(root, ticket);
+  const baseRecord = ticketRecord(root, ticket, byTicketId(board));
   const currentAction = config.workflow?.statusActions?.[ticket.status] ?? null;
   const ticketContext = {
     id: baseRecord.id,
@@ -1418,7 +1437,7 @@ async function commandDesignReviewCheck(root, args, allowMainRoot) {
     );
   }
 
-  const { ticket } = await findTicket(root, ticketId);
+  const { board, ticket } = await findTicket(root, ticketId);
 
   const promptPath = path.resolve(root, "plans", "prompts", "steps", "design_review.md");
   await assertPromptExists(promptPath, "design-review");
@@ -1455,7 +1474,7 @@ async function commandDesignReviewCheck(root, args, allowMainRoot) {
     }
   }
 
-  const baseRecord = ticketRecord(root, ticket);
+  const baseRecord = ticketRecord(root, ticket, byTicketId(board));
   const currentAction = config.workflow?.statusActions?.[ticket.status] ?? null;
   const ticketContext = {
     id: baseRecord.id,
@@ -1550,7 +1569,7 @@ async function commandSpecialtyRun(root, args) {
   }
 
   const config = await loadConfig(root);
-  const { ticket } = await findTicket(root, ticketId);
+  const { board, ticket } = await findTicket(root, ticketId);
 
   const stage = statusToStage(ticket.status);
   if (stage === null) {
@@ -1609,7 +1628,7 @@ async function commandSpecialtyRun(root, args) {
     }
   }
 
-  const baseRecord = ticketRecord(root, ticket);
+  const baseRecord = ticketRecord(root, ticket, byTicketId(board));
   const currentAction = config.workflow?.statusActions?.[ticket.status] ?? null;
   const ticketContext = {
     id: baseRecord.id,
@@ -1795,7 +1814,7 @@ const USAGE_TEXT = `Usage:
   local-board --version
   local-board where [--json]
   local-board [--root <path>] validate [--json]
-  local-board [--root <path>] list [--status <status>] [--ready] [--limit <N>] [--json]
+  local-board [--root <path>] list [--status <status>] [--ready] [--unblocked] [--limit <N>] [--json]
   local-board [--root <path>] next [--json]
   local-board [--root <path>] query-next [--json]
   local-board [--root <path>] query-ticket <ticket-id> [--json]

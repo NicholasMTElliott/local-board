@@ -45,7 +45,7 @@ etc.). With a single ready ticket and nothing else open, prefer the standard
 2. `local-board validate`. Stop on validation errors.
 3. `local-board fast-forward --json`. This confirms you are on the detected default branch with a clean tree before any worktree merges move the default ref. Stop if it refuses.
 4. `local-board team-config --json` to resolve the concurrency cap. Treat the returned `maxTeammates` as **`maxInFlight`** — the maximum number of tickets you keep in flight at once. It defaults to 6 and is overridden by `LOCAL_BOARD_MAX_TEAMMATES`. The real limiter is your own context budget (every step result funnels into this one window) and how many tickets you can schedule accurately at once, not raw tokens. A validation run confirmed 2 concurrent tickets are trivially manageable; **prefer ≈3** unless a project raises the cap deliberately. Never exceed `maxInFlight`.
-5. `local-board list --ready --limit <maxInFlight> --json` for the initial batch. If empty, report "no ready tickets" and stop.
+5. `local-board list --ready --limit <maxInFlight> --json` for the initial batch. If empty, report "no ready tickets" and stop. To find dependency/promotion candidates in a non-ready status (e.g. backlog tickets whose blockers are all closed), use `local-board list --status <status> --unblocked --json` instead — it reports `blockedBy`/`blockedByOpen` per ticket and composes with `--status` for any state.
 
 ## Execution profiles
 
