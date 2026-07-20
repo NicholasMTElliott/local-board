@@ -13,7 +13,7 @@ estimateBasis: T20260711T2137Z
 workStartedAt: 2026-07-20T22:13:03Z
 workCompletedAt: null
 created: 2026-07-20T21:16:01Z
-updated: 2026-07-20T22:24:53Z
+updated: 2026-07-20T22:27:29Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
@@ -251,6 +251,18 @@ Full suite: `node --test` -- 645 pass, 1 skipped (pre-existing `smoke (slow)` sk
 No deviations from the Technical Design.
 
 ## Review Findings
+
+Code review (codex gpt-5.6-terra, high effort): CONCERNS — implementation correct against acceptance criteria; one non-blocking finding.
+
+1. [Low] test/cli.test.js:914 — the pass-through test verifies parent on the query-ticket/actionRecord shape but not non-empty children or blocks, despite the test-plan bullet requiring parent/children/blocks on both record shapes. Fix: also query the parent and blocker tickets and assert children: [childId] and blocks: [childId]. Resolution: addressed fix-forward in this stage; assertions added before the move to test.
+
+Verification performed by reviewer:
+- Read reviewer role, Memory Bank, ticket requirement/design/implementation notes, commit history, and the mainline...HEAD diff.
+- Statically verified openBlockers preserves missing-id and done/archived closed-status semantics and is shared by both eligibility predicates and record shapes.
+- Verified new JSON fields are appended without removing, renaming, or reordering existing fields.
+- Verified --unblocked filters before limit, composes with --status, and rejects --ready with a non-zero error path.
+- Searched all ticketRecord call sites: plain list, next, gate-check, design-review-check, and specialty-run each pass a real byTicketId(board) map; no production call uses the empty-map default.
+- Reviewed added CLI tests and both local-team skill updates; skill text accurately describes the new flag.
 
 ## Test Evidence
 
