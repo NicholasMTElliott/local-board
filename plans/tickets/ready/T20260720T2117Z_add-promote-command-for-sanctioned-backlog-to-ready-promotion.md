@@ -13,8 +13,8 @@ estimateBasis: T20260710T1222Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T22:06:37Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-20T22:07:52Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # Add promote command for sanctioned backlog-to-ready promotion
@@ -350,3 +350,5 @@ Suite-wide:
 ## Run Log
 
 - 2026-07-20T22:06:37Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design written: deriveEntryStatus(config,type) inverts statusActions over doneRequires and picks furthest-from-done pipeline status; --to validated against TRIGGER_STATUSES; non-backlog refused; stderr open-dep warning; transition via moveTicket; Run Log line; JSON shape; SKILL blocks + usage updated
+
+- 2026-07-20T22:07:52Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: ux_interaction_review (new CLI command flow); no security/UI triggers
