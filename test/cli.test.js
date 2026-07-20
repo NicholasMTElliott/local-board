@@ -659,8 +659,24 @@ test("list --ready uses config-aware eligibility, ordering, JSON shape, status f
     assert.equal(ids.includes(implementingId), false);
     assert.equal(ids.includes(doneId), false);
     assert.equal(ids.includes(blockedId), false);
-    assert.deepEqual(Object.keys(rows[0]), ["id", "type", "status", "priority", "branch", "title", "path", "action"]);
+    assert.deepEqual(Object.keys(rows[0]), [
+      "id",
+      "type",
+      "status",
+      "priority",
+      "branch",
+      "title",
+      "path",
+      "action",
+      "parent",
+      "children",
+      "blocks",
+      "blockedBy",
+      "blockedByOpen",
+    ]);
     assert.equal(rows[0].id, (await queryNext(root))?.ticket);
+    // A ready ticket is eligible by definition, so blockedByOpen is always empty.
+    assert.deepEqual(rows[0].blockedByOpen, []);
 
     const filtered = await runCli(["--root", root, "list", "--ready", "--status", "ready_for_design", "--json"]);
     assert.equal(filtered.code, 0, filtered.stderr);
@@ -669,6 +685,247 @@ test("list --ready uses config-aware eligibility, ordering, JSON shape, status f
     const limited = await runCli(["--root", root, "list", "--ready", "--limit", "1", "--json"]);
     assert.equal(limited.code, 0, limited.stderr);
     assert.deepEqual(JSON.parse(limited.stdout).map((row) => row.id), [rows[0].id]);
+  });
+});
+
+test("query-ticket --json surfaces blockedByOpen for an open dependency and clears it once the dependency closes", async () => {
+  await withBoard(async (root) => {
+    const openDepPath = await createTicket(root, "task", "Open dependency", {
+      status: "ready_for_design",
+      now: new Date("2026-07-20T20:50:00Z"),
+    });
+    const openDepId = path.basename(openDepPath).split("_", 1)[0];
+
+    const targetPath = await createTicket(root, "task", "Dependency-blocked target", {
+      status: "ready_for_implementation",
+      now: new Date("2026-07-20T20:51:00Z"),
+    });
+    const targetId = path.basename(targetPath).split("_", 1)[0];
+    // validate() (which query-ticket runs first) requires blockedBy/blocks
+    // reciprocity, so both sides of the link must be patched.
+    await replaceText(targetPath, "blockedBy: []", `blockedBy: [${openDepId}]`);
+    await replaceText(openDepPath, "blocks: []", `blocks: [${targetId}]`);
+
+    const beforeClose = await runCli(["--root", root, "query-ticket", targetId, "--json"]);
+    assert.equal(beforeClose.code, 0, beforeClose.stderr);
+    const beforeRecord = JSON.parse(beforeClose.stdout);
+    assert.deepEqual(beforeRecord.blockedBy, [openDepId]);
+    assert.deepEqual(beforeRecord.blockedByOpen, [openDepId]);
+    assert.equal(beforeRecord.eligible, false);
+
+    // Any status -> archived is structurally allowed unconditionally, so this
+    // needs no --override even with enforceTransitions on.
+    const moveResult = await runCli(["--root", root, "move", openDepId, "archived"]);
+    assert.equal(moveResult.code, 0, moveResult.stderr);
+
+    const afterClose = await runCli(["--root", root, "query-ticket", targetId, "--json"]);
+    assert.equal(afterClose.code, 0, afterClose.stderr);
+    const afterRecord = JSON.parse(afterClose.stdout);
+    assert.deepEqual(afterRecord.blockedBy, [openDepId]);
+    // The dependency is now archived (closed): no longer open, so eligible.
+    assert.deepEqual(afterRecord.blockedByOpen, []);
+    assert.equal(afterRecord.eligible, true);
+  });
+});
+
+test("list (plain, unvalidated) --json counts a missing dependency id as open, alongside a closed and a still-open dependency", async () => {
+  await withBoard(async (root) => {
+    const closedDep = await createTicket(root, "task", "Closed dependency", {
+      status: "done",
+      now: new Date("2026-07-20T20:55:00Z"),
+    });
+    const closedDepId = path.basename(closedDep).split("_", 1)[0];
+    const missingDepId = "T20200101T0000Z";
+
+    // Plain `list` intentionally uses discover() without validate() (per the
+    // Technical Design), so a dangling blockedBy reference here is legal --
+    // unlike query-ticket/list --ready, which validate first.
+    const targetPath = await createTicket(root, "task", "Dependency-blocked target", {
+      status: "backlog",
+      now: new Date("2026-07-20T20:56:00Z"),
+    });
+    const targetId = path.basename(targetPath).split("_", 1)[0];
+    await replaceText(targetPath, "blockedBy: []", `blockedBy: [${closedDepId}, ${missingDepId}]`);
+
+    const result = await runCli(["--root", root, "list", "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    const record = JSON.parse(result.stdout).find((row) => row.id === targetId);
+    assert.deepEqual(record.blockedBy, [closedDepId, missingDepId]);
+    // The closed dependency is not open; the missing id counts as open.
+    assert.deepEqual(record.blockedByOpen, [missingDepId]);
+  });
+});
+
+test("list --status backlog --unblocked --json returns exactly the backlog tickets whose every blockedBy entry is closed", async () => {
+  await withBoard(async (root) => {
+    const closedDep = await createTicket(root, "task", "Closed dependency", {
+      status: "done",
+      now: new Date("2026-07-20T21:00:00Z"),
+    });
+    const closedDepId = path.basename(closedDep).split("_", 1)[0];
+    const openDep = await createTicket(root, "task", "Open dependency", {
+      status: "ready_for_design",
+      now: new Date("2026-07-20T21:01:00Z"),
+    });
+    const openDepId = path.basename(openDep).split("_", 1)[0];
+
+    const noDepsPath = await createTicket(root, "task", "Backlog no deps", {
+      status: "backlog",
+      now: new Date("2026-07-20T21:02:00Z"),
+    });
+    const noDepsId = path.basename(noDepsPath).split("_", 1)[0];
+
+    const closedDepPath = await createTicket(root, "task", "Backlog closed dep", {
+      status: "backlog",
+      now: new Date("2026-07-20T21:03:00Z"),
+    });
+    const closedDepTicketId = path.basename(closedDepPath).split("_", 1)[0];
+    await replaceText(closedDepPath, "blockedBy: []", `blockedBy: [${closedDepId}]`);
+
+    const openDepPath = await createTicket(root, "task", "Backlog open dep", {
+      status: "backlog",
+      now: new Date("2026-07-20T21:04:00Z"),
+    });
+    const openDepTicketId = path.basename(openDepPath).split("_", 1)[0];
+    await replaceText(openDepPath, "blockedBy: []", `blockedBy: [${openDepId}]`);
+
+    const missingDepPath = await createTicket(root, "task", "Backlog missing dep", {
+      status: "backlog",
+      now: new Date("2026-07-20T21:05:00Z"),
+    });
+    const missingDepTicketId = path.basename(missingDepPath).split("_", 1)[0];
+    await replaceText(missingDepPath, "blockedBy: []", "blockedBy: [T20200101T0000Z]");
+
+    // Non-backlog ticket, unblocked, must not appear (status filter excludes it).
+    await createTicket(root, "task", "Ready design, unblocked", {
+      status: "ready_for_design",
+      now: new Date("2026-07-20T21:06:00Z"),
+    });
+
+    const result = await runCli(["--root", root, "list", "--status", "backlog", "--unblocked", "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    const rows = JSON.parse(result.stdout);
+    const ids = rows.map((row) => row.id).sort();
+    assert.deepEqual(ids, [closedDepTicketId, noDepsId].sort());
+    assert.equal(ids.includes(openDepTicketId), false);
+    assert.equal(ids.includes(missingDepTicketId), false);
+    for (const row of rows) {
+      assert.equal(row.status, "backlog");
+      assert.deepEqual(row.blockedByOpen, []);
+    }
+    assert.ok(rows.every((row) => Object.hasOwn(row, "blockedBy")));
+  });
+});
+
+test("list --unblocked --json with no --status filters unblocked tickets across every status", async () => {
+  await withBoard(async (root) => {
+    const closedDep = await createTicket(root, "task", "Closed dependency", {
+      status: "done",
+      now: new Date("2026-07-20T21:10:00Z"),
+    });
+    const closedDepId = path.basename(closedDep).split("_", 1)[0];
+    const openDep = await createTicket(root, "task", "Open dependency", {
+      status: "ready_for_design",
+      now: new Date("2026-07-20T21:11:00Z"),
+    });
+    const openDepId = path.basename(openDep).split("_", 1)[0];
+
+    const readyNoDepsPath = await createTicket(root, "task", "Ready, no deps", {
+      status: "ready_for_implementation",
+      now: new Date("2026-07-20T21:12:00Z"),
+    });
+    const readyNoDepsId = path.basename(readyNoDepsPath).split("_", 1)[0];
+
+    const backlogClosedDepPath = await createTicket(root, "task", "Backlog, closed dep", {
+      status: "backlog",
+      now: new Date("2026-07-20T21:13:00Z"),
+    });
+    const backlogClosedDepId = path.basename(backlogClosedDepPath).split("_", 1)[0];
+    await replaceText(backlogClosedDepPath, "blockedBy: []", `blockedBy: [${closedDepId}]`);
+
+    const questionsOpenDepPath = await createTicket(root, "task", "Questions, open dep", {
+      status: "questions",
+      now: new Date("2026-07-20T21:14:00Z"),
+    });
+    const questionsOpenDepId = path.basename(questionsOpenDepPath).split("_", 1)[0];
+    await replaceText(questionsOpenDepPath, "blockedBy: []", `blockedBy: [${openDepId}]`);
+
+    const result = await runCli(["--root", root, "list", "--unblocked", "--json"]);
+    assert.equal(result.code, 0, result.stderr);
+    const ids = JSON.parse(result.stdout).map((row) => row.id).sort();
+    assert.deepEqual(ids, [readyNoDepsId, backlogClosedDepId, closedDepId, openDepId].sort());
+    assert.equal(ids.includes(questionsOpenDepId), false);
+  });
+});
+
+test("list --ready --unblocked is rejected with a clear, actionable, non-zero-exit message", async () => {
+  await withBoard(async (root) => {
+    await createTicket(root, "task", "Ready implementation", {
+      status: "ready_for_implementation",
+      now: new Date("2026-07-20T21:20:00Z"),
+    });
+
+    const result = await runCli(["--root", root, "list", "--ready", "--unblocked", "--json"]);
+    assert.notEqual(result.code, 0);
+    assert.match(result.stderr, /--unblocked cannot be combined with --ready/);
+    assert.match(result.stderr, /list --status backlog --unblocked --json/);
+  });
+});
+
+test("list (plain) and query-ticket both pass through parent/children/blocks from front matter", async () => {
+  await withBoard(async (root) => {
+    const parentPath = await createTicket(root, "epic", "Parent epic", {
+      status: "backlog",
+      now: new Date("2026-07-20T21:30:00Z"),
+    });
+    const parentId = path.basename(parentPath).split("_", 1)[0];
+
+    const childPath = await createTicket(root, "task", "Child task", {
+      status: "ready_for_design",
+      parent: parentId,
+      now: new Date("2026-07-20T21:31:00Z"),
+    });
+    const childId = path.basename(childPath).split("_", 1)[0];
+    // createTicket({ parent }) already calls linkParent, which appends childId
+    // to the parent's children -- no manual patch needed here.
+
+    const blockerPath = await createTicket(root, "task", "Blocker task", {
+      status: "backlog",
+      now: new Date("2026-07-20T21:32:00Z"),
+    });
+    const blockerId = path.basename(blockerPath).split("_", 1)[0];
+    await replaceText(blockerPath, "blocks: []", `blocks: [${childId}]`);
+    await replaceText(childPath, "blockedBy: []", `blockedBy: [${blockerId}]`);
+
+    const listResult = await runCli(["--root", root, "list", "--json"]);
+    assert.equal(listResult.code, 0, listResult.stderr);
+    const listRows = JSON.parse(listResult.stdout);
+    const childRow = listRows.find((row) => row.id === childId);
+    assert.equal(childRow.parent, parentId);
+    assert.deepEqual(childRow.blockedBy, [blockerId]);
+    assert.deepEqual(childRow.blockedByOpen, [blockerId]);
+    const parentRow = listRows.find((row) => row.id === parentId);
+    assert.deepEqual(parentRow.children, [childId]);
+    const blockerRow = listRows.find((row) => row.id === blockerId);
+    assert.deepEqual(blockerRow.blocks, [childId]);
+
+    const queryResult = await runCli(["--root", root, "query-ticket", childId, "--json"]);
+    assert.equal(queryResult.code, 0, queryResult.stderr);
+    const queryRecord = JSON.parse(queryResult.stdout);
+    assert.equal(queryRecord.parent, parentId);
+    assert.deepEqual(queryRecord.blockedBy, [blockerId]);
+    assert.deepEqual(queryRecord.blockedByOpen, [blockerId]);
+
+    // Non-empty children (on the parent) and blocks (on the blocker) pass
+    // through on the actionRecord shape too, not just parent/blockedBy on the
+    // child -- query both other tickets on both surfaces.
+    const parentQueryResult = await runCli(["--root", root, "query-ticket", parentId, "--json"]);
+    assert.equal(parentQueryResult.code, 0, parentQueryResult.stderr);
+    assert.deepEqual(JSON.parse(parentQueryResult.stdout).children, [childId]);
+
+    const blockerQueryResult = await runCli(["--root", root, "query-ticket", blockerId, "--json"]);
+    assert.equal(blockerQueryResult.code, 0, blockerQueryResult.stderr);
+    assert.deepEqual(JSON.parse(blockerQueryResult.stdout).blocks, [childId]);
   });
 });
 

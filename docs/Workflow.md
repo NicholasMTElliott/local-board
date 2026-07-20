@@ -16,7 +16,7 @@ For a specific ticket:
 node ./bin/local-board.js query-ticket T20260514T1234Z --json
 ```
 
-The result includes the ticket path, action, prompt, configured agent, transition guidance, and eligibility.
+The result includes the ticket path, action, prompt, configured agent, transition guidance, eligibility, and dependency state. Dependency fields are `parent`, `children`, `blocks`, `blockedBy`, and `blockedByOpen`; `blockedByOpen` is the missing or not-yet-closed subset that explains dependency-driven `eligible: false`.
 
 For a board-level state summary:
 
@@ -51,6 +51,8 @@ Current trigger statuses are:
 `create` prints a stderr warning (never a refusal) when the requested `--status` is a trigger status whose action is not one of the type's `routing.doneRequires` actions -- e.g. a `story` or `epic` created at any trigger status other than `ready_for_decomposition`, or a `task`/`bug` created at `ready_for_decomposition`. The warning names the conventional entry status and cites the `doneRequires` rationale. This is warning-only for existing boards: the requested status is still created (all trigger statuses stay schema-legal), stdout still holds exactly the created ticket path, and boards/scripts that never trigger the mismatch see byte-identical output. It is independent of `routing.enforceTransitions`; the sanctioned correction for a genuine mistake is `move <id> <status> --override --reason "<text>"` (a plain `move` off the transition map is refused when `enforceTransitions` is on).
 
 Ticket dependencies should not use `status: blocked`. Keep the dependent ticket in its intended ready status and record the dependency with `block <ticket-id> <dependency-id>`. The ticket will become eligible automatically when every `blockedBy` ticket is `done` or `archived`.
+
+To inspect dependency candidates outside ready statuses, use `list --status <status> --unblocked --json`. The filter keeps records whose `blockedByOpen` is empty, composes with `--status`, and is rejected with `--ready` because `--ready` already returns only eligible tickets.
 
 Priority order is `P0`, `P1`, `P2`, `P3`, then `P4`. Ties use configured pipeline order, then oldest `created`, then ticket ID.
 
@@ -118,6 +120,7 @@ The user answers in the ticket or chat, then moves the ticket back to an eligibl
 ```sh
 node ./bin/local-board.js validate
 node ./bin/local-board.js list
+node ./bin/local-board.js list --status backlog --unblocked --json
 node ./bin/local-board.js next
 node ./bin/local-board.js schema --json
 node ./bin/local-board.js create story "Ticket parser" --status backlog --priority P2

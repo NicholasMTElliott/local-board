@@ -61,6 +61,7 @@ node ./bin/local-board.js version
 node ./bin/local-board.js where --json
 node ./bin/local-board.js validate
 node ./bin/local-board.js list
+node ./bin/local-board.js list --status backlog --unblocked --json
 node ./bin/local-board.js next
 node ./bin/local-board.js query-next --json
 node ./bin/local-board.js query-ticket T20260514T1234Z --json
@@ -92,6 +93,7 @@ node ./bin/local-board.js block T20260514T1236Z T20260514T1235Z
 ```
 
 The same commands are available through `local-board` when the package bin is on `PATH`.
+JSON records from `list`, `list --ready`, `query-next`, and `query-ticket` include `parent`, `children`, `blocks`, `blockedBy`, and `blockedByOpen`. `blockedByOpen` names missing or not-yet-closed dependencies. Use `list --status <status> --unblocked --json` to find tickets in any status whose blockers are all closed; `--unblocked` is rejected with `--ready`.
 
 For multi-line Markdown, `section --file <path>` is preferred. It avoids shell quoting failures from apostrophes, backticks, dollar signs, and long generated text. Create that file with the Write tool, not shell redirection. The payload is the section body only; do not include the section's own `## Heading`, and fence any literal top-level `## ` sample lines.
 
@@ -103,7 +105,7 @@ For multi-line Markdown, `section --file <path>` is preferred. It avoids shell q
 
 Workflow routing lives in `plans/local-board.config.jsonc`. Comments and trailing commas are allowed. Strict routing is enforced by `begin-step`, `complete-step`, `approve-inline`, `move ... done`, and `validate`.
 
-Ticket dependencies use `blockedBy`/`blocks` while the dependent ticket stays in its intended ready status. `status: blocked` is reserved for non-ticket blockers.
+Ticket dependencies use `blockedBy`/`blocks` while the dependent ticket stays in its intended ready status. `status: blocked` is reserved for non-ticket blockers. `blockedByOpen` in JSON output is the open subset that explains a dependency-blocked ticket's `eligible: false`.
 
 When `git.autoMerge` is `true`, `move ... done` commits planning-only closeout changes and merges the recorded ticket branch into the configured or detected default branch after strict routing validation passes.
 

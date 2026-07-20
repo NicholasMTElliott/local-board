@@ -25,7 +25,7 @@ You are the top-level orchestrator. Keep up to `maxInFlight` tickets active, dis
 2. Run `local-board validate`. Stop on validation errors.
 3. Run `local-board fast-forward --json`. Stop if it refuses.
 4. Run `local-board team-config --json`. Treat `maxTeammates` as `maxInFlight`; prefer about 3 even if the cap is higher.
-5. Run `local-board list --ready --limit <maxInFlight> --json`. If empty, report no ready tickets and stop.
+5. Run `local-board list --ready --limit <maxInFlight> --json`. If empty, report no ready tickets and stop. To find promotion candidates outside the ready statuses (e.g. backlog tickets whose blockers are all closed), run `local-board list --status <status> --unblocked --json` instead — it reports `blockedBy`/`blockedByOpen` per ticket and composes with `--status` for any state.
 
 ## Wave-Barrier Scheduling
 

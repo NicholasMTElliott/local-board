@@ -2373,19 +2373,24 @@ export async function schemaRecord(root = ".") {
   };
 }
 
+// Returns the subset of a ticket's declared blockedBy ids whose dependency is
+// missing from the board OR not in a closed status (done/archived) -- exactly
+// the ids that make the ticket ineligible. Single source of truth reused by
+// isEligible/isEligibleForConfig (eligibility) and actionRecord/ticketRecord
+// (dependency-state exposure), so the two can never drift.
+function openBlockers(ticket, byId) {
+  return asList(ticket.frontMatter.blockedBy).filter((id) => {
+    const dep = byId.get(id);
+    return dep === undefined || !isClosedStatus(dep.status);
+  });
+}
+
 export function isEligible(ticket, byId) {
   if (!TRIGGER_STATUSES.has(ticket.status)) {
     return false;
   }
 
-  for (const dependencyId of asList(ticket.frontMatter.blockedBy)) {
-    const dependency = byId.get(dependencyId);
-    if (dependency === undefined || !isClosedStatus(dependency.status)) {
-      return false;
-    }
-  }
-
-  return true;
+  return openBlockers(ticket, byId).length === 0;
 }
 
 export function isEligibleForConfig(ticket, byId, config) {
@@ -2393,14 +2398,7 @@ export function isEligibleForConfig(ticket, byId, config) {
     return false;
   }
 
-  for (const dependencyId of asList(ticket.frontMatter.blockedBy)) {
-    const dependency = byId.get(dependencyId);
-    if (dependency === undefined || !isClosedStatus(dependency.status)) {
-      return false;
-    }
-  }
-
-  return true;
+  return openBlockers(ticket, byId).length === 0;
 }
 
 function isClosedStatus(status) {
@@ -2431,6 +2429,11 @@ function actionRecord(root, ticket, config, byId) {
         },
     transitions: transitionsForStatus(config, ticket.status),
     eligible: action === null ? false : isEligibleForConfig(ticket, byId, config),
+    parent: ticket.frontMatter.parent ?? null,
+    children: asList(ticket.frontMatter.children),
+    blocks: asList(ticket.frontMatter.blocks),
+    blockedBy: asList(ticket.frontMatter.blockedBy),
+    blockedByOpen: openBlockers(ticket, byId),
   };
 }
 
@@ -2586,7 +2589,7 @@ export function serializeFrontMatter(frontMatter) {
   return orderedKeys.map((field) => `${field}: ${formatScalar(frontMatter[field])}\n`).join("");
 }
 
-export function ticketRecord(root, ticket) {
+export function ticketRecord(root, ticket, byId = new Map()) {
   return {
     id: ticket.id,
     type: ticket.type,
@@ -2594,6 +2597,11 @@ export function ticketRecord(root, ticket) {
     priority: ticket.priority,
     path: path.relative(path.resolve(root), ticket.path),
     title: ticket.title,
+    parent: ticket.frontMatter.parent ?? null,
+    children: asList(ticket.frontMatter.children),
+    blocks: asList(ticket.frontMatter.blocks),
+    blockedBy: asList(ticket.frontMatter.blockedBy),
+    blockedByOpen: openBlockers(ticket, byId),
   };
 }
 
