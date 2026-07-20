@@ -1,7 +1,7 @@
 ---
 id: T20260720T2116Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P1
 parent: null
 children: []
@@ -10,10 +10,10 @@ blocks: [T20260720T2118Z]
 branch: local-board/T20260720T2116Z-surface-dependency-state-in-list-query-output-and-add-unblocked-filter
 estimate: 2
 estimateBasis: T20260711T2137Z
-workStartedAt: null
+workStartedAt: 2026-07-20T22:13:03Z
 workCompletedAt: null
 created: 2026-07-20T21:16:01Z
-updated: 2026-07-20T22:12:53Z
+updated: 2026-07-20T22:13:03Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -243,3 +243,5 @@ prefers leniency (single-branch change, test flips accordingly).
 - 2026-07-20T22:06:59Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (no security/UI/UX triggers; additive CLI JSON fields)
 
 - 2026-07-20T22:12:53Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: CONCERNS: design sound; Medium - commandGateCheck/commandDesignReviewCheck/commandSpecialtyRun destructure only {ticket}, so board/byId not in scope as design claims; implementer must bind board+byTicketId or leave those legacy. Rest verified: openBlockers semantics, filter-before-limit, --ready rejection, additivity, test plan
+
+- 2026-07-20T22:13:03Z: Ensured git branch local-board/T20260720T2116Z-surface-dependency-state-in-list-query-output-and-add-unblocked-filter (already-current).
