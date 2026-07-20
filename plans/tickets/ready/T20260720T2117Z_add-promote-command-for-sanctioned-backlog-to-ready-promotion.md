@@ -13,7 +13,7 @@ estimateBasis: T20260710T1222Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T22:19:27Z
+updated: 2026-07-20T22:19:48Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", ux_interaction_review:inline, "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -340,6 +340,18 @@ Suite-wide:
 ## Implementation Notes
 
 ## Review Findings
+
+Design review verdict (codex gpt-5.6-sol, xhigh): FAIL. Findings to resolve in the redesign, most severe first:
+
+1. [High] Source-state race: the backlog precondition is checked before moveTicket acquires its ticket lock. A concurrent mutation can move the ticket between preflight and move; moveTicket re-resolves but does not require from === backlog, and a same-target move is structurally allowed, so promote could succeed and falsely log "backlog -> ready_for_design" for an already-ready ticket. Fix: add an expected-source precondition evaluated inside moveTicket's existing lock (e.g. an options.expectFrom), derive the reported "from" from that locked read, and add a race/precondition test.
+
+2. [High] Lossy derivation: inverting workflow.statusActions is lossy — action values are not validated unique, so two statuses producing the same action overwrite each other and can select a status that is not furthest from done. Statuses absent from pipelineOrder get index -1 and the proposed failure handling does not reject an all-unranked candidate set. Fix: enumerate every (status, action) pair matching a required action, keep only ranked trigger statuses, pick the maximum rank, refuse when none remain. Add duplicate-action and all-unranked custom-pipeline tests.
+
+3. [Medium] Non-atomic audit: move and Run Log append are separate locked writes; a comment failure leaves the ticket promoted with no audit line and skips maybeCommitPlanning (dirty planning tree on commitPlanningOnTransition boards). Fix: append the promotion audit entry within the locked move mutation (single commit), and add a git integration test asserting the promotion commit contains both the relocation and the Run Log line with plans/ clean afterward.
+
+4. [Medium] Guard gap: test/skill-usage-sync.test.js REQUIRED_COMMANDS does not include promote — both SKILL blocks could omit it and still pass. Fix: add promote to REQUIRED_COMMANDS (or a direct presence assertion).
+
+Verified as correct by the reviewer (keep as-is): pipelineOrder is closest-to-done-first in both repo config and scaffold, so max-index derivation yields ready_for_decomposition for epic/story and ready_for_design for task/bug; closed-dependency warning semantics match isEligible; acceptance-criteria command cases otherwise covered.
 
 ## Test Evidence
 
