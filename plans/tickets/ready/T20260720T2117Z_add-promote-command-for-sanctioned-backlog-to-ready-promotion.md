@@ -13,8 +13,8 @@ estimateBasis: T20260710T1222Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T22:06:36Z
-completedSteps: []
+updated: 2026-07-20T22:06:37Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
 # Add promote command for sanctioned backlog-to-ready promotion
@@ -348,3 +348,5 @@ Suite-wide:
 ## Questions
 
 ## Run Log
+
+- 2026-07-20T22:06:37Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design written: deriveEntryStatus(config,type) inverts statusActions over doneRequires and picks furthest-from-done pipeline status; --to validated against TRIGGER_STATUSES; non-backlog refused; stderr open-dep warning; transition via moveTicket; Run Log line; JSON shape; SKILL blocks + usage updated
