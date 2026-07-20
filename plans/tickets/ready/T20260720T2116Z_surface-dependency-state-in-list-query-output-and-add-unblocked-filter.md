@@ -14,7 +14,7 @@ workStartedAt: null
 workCompletedAt: null
 created: 2026-07-20T21:16:01Z
 updated: 2026-07-20T22:06:14Z
-completedSteps: []
+completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
 # Surface dependency state in list/query output and add --unblocked filter
@@ -235,3 +235,5 @@ prefers leniency (single-branch change, test flips accordingly).
 ## Questions
 
 ## Run Log
+
+- 2026-07-20T22:06:14Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design written: shared openBlockers helper reused by eligibility; additive blockedBy/blockedByOpen/parent/children/blocks on both record shapes; --unblocked composes with --status, rejected with --ready; test matrix incl. missing-dep and additivity guard
