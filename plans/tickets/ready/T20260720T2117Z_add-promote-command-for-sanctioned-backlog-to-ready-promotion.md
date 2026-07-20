@@ -13,7 +13,7 @@ estimateBasis: T20260710T1222Z
 workStartedAt: 2026-07-20T23:00:35Z
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T23:19:42Z
+updated: 2026-07-20T23:25:02Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -451,6 +451,31 @@ Code review (codex gpt-5.6-terra, high effort): PASS — implementation satisfie
 4. [Medium] promote missing from REQUIRED_COMMANDS — resolved in test/skill-usage-sync.test.js.
 
 ## Test Evidence
+
+verdict: pass
+
+Full suite green, and every acceptance criterion verified end-to-end against the real CLI on a throwaway scaffold board outside the repo. No regressions, no flakes, worktree left untouched (clean `git status`).
+
+### Suite
+
+- `node --test` in the ticket worktree: 662 tests, 661 pass, 0 fail, 1 skip (`smoke (slow)` — pre-existing, unrelated), ~39.6s. Matches Implementation Notes baseline.
+- `node --test test/skill-usage-sync.test.js` isolated: 6/6 pass, including byte-identical-blocks and required-command-presence checks.
+- `grep -rn "promote" test/*.js`: 33 references across cli/git/skill-usage-sync/tickets/worktrees test files — matches the claimed new-test footprint.
+
+### Acceptance criteria (throwaway scaffold board under OS temp; cleaned up after)
+
+1. Entry-status derivation, no `--to`: `promote <epic>` -> `Promoted ... backlog -> ready_for_decomposition`; `promote <task>` -> `Promoted ... backlog -> ready_for_design`; both exit 0, files relocated `backlog/` -> `ready/`. PASS.
+2. `promote --to designing`: refused, exit 2 — `promote refused: "designing" is not a trigger (ready_*) status; promote targets one of the ready_* statuses only.` Ticket unchanged in backlog. PASS.
+3. `promote` on a `ready_for_design` ticket: refused, exit 2 — message names the current status. PASS.
+4. Open-dependency promotion: succeeds exit 0 with stderr-only `WARNING: ... has open blockedBy dependencies [...]; promotion will proceed, but the ticket stays ineligible in list --ready until they close.` (stdout/stderr split verified by redirection); `list --ready` excludes the promoted-but-blocked ticket. PASS.
+5. Front matter + folder + Run Log: moved file shows `status: ready_for_design`, lives under `plans/tickets/ready/`, Run Log contains `- <iso>: Promoted backlog -> ready_for_design (user-directed)`. PASS.
+6. `--json` shape: exactly `ticket, from, to, targetSource, path, openBlockedBy`; verified `targetSource: "computed"` and `"override"` (`--to ready_for_implementation`) plus empty and populated `openBlockedBy`. PASS.
+
+### Gaps / caveats
+
+- Wrong-root guard verified via the passing `test/worktrees.test.js` case rather than a live registered-worktree topology.
+- Single-commit relocation+audit atomicity verified via the passing `test/git.test.js` integration coverage rather than a live git-enabled scaffold.
+- Throwaway temp board removed after testing; ticket worktree untouched.
 
 ## Documentation Updates
 
