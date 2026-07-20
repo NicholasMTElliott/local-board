@@ -13,7 +13,7 @@ estimateBasis: T20260710T1222Z
 workStartedAt: 2026-07-20T23:00:35Z
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T23:00:35Z
+updated: 2026-07-20T23:16:15Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -363,6 +363,69 @@ Suite-wide:
    exact wording vs aligning with policy ticket T20260720T2118Z.
 
 ## Implementation Notes
+
+Implemented per the reworked Technical Design, matching all four review-fix deltas.
+
+**Conflict gate**: merged `local-board/T20260720T2116Z-...unblocked-filter` first (clean, no
+conflicts — that peer's `openBlockers` helper, dependency-state JSON fields, and `--unblocked`
+list flag landed intact and were reused rather than reimplemented).
+
+**`src/tickets.js`**:
+- `moveTicket(root, ticketId, status, options)` gains two additive, default-absent keys:
+  - `options.expectFrom`: checked immediately after the locked `findTicket` read, before any
+    gate or fs mutation. Mismatch throws `promote refused: <id> is in <status> under lock, not
+    <expectFrom>; ...` with zero side effects.
+  - `options.auditComment`: appended to the Run Log inside the same locked mutation, after the
+    loop-back-invalidation append and before render/write — one write, one downstream
+    `maybeCommitPlanning` commit.
+  - Existing callers (unset options) are byte-identical; regression-tested.
+- `deriveEntryStatus(config, type)`: enumerates every `(status, action)` pair in
+  `workflow.statusActions` (never inverts it), keeps only trigger statuses ranked in
+  `workflow.pipelineOrder`, and returns the max-rank (furthest-from-done) candidate. Refuses on
+  an empty `doneRequires[type]` or an all-unranked candidate set. Scaffold: epic/story ->
+  `ready_for_decomposition`, task/bug -> `ready_for_design`.
+- `openBlockers(ticket, byId)` — was already private (added by the merged peer ticket) — is now
+  exported so `promote`'s stderr warning reuses the exact `isEligible` closed-status semantics
+  instead of reaching into private internals.
+
+**`src/cli.js`**:
+- `commandPromote`: friendly pre-lock backlog refusal, `--to` validated against
+  `TRIGGER_STATUSES`, computes `deriveEntryStatus` when `--to` is absent, stderr `WARNING` on
+  `openBlockers`, one `moveTicket({ expectFrom: "backlog", auditComment: ... })` call, one
+  `maybeCommitPlanning`. `--json` shape: `{ ticket, from, to, targetSource, path,
+  openBlockedBy }`. Dispatch branch and `USAGE_TEXT` line added near `move`.
+
+**Docs/skill surface**: `promote` added to both curated CLI Commands blocks (`SKILL.md`,
+`skills/codex/local-board/SKILL.md`, byte-identical) and to `REQUIRED_COMMANDS` in
+`test/skill-usage-sync.test.js` (closes finding 4 — a block omitting `promote` now fails CI).
+Added a one-line `promote` mention to `docs/Workflow.md`'s backlog/trigger-status section.
+`npm run sync-resources` was not needed (no `plans/prompts` files touched).
+
+**Tests added** (16 new, all passing):
+- `test/tickets.test.js`: `deriveEntryStatus` scaffold derivation, duplicate-action
+  non-lossy resolution, all-unranked refusal, empty/missing `doneRequires` refusal,
+  reordered/renamed-action robustness; `openBlockers` unit test; `moveTicket`
+  `expectFrom` match/mismatch (race/precondition, zero side effects on refusal),
+  `auditComment` same-write atomicity, and a byte-identical-regression test for callers
+  that pass neither option.
+- `test/cli.test.js`: scaffold-config epic->ready_for_decomposition /
+  task->ready_for_design without `--to`; `--to designing` refusal; non-backlog refusal;
+  open-dependency warning + `list --ready` exclusion; `--json` shape incl.
+  `targetSource: computed` vs `override`.
+- `test/worktrees.test.js`: wrong-root guard refuses `promote` from the main root and is
+  overridden by `--allow-main-root` (mirrors the existing `move` guard test).
+- `test/git.test.js`: `commitPlanningOnTransition` integration test asserting ONE commit
+  contains both the relocation (`--no-renames` diff-tree: old path deleted, new path
+  added) and the Run Log promotion line, with `plans/` clean afterward.
+- `test/skill-usage-sync.test.js`: `promote` added to `REQUIRED_COMMANDS`.
+
+Full suite: `node --test` — 661 pass, 0 fail, 1 skipped (pre-existing, unrelated) — up from a
+645-pass baseline immediately after the sanctioned merge (16 new tests, no regressions).
+
+No deviations from the approved design. Both open questions in the ticket (children-present
+epic/story routing; exact Run Log wording) were resolved by the design as written and
+implemented as specified (`--to` is the escape hatch; wording is exactly
+`Promoted backlog -> <status> (user-directed)`).
 
 ## Review Findings
 
