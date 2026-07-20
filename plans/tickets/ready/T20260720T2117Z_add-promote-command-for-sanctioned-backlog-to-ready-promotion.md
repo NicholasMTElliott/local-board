@@ -8,12 +8,12 @@ children: []
 blockedBy: []
 blocks: [T20260720T2118Z]
 branch: local-board/T20260720T2117Z-add-promote-command-for-sanctioned-backlog-to-ready-promotion
-estimate: null
-estimateBasis: null
+estimate: 2
+estimateBasis: T20260710T1222Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T22:06:06Z
+updated: 2026-07-20T22:06:36Z
 completedSteps: []
 routingApprovals: []
 ---
