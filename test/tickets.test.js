@@ -15,6 +15,7 @@ import {
   completeStep,
   composeExecutor,
   createTicket,
+  deriveEntryStatus,
   discover,
   findTicket,
   gateConsultationRecords,
@@ -27,6 +28,7 @@ import {
   modelAccepted,
   moveTicket,
   nextTicket,
+  openBlockers,
   parseFrontMatter,
   parseMarkdownTicket,
   queryNext,
@@ -3274,6 +3276,170 @@ test("typeStatusAdvisory is defensive against custom-config edges: missing doneR
   const unproducedAdvisory = typeStatusAdvisory(configWithUnproducedAction, "task", "ready_for_design");
   assert.match(unproducedAdvisory, /"publish"/);
   assert.match(unproducedAdvisory, /no conventional entry status could be determined/);
+});
+
+test("deriveEntryStatus derives the scaffold's furthest-from-done entry status: ready_for_decomposition for epic/story, ready_for_design for task/bug", () => {
+  assert.equal(deriveEntryStatus(DEFAULT_CONFIG, "epic"), "ready_for_decomposition");
+  assert.equal(deriveEntryStatus(DEFAULT_CONFIG, "story"), "ready_for_decomposition");
+  assert.equal(deriveEntryStatus(DEFAULT_CONFIG, "task"), "ready_for_design");
+  assert.equal(deriveEntryStatus(DEFAULT_CONFIG, "bug"), "ready_for_design");
+});
+
+test("deriveEntryStatus resolves a duplicate-action config to the furthest-from-done ranked trigger status, never losing the earlier status to inversion", () => {
+  // Two statuses (ready_for_design, ready_for_implementation) both produce
+  // the "design" action; both are required for "task". A lossy
+  // statusActions inversion would keep only the LAST entry in object order
+  // (ready_for_implementation); pair-enumeration must keep both candidates
+  // and pick the furthest-from-done one (ready_for_design, higher pipeline
+  // index).
+  const config = {
+    ...DEFAULT_CONFIG,
+    workflow: {
+      ...DEFAULT_CONFIG.workflow,
+      statusActions: {
+        ...DEFAULT_CONFIG.workflow.statusActions,
+        ready_for_implementation: "design",
+      },
+    },
+    routing: {
+      ...DEFAULT_CONFIG.routing,
+      doneRequires: { task: ["design"] },
+    },
+  };
+
+  assert.equal(deriveEntryStatus(config, "task"), "ready_for_design");
+});
+
+test("deriveEntryStatus refuses when every action-matching status is unranked in pipelineOrder (all-unranked custom pipeline), rather than picking a -1 rank", () => {
+  const config = {
+    ...DEFAULT_CONFIG,
+    workflow: {
+      ...DEFAULT_CONFIG.workflow,
+      // ready_for_design's action ("design") is required for "task", but
+      // ready_for_design itself is trimmed out of pipelineOrder.
+      pipelineOrder: DEFAULT_CONFIG.workflow.pipelineOrder.filter((status) => status !== "ready_for_design"),
+    },
+    routing: {
+      ...DEFAULT_CONFIG.routing,
+      doneRequires: { task: ["design"] },
+    },
+  };
+
+  assert.throws(() => deriveEntryStatus(config, "task"), /cannot derive a promotion target/);
+});
+
+test("deriveEntryStatus refuses when routing.doneRequires[type] is empty or missing, naming --to as the manual path", () => {
+  const configEmpty = {
+    ...DEFAULT_CONFIG,
+    routing: { ...DEFAULT_CONFIG.routing, doneRequires: { task: [] } },
+  };
+  assert.throws(() => deriveEntryStatus(configEmpty, "task"), /cannot derive a promotion target.*--to/s);
+
+  const configMissing = {
+    ...DEFAULT_CONFIG,
+    routing: { ...DEFAULT_CONFIG.routing, doneRequires: {} },
+  };
+  assert.throws(() => deriveEntryStatus(configMissing, "task"), /cannot derive a promotion target.*--to/s);
+});
+
+test("deriveEntryStatus is robust to a reordered doneRequires list and a renamed statusActions action: still yields the max-rank entry", () => {
+  const config = {
+    ...DEFAULT_CONFIG,
+    workflow: {
+      ...DEFAULT_CONFIG.workflow,
+      statusActions: {
+        ...DEFAULT_CONFIG.workflow.statusActions,
+        ready_for_design: "design-review-and-plan",
+      },
+    },
+    routing: {
+      ...DEFAULT_CONFIG.routing,
+      // Reordered vs the scaffold order, and referencing the renamed action.
+      doneRequires: {
+        task: ["document", "test", "review", "implement", "design-review-and-plan"],
+      },
+    },
+  };
+
+  assert.equal(deriveEntryStatus(config, "task"), "ready_for_design");
+});
+
+test("openBlockers returns only missing or non-closed dependency ids, matching isEligible's closed-status semantics", () => {
+  const ticket = { frontMatter: { blockedBy: ["T1", "T2", "T3"] } };
+  const byId = new Map([
+    ["T1", { status: "done" }],
+    ["T2", { status: "implementing" }],
+    // T3 intentionally absent: a missing dependency is also "open".
+  ]);
+
+  assert.deepEqual(openBlockers(ticket, byId), ["T2", "T3"]);
+});
+
+test("moveTicket options.expectFrom proceeds and relocates normally when it matches the locked read", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Expect from matches", { status: "backlog" });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const movedPath = await moveTicket(root, ticketId, "ready_for_design", { expectFrom: "backlog" });
+
+    assert.equal(path.relative(root, movedPath), path.join("plans", "tickets", "ready", path.basename(ticketPath)));
+    const text = await readFile(movedPath, "utf8");
+    assert.match(text, /^status: ready_for_design$/m);
+  });
+});
+
+test("moveTicket options.expectFrom mismatch refuses under lock, names the actual locked status, and leaves the ticket untouched at its original path (race/precondition)", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Expect from mismatch", { status: "ready_for_design" });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    const originalText = await readFile(ticketPath, "utf8");
+
+    await assert.rejects(
+      moveTicket(root, ticketId, "ready_for_implementation", { expectFrom: "backlog" }),
+      /promote refused: .* is in ready_for_design under lock, not backlog; the ticket changed state before promotion could run\./,
+    );
+
+    // Zero side effects: file untouched at its original path with original content.
+    assert.equal(await readFile(ticketPath, "utf8"), originalText);
+    const readyDir = path.join(root, "plans", "tickets", "ready");
+    assert.deepEqual(await readdir(readyDir), [path.basename(ticketPath)]);
+  });
+});
+
+test("moveTicket options.auditComment lands the Run Log line in the SAME written file as the relocation (single write, not a separate comment call)", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "Audit comment atomic", { status: "backlog" });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const movedPath = await moveTicket(root, ticketId, "ready_for_design", {
+      expectFrom: "backlog",
+      auditComment: "Promoted backlog -> ready_for_design (user-directed)",
+      now: new Date("2026-07-20T23:15:00Z"),
+    });
+
+    const text = await readFile(movedPath, "utf8");
+    assert.match(text, /^status: ready_for_design$/m);
+    assert.match(
+      text,
+      /- 2026-07-20T23:15:00Z: Promoted backlog -> ready_for_design \(user-directed\)/,
+    );
+  });
+});
+
+test("moveTicket with neither expectFrom nor auditComment behaves byte-identically to a call before those options existed (regression)", async () => {
+  await withBoard(async (root) => {
+    const ticketPath = await createTicket(root, "task", "No new options", { status: "ready_for_design" });
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+
+    const movedPath = await moveTicket(root, ticketId, "implementing", {
+      now: new Date("2026-05-14T21:00:00Z"),
+    });
+
+    const text = await readFile(movedPath, "utf8");
+    assert.match(text, /^status: implementing$/m);
+    assert.doesNotMatch(text, /Promoted backlog/);
+    assert.doesNotMatch(text, /under lock, not/);
+  });
 });
 
 test("moveTicket refuses the design -> implementation forward move without a recorded design review, and allows it once recorded (both ready_for_design and designing)", async () => {

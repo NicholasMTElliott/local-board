@@ -399,6 +399,7 @@ local-board design-review-complete <ticket-id> --executor <executor> [--model <m
 local-board calibration suggest <ticket-id> [--json]
 local-board estimate <ticket-id> <points> [--basis <ticket-id-or-bootstrap>] [--force] [--json]
 local-board move <ticket-id> <status> [--override] [--reason "<text>"] [--json]
+local-board promote <ticket-id> [--to <status>] [--json]
 local-board set <ticket-id> <field> <value> [--override] [--reason "<text>"]
 local-board section <ticket-id> "<text>" --section "<section>"
 local-board section <ticket-id> --file <path> --section "<section>"

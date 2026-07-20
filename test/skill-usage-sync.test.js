@@ -105,7 +105,7 @@ test("each skill's CLI Commands block is a subset of the authoritative CLI usage
   }
 });
 
-const REQUIRED_COMMANDS = ["design-review-check", "design-review-complete"];
+const REQUIRED_COMMANDS = ["design-review-check", "design-review-complete", "promote"];
 
 test("each skill's CLI Commands block documents the required design-review command surface", async () => {
   for (const file of SKILL_FILES) {

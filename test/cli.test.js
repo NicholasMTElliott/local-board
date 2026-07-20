@@ -2719,6 +2719,113 @@ test("CLI set <id> status has --override parity with move", async () => {
   });
 });
 
+test("CLI promote on a scaffold-config board sends an epic to ready_for_decomposition and a task to ready_for_design without --to; front matter, folder, and Run Log all update", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const epicCreate = await runCli(["--root", root, "create", "epic", "Promote epic", "--status", "backlog"]);
+    assert.equal(epicCreate.code, 0, epicCreate.stderr);
+    const epicId = path.basename(epicCreate.stdout.trim()).split("_", 1)[0];
+
+    const epicPromoted = await runCli(["--root", root, "promote", epicId]);
+    assert.equal(epicPromoted.code, 0, epicPromoted.stderr);
+    const epicPath = epicPromoted.stdout.trim().split("\n")[0];
+    assert.equal(path.dirname(epicPath), path.join(root, "plans", "tickets", "ready"));
+    const epicText = await readFile(epicPath, "utf8");
+    assert.match(epicText, /^status: ready_for_decomposition$/m);
+    assert.match(epicText, /Promoted backlog -> ready_for_decomposition \(user-directed\)/);
+
+    const taskCreate = await runCli(["--root", root, "create", "task", "Promote task", "--status", "backlog"]);
+    assert.equal(taskCreate.code, 0, taskCreate.stderr);
+    const taskId = path.basename(taskCreate.stdout.trim()).split("_", 1)[0];
+
+    const taskPromoted = await runCli(["--root", root, "promote", taskId]);
+    assert.equal(taskPromoted.code, 0, taskPromoted.stderr);
+    const taskPath = taskPromoted.stdout.trim().split("\n")[0];
+    assert.equal(path.dirname(taskPath), path.join(root, "plans", "tickets", "ready"));
+    const taskText = await readFile(taskPath, "utf8");
+    assert.match(taskText, /^status: ready_for_design$/m);
+    assert.match(taskText, /Promoted backlog -> ready_for_design \(user-directed\)/);
+  });
+});
+
+test("CLI promote --to designing refuses (not a trigger status); promote on a ready_for_design ticket refuses (not backlog)", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const create = await runCli(["--root", root, "create", "task", "Promote refusals", "--status", "backlog"]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const badTo = await runCli(["--root", root, "promote", ticketId, "--to", "designing"]);
+    assert.equal(badTo.code, 2);
+    assert.match(badTo.stderr, /promote refused: "designing" is not a trigger \(ready_\*\) status/);
+
+    const promoted = await runCli(["--root", root, "promote", ticketId]);
+    assert.equal(promoted.code, 0, promoted.stderr);
+
+    const notBacklog = await runCli(["--root", root, "promote", ticketId]);
+    assert.equal(notBacklog.code, 2);
+    assert.match(notBacklog.stderr, /promote refused: .* is in ready_for_design, not backlog/);
+  });
+});
+
+test("CLI promote on a ticket with an open blockedBy dependency succeeds, prints a stderr warning, and the ticket stays excluded from list --ready", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const depCreate = await runCli(["--root", root, "create", "task", "Dependency", "--status", "backlog"]);
+    assert.equal(depCreate.code, 0, depCreate.stderr);
+    const depId = path.basename(depCreate.stdout.trim()).split("_", 1)[0];
+
+    const create = await runCli(["--root", root, "create", "task", "Blocked promote candidate", "--status", "backlog"]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    assert.equal((await runCli(["--root", root, "block", ticketId, depId])).code, 0);
+
+    const promoted = await runCli(["--root", root, "promote", ticketId]);
+    assert.equal(promoted.code, 0, promoted.stderr);
+    assert.match(promoted.stderr, new RegExp(`WARNING: ${ticketId} has open blockedBy dependencies \\[${depId}\\]`));
+    assert.match(promoted.stderr, /stays ineligible in list --ready/);
+
+    const ready = await runCli(["--root", root, "list", "--ready", "--json"]);
+    assert.equal(ready.code, 0, ready.stderr);
+    const readyIds = JSON.parse(ready.stdout).map((record) => record.id);
+    assert.ok(!readyIds.includes(ticketId), "ticket with an open dependency must stay excluded from list --ready");
+  });
+});
+
+test("CLI promote --json reports ticket/from/to/targetSource/path/openBlockedBy; --to <valid trigger> sets targetSource: override", async () => {
+  await withBoard(async (root) => {
+    assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
+
+    const create = await runCli(["--root", root, "create", "task", "Promote json", "--status", "backlog"]);
+    assert.equal(create.code, 0, create.stderr);
+    const ticketId = path.basename(create.stdout.trim()).split("_", 1)[0];
+
+    const computed = await runCli(["--root", root, "promote", ticketId, "--json"]);
+    assert.equal(computed.code, 0, computed.stderr);
+    const computedJson = JSON.parse(computed.stdout);
+    assert.equal(computedJson.ticket, ticketId);
+    assert.equal(computedJson.from, "backlog");
+    assert.equal(computedJson.to, "ready_for_design");
+    assert.equal(computedJson.targetSource, "computed");
+    assert.equal(path.basename(computedJson.path), path.basename(create.stdout.trim()));
+    assert.deepEqual(computedJson.openBlockedBy, []);
+
+    const create2 = await runCli(["--root", root, "create", "task", "Promote json override", "--status", "backlog"]);
+    assert.equal(create2.code, 0, create2.stderr);
+    const ticketId2 = path.basename(create2.stdout.trim()).split("_", 1)[0];
+
+    const overridden = await runCli(["--root", root, "promote", ticketId2, "--to", "ready_for_implementation", "--json"]);
+    assert.equal(overridden.code, 0, overridden.stderr);
+    const overriddenJson = JSON.parse(overridden.stdout);
+    assert.equal(overriddenJson.to, "ready_for_implementation");
+    assert.equal(overriddenJson.targetSource, "override");
+  });
+});
+
 test("CLI completes an optional specialty step and the board still validates", async () => {
   await withBoard(async (root) => {
     assert.equal((await runCli(["--root", root, "init", "--json"])).code, 0);
