@@ -13,8 +13,8 @@ estimateBasis: T20260710T2050Z
 workStartedAt: 2026-07-20T23:45:36Z
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T23:47:57Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
+updated: 2026-07-20T23:48:36Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet"]
 routingApprovals: []
 ---
 # Skill policy: never self-promote backlog; hard stop with state-report when ready queue is empty
@@ -207,3 +207,5 @@ No deviations from the design.
 - 2026-07-20T23:45:35Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: PASS (round 2): whitespace-tolerant test plan verified against both wrapped variants (all six regexes evaluated); wording/insertion points unchanged; no new defects
 
 - 2026-07-20T23:45:36Z: Ensured git branch local-board/T20260720T2118Z-skill-policy-never-self-promote-backlog-hard-stop-with-state-report-when-ready-queue-is-empty (already-current).
+
+- 2026-07-20T23:48:36Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Policy block transcribed verbatim at all four verified insertion points; new four-file whitespace-tolerant content assertion in skill-usage-sync; fenced blocks untouched; node --test 662/0/1; commit f1b36e8
