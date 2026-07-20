@@ -7,13 +7,13 @@ parent: null
 children: []
 blockedBy: [T20260720T2116Z, T20260720T2117Z]
 blocks: []
-branch: null
+branch: local-board/T20260720T2118Z-skill-policy-never-self-promote-backlog-hard-stop-with-state-report-when-ready-queue-is-empty
 estimate: null
 estimateBasis: null
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T22:01:08Z
+updated: 2026-07-20T23:31:31Z
 completedSteps: []
 routingApprovals: []
 ---
