@@ -13,7 +13,7 @@ estimateBasis: T20260710T2050Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T23:40:57Z
+updated: 2026-07-20T23:40:58Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -157,6 +157,8 @@ Manual/doc verification: none required beyond the suite; `sync-resources` explic
 ### Open questions
 
 - Single-ticket `list` reference: the requirement names `list --status backlog --unblocked --json` as the unblocked-count diagnostic, but `list` is documented as parallel-only in the single-ticket CLI Commands note. Chosen approach: keep the reference in single-ticket prose (read-only diagnostic; does not alter the curated block). Alternative if reviewers object: single-ticket mode reports only the `state-report --json` `byStatus` backlog total and omits the unblocked subset. Preference: keep it — the requirement explicitly wants the unblocked count and `list` is available on the CLI regardless of which skill curates it. Flagging for the design reviewer rather than blocking.
+
+- 2026-07-20T23:40:58Z: Design review round 1 (codex gpt-5.6-sol): FAIL solely on the test plan's whitespace-sensitive regex - a faithful implementation fails because the policy text line-wraps (parallel variant wraps between 'the' and 'user's'; single-ticket between 'only' and 'the'). Fix: normalize whitespace or use /only\s+the\s+user'?s\s+own\s+session\s+message\s+counts/i-style patterns for ALL asserted phrases. Ruling on open question: KEEP the list --status backlog --unblocked --json reference in the single-ticket policy (read-only diagnostic; state-report cannot supply the unblocked subset). Everything else verified sound - do not change insertion points or wording.
 
 ## Implementation Notes
 
