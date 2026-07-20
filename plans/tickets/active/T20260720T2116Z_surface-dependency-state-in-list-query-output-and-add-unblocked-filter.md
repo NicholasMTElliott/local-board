@@ -13,7 +13,7 @@ estimateBasis: T20260711T2137Z
 workStartedAt: 2026-07-20T22:13:03Z
 workCompletedAt: null
 created: 2026-07-20T21:16:01Z
-updated: 2026-07-20T22:13:03Z
+updated: 2026-07-20T22:23:06Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -227,6 +227,28 @@ prefers leniency (single-branch change, test flips accordingly).
 - 2026-07-20T22:12:53Z: Design review (codex gpt-5.6-sol, CONCERNS): commandGateCheck, commandDesignReviewCheck, and commandSpecialtyRun currently destructure only { ticket } from findTicket, so board/byId are NOT in scope there. Implementer: either bind const { board, ticket } and pass byTicketId(board), or leave those three context builders on legacy fields and note the scope revision. All other design claims verified against source.
 
 ## Implementation Notes
+
+- Implemented per Technical Design: shared `openBlockers(ticket, byId)` helper in `src/tickets.js` (private, not exported) is now the single source of truth reused by `isEligible`/`isEligibleForConfig` and by `actionRecord`/`ticketRecord`'s new `blockedByOpen` field, so eligibility and dependency-state exposure cannot drift.
+- `actionRecord` and `ticketRecord` both gained `parent`, `children`, `blocks`, `blockedBy`, `blockedByOpen` (additive; existing fields unchanged). `ticketRecord(root, ticket, byId = new Map())` took a new optional `byId` parameter; the empty-map default means an un-passed `byId` renders every `blockedBy` id as open (safety net only -- all real call sites now pass a real map).
+- `readyListJsonRecord` (curated `list --ready --json` subset) got the same five fields appended, preserving every previously-asserted field (verified in the updated `list --ready` CLI test's `Object.keys` assertion).
+- `--unblocked` flag added to `commandList` (`src/cli.js`), composable with `--status`. Combined with `--ready` it is rejected up front with a clear, non-zero-exit message naming `list --status backlog --unblocked --json` as the intended usage (chosen over redundant-accept per the Technical Design's stated rationale). Plain-list ordering: status filter -> unblocked filter -> `--limit` slice, matching the `--ready` path. Text (non-JSON) output format is unchanged; new fields surface in `--json` only.
+- Design-review finding resolved (commandGateCheck/commandDesignReviewCheck/commandSpecialtyRun destructuring only `{ ticket }` from `findTicket`, leaving `board`/`byId` out of scope): chose to bind `const { board, ticket } = await findTicket(...)` in all three and pass `byTicketId(board)` into their `ticketRecord(...)` calls, rather than leaving them on legacy (id/type/status/priority/path/title-only) fields. This keeps the record internally consistent everywhere `ticketRecord` is called, at the cost of a one-line destructuring change per site; none of the three consume the new dependency fields today (their `ticketContext` only reads `id/type/status/priority/path/title`), so this is a low-risk, forward-looking consistency fix rather than a behavior change. `commandNext` (an incidental caller, not explicitly named in scope but trivially fixable since `board` was already in scope) was updated the same way for the same reason.
+- `src/cli.js` `USAGE_TEXT` `list` line updated to `list [--status <status>] [--ready] [--unblocked] [--limit <N>] [--json]`.
+- `SKILL_TEAM.md` and `skills/codex/local-team/SKILL.md`: added a sentence after the existing `list --ready --limit ... --json` preflight step pointing at `list --status <status> --unblocked --json` for promotion-candidate / dependency discovery outside the ready statuses. Not byte-sync-tested against each other for this line; both were edited in parallel by hand.
+- No `plans/prompts` or `plans/templates` file was touched, so `npm run sync-resources` was not required (confirmed by a clean full-suite run including `test/resources-sync.test.js` and `test/skill-usage-sync.test.js`).
+
+Tests added (test/cli.test.js):
+- Updated the existing `list --ready` test's `Object.keys` assertion to include the five new additive fields, plus an explicit check that a ready ticket's `blockedByOpen` is always `[]`.
+- New: `query-ticket --json surfaces blockedByOpen for an open dependency and clears it once the dependency closes` -- same ticket, open (non-closed) dependency then archived, using reciprocal `blockedBy`/`blocks` front matter since `query-ticket` runs `validate()` first (which enforces link reciprocity and dependency existence).
+- New: `list (plain, unvalidated) --json counts a missing dependency id as open, alongside a closed and a still-open dependency` -- deliberately uses plain `list` (not `--ready`/`query-ticket`) because only the plain list path skips `validate()`, so a dangling `blockedBy` reference is legal there (per the Technical Design's noted edge case) and is the only place a missing-dependency case can be exercised without also fabricating a matching ticket.
+- New: `list --status backlog --unblocked --json returns exactly the backlog tickets whose every blockedBy entry is closed`.
+- New: `list --unblocked --json with no --status filters unblocked tickets across every status`.
+- New: `list --ready --unblocked is rejected with a clear, actionable, non-zero-exit message`.
+- New: `list (plain) and query-ticket both pass through parent/children/blocks from front matter`.
+
+Full suite: `node --test` -- 645 pass, 1 skipped (pre-existing `smoke (slow)` skip, unrelated), 0 fail.
+
+No deviations from the Technical Design.
 
 ## Review Findings
 
