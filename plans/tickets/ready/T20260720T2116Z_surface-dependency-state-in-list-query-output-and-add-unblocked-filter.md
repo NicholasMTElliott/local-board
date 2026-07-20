@@ -13,7 +13,7 @@ estimateBasis: T20260711T2137Z
 workStartedAt: 2026-07-20T22:13:03Z
 workCompletedAt: null
 created: 2026-07-20T21:16:01Z
-updated: 2026-07-20T22:28:58Z
+updated: 2026-07-20T23:05:34Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -265,6 +265,49 @@ Verification performed by reviewer:
 - Reviewed added CLI tests and both local-team skill updates; skill text accurately describes the new flag.
 
 ## Test Evidence
+
+verdict: pass
+
+### Suite
+
+`node --test` (run twice from `C:/Users/Nicho/Documents/local-board-worktrees/T20260720T2116Z`):
+
+- Run 1: 646 tests, 644 pass, 1 fail, 1 skip. The failure was `worktree-add supports an explicit relative worktrees.location outside the repo` (test/worktrees.test.js:1154), erroring on `git -C C:\...\Temp\explicit-worktrees\T20260522T1506Z branch --show-current: fatal: not a git repository`. This is an unrelated worktree-fixture temp-dir test, not touched by this ticket's diff (tickets.js/cli.js record shapes and `--unblocked`).
+- Re-ran `node --test test/worktrees.test.js` in isolation: 45/45 pass, including the flaky test.
+- Re-ran full `node --test` again: 646 tests, 645 pass, 0 fail, 1 skip (the pre-existing `smoke (slow)` skip).
+
+Conclusion: the failure was a transient flake (temp-directory/parallelism race in an unrelated worktree fixture), not a regression from this ticket. Confirmed green full-suite result: 645 pass / 0 fail / 1 skip, matching the Implementation Notes' reported counts.
+
+### Acceptance criteria — CLI verification (real CLI, `node ./bin/local-board.js ...`)
+
+1. `list --status backlog --unblocked --json`
+   Result: `[]`, exit 0. This board has no tickets in `backlog` status, so the empty result is the expected empty-set behavior. Substituted the same scenario on `--status ready_for_design`:
+   - `list --status ready_for_design --json` -> 2 tickets: T20260720T2118Z (blockedByOpen: [T20260720T2116Z, T20260720T2117Z]), T20260720T2117Z (blockedByOpen: []).
+   - `list --status ready_for_design --unblocked --json` -> exactly [T20260720T2117Z].
+   Confirms `--unblocked` keeps exactly the tickets whose `blockedByOpen` is empty, composed with `--status`, and each record carries `blockedBy`/`blockedByOpen`.
+
+2. `query-ticket T20260720T2118Z --json`
+   Result: `eligible: false`, `blockedBy: ["T20260720T2116Z","T20260720T2117Z"]`, `blockedByOpen: ["T20260720T2116Z","T20260720T2117Z"]` (both blockers open at test time). Non-empty `blockedByOpen` correctly explains `eligible: false`.
+
+3. `list --ready --json` field retention
+   2 ready tickets returned. `Object.keys` of a record: `id, type, status, priority, branch, title, path, action, parent, children, blocks, blockedBy, blockedByOpen` — all prior fields retained, plus the five new additive fields. `blockedByOpen` is `[]` for every ready record (ready tickets are eligible by definition).
+
+4. `list --ready --unblocked` rejection
+   Both with and without `--json`: exit code 2, stderr:
+   `--unblocked cannot be combined with --ready; --ready already returns only eligible (unblocked) tickets. Use --unblocked with --status <status> to inspect other states, e.g. list --status backlog --unblocked --json.`
+   Clear, non-zero-exit, matches the Technical Design's specified rejection text; behavior is `--json`-independent.
+
+### Additional spot checks
+
+- Usage line: `--help` shows `list [--status <status>] [--ready] [--unblocked] [--limit <N>] [--json]`.
+- Pass-through: `query-ticket T20260720T2116Z --json` shows `parent: null`, `children: []`, `blocks: ["T20260720T2118Z"]`, `blockedBy: []` — front-matter pass-through on the actionRecord shape confirmed.
+- Docs: `SKILL_TEAM.md:48` and `skills/codex/local-team/SKILL.md:28` both mention `list --status <status> --unblocked --json` for promotion/dependency-candidate discovery.
+
+### Gaps / caveats
+
+- Zero `backlog` tickets on this board, so the literal backlog acceptance command returns an empty array (correct); the filter's selection logic was demonstrated against `--status ready_for_design`, where it produced the expected exact subset.
+- The one full-suite failure encountered was reproduced as a flake (unrelated worktree temp-dir test, passes in isolation and on rerun); not attributable to this ticket.
+- No files were modified during testing; `git status --short` empty at end.
 
 ## Documentation Updates
 
