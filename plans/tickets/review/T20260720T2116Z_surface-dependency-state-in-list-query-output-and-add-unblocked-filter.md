@@ -13,8 +13,8 @@ estimateBasis: T20260711T2137Z
 workStartedAt: 2026-07-20T22:13:03Z
 workCompletedAt: null
 created: 2026-07-20T21:16:01Z
-updated: 2026-07-20T22:27:29Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-20T22:28:58Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
 # Surface dependency state in list/query output and add --unblocked filter
@@ -283,3 +283,5 @@ Verification performed by reviewer:
 - 2026-07-20T22:24:01Z: Completed implement via claude-subagent:local-board-implementer@sonnet: openBlockers helper + additive dependency fields on both record shapes; --unblocked flag with --ready rejection; board/byId bound at gate/design-review/specialty/next call sites (resolves review finding); 6 new tests; node --test 645 pass 0 fail; commit fcb6d7c
 
 - 2026-07-20T22:24:53Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (no security/UI triggers; internal record fields + CLI flag)
+
+- 2026-07-20T22:28:58Z: Completed review via codex-task:read-only@gpt-5.6-terra: CONCERNS: implementation correct vs acceptance criteria; 1 Low finding (children/blocks pass-through assertions missing) fixed forward in f899908, suite green 645/0; reviewer verified openBlockers semantics, additivity, --unblocked/--ready rejection, byId threading at all call sites
