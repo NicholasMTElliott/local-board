@@ -14,7 +14,7 @@ workStartedAt: null
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
 updated: 2026-07-20T23:35:31Z
-completedSteps: []
+completedSteps: ["design:claude-subagent:local-board-designer@opus"]
 routingApprovals: []
 ---
 # Skill policy: never self-promote backlog; hard stop with state-report when ready queue is empty
@@ -169,3 +169,5 @@ Manual/doc verification: none required beyond the suite; `sync-resources` explic
 ## Questions
 
 ## Run Log
+
+- 2026-07-20T23:35:31Z: Completed design via claude-subagent:local-board-designer@opus: Docs-only: identical approval-boundary policy block in all four skills (team preflight step-5 replacement; single-ticket new Empty Queue and Backlog Promotion section clear of FALLBACK_WALK_SECTIONS slicing); state-report + unblocked-count diagnostic, hard stop, promote-on-explicit-instruction, config-not-an-instruction; new 4-file content assertion in skill-usage-sync; sync-resources not needed (verified)
