@@ -14,7 +14,7 @@ workStartedAt: 2026-07-20T23:00:35Z
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
 updated: 2026-07-20T23:30:09Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
 routingApprovals: []
 ---
 # Add promote command for sanctioned backlog-to-ready promotion
@@ -526,3 +526,5 @@ Documentation updated for the new `promote` command. Authored by codex-task:work
 - 2026-07-20T23:19:41Z: Completed review via codex-task:read-only@gpt-5.6-terra: PASS: no findings; expectFrom locked placement, non-lossy derivation, atomic audit, REQUIRED_COMMANDS all verified against 9e425de; diff --check clean
 
 - 2026-07-20T23:25:02Z: Completed test via claude-subagent:local-board-tester@sonnet: PASS: suite 661/0/1; all 6 acceptance criteria live-verified on throwaway scaffold board (derivation, both refusals, stderr-only open-dep warning + ready exclusion, Run Log audit line, --json shape computed+override)
+
+- 2026-07-20T23:30:09Z: Completed document via codex-task:workspace-write: README promote example + memory-bank MVP CLI entry with semantics line; stale skill-block count corrected 29->35 (verified); suite green 661/0/1 post-edit (commit 4a7fb50); codex sandbox blocked commit/test so orchestrator verified+committed
