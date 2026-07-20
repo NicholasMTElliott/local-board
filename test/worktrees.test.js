@@ -449,6 +449,27 @@ test("guard no-ops when the ticket has no registered worktree (single-ticket mod
   });
 });
 
+test("guard refuses promote from the main root when the ticket has a registered worktree; succeeds with --allow-main-root and from the worktree root", { skip: !GIT_AVAILABLE }, async () => {
+  await withRepo(async (root, _baseBranch, worktreesRoot) => {
+    const ticketPath = await createTicket(root, "task", "Guard promote ticket", {
+      status: "backlog",
+      now: new Date("2026-05-22T16:04:00Z"),
+    });
+    await git(root, ["add", "plans"]);
+    await git(root, ["commit", "-m", "Add ticket"]);
+    const ticketId = path.basename(ticketPath).split("_", 1)[0];
+    assert.equal((await runCli(["--root", root, "worktree-add", ticketId, "--json"])).code, 0);
+    const worktreePath = path.join(worktreesRoot, ticketId);
+
+    const refused = await runCli(["--root", root, "promote", ticketId]);
+    assert.equal(refused.code, 2);
+    assert.match(refused.stderr, new RegExp(`^refusing to mutate ${escapeRegExp(ticketId)} from `));
+
+    const overridden = await runCli(["--root", root, "promote", ticketId, "--allow-main-root"]);
+    assert.equal(overridden.code, 0, overridden.stderr);
+  });
+});
+
 test("guard is a no-op when worktrees.guardWrongRoot is false (non-breaking default for older boards)", { skip: !GIT_AVAILABLE }, async () => {
   await withRepo(async (root) => {
     await writeFile(

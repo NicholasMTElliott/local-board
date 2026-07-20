@@ -499,6 +499,55 @@ test(
 );
 
 test(
+  "promote (T20260720T2117Z) produces ONE commit containing both the ticket relocation and the Run Log promotion line, leaving plans/ clean afterward",
+  { skip: !GIT_AVAILABLE },
+  async () => {
+    await withRepo(async (root) => {
+      const created = await runCli(["--root", root, "create", "task", "Promote atomic commit", "--status", "backlog"]);
+      assert.equal(created.code, 0, created.stderr);
+      const ticketId = path.basename(created.stdout.trim()).split("_", 1)[0];
+      await assertPlansClean(root);
+
+      const commitsBefore = Number(await gitOutput(root, ["rev-list", "--count", "HEAD"]));
+
+      const promoted = await runCli(["--root", root, "promote", ticketId]);
+      assert.equal(promoted.code, 0, promoted.stderr);
+      await assertPlansClean(root);
+
+      const commitsAfter = Number(await gitOutput(root, ["rev-list", "--count", "HEAD"]));
+      assert.equal(commitsAfter, commitsBefore + 1, "promote must land exactly one new commit");
+      assert.equal(await gitLastSubject(root), `${ticketId}: promote ready_for_design`);
+
+      // --no-renames forces separate delete/add entries (rather than a
+      // rename pair) regardless of the machine's diff.renames config, since
+      // the content also changes (status + Run Log line) alongside the path.
+      const changedFiles = (
+        await gitOutput(root, ["diff-tree", "--no-renames", "--no-commit-id", "--name-status", "-r", "HEAD"])
+      )
+        .split("\n")
+        .filter((line) => line.trim() !== "");
+
+      const oldRel = path.relative(root, created.stdout.trim()).replace(/\\/g, "/");
+      const newPathAbs = promoted.stdout.trim().split("\n")[0];
+      const newRel = path.relative(root, newPathAbs).replace(/\\/g, "/");
+
+      assert.ok(
+        changedFiles.some((line) => line.startsWith("D") && line.includes(oldRel)),
+        `expected the old backlog path (${oldRel}) deleted in the promotion commit; got: ${changedFiles.join(", ")}`,
+      );
+      assert.ok(
+        changedFiles.some((line) => line.startsWith("A") && line.includes(newRel)),
+        `expected the new ready path (${newRel}) added in the promotion commit; got: ${changedFiles.join(", ")}`,
+      );
+
+      const newFileContent = await gitOutput(root, ["show", `HEAD:${newRel}`]);
+      assert.match(newFileContent, /^status: ready_for_design$/m);
+      assert.match(newFileContent, /Promoted backlog -> ready_for_design \(user-directed\)/);
+    });
+  },
+);
+
+test(
   "commitPlanningOnTransition: false leaves current behavior byte-identical (no commits made)",
   { skip: !GIT_AVAILABLE },
   async () => {

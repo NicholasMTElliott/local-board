@@ -836,6 +836,11 @@ export async function findTicket(root, ticketId) {
   return { board, ticket: matches[0] };
 }
 
+// options.expectFrom (string | undefined) and options.auditComment (string |
+// undefined) are additive, default-absent keys used by `promote`
+// (T20260720T2117Z) so its source-state precondition and its audit line land
+// under this same lock, in this same single write/commit, as the relocation
+// itself -- with zero change to any existing caller that never sets them.
 export async function moveTicket(root, ticketId, status, options = {}) {
   if (!STATUSES.has(status)) {
     throw new Error(`status must be one of ${[...STATUSES].sort().join(", ")}`);
@@ -852,6 +857,19 @@ export async function moveTicket(root, ticketId, status, options = {}) {
       const { board, ticket } = await findTicket(root, ticketId);
       if (options.__afterRead) {
         await options.__afterRead();
+      }
+
+      // Source-state precondition (promote, T20260720T2117Z, design-review
+      // finding 1): evaluated immediately after the locked read and before any
+      // gate or fs mutation, so a mismatch has zero side effects and the
+      // locked read is proven to equal expectFrom on success -- the caller
+      // can report `from = expectFrom` soundly without moveTicket changing its
+      // return type.
+      if (options.expectFrom !== undefined && ticket.status !== options.expectFrom) {
+        throw new Error(
+          `${ticket.path}: promote refused: ${ticket.id} is in ${ticket.status} under lock, not ` +
+            `${options.expectFrom}; the ticket changed state before promotion could run.`,
+        );
       }
 
       // Config is needed on nearly every call now that the hard transition
@@ -938,6 +956,15 @@ export async function moveTicket(root, ticketId, status, options = {}) {
             `- ${formatIsoSeconds(now)}: ${invalidationRunLogMessage(status, invalidation.removed)}`,
           );
         }
+      }
+
+      // Atomic audit line (promote, T20260720T2117Z, design-review finding
+      // 3): appended within this same locked mutation, after the loop-back
+      // invalidation append and before render/write, so the relocation and
+      // the audit line are a single write and a single downstream
+      // maybeCommitPlanning commit.
+      if (options.auditComment) {
+        body = appendToSection(body, "Run Log", `- ${formatIsoSeconds(now)}: ${options.auditComment}`);
       }
 
       const frontMatter = withUpdated(nextFrontMatter, now);
@@ -2376,9 +2403,11 @@ export async function schemaRecord(root = ".") {
 // Returns the subset of a ticket's declared blockedBy ids whose dependency is
 // missing from the board OR not in a closed status (done/archived) -- exactly
 // the ids that make the ticket ineligible. Single source of truth reused by
-// isEligible/isEligibleForConfig (eligibility) and actionRecord/ticketRecord
-// (dependency-state exposure), so the two can never drift.
-function openBlockers(ticket, byId) {
+// isEligible/isEligibleForConfig (eligibility), actionRecord/ticketRecord
+// (dependency-state exposure), and `promote`'s stderr open-dependency warning
+// (T20260720T2117Z) -- exported so the CLI never needs to reach into private
+// internals and the warning cannot disagree with list --ready eligibility.
+export function openBlockers(ticket, byId) {
   return asList(ticket.frontMatter.blockedBy).filter((id) => {
     const dep = byId.get(id);
     return dep === undefined || !isClosedStatus(dep.status);
@@ -2403,6 +2432,58 @@ export function isEligibleForConfig(ticket, byId, config) {
 
 function isClosedStatus(status) {
   return CLOSED_STATUSES.has(status);
+}
+
+// Derives the type-appropriate entry (ready_*) status for `promote`
+// (T20260720T2117Z), config-derived and non-lossy:
+//   1. required = the set of actions routing.doneRequires[type] names. Empty
+//      or missing -> refuse (--to remains the manual path).
+//   2. Enumerate EVERY (status, action) pair in workflow.statusActions (never
+//      invert it -- inversion silently drops a status when two statuses
+//      share one action) and keep the status of any pair whose action is in
+//      `required`.
+//   3. Filter to statuses that are BOTH trigger (ready_*) statuses AND ranked
+//      in workflow.pipelineOrder; unranked candidates are discarded here, not
+//      silently given rank -1.
+//   4. Empty result -> refuse (no required action maps to a ranked trigger
+//      status).
+//   5. Return the candidate with the MAXIMUM pipelineOrder index.
+//      pipelineOrder is ordered closest-to-done first, so the maximum index
+//      is the furthest-from-done pipeline entry point -- ready_for_design for
+//      task/bug, ready_for_decomposition for epic/story on the scaffold.
+export function deriveEntryStatus(config, type) {
+  const required = new Set(config.routing?.doneRequires?.[type] ?? []);
+  if (required.size === 0) {
+    throw new Error(
+      `cannot derive a promotion target for type "${type}": routing.doneRequires.${type} is empty or ` +
+        `undefined; specify --to <status> explicitly.`,
+    );
+  }
+
+  const pipelineOrder = config.workflow?.pipelineOrder ?? [];
+  const statusActions = config.workflow?.statusActions ?? {};
+  let best = null;
+  let bestRank = -1;
+  for (const [status, action] of Object.entries(statusActions)) {
+    if (!required.has(action)) continue;
+    if (!TRIGGER_STATUSES.has(status)) continue;
+    const rank = pipelineOrder.indexOf(status);
+    if (rank === -1) continue;
+    if (rank > bestRank) {
+      bestRank = rank;
+      best = status;
+    }
+  }
+
+  if (best === null) {
+    throw new Error(
+      `cannot derive a promotion target for type "${type}": no status in workflow.statusActions producing an ` +
+        `action in routing.doneRequires.${type} is both a trigger (ready_*) status and ranked in ` +
+        `workflow.pipelineOrder; specify --to <status> explicitly.`,
+    );
+  }
+
+  return best;
 }
 
 function actionRecord(root, ticket, config, byId) {

@@ -14,6 +14,7 @@ import {
   completeStep,
   composeExecutor,
   createTicket,
+  deriveEntryStatus,
   discover,
   findTicket,
   formatIsoSeconds,
@@ -21,6 +22,7 @@ import {
   linkParent,
   moveTicket,
   nextTicket,
+  openBlockers,
   parseScalar,
   queryNext,
   queryReady,
@@ -35,6 +37,7 @@ import {
   suggestCalibration,
   TICKET_ID_RE,
   ticketRecord,
+  TRIGGER_STATUSES,
   typeStatusAdvisory,
   unblockTicket,
   unlinkParent,
@@ -140,6 +143,9 @@ export async function main(argv) {
     }
     if (command === "move") {
       return await commandMove(root, args, allowMainRoot);
+    }
+    if (command === "promote") {
+      return await commandPromote(root, args, allowMainRoot);
     }
     if (command === "set" || command === "update-field") {
       return await commandSet(root, args, allowMainRoot);
@@ -854,6 +860,89 @@ async function commandMove(root, args, allowMainRoot) {
 
   const overrideTransition = override ? { reason } : undefined;
   await moveAndMaybeMerge(root, ticketId, status, { asJson, overrideTransition, command: "move" });
+  return 0;
+}
+
+// Sanctioned, audited backlog -> ready_* promotion (T20260720T2117Z). Routes
+// the actual transition through moveTicket's existing lock via the additive
+// `expectFrom`/`auditComment` options, so the backlog precondition, the
+// relocation, and the Run Log audit line are all one locked mutation and one
+// downstream maybeCommitPlanning commit.
+async function commandPromote(root, args, allowMainRoot) {
+  const asJson = takeFlag(args, "--json");
+  const to = takeOption(args, "--to");
+  const ticketId = args.shift();
+  ensureNoArgs(args);
+
+  if (ticketId === undefined) {
+    throw new Error("promote requires: <ticket-id> [--to <status>] [--allow-main-root] [--json]");
+  }
+
+  await assertInvocationRootForTicket(root, ticketId, { allowMainRoot });
+
+  const config = await loadConfig(root);
+  const { board, ticket } = await findTicket(root, ticketId);
+
+  // Friendly pre-lock refusal (fast, readable message). The authoritative
+  // check is moveTicket's own `expectFrom: "backlog"`, evaluated under its
+  // lock, which closes the preflight -> move race this check alone cannot.
+  if (ticket.status !== "backlog") {
+    throw new Error(
+      `promote refused: ${ticket.id} is in ${ticket.status}, not backlog; promote only promotes backlog tickets.`,
+    );
+  }
+
+  let target;
+  let targetSource;
+  if (to !== undefined) {
+    if (!TRIGGER_STATUSES.has(to)) {
+      throw new Error(
+        `promote refused: "${to}" is not a trigger (ready_*) status; promote targets one of the ready_* ` +
+          `statuses only.`,
+      );
+    }
+    target = to;
+    targetSource = "override";
+  } else {
+    target = deriveEntryStatus(config, ticket.type);
+    targetSource = "computed";
+  }
+
+  const byId = byTicketId(board);
+  const openBlockedBy = openBlockers(ticket, byId);
+  if (openBlockedBy.length > 0) {
+    console.error(
+      `WARNING: ${ticket.id} has open blockedBy dependencies [${openBlockedBy.join(", ")}]; promotion will ` +
+        `proceed, but the ticket stays ineligible in list --ready until they close.`,
+    );
+  }
+
+  const targetPath = await moveTicket(root, ticketId, target, {
+    expectFrom: "backlog",
+    auditComment: `Promoted backlog -> ${target} (user-directed)`,
+  });
+  await maybeCommitPlanning(root, { ticketId, command: "promote", detail: target });
+
+  if (asJson) {
+    console.log(
+      JSON.stringify(
+        {
+          ticket: ticket.id,
+          from: "backlog",
+          to: target,
+          targetSource,
+          path: targetPath,
+          openBlockedBy,
+        },
+        null,
+        2,
+      ),
+    );
+  } else {
+    console.log(targetPath);
+    console.log(`Promoted ${ticket.id} backlog -> ${target}`);
+  }
+
   return 0;
 }
 
@@ -1835,6 +1924,7 @@ const USAGE_TEXT = `Usage:
   local-board [--root <path>] approve-inline <ticket-id> <action> --reason <text> [--executor <executor>] [--allow-main-root] [--json]
   local-board [--root <path>] check-dispatch --agent <subagent-type> [--model <model>] [--ticket <ticket-id>] [--json]
   local-board [--root <path>] move <ticket-id> <status> [--override] [--reason <text>] [--allow-main-root] [--json]
+  local-board [--root <path>] promote <ticket-id> [--to <status>] [--allow-main-root] [--json]
   local-board [--root <path>] set <ticket-id> <field> <value> [--override] [--reason <text>] [--allow-main-root]
   local-board [--root <path>] comment <ticket-id> <text> [--marker key=value ...] [--section <section>] [--allow-main-root]
   local-board [--root <path>] comments <ticket-id> [--section <name>] [--marker key=value ...] [--json]
