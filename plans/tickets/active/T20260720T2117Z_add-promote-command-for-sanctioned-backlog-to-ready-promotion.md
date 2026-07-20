@@ -1,7 +1,7 @@
 ---
 id: T20260720T2117Z
 type: task
-status: ready_for_implementation
+status: implementing
 priority: P1
 parent: null
 children: []
@@ -10,10 +10,10 @@ blocks: [T20260720T2118Z]
 branch: local-board/T20260720T2117Z-add-promote-command-for-sanctioned-backlog-to-ready-promotion
 estimate: 2
 estimateBasis: T20260710T1222Z
-workStartedAt: null
+workStartedAt: 2026-07-20T23:00:35Z
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T23:00:34Z
+updated: 2026-07-20T23:00:35Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -401,3 +401,5 @@ Verified as correct by the reviewer (keep as-is): pipelineOrder is closest-to-do
 - 2026-07-20T22:25:28Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (rework round; UX flows unchanged from round 1, no new triggers)
 
 - 2026-07-20T23:00:34Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: PASS (round 2): all four round-1 findings resolved - expectFrom inside withTicketLock span verified; pair-enumeration derivation correct for duplicate/custom pipelines; auditComment insertion point atomic pre-render; promote to REQUIRED_COMMANDS; no new findings
+
+- 2026-07-20T23:00:35Z: Ensured git branch local-board/T20260720T2117Z-add-promote-command-for-sanctioned-backlog-to-ready-promotion (already-current).
