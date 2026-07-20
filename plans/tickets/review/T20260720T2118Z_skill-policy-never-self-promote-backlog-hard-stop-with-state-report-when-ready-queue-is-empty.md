@@ -14,7 +14,7 @@ workStartedAt: 2026-07-20T23:45:36Z
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
 updated: 2026-07-20T23:56:18Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
 # Skill policy: never self-promote backlog; hard stop with state-report when ready queue is empty
@@ -222,3 +222,5 @@ Verification performed by reviewer:
 - 2026-07-20T23:48:36Z: Completed implement via claude-subagent:local-board-implementer@sonnet: Policy block transcribed verbatim at all four verified insertion points; new four-file whitespace-tolerant content assertion in skill-usage-sync; fenced blocks untouched; node --test 662/0/1; commit f1b36e8
 
 - 2026-07-20T23:49:24Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (docs+test only)
+
+- 2026-07-20T23:56:18Z: Completed review via codex-task:read-only@gpt-5.6-terra: CONCERNS: policy text faithful in all four files; 1 Medium (whole-file guard regexes) fixed forward in 7211602 with sentence-bound assertions + verified negative check; suite 662/0/1
