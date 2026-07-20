@@ -13,7 +13,7 @@ estimateBasis: T20260710T2050Z
 workStartedAt: 2026-07-20T23:45:36Z
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T23:45:36Z
+updated: 2026-07-20T23:47:57Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
@@ -165,6 +165,22 @@ Manual/doc verification: none required beyond the suite; `sync-resources` explic
 - Single-ticket `list` reference (was open in round 1; design-review ruling: KEEP): the requirement names `list --status backlog --unblocked --json` as the unblocked-count diagnostic, but `list` is documented as parallel-only in the single-ticket CLI Commands note. Resolution: keep the reference in single-ticket prose. It is a read-only diagnostic and does not alter the curated CLI Commands block, and `state-report --json` alone cannot supply the unblocked subset (its `byStatus` gives only the backlog total, not the unblocked count the policy must report). `list` is available on the CLI regardless of which skill curates it in its command surface.
 
 ## Implementation Notes
+
+Implemented the round-2 design verbatim: docs-only, five-file change.
+
+Policy block placement:
+- `SKILL_TEAM.md` Preflight step 5: replaced `If empty, report "no ready tickets" and stop.` with the full approval-boundary policy block (parallel wording).
+- `skills/codex/local-team/SKILL.md` Preflight step 5: same replacement, identical wording (audience-neutral).
+- `SKILL.md`: new `## Empty Queue and Backlog Promotion` subsection inserted immediately after the transition-guidance paragraph that closes `## Core Loop` and before `## Process Contract` (single-ticket wording).
+- `skills/codex/local-board/SKILL.md`: same new `## Empty Queue and Backlog Promotion` subsection inserted immediately after the `## Core Loop` equivalent's closing paragraph and before `## Route Translation Contract`.
+
+No edits to any fenced CLI Commands block, `plans/prompts/`, or `resources/`; `sync-resources` not run (per design, verified unnecessary).
+
+Test: added `test/skill-usage-sync.test.js` test `"all four skill files encode the never-self-promote-backlog approval-boundary policy"`, iterating all four skill files against the six whitespace-tolerant regexes specified in the design (approval boundary, never...backlog, state-report --json, list --status backlog --unblocked --json, local-board promote <id>, only the user's own session message counts). No literal-space `.includes` used.
+
+Full suite: `node --test` — 662 passed, 1 skipped, 0 failed (includes the new assertion).
+
+No deviations from the design.
 
 ## Review Findings
 
