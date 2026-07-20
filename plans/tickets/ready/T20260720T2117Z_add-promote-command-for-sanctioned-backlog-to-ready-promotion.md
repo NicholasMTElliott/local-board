@@ -13,7 +13,7 @@ estimateBasis: T20260710T1222Z
 workStartedAt: 2026-07-20T23:00:35Z
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T23:25:03Z
+updated: 2026-07-20T23:30:09Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -478,6 +478,24 @@ Full suite green, and every acceptance criterion verified end-to-end against the
 - Throwaway temp board removed after testing; ticket worktree untouched.
 
 ## Documentation Updates
+
+Documentation updated for the new `promote` command. Authored by codex-task:workspace-write; suite verification and commit performed by the orchestrator because the codex sandbox blocked child-process spawns and the shared git metadata dir.
+
+### Files updated (commit 4a7fb50)
+
+- `README.md` — added `promote <ticket-id> --json` to the CLI quick-reference examples.
+- `memory-bank/systemPatterns.md` — `promote` added to the MVP CLI list with a terse semantics line (config-derived trigger target, `--to` override, non-backlog refusal, open-dependency warning, audited Run Log line via `moveTicket`); corrected the curated skill-block count to 35 (verified against the actual `SKILL.md` block — the prior "29" was stale) and recorded `promote` in the `REQUIRED_COMMANDS` surface note.
+
+### Audited, no changes needed
+
+- `docs/Workflow.md` — implementer's promote guidance already covers the backlog/trigger-status story.
+- `docs/PerStepOrchestration.md`, `docs/CodexSupport.md` — no backlog-promotion flow documentation to extend (the policy ticket T20260720T2118Z owns the skill-flow policy text).
+- `SKILL.md`, `skills/codex/local-board/SKILL.md` — command blocks already updated by the implementer and byte-sync-tested.
+
+### Verification
+
+- Full suite after doc edits: `node --test` — 662 tests, 661 pass, 0 fail, 1 skip (pre-existing `smoke (slow)`); content-assertion suites green.
+- No `plans/prompts` changes, so no `sync-resources` run needed.
 
 ## Questions
 
