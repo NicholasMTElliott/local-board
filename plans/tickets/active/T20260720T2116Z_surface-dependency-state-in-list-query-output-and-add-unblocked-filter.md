@@ -13,8 +13,8 @@ estimateBasis: T20260711T2137Z
 workStartedAt: 2026-07-20T22:13:03Z
 workCompletedAt: null
 created: 2026-07-20T21:16:01Z
-updated: 2026-07-20T22:23:06Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
+updated: 2026-07-20T22:24:01Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet"]
 routingApprovals: []
 ---
 # Surface dependency state in list/query output and add --unblocked filter
@@ -267,3 +267,5 @@ No deviations from the Technical Design.
 - 2026-07-20T22:12:53Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: CONCERNS: design sound; Medium - commandGateCheck/commandDesignReviewCheck/commandSpecialtyRun destructure only {ticket}, so board/byId not in scope as design claims; implementer must bind board+byTicketId or leave those legacy. Rest verified: openBlockers semantics, filter-before-limit, --ready rejection, additivity, test plan
 
 - 2026-07-20T22:13:03Z: Ensured git branch local-board/T20260720T2116Z-surface-dependency-state-in-list-query-output-and-add-unblocked-filter (already-current).
+
+- 2026-07-20T22:24:01Z: Completed implement via claude-subagent:local-board-implementer@sonnet: openBlockers helper + additive dependency fields on both record shapes; --unblocked flag with --ready rejection; board/byId bound at gate/design-review/specialty/next call sites (resolves review finding); 6 new tests; node --test 645 pass 0 fail; commit fcb6d7c
