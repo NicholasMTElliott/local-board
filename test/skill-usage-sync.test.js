@@ -215,3 +215,34 @@ test("all four skill texts document the pinned-retry-then-fallback-walk choreogr
     }
   }
 });
+
+// T20260720T2118Z: all four skill files must encode the never-self-promote-
+// backlog policy (approval-boundary rationale, state-report diagnostic, hard
+// stop, explicit-instruction promotion path via `promote`). The policy prose
+// is line-wrapped Markdown, so matches MUST be whitespace-tolerant (`\s+`
+// regexes against the whole file source) — a literal-space `.includes` check
+// would fail on correct content at the wrap point.
+const BACKLOG_POLICY_FILES = [
+  path.join(ROOT, "SKILL.md"),
+  path.join(ROOT, "skills", "codex", "local-board", "SKILL.md"),
+  path.join(ROOT, "SKILL_TEAM.md"),
+  path.join(ROOT, "skills", "codex", "local-team", "SKILL.md"),
+];
+
+const BACKLOG_POLICY_PATTERNS = [
+  /approval\s+boundary/i,
+  /never\b[\s\S]*?\bbacklog\b/i,
+  /state-report\s+--json/,
+  /list\s+--status\s+backlog\s+--unblocked\s+--json/,
+  /local-board\s+promote\s+<id>/,
+  /only\s+the\s+user'?s\s+own\s+session\s+message\s+counts/i,
+];
+
+test("all four skill files encode the never-self-promote-backlog approval-boundary policy", async () => {
+  for (const file of BACKLOG_POLICY_FILES) {
+    const source = await readFile(file, "utf8");
+    for (const pattern of BACKLOG_POLICY_PATTERNS) {
+      assert.match(source, pattern, `${file}: missing backlog-policy element matching ${pattern}`);
+    }
+  }
+});
