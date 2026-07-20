@@ -13,7 +13,7 @@ estimateBasis: T20260710T2050Z
 workStartedAt: 2026-07-20T23:45:36Z
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T23:56:18Z
+updated: 2026-07-20T23:58:51Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra"]
 routingApprovals: []
 ---
@@ -196,6 +196,35 @@ Verification performed by reviewer:
 - Confirmed the diff is confined to the four designed skill regions and the new assertion.
 
 ## Test Evidence
+
+verdict: pass
+
+Docs-only change verified: full suite green, the new guard test passes, all four skill files carry the complete policy block at the designed locations, no competing autonomous-promotion wording exists, and every command the policy references exists and runs read-only.
+
+### Suite
+
+- Full suite: 663 tests, 662 pass, 0 fail, 1 skip — matches recorded implementation counts.
+- Isolated `test/skill-usage-sync.test.js`: 7/7 pass, including the new `"all four skill files encode the never-self-promote-backlog approval-boundary policy"` assertion.
+- No flakes; deterministic docs-only assertions.
+
+### Acceptance criteria
+
+1. Policy present in all four files (direct read; matches design verbatim):
+   - `SKILL.md` 52-66 — new `Empty Queue and Backlog Promotion` section between Core Loop and Process Contract.
+   - `skills/codex/local-board/SKILL.md` 71-85 — same section before Route Translation Contract.
+   - `SKILL_TEAM.md` 48-62 — inline in Preflight step 5, replacing the old bare clause.
+   - `skills/codex/local-team/SKILL.md` 28-42 — same Preflight step 5 placement.
+   Each block contains the approval-boundary rationale, the `state-report --json` + `list --status backlog --unblocked --json` diagnostic, an explicit STOP, and the `promote`-driven explicit-instruction carve-out.
+2. No autonomous-promotion permission anywhere: grepped `promote`/`move` across all four files — every occurrence is the policy block itself, the fenced CLI usage line, or the `enforceTransitions` structural-allow-set description (CLI behavior description, not agent instruction).
+3. Old bare clause `If empty, report "no ready tickets" and stop.` absent from both team files (only remaining "no ready tickets" text is the unrelated wave-barrier Terminate condition).
+4. Single-ticket CLI Commands blocks byte-identical — passing suite guard plus visual spot-check; both blocks list `promote` and `state-report`.
+5. Referenced commands live: `--help` shows `promote` and `state-report`; `state-report --json` returns `byStatus`; `list --status backlog --unblocked --json` runs read-only (empty array — this board copy has no backlog tickets, correct result).
+
+### Gaps / caveats
+
+- `--unblocked` exercised only against an empty backlog here; non-empty behavior is covered by T20260720T2116Z's own suite.
+- The install-refresh note in Documentation Updates is the docs stage's responsibility; flagged as not yet present at test time (expected).
+- All commands run were read-only; worktree untouched.
 
 ## Documentation Updates
 
