@@ -13,8 +13,8 @@ estimateBasis: T20260710T1222Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T22:25:28Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-20T23:00:34Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
 # Add promote command for sanctioned backlog-to-ready promotion
@@ -399,3 +399,5 @@ Verified as correct by the reviewer (keep as-is): pipelineOrder is closest-to-do
 - 2026-07-20T22:24:22Z: Completed design via claude-subagent:local-board-designer@opus: Rework per FAIL review: expectFrom enforced inside moveTicket lock; deriveEntryStatus enumerates (status,action) pairs, ranked triggers only, refuses empty set; auditComment written within locked move (one commit); promote added to REQUIRED_COMMANDS; race/duplicate-action/all-unranked/git-integration tests added
 
 - 2026-07-20T22:25:28Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (rework round; UX flows unchanged from round 1, no new triggers)
+
+- 2026-07-20T23:00:34Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: PASS (round 2): all four round-1 findings resolved - expectFrom inside withTicketLock span verified; pair-enumeration derivation correct for duplicate/custom pipelines; auditComment insertion point atomic pre-render; promote to REQUIRED_COMMANDS; no new findings
