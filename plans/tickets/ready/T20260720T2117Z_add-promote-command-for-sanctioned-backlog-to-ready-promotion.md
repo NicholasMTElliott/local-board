@@ -13,8 +13,8 @@ estimateBasis: T20260710T1222Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T22:24:22Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus"]
+updated: 2026-07-20T22:25:28Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # Add promote command for sanctioned backlog-to-ready promotion
@@ -397,3 +397,5 @@ Verified as correct by the reviewer (keep as-is): pipelineOrder is closest-to-do
 - 2026-07-20T22:19:49Z: Invalidated downstream evidence on loop-back to ready_for_design: removed completedSteps [design:claude-subagent:local-board-designer@opus, gate:design:claude-subagent:local-board-gatecheck@haiku, ux_interaction_review:inline, design-review:codex-task:read-only@gpt-5.6-sol].
 
 - 2026-07-20T22:24:22Z: Completed design via claude-subagent:local-board-designer@opus: Rework per FAIL review: expectFrom enforced inside moveTicket lock; deriveEntryStatus enumerates (status,action) pairs, ranked triggers only, refuses empty set; auditComment written within locked move (one commit); promote added to REQUIRED_COMMANDS; race/duplicate-action/all-unranked/git-integration tests added
+
+- 2026-07-20T22:25:28Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (rework round; UX flows unchanged from round 1, no new triggers)
