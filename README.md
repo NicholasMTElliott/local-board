@@ -68,6 +68,7 @@ node ./bin/local-board.js query-ticket T20260514T1234Z --json
 node ./bin/local-board.js state-report --json
 node ./bin/local-board.js schema --json
 node ./bin/local-board.js create task "Implement ticket validator" --status ready_for_design --priority P1
+node ./bin/local-board.js promote T20260514T1234Z --json
 node ./bin/local-board.js estimate T20260514T1234Z 4 --basis bootstrap --json
 node ./bin/local-board.js calibration suggest T20260514T1234Z --json
 node ./bin/local-board.js gate-check T20260514T1234Z --stage implement --json
