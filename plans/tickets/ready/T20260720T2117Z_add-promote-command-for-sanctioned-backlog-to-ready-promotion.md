@@ -13,8 +13,8 @@ estimateBasis: T20260710T1222Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T22:07:52Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-20T22:08:20Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", ux_interaction_review:inline]
 routingApprovals: []
 ---
 # Add promote command for sanctioned backlog-to-ready promotion
@@ -352,3 +352,5 @@ Suite-wide:
 - 2026-07-20T22:06:37Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design written: deriveEntryStatus(config,type) inverts statusActions over doneRequires and picks furthest-from-done pipeline status; --to validated against TRIGGER_STATUSES; non-backlog refused; stderr open-dep warning; transition via moveTicket; Run Log line; JSON shape; SKILL blocks + usage updated
 
 - 2026-07-20T22:07:52Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: ux_interaction_review (new CLI command flow); no security/UI triggers
+
+- 2026-07-20T22:08:20Z: Completed ux_interaction_review via inline: CONCERNS: refusal/warning/json flows consistent with CLI conventions; Low: no batch promote form (per-ticket loop acceptable v1); Low: ensure non-json success output confirms from->to transition
