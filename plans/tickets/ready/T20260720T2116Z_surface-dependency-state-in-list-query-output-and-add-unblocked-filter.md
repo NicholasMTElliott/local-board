@@ -13,8 +13,8 @@ estimateBasis: T20260711T2137Z
 workStartedAt: null
 workCompletedAt: null
 created: 2026-07-20T21:16:01Z
-updated: 2026-07-20T22:06:59Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku"]
+updated: 2026-07-20T22:12:53Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol"]
 routingApprovals: []
 ---
 # Surface dependency state in list/query output and add --unblocked filter
@@ -239,3 +239,5 @@ prefers leniency (single-branch change, test flips accordingly).
 - 2026-07-20T22:06:14Z: Completed design via claude-subagent:local-board-designer@opus: Technical Design written: shared openBlockers helper reused by eligibility; additive blockedBy/blockedByOpen/parent/children/blocks on both record shapes; --unblocked composes with --status, rejected with --ready; test matrix incl. missing-dep and additivity guard
 
 - 2026-07-20T22:06:59Z: Gate consultation design via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (no security/UI/UX triggers; additive CLI JSON fields)
+
+- 2026-07-20T22:12:53Z: Recorded design review via codex-task:read-only@gpt-5.6-sol: CONCERNS: design sound; Medium - commandGateCheck/commandDesignReviewCheck/commandSpecialtyRun destructure only {ticket}, so board/byId not in scope as design claims; implementer must bind board+byTicketId or leave those legacy. Rest verified: openBlockers semantics, filter-before-limit, --ready rejection, additivity, test plan
