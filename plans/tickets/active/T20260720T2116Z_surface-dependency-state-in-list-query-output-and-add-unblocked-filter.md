@@ -13,8 +13,8 @@ estimateBasis: T20260711T2137Z
 workStartedAt: 2026-07-20T22:13:03Z
 workCompletedAt: null
 created: 2026-07-20T21:16:01Z
-updated: 2026-07-20T22:24:01Z
-completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet"]
+updated: 2026-07-20T22:24:53Z
+completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku"]
 routingApprovals: []
 ---
 # Surface dependency state in list/query output and add --unblocked filter
@@ -269,3 +269,5 @@ No deviations from the Technical Design.
 - 2026-07-20T22:13:03Z: Ensured git branch local-board/T20260720T2116Z-surface-dependency-state-in-list-query-output-and-add-unblocked-filter (already-current).
 
 - 2026-07-20T22:24:01Z: Completed implement via claude-subagent:local-board-implementer@sonnet: openBlockers helper + additive dependency fields on both record shapes; --unblocked flag with --ready rejection; board/byId bound at gate/design-review/specialty/next call sites (resolves review finding); 6 new tests; node --test 645 pass 0 fail; commit fcb6d7c
+
+- 2026-07-20T22:24:53Z: Gate consultation implement via claude-subagent:local-board-gatecheck@haiku: requestedSteps: none (no security/UI triggers; internal record fields + CLI flag)
