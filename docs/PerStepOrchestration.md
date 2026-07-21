@@ -173,9 +173,12 @@ executors are pure work units.
 
 1. **Seed.** `validate`; resolve config and `maxInFlight`; `list --ready`. Use
    `list --status <status> --unblocked --json` only when scouting non-ready
-   promotion/dependency candidates; `--unblocked` is rejected with `--ready`. For
-   each of up to `maxInFlight` ready tickets: `worktree-add`, `start-work`, add
-   to `inFlight`.
+   dependency candidates or user-requested promotion candidates; `--unblocked`
+   is rejected with `--ready`. Backlog promotion is user-authorized only: an
+   empty ready queue is reported with `state-report --json` plus the unblocked
+   backlog count, then the orchestrator stops unless the current session
+   explicitly instructs promotion. For each of up to `maxInFlight` ready tickets:
+   `worktree-add`, `start-work`, add to `inFlight`.
 2. **Dispatch.** For each in-flight ticket with no outstanding executor and not
    gated on a pending peer-merge: `begin-step` to get the action + profile, then:
    - `inline` → the orchestrator performs the step itself.
@@ -251,7 +254,7 @@ ordered and deterministic:
    `inFlight < maxInFlight`, pull the next ready ticket (`worktree-add` +
    `start-work`) and begin dispatching it. Newly-unblocked dependents and
    `decompose` children appear here on the next `list --ready`; non-ready
-   promotion candidates can be inspected with `list --status <status> --unblocked --json`.
+   user-requested promotion candidates can be inspected with `list --status <status> --unblocked --json`.
 8. **Terminate.** When `readyQueue` is empty and `inFlight` is empty, emit the
    final per-ticket summary (ticket, model(s) used per step, final status,
    branch, one-line evidence, questions/blockers).

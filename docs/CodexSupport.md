@@ -25,7 +25,8 @@ Use `local-board install --list-targets` to see detected targets. A normal `loca
 - `local-board`: create tickets, initialize a board, work the next eligible ticket, or work a specific ticket.
 - `local-team`: keep several ready tickets in flight from one top-level Codex session using per-ticket worktrees and wave-barrier dispatch.
 
-Both skills treat the local-board CLI as the state authority. Codex should query workflow state with `query-next`, `query-ticket`, and `begin-step`; use `list --status <status> --unblocked --json` for non-ready dependency candidates; mutate state with `create`, `section`, `comment`, `complete-step`, `move`, and relationship commands; and finish by running `validate`.
+Both skills treat the local-board CLI as the state authority. Codex should query workflow state with `query-next`, `query-ticket`, and `begin-step`; use `list --status <status> --unblocked --json` for non-ready dependency candidates and user-requested promotion candidates; mutate state with `create`, `section`, `comment`, `complete-step`, `move`, and relationship commands; and finish by running `validate`.
+Backlog promotion is a user approval boundary: an empty ready queue is diagnosed and reported, then Codex stops unless the current session explicitly instructs `local-board promote`.
 
 When maintaining skill text, keep the repo-root `SKILL.md` and `skills/codex/local-board/SKILL.md` `## CLI Commands` blocks byte-identical; `test/skill-usage-sync.test.js` treats root `SKILL.md` as canonical.
 
@@ -131,7 +132,7 @@ Strict routing accepts completion evidence recorded against the pinned model OR 
 `local-team` is one Codex orchestrator, not a set of persistent teammates. It:
 
 - runs `fast-forward`, `team-config`, and `list --ready`;
-- uses `list --status <status> --unblocked --json` for non-ready promotion/dependency discovery;
+- uses `list --status <status> --unblocked --json` for non-ready dependency discovery and user-requested promotion discovery;
 - creates one worktree per in-flight ticket with `worktree-add`;
 - dispatches each wave of ready steps to Codex explorers/workers;
 - records evidence and transitions itself;
