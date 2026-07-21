@@ -1,7 +1,7 @@
 ---
 id: T20260720T2118Z
 type: task
-status: ready_for_docs
+status: done
 priority: P1
 parent: null
 children: []
@@ -11,7 +11,7 @@ branch: local-board/T20260720T2118Z-skill-policy-never-self-promote-backlog-hard
 estimate: 2
 estimateBasis: T20260710T2050Z
 workStartedAt: 2026-07-20T23:45:36Z
-workCompletedAt: null
+workCompletedAt: 2026-07-21T00:04:12Z
 created: 2026-07-20T21:16:06Z
 updated: 2026-07-21T00:04:12Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog, document:codex-task:workspace-write]
