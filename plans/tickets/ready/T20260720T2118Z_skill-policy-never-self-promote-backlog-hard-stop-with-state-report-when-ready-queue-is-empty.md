@@ -13,7 +13,7 @@ estimateBasis: T20260710T2050Z
 workStartedAt: 2026-07-20T23:45:36Z
 workCompletedAt: null
 created: 2026-07-20T21:16:06Z
-updated: 2026-07-20T23:58:52Z
+updated: 2026-07-21T00:04:12Z
 completedSteps: ["design:claude-subagent:local-board-designer@opus", "gate:design:claude-subagent:local-board-gatecheck@haiku", "design-review:codex-task:read-only@gpt-5.6-sol", "implement:claude-subagent:local-board-implementer@sonnet", "gate:implement:claude-subagent:local-board-gatecheck@haiku", "review:codex-task:read-only@gpt-5.6-terra", "test:claude-subagent:local-board-tester@sonnet", gate:test:skipped-empty-catalog]
 routingApprovals: []
 ---
@@ -227,6 +227,29 @@ Docs-only change verified: full suite green, the new guard test passes, all four
 - All commands run were read-only; worktree untouched.
 
 ## Documentation Updates
+
+Narrative docs aligned with the shipped approval-boundary policy. Authored by codex-task:workspace-write; suite verification and commit performed by the orchestrator because the codex sandbox blocked child-process spawns and the shared git metadata dir.
+
+### Files updated (commit ebefd2b)
+
+- `memory-bank/systemPatterns.md` — one current-state line: the four skill flows encode the empty-ready backlog approval-boundary policy, guarded by `skill-usage-sync` (diagnostic, hard stop, explicit-session `promote` path).
+- `docs/PerStepOrchestration.md` — Seed/Refill wording now states promotion is user-authorized only: empty ready queue is reported via `state-report --json` + unblocked backlog count, then the orchestrator stops absent an explicit session instruction.
+- `docs/Workflow.md` — one line after the `promote` guidance: for agent-run flows, backlog -> `ready_*` is a user approval boundary; agents use `promote` only for tickets covered by an explicit current-session instruction.
+- `docs/CodexSupport.md` — unblocked-query language and the team-flow bullet now say "user-requested promotion candidates", plus a one-line Codex stop policy.
+
+### Audited, no changes needed
+
+- `README.md` — lists commands and install skew status; does not describe agent promotion behavior.
+- `docs/Install.md` — the `install --status` skew/content-hash refresh flow is already accurate.
+
+### Installed-skill refresh (required note)
+
+After this ticket merges, the installed skill copies under `~/.claude/skills` and `~/.codex/skills` are STALE until `local-board install` is re-run; `local-board install --status` will report `skewed` via the content hash. Re-run `local-board install` to refresh the local-board and local-team skills so live sessions pick up the approval-boundary policy.
+
+### Verification
+
+- Full suite after doc edits: `node --test` — 663 tests, 662 pass, 0 fail, 1 skip; content-assertion suites (including the new policy guard) green.
+- No `plans/prompts` changes; no `sync-resources` run needed.
 
 ## Questions
 
