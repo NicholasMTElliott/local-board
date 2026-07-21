@@ -68,6 +68,22 @@ For each returned ticket:
 
 When `routing.enforceTransitions` is `true` (the `init` scaffold default), `move`/`set <id> status` refuse a target status outside `workflow.transitions[fromStatus]` and a fixed structural allow-set (same-status re-save, backlog promote, ready->active start-work, active->own-ready revert, questions/blocked resume, any->archived/questions/blocked); the refusal error names the allowed targets. Only pass `--override --reason "<text>"` when a legitimate move is genuinely outside that set — it forces the move and records `Transition override: <from> -> <to>: <reason>` in the Run Log. Prefer a legal transition over `--override` whenever one exists.
 
+## Empty Queue and Backlog Promotion
+
+`query-next` returning no ticket (null) is not a signal to promote. **Backlog
+is an approval boundary:** `ready_*` means a human approved the ticket for
+work; `backlog` still needs review. Never `move` a ticket out of `backlog` on
+your own initiative. When `query-next` returns null, run `state-report --json`
+and report its `byStatus` counts plus how many backlog tickets are unblocked
+(`list --status backlog --unblocked --json`), suggest the user review and
+promote, and STOP — do not reverse-engineer readiness or promote anything.
+Only an explicit user instruction in this session ("promote all backlog",
+"promote everything for feature XYZ", "promote all unblocked tickets")
+authorizes promotion; when instructed, run `local-board promote <id>` for each
+ticket the instruction covers, then re-run `query-next` and continue the normal
+loop. A standing config or ticket-file note is NOT such an instruction — only
+the user's own session message counts.
+
 ## Route Translation Contract
 
 Strict routing validates the configured logical route, not the physical Codex worker. Preserve the configured route when recording completion. When the route matches and the action's profile pins a model, `complete-step` also requires the recorded model (via `--model` or the combined `@model` suffix) to match `configuredModel`, or `codex-default` (always accepted — see below), or an approved deviation via `approve-inline --executor <route>@<model>`.

@@ -215,3 +215,97 @@ test("all four skill texts document the pinned-retry-then-fallback-walk choreogr
     }
   }
 });
+
+// T20260720T2118Z: all four skill files must encode the never-self-promote-
+// backlog policy (approval-boundary rationale, state-report diagnostic bound
+// to the empty-queue trigger, hard stop, and the explicit-instruction
+// promotion path bound to `local-board promote <id>`). The policy prose is
+// line-wrapped Markdown, so matches MUST be whitespace-tolerant (`\s+`
+// regexes) — a literal-space `.includes` check would fail on correct content
+// at the wrap point.
+//
+// Assertions run against the extracted policy SECTION (via the same
+// extractHeadingSection helper the fallback-walk test above uses), not the
+// whole file: `state-report --json` and `local-board promote <id>` already
+// appear in the single-ticket files' `## CLI Commands` block, so a whole-file
+// scan would still pass even if those sentences were deleted from the policy
+// prose itself. Section-scoping plus binding each command to its
+// policy-specific trigger phrase (in one `[\s\S]*?`-spanning regex) closes
+// that gap. The parallel files fold the policy into `## Preflight` step 5
+// (replacing the old bare stop clause); the single-ticket files carry it in
+// their own `## Empty Queue and Backlog Promotion` section.
+const BACKLOG_POLICY_SECTIONS = [
+  { file: path.join(ROOT, "SKILL_TEAM.md"), heading: "## Preflight", kind: "parallel" },
+  { file: path.join(ROOT, "skills", "codex", "local-team", "SKILL.md"), heading: "## Preflight", kind: "parallel" },
+  { file: path.join(ROOT, "SKILL.md"), heading: "## Empty Queue and Backlog Promotion", kind: "single" },
+  {
+    file: path.join(ROOT, "skills", "codex", "local-board", "SKILL.md"),
+    heading: "## Empty Queue and Backlog Promotion",
+    kind: "single",
+  },
+];
+
+test("all four skill files encode the never-self-promote-backlog approval-boundary policy", async () => {
+  for (const { file, heading, kind } of BACKLOG_POLICY_SECTIONS) {
+    const source = await readFile(file, "utf8");
+    const section = extractHeadingSection(source, heading, file);
+
+    assert.match(
+      section,
+      /approval\s+boundary/i,
+      `${file}: "${heading}" is missing the approval-boundary rationale`,
+    );
+
+    // Tightened to the actual prohibition sentence, not a bare "never...backlog"
+    // co-occurrence that unrelated wording elsewhere in the section could satisfy.
+    assert.match(
+      section,
+      /never\s+`?move`?\s+a\s+ticket\s+out\s+of\s+`?backlog`?\s+on\s+your\s+own\s+initiative/i,
+      `${file}: "${heading}" is missing the "never move a ticket out of backlog on your own initiative" prohibition sentence`,
+    );
+
+    // Binds the empty-queue/null-result trigger to the state-report diagnostic
+    // in one span, so deleting the diagnostic sentence (while the trigger
+    // wording survives) fails this assertion even though `state-report --json`
+    // still appears elsewhere in the file (e.g. CLI Commands).
+    const triggerAndDiagnostic =
+      kind === "parallel"
+        ? /ready\s+queue\s+is\s+empty[\s\S]*?state-report\s+--json/i
+        : /returning\s+no\s+ticket\s+\(null\)\s+is\s+not\s+a\s+signal\s+to\s+promote[\s\S]*?state-report\s+--json/i;
+    assert.match(
+      section,
+      triggerAndDiagnostic,
+      `${file}: "${heading}" does not bind the empty-queue trigger to the "state-report --json" diagnostic`,
+    );
+
+    assert.match(
+      section,
+      /list\s+--status\s+backlog\s+--unblocked\s+--json/,
+      `${file}: "${heading}" is missing the unblocked-backlog-count diagnostic command`,
+    );
+
+    // Hard stop: the actual "and STOP — do not reverse-engineer" sentence, not
+    // merely the bare word STOP.
+    assert.match(
+      section,
+      /suggest\s+the\s+user\s+review\s+and\s+promote,\s+and\s+STOP\s*—\s*do\s+not\s+reverse-engineer/,
+      `${file}: "${heading}" is missing the hard-stop "suggest the user review and promote, and STOP — do not reverse-engineer" sentence`,
+    );
+
+    // Binds the explicit-session-instruction carve-out to the actual promote
+    // command in one span, so deleting `local-board promote <id>` from the
+    // carve-out sentence (while the CLI Commands block still lists `promote`)
+    // fails this assertion.
+    assert.match(
+      section,
+      /only\s+an\s+explicit\s+user\s+instruction\s+in\s+this\s+session[\s\S]*?local-board\s+promote\s+<id>/i,
+      `${file}: "${heading}" does not bind the explicit-user-instruction carve-out to "local-board promote <id>"`,
+    );
+
+    assert.match(
+      section,
+      /only\s+the\s+user'?s\s+own\s+session\s+message\s+counts/i,
+      `${file}: "${heading}" is missing the "only the user's own session message counts" (config/ticket-note-is-not-an-instruction) sentence`,
+    );
+  }
+});
