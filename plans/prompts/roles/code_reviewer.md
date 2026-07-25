@@ -27,3 +27,33 @@ You may be running inside a ticket worktree that holds uncommitted, orchestrator
 - Revert any temporary probe edit by TARGETED path only: `git checkout -- <specific-file>`, `git restore <specific-file>`, or the exact inverse filesystem edit you made.
 - Never run a tree-wide or history/branch-mutating git command inside the worktree: no `git checkout -- .`, `git restore .`, `git stash`, `git reset --hard`, `git clean -fd`, `git clean -fdx`, `git merge`, `git merge --abort`, `git rebase`, `git rebase --abort`, or branch switches (`git switch` / `git checkout <branch>`).
 - These commands silently destroy uncommitted ticket state — this has already lost a ticket in the field. If the tree is dirty in a way you cannot cleanly reverse by targeted path, stop and report it rather than resetting.
+
+## Audit the design's test plan first
+
+When the ticket's technical design specifies named test cases, rows, or scenarios, walk
+them one by one against the implemented tests before any other review activity, and
+report every row that is missing, collapsed, or degraded relative to what the design
+specifies. Treat the implementer's own coverage claims as unverified.
+
+This check routinely outranks general defect hunting in yield. The common failure is not
+an omitted feature but a specified cross-product quietly reduced to a few representative
+cases while the total test count rises, so nothing looks wrong from a summary.
+
+## Review the tests as hard as the production code
+
+A test that reports success while being structurally unable to fail is a defect, and it
+is invisible to a green run. Look specifically for:
+
+- an assertion that stays true when the behaviour it checks is deleted;
+- a positive control whose stated mutation cannot actually reach the assertion;
+- a guard that disables itself when its precondition is missing, instead of failing closed;
+- a collection indexed before its shape is asserted — in harnesses where a runtime error
+  inside a test aborts only that test without failing the run, every later assertion in
+  that function is silently skipped;
+- a lookup whose default value satisfies the expected result, so an absent key passes;
+- a skip path indistinguishable from a pass;
+- a tolerance, window, or sample size too wide to discriminate a wrong implementation;
+- an unconditional pass (an assertion whose condition is a literal truth).
+
+Report these with the same severity you would give an equivalent production defect: a
+missing test and a test that cannot fail have the same effect on the next regression.

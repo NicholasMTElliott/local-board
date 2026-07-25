@@ -30,3 +30,25 @@ tool, never with shell redirection.
 ## Estimate after design
 
 After writing the Technical Design, run the estimate step (`plans/prompts/steps/estimate.md`) before completing the design action. This is enforced by local-board for tasks and bugs when `config.estimation.enabled` is true; the orchestrator's `complete-step design` will refuse otherwise.
+
+## A test strategy that can fail
+
+A test that cannot fail reads as coverage while providing none, and it is far cheaper to
+prevent here than to find in review. For every test the strategy proposes:
+
+- name the concrete change to the code under test that would make it fail, and confirm
+  that change is actually reachable by the test as written;
+- enumerate cross-products as explicit rows — every value of A against every value of B —
+  rather than describing them. An enumerated matrix survives implementation; a described
+  one is routinely reduced to a few representative cases;
+- state the tolerance, window, or sample size for any statistical or timing assertion
+  together with the margin that makes it discriminate a wrong implementation;
+- prefer a structural change that removes the possibility of a defect over a check that
+  detects it. A guard is only as good as the test proving the guard fires.
+
+Where a behaviour genuinely cannot be given a failing mutation, say so explicitly rather
+than implying verification the test cannot provide. A disclosed gap is a design decision;
+an undisclosed one is a defect.
+
+Name each test case or row you specify, so implementation and review can be audited
+against this plan case by case.
