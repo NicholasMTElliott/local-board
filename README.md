@@ -11,7 +11,7 @@ External kanban tools put your plan in a separate system from your code. local-b
 ## Requirements
 
 - [Node.js](https://nodejs.org/) 22 or later.
-- No runtime dependencies, no install step, no network access. The CLI is pure Node ESM.
+- No runtime dependencies, no build step, no network access. The CLI is pure Node ESM.
 - Parallel mode runs on any harness whose orchestrator can dispatch subagents and pin a model per dispatch (e.g. [Claude Code](https://claude.com/claude-code)). It does not require agent teams or `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`.
 
 ## Quick start

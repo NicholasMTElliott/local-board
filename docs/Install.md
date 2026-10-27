@@ -11,6 +11,8 @@ resolves to `%USERPROFILE%`, e.g. `~/.claude` is
 ## Prerequisites
 
 - Node.js 22 or later.
+- `git` on `PATH` for a GitHub install: npm runs `git` to resolve the branch
+  or tag before downloading.
 - `local-board` must already resolve on `PATH`. The installer checks this
   first and fails fast: from a checkout it suggests `npm install -g .` or
   `npm link`; otherwise it suggests
@@ -40,6 +42,11 @@ local-board install                    # default targets
 npm install -g .                       # or: npm link
 local-board install
 ```
+
+To install a tagged release instead of `mainline`, append the git tag as
+`#<tag>`: `npm install -g github:NicholasMTElliott/local-board#<tag>`. An
+older tag installs that release's CLI, which may lack commands described
+here.
 
 Deprecated aliases for running the installer from a checkout (both require the
 same prior global install/link so `local-board` resolves on `PATH`):
