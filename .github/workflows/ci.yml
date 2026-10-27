@@ -2,17 +2,18 @@ name: CI
 
 on:
   push:
+    branches: [mainline]
   pull_request:
 
 permissions:
   contents: read
 
-# A same-repo PR branch triggers both `push` and `pull_request`. Group both by
-# head repo + branch so they share one slot and the newer run cancels the older.
-# On mainline a new run queues instead of cancelling the one in progress.
+# Pushes run CI only on mainline; other branches get CI through their PR, so a
+# PR commit is tested once. A new commit on a PR cancels that PR's in-progress
+# run. On mainline a new run queues instead of cancelling the one in progress.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/mainline' }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
