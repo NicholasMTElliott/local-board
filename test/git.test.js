@@ -12,6 +12,7 @@ import { initProject } from "../src/scaffold.js";
 import { beginStep, completeStep, createTicket, setTicketField } from "../src/tickets.js";
 import { commitPlanningTransition, startTicketWork } from "../src/git.js";
 import { removeFixtureDir } from "./helpers/fixtures.js";
+import { physicalPath } from "./helpers/paths.js";
 
 const execFileAsync = promisify(execFile);
 const GIT_AVAILABLE = await hasGit();
@@ -527,9 +528,9 @@ test(
         .split("\n")
         .filter((line) => line.trim() !== "");
 
-      const oldRel = path.relative(root, created.stdout.trim()).replace(/\\/g, "/");
+      const oldRel = path.relative(physicalPath(root), created.stdout.trim()).replace(/\\/g, "/");
       const newPathAbs = promoted.stdout.trim().split("\n")[0];
-      const newRel = path.relative(root, newPathAbs).replace(/\\/g, "/");
+      const newRel = path.relative(physicalPath(root), newPathAbs).replace(/\\/g, "/");
 
       assert.ok(
         changedFiles.some((line) => line.startsWith("D") && line.includes(oldRel)),

@@ -12,6 +12,7 @@ import { createTicket, setTicketField } from "../src/tickets.js";
 import { assertInvocationRootForTicket, worktreesRootFor } from "../src/worktrees.js";
 import { defaultConfigJsonc } from "../src/config.js";
 import { removeFixtureDir } from "./helpers/fixtures.js";
+import { physicalPath } from "./helpers/paths.js";
 
 const execFileAsync = promisify(execFile);
 const GIT_AVAILABLE = await hasGit();
@@ -1386,8 +1387,9 @@ async function runCli(args) {
   }
 }
 
+// The CLI reports worktree paths physically, as git does (helpers/paths.js).
 function displayPath(value) {
-  return path.resolve(value).replace(/\\/g, "/");
+  return physicalPath(value).replace(/\\/g, "/");
 }
 
 function escapeRegExp(value) {

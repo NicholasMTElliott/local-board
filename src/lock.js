@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { gitOutput } from "./git.js";
+import { canonicalPath } from "./paths.js";
 
 // Mutual-exclusion primitive for the read-modify-write windows that atomic
 // single-file writes (writeTicketFile's write-temp-then-rename) do not cover:
@@ -157,14 +158,17 @@ export async function withFileLock(lockPath, fn, options = {}) {
 // repo. Mirrors active-steps.js's ledger anchor exactly (same git-common-dir
 // resolution) so mainline and every worktree of the same ticket contend on
 // the same lock path. Falls back to the passed root when git resolution
-// fails (non-git directories, e.g. test fixtures).
+// fails (non-git directories, e.g. test fixtures). The result is canonical
+// (src/paths.js): git may print the common dir relative to `root`, and
+// `root` may be a symlinked spelling, which would never compare equal to the
+// physical paths `git worktree list` reports.
 export async function resolveMainRoot(root) {
   try {
     const commonDir = await gitOutput(root, ["rev-parse", "--git-common-dir"]);
     const absoluteCommonDir = path.resolve(root, commonDir);
-    return path.dirname(absoluteCommonDir);
+    return canonicalPath(path.dirname(absoluteCommonDir));
   } catch {
-    return path.resolve(root);
+    return canonicalPath(root);
   }
 }
 

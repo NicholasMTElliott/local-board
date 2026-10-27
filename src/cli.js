@@ -60,6 +60,7 @@ import {
 import { resolveMaxTeammates } from "./team.js";
 import { gitOutput } from "./git.js";
 import { runVersionBump } from "./version-bump.js";
+import { canonicalPath } from "./paths.js";
 
 export { commandWhere };
 
@@ -67,7 +68,9 @@ export async function main(argv) {
   const args = [...argv];
 
   try {
-    const root = takeOption(args, "--root") ?? ".";
+    // Physical spelling, so every comparison against git output (worktree
+    // lookups, the wrong-root guard) sees the same path git reports.
+    const root = canonicalPath(takeOption(args, "--root") ?? ".");
     const allowMainRoot = takeFlag(args, "--allow-main-root");
     const command = args.shift();
 

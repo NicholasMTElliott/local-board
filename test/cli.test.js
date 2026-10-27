@@ -13,6 +13,7 @@ import { loadConfig } from "../src/config.js";
 import { createTicket, discover, queryNext } from "../src/tickets.js";
 import { ledgerPath, readActiveSteps, stampActiveStep } from "../src/active-steps.js";
 import { removeFixtureDir } from "./helpers/fixtures.js";
+import { physicalPath } from "./helpers/paths.js";
 
 const execFileAsync = promisify(execFile);
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -546,7 +547,7 @@ test("begin-step (T20260710T1532Z, D6): configuredFallbackModels and codexDispat
       strict: true,
       delegationRequired: true,
       branch: null,
-      path: path.relative(root, ticketPath),
+      path: path.relative(physicalPath(root), ticketPath),
     };
 
     const baseline = await runCli(["--root", root, "begin-step", ticketId, "--json"]);
@@ -1545,7 +1546,7 @@ test("CLI gate-check (T20260710T1532Z, D6): a fallback-free gate profile is byte
     assert.deepEqual(out, {
       ticket: ticketId,
       stage: "design",
-      prompt: path.resolve(root, "plans", "prompts", "steps", "gate-check.md"),
+      prompt: path.resolve(physicalPath(root), "plans", "prompts", "steps", "gate-check.md"),
       agent: gateProfile.route,
       model: gateProfile.model ?? null,
       ticketPath,
@@ -1554,7 +1555,7 @@ test("CLI gate-check (T20260710T1532Z, D6): a fallback-free gate profile is byte
         type: "task",
         status: "ready_for_design",
         priority: "P2",
-        path: path.relative(root, ticketPath),
+        path: path.relative(physicalPath(root), ticketPath),
         title: "Gate-check legacy shape",
         currentAction: "design",
         requirement: "",
@@ -1574,7 +1575,7 @@ test("CLI gate-check (T20260710T1532Z, D6): a fallback-free gate profile is byte
       stage: "design",
       route: gateProfile.route,
       model: gateProfile.model ?? null,
-      root: path.resolve(root),
+      root: physicalPath(root),
       ts: stamp.ts,
     });
     assert.match(stamp.ts, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
@@ -2105,7 +2106,7 @@ test("CLI design-review-check (T20260710T1532Z D6, B20260710T2050Z D7 fix): a fa
     const out1 = JSON.parse(result1.stdout);
     assert.deepEqual(out1, {
       ticket: ticketId1,
-      prompt: path.resolve(root, "plans", "prompts", "steps", "design_review.md"),
+      prompt: path.resolve(physicalPath(root), "plans", "prompts", "steps", "design_review.md"),
       agent: "codex-task:read-only",
       model: "gpt-5.6-sol",
       effort: "xhigh",
@@ -2115,7 +2116,7 @@ test("CLI design-review-check (T20260710T1532Z D6, B20260710T2050Z D7 fix): a fa
         type: "task",
         status: "ready_for_design",
         priority: "P2",
-        path: path.relative(root, ticketPath1),
+        path: path.relative(physicalPath(root), ticketPath1),
         title: "Design-review legacy shape default",
         currentAction: "design",
         requirement: "",
@@ -2151,7 +2152,7 @@ test("CLI design-review-check (T20260710T1532Z D6, B20260710T2050Z D7 fix): a fa
     const out2 = JSON.parse(result2.stdout);
     assert.deepEqual(out2, {
       ticket: ticketId2,
-      prompt: path.resolve(root, "plans", "prompts", "steps", "design_review.md"),
+      prompt: path.resolve(physicalPath(root), "plans", "prompts", "steps", "design_review.md"),
       agent: "claude-subagent:local-board-reviewer",
       model: "sonnet",
       effort: null,
@@ -2161,7 +2162,7 @@ test("CLI design-review-check (T20260710T1532Z D6, B20260710T2050Z D7 fix): a fa
         type: "task",
         status: "ready_for_design",
         priority: "P2",
-        path: path.relative(root, ticketPath2),
+        path: path.relative(physicalPath(root), ticketPath2),
         title: "Design-review legacy shape claude-subagent no fallback",
         currentAction: "design",
         requirement: "",
@@ -2181,7 +2182,7 @@ test("CLI design-review-check (T20260710T1532Z D6, B20260710T2050Z D7 fix): a fa
     assert.equal(record2.action, "design-review");
     assert.equal(record2.route, "claude-subagent:local-board-reviewer");
     assert.equal(record2.model, "sonnet");
-    assert.equal(record2.root, path.resolve(root));
+    assert.equal(record2.root, physicalPath(root));
     assert.equal(typeof record2.ts, "string");
   });
 });
@@ -2730,7 +2731,7 @@ test("CLI promote on a scaffold-config board sends an epic to ready_for_decompos
     const epicPromoted = await runCli(["--root", root, "promote", epicId]);
     assert.equal(epicPromoted.code, 0, epicPromoted.stderr);
     const epicPath = epicPromoted.stdout.trim().split("\n")[0];
-    assert.equal(path.dirname(epicPath), path.join(root, "plans", "tickets", "ready"));
+    assert.equal(path.dirname(epicPath), physicalPath(path.join(root, "plans", "tickets", "ready")));
     const epicText = await readFile(epicPath, "utf8");
     assert.match(epicText, /^status: ready_for_decomposition$/m);
     assert.match(epicText, /Promoted backlog -> ready_for_decomposition \(user-directed\)/);
@@ -2742,7 +2743,7 @@ test("CLI promote on a scaffold-config board sends an epic to ready_for_decompos
     const taskPromoted = await runCli(["--root", root, "promote", taskId]);
     assert.equal(taskPromoted.code, 0, taskPromoted.stderr);
     const taskPath = taskPromoted.stdout.trim().split("\n")[0];
-    assert.equal(path.dirname(taskPath), path.join(root, "plans", "tickets", "ready"));
+    assert.equal(path.dirname(taskPath), physicalPath(path.join(root, "plans", "tickets", "ready")));
     const taskText = await readFile(taskPath, "utf8");
     assert.match(taskText, /^status: ready_for_design$/m);
     assert.match(taskText, /Promoted backlog -> ready_for_design \(user-directed\)/);
@@ -3424,7 +3425,7 @@ test("CLI specialty-run (T20260710T1532Z, D6): a fallback-free specialty payload
       ticket: ticketId,
       stage: "implement",
       step: "security_audit",
-      prompt: path.resolve(root, "plans/prompts/optional-steps/impl/security_audit.md"),
+      prompt: path.resolve(physicalPath(root), "plans/prompts/optional-steps/impl/security_audit.md"),
       agent: "codex-task:read-only",
       model: "gpt-5.6-sol",
       effort: "xhigh",
@@ -3434,7 +3435,7 @@ test("CLI specialty-run (T20260710T1532Z, D6): a fallback-free specialty payload
         type: "task",
         status: "implementing",
         priority: "P2",
-        path: path.relative(root, ticketPath),
+        path: path.relative(physicalPath(root), ticketPath),
         title: "Specialty legacy shape",
         currentAction: null,
         requirement: "",

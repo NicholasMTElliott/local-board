@@ -39,6 +39,7 @@ SKILL.md              installable orchestration skill template
 - Prefer schemas and small scripts over hidden convention.
 - Avoid external services for core workflow.
 - Preserve portability across Windows/macOS/Linux.
+- Path canonicalization: git reports physical paths (symlinks resolved; Windows 8.3 names expanded). `canonicalPath` (`src/paths.js`; realpath.native, nearest-existing-ancestor for missing paths, keeps drive form over UNC on win32) is applied to `--root` at CLI entry, to `resolveMainRoot`, and to both sides of `pathsEqual` (`src/worktrees.js`). CLI output paths are therefore physical. Tests build expected paths with `test/helpers/paths.js` `physicalPath`; fixtures keep their (possibly symlinked) tmpdir spelling; `test/symlink-root.test.js` covers guard/remove/check-dispatch via a symlink (junction on Windows). Hooks only build ledger paths (no git comparison) and are not canonicalized.
 - Installer requires `local-board` to resolve on PATH before rendering skills/agents.
 - codex-task is a detected-not-managed peer install; `validate` warns on stderr
   without changing exit code when `codex-task:*` routes exist but `codex` or
