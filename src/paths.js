@@ -9,6 +9,10 @@ import path from "node:path";
 // output. Without this the wrong-root guard fails open and worktree lookups
 // miss.
 //
+// realpath.native matches git on every platform, including a Windows mapped
+// network drive: Git for Windows' realpath (compat/mingw.c) also goes through
+// GetFinalPathNameByHandleW, so both report Z:\repo as \\server\share\repo.
+//
 // Paths that don't exist yet (a worktree about to be created, one just
 // removed) canonicalize their nearest existing ancestor and keep the rest
 // as given. Never throws: an unresolvable path comes back path.resolve()d.
@@ -31,22 +35,9 @@ export function canonicalPath(value) {
 }
 
 function realpathOrNull(value) {
-  let real;
   try {
-    real = realpathSync.native(value);
+    return realpathSync.native(value);
   } catch {
     return null;
   }
-  // On Windows, realpath.native turns a mapped network drive (Z:\repo) into
-  // its UNC target (\\server\share\repo). git keeps the drive letter, and a
-  // changed spelling can trip git's safe.directory ownership check, so keep
-  // the drive form there. The JS realpath still resolves symlinks/junctions.
-  if (process.platform === "win32" && real.startsWith("\\\\") && !value.startsWith("\\\\")) {
-    try {
-      return realpathSync(value);
-    } catch {
-      return null;
-    }
-  }
-  return real;
 }
