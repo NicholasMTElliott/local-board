@@ -12,6 +12,7 @@ import {
   withTicketLock,
 } from "../src/lock.js";
 import { removeFixtureDir } from "./helpers/fixtures.js";
+import { physicalPath } from "./helpers/paths.js";
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -26,16 +27,16 @@ async function withRoot(fn) {
   }
 }
 
-test("resolveMainRoot falls back to the resolved root in a non-git directory", async () => {
+test("resolveMainRoot falls back to the canonical root in a non-git directory", async () => {
   await withRoot(async (root) => {
-    assert.equal(await resolveMainRoot(root), path.resolve(root));
+    assert.equal(await resolveMainRoot(root), physicalPath(root));
   });
 });
 
 test("ticketLockPath resolves under <root>/.local-board/locks/<ticketId>.lock", async () => {
   await withRoot(async (root) => {
     const lockPath = await ticketLockPath(root, "T1");
-    assert.equal(lockPath, path.join(path.resolve(root), ".local-board", "locks", "T1.lock"));
+    assert.equal(lockPath, path.join(physicalPath(root), ".local-board", "locks", "T1.lock"));
   });
 });
 

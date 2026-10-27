@@ -14,6 +14,7 @@ import {
   ticketBranchName,
 } from "./git.js";
 import { resolveMainRoot } from "./lock.js";
+import { canonicalPath } from "./paths.js";
 import { runVersionBump } from "./version-bump.js";
 
 export async function addTicketWorktree(root, ticketId) {
@@ -458,11 +459,15 @@ async function findRegisteredWorktree(root, worktreePath) {
 // case-insensitive, so two differently-cased spellings of the same resolved
 // path (drive-letter casing, git's own casing choices, etc.) must compare
 // equal there; POSIX stays case-sensitive since its filesystems normally are.
+// Both sides are canonicalized first (src/paths.js) because git reports
+// physical paths while callers may pass a symlinked or 8.3 spelling.
 function pathsEqual(left, right) {
+  const a = canonicalPath(left);
+  const b = canonicalPath(right);
   if (process.platform === "win32") {
-    return left.toLowerCase() === right.toLowerCase();
+    return a.toLowerCase() === b.toLowerCase();
   }
-  return left === right;
+  return a === b;
 }
 
 async function listRegisteredWorktrees(root) {

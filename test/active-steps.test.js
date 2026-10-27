@@ -21,6 +21,7 @@ import {
   stampActiveStepNoClobber,
 } from "../src/active-steps.js";
 import { removeFixtureDir } from "./helpers/fixtures.js";
+import { physicalPath } from "./helpers/paths.js";
 
 const execFileAsync = promisify(execFile);
 const GIT_AVAILABLE = await hasGit();
@@ -62,7 +63,7 @@ async function withRepo(fn) {
 test("ledgerPath falls back to the passed root in a non-git directory", async () => {
   await withBoard(async (root) => {
     const resolved = await ledgerPath(root);
-    assert.equal(resolved, path.join(path.resolve(root), ".local-board", "active-steps.json"));
+    assert.equal(resolved, path.join(physicalPath(root), ".local-board", "active-steps.json"));
   });
 });
 

@@ -39,6 +39,7 @@ SKILL.md              installable orchestration skill template
 - Prefer schemas and small scripts over hidden convention.
 - Avoid external services for core workflow.
 - Preserve portability across Windows/macOS/Linux.
+- Path canonicalization: git reports physical paths (symlinks resolved; Windows 8.3 names expanded). `canonicalPath` (`src/paths.js`; `realpathSync.native`, same as Git for Windows' realpath incl. mapped drive → UNC; nearest-existing-ancestor for missing paths) is applied to `--root` at CLI entry, to `resolveMainRoot`, and to both sides of `pathsEqual` (`src/worktrees.js`). Behaviour: every CLI output path (ticket paths, prompt paths, worktree paths, ledger `root`) is the physical spelling, not the `--root` spelling the caller passed. Tests build expected paths with `test/helpers/paths.js` `physicalPath`; fixtures keep their (possibly symlinked) tmpdir spelling; `test/symlink-root.test.js` covers guard/remove/check-dispatch via a symlink (junction on Windows). Hooks only build ledger paths (no git comparison) and are not canonicalized.
 - Installer requires `local-board` to resolve on PATH before rendering skills/agents.
 - codex-task is a detected-not-managed peer install; `validate` warns on stderr
   without changing exit code when `codex-task:*` routes exist but `codex` or
@@ -87,7 +88,7 @@ SKILL.md              installable orchestration skill template
   recovery path).
 - `worktrees.location` controls ticket worktree placement: sibling default, inside `.worktrees`, or explicit non-`plans/` path.
 - `package.json` `files` allowlist defines the npm package surface (also applied to git installs).
-- Distribution: not on the npm registry. Install = `npm install -g github:NicholasMTElliott/local-board` (tracks `mainline`; no build step); contributors use `npm install -g .`/`npm link`. Node floor `engines.node >=22`; CI matrix 22/24/26.
+- Distribution: not on the npm registry. Install = `npm install -g github:NicholasMTElliott/local-board` (tracks `mainline`; no build step); contributors use `npm install -g .`/`npm link`. Node floor `engines.node >=22`; CI (`.github/workflows/ci.yml`): ubuntu × Node 22/24/26 + windows/macos × Node 24 (check, test, validate). Release workflow tests ubuntu/Node 22 only.
 - Agent profiles support `{ route, model?, effort?, fallbackModels?, prompt? }`; optional-step agents also accept `{ route, model?, effort?, fallbackModels? }` (string form unchanged). `fallbackModels` is an ordered string array that requires `model`, is rejected on inline routes, is surfaced/emitted only when configured, and is accepted by strict routing evidence alongside the pinned model (`codex-default` wildcard remains). `effort` is shape-validated like `model`, rejected on inline routes, surfaced by `begin-step`/`specialty-run`, and passed through `codexDispatch` without sanitization; effort is dispatch-only and excluded from evidence tokens and the active-steps ledger. Specialty names must not collide with effective `workflow.statusActions` values.
 - The `init` scaffold pins review to `codex-task:read-only` / `gpt-5.6-terra` / `high` and `design/security_threat_model` plus `implement/security_audit` to `codex-task:read-only` / `gpt-5.6-sol` / `xhigh`; delete pins or reroute if unavailable. `DEFAULT_CONFIG` remains unpinned.
 
