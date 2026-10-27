@@ -6,7 +6,7 @@ By participating, you agree to abide by the [Code of Conduct](CODE_OF_CONDUCT.md
 
 ## Local Setup
 
-Requirements: [Node.js](https://nodejs.org/) 20 or later. There are no runtime dependencies and no install step — clone the repo and run the CLI directly.
+Requirements: [Node.js](https://nodejs.org/) 22 or later. There are no runtime dependencies and no install step — clone the repo and run the CLI directly.
 
 ```sh
 git clone https://github.com/NicholasMTElliott/local-board.git
