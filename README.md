@@ -10,8 +10,8 @@ External kanban tools put your plan in a separate system from your code. local-b
 
 ## Requirements
 
-- [Node.js](https://nodejs.org/) 20 or later.
-- No runtime dependencies, no install step, no network access. The CLI is pure Node ESM.
+- [Node.js](https://nodejs.org/) 22 or later.
+- No runtime dependencies, no build step, no network access. The CLI is pure Node ESM.
 - Parallel mode runs on any harness whose orchestrator can dispatch subagents and pin a model per dispatch (e.g. [Claude Code](https://claude.com/claude-code)). It does not require agent teams or `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`.
 
 ## Quick start
@@ -28,17 +28,17 @@ node ./bin/local-board.js list --ready
 node ./bin/local-board.js --root /path/to/your/repo init
 ```
 
-To use local-board as an agent orchestrator, install it globally so the `local-board` command is on `PATH`, then run the installer to place skills and agents:
+To use local-board as an agent orchestrator, install it globally so the `local-board` command is on `PATH`, then run the installer to place skills and agents. local-board is not published to the npm registry; install it from GitHub (this tracks the `mainline` branch):
 
 ```sh
-npm install -g local-board            # or: npm install -g . / npm link, from a checkout
+npm install -g github:NicholasMTElliott/local-board   # or, from a checkout: npm install -g . / npm link
 local-board install                   # install skills + agents
 local-board install --hooks           # opt in to Claude Code dispatch-enforcement hooks
 local-board install --list-targets    # see where they would go
 local-board install --target=codex    # install only Codex skills
 ```
 
-Installed skill and agent text always invokes the `local-board` command on `PATH` — never an absolute script path — so it is byte-identical regardless of how or where it was installed. The installer verifies `local-board` resolves on `PATH` before installing and fails fast with targeted guidance (`npm install -g .` / `npm link` for a checkout, `npm install -g local-board` otherwise) if it does not.
+Installed skill and agent text always invokes the `local-board` command on `PATH` — never an absolute script path — so it is byte-identical regardless of how or where it was installed. The installer verifies `local-board` resolves on `PATH` before installing and fails fast with targeted guidance (`npm install -g .` / `npm link` for a checkout, `npm install -g github:NicholasMTElliott/local-board` otherwise) if it does not.
 
 See [docs/Install.md](docs/Install.md) for every path the installer writes per target and the `~/.claude/settings.json` consent side effect.
 

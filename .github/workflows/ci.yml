@@ -2,10 +2,18 @@ name: CI
 
 on:
   push:
+    branches: [mainline]
   pull_request:
 
 permissions:
   contents: read
+
+# Pushes run CI only on mainline; other branches get CI through their PR, so a
+# PR commit is tested once. A new commit on a PR cancels that PR's in-progress
+# run. On mainline a new run queues instead of cancelling the one in progress.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
@@ -13,10 +21,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: ['20.x', '22.x']
+        node-version: ['22.x', '24.x', '26.x']
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: ${{ matrix.node-version }}
       # No dependencies and no lockfile — nothing to install. Run the checks directly.

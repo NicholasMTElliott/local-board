@@ -10,10 +10,13 @@ resolves to `%USERPROFILE%`, e.g. `~/.claude` is
 
 ## Prerequisites
 
-- Node.js 20 or later.
+- Node.js 22 or later.
+- `git` on `PATH` for a GitHub install: npm runs `git` to resolve the branch
+  or tag before downloading.
 - `local-board` must already resolve on `PATH`. The installer checks this
   first and fails fast: from a checkout it suggests `npm install -g .` or
-  `npm link`; otherwise it suggests `npm install -g local-board`.
+  `npm link`; otherwise it suggests
+  `npm install -g github:NicholasMTElliott/local-board`.
 - `npx local-board` is not supported. A first `npx` run needs network access
   to fetch the package, which sandboxed environments (including the Codex
   sandbox) deny.
@@ -27,14 +30,23 @@ resolves to `%USERPROFILE%`, e.g. `~/.claude` is
 
 ## Install methods
 
+local-board is not published to the npm registry. Install it from GitHub;
+npm clones the repo's default branch (`mainline`), so you get the latest
+commit, not a tagged release:
+
 ```sh
-npm install -g local-board             # published package
+npm install -g github:NicholasMTElliott/local-board
 local-board install                    # default targets
 
 # from a checkout of this repo instead:
 npm install -g .                       # or: npm link
 local-board install
 ```
+
+To install a tagged release instead of `mainline`, append the git tag as
+`#<tag>`: `npm install -g github:NicholasMTElliott/local-board#<tag>`. An
+older tag installs that release's CLI, which may lack commands described
+here.
 
 Deprecated aliases for running the installer from a checkout (both require the
 same prior global install/link so `local-board` resolves on `PATH`):

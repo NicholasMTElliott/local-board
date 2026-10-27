@@ -938,7 +938,7 @@ test("PATH verification failure (injected PATH miss, packaged/no-.git tree): gui
           }),
         (error) => {
           assert.match(error.message, /local-board is not on PATH/);
-          assert.match(error.message, /npm install -g local-board/);
+          assert.match(error.message, /npm install -g github:NicholasMTElliott\/local-board,/);
           assert.doesNotMatch(error.message, /npm link/);
           return true;
         },

@@ -302,7 +302,7 @@ function performInstall(args, targets, home, installDir, options = {}, homeOverr
     throw new Error(
       fromClone
         ? "local-board is not on PATH. From this checkout run: npm install -g . (or: npm link), then re-run local-board install."
-        : "local-board is not on PATH. Install it globally: npm install -g local-board, then re-run local-board install.",
+        : "local-board is not on PATH. Install it globally: npm install -g github:NicholasMTElliott/local-board, then re-run local-board install.",
     );
   }
 
