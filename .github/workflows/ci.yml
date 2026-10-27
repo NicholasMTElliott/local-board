@@ -19,10 +19,11 @@ jobs:
   test:
     name: ${{ matrix.os }} / Node ${{ matrix.node-version }}
     runs-on: ${{ matrix.os }}
-    # Every supported Node line on Linux; Windows on the active LTS only.
-    # Node-version bugs are platform-independent and surface on Linux; Windows
-    # is here for path, line-ending and shell differences, which one Node line
-    # catches. Four jobs instead of six keeps the slow Windows runner to one.
+    # Every supported Node line on Linux; Windows and macOS on the active LTS
+    # only. Node-version bugs are platform-independent and surface on Linux;
+    # Windows and macOS are here for path, line-ending and shell differences,
+    # which one Node line catches. Five jobs instead of nine keeps the slow
+    # Windows/macOS runners to one each.
     strategy:
       fail-fast: false
       matrix:
@@ -30,6 +31,8 @@ jobs:
         node-version: ['22.x', '24.x', '26.x']
         include:
           - os: windows-latest
+            node-version: '24.x'
+          - os: macos-latest
             node-version: '24.x'
     steps:
       - uses: actions/checkout@v7
