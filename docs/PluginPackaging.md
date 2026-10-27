@@ -27,15 +27,18 @@ investigation.
   cost.** Users still only install plugins via a marketplace or session
   flags (`--plugin-dir`/`--plugin-url`) — never directly via `npm install
   local-board`. But a marketplace *entry* can source its plugin contents from
-  npm (`package`/`version`/`registry`), so in principle the existing npm
-  package could be referenced by a marketplace entry instead of a separate
-  git/zip artifact. That shrinks the second-channel cost — no forked
+  npm (`package`/`version`/`registry`), so in principle an npm package
+  could be referenced by a marketplace entry instead of a separate git/zip
+  artifact. That shrinks the second-channel cost — no forked
   git/zip release process — but does not vanish it: a marketplace manifest
   (`.claude-plugin/marketplace.json`) must still be authored and hosted
   somewhere, and the npm package's layout would need a
   `.claude-plugin/plugin.json` manifest plus plugin-shaped directories
   (`skills/`, `agents/`, `hooks/`) added alongside its current CLI layout.
-  The CLI already ships via npm (`npm install -g local-board`), and
+  local-board is not on the npm registry today, so this path would also
+  need a published package.
+  The CLI already installs globally with npm from GitHub
+  (`npm install -g github:NicholasMTElliott/local-board`), and
   installed skills/agents invoke the on-`PATH` `local-board` command;
   marketplace installation is a separate, additional entry point on top of
   that, not a replacement for it.
@@ -148,8 +151,8 @@ Adopt when *any* of the following holds:
 
 1. The Claude hook API and subagent tool name (`Task`/`Agent`) stabilize.
 2. There is demand for marketplace discoverability. When we want marketplace
-   distribution, the npm package can be the plugin source — spike a
-   `.claude-plugin` manifest then.
+   distribution, a registry-published npm package could be the plugin
+   source — spike a `.claude-plugin` manifest then.
 3. The installer's `settings.json` patching becomes a real maintenance or
    support burden.
 
