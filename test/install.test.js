@@ -571,6 +571,102 @@ test("CLI install --uninstall removes what install created", async () => {
   });
 });
 
+const MEMORY_BANK_SKILLS = ["condense-memory-bank", "memory-bank-init", "update-memory-bank"];
+
+test("claude-target install copies the memory-bank skills verbatim, records them in install-info.json, and uninstall removes them", async () => {
+  await withHome(async (home) => {
+    await runInstallCli(home, ["--target=claude"]);
+    for (const name of MEMORY_BANK_SKILLS) {
+      const installed = await readFile(path.join(home, ".claude", "skills", name, "SKILL.md"), "utf8");
+      const source = await readFile(path.resolve("skills", "memory-bank", name, "SKILL.md"), "utf8");
+      assert.equal(installed, source, `${name} must install byte-identical to its source`);
+    }
+    const info = JSON.parse(await readFile(path.join(home, ".local-board", "install-info.json"), "utf8"));
+    assert.deepEqual(info.memoryBankSkills, MEMORY_BANK_SKILLS);
+
+    const unrelated = path.join(home, ".claude", "skills", "my-own-skill");
+    mkdirSync(unrelated, { recursive: true });
+    await runInstallCli(home, ["--target=claude", "--uninstall"]);
+    for (const name of MEMORY_BANK_SKILLS) {
+      assert.equal(existsSync(path.join(home, ".claude", "skills", name)), false);
+    }
+    assert.equal(existsSync(unrelated), true, "uninstall must not touch skills it did not ship");
+  });
+});
+
+test("claude-target install overwrites a stale memory-bank skill copy", async () => {
+  await withHome(async (home) => {
+    const stalePath = path.join(home, ".claude", "skills", "update-memory-bank", "SKILL.md");
+    mkdirSync(path.dirname(stalePath), { recursive: true });
+    await writeFile(stalePath, "stale\n");
+    await runInstallCli(home, ["--target=claude"]);
+    const installed = await readFile(stalePath, "utf8");
+    assert.equal(installed, await readFile(path.resolve("skills", "memory-bank", "update-memory-bank", "SKILL.md"), "utf8"));
+  });
+});
+
+test("non-claude targets do not install the memory-bank skills", async () => {
+  await withHome(async (home) => {
+    await runInstallCli(home, ["--target=codex"]);
+    for (const name of MEMORY_BANK_SKILLS) {
+      assert.equal(existsSync(path.join(home, ".claude", "skills", name)), false);
+      assert.equal(existsSync(path.join(home, ".codex", "skills", name)), false);
+    }
+    const info = JSON.parse(await readFile(path.join(home, ".local-board", "install-info.json"), "utf8"));
+    assert.deepEqual(info.memoryBankSkills, []);
+  });
+});
+
+test("uninstall leaves a user's same-named skill alone when no Claude install recorded it", async () => {
+  await withHome(async (home) => {
+    const userSkill = path.join(home, ".claude", "skills", "update-memory-bank", "SKILL.md");
+    mkdirSync(path.dirname(userSkill), { recursive: true });
+    await writeFile(userSkill, "user-owned\n");
+    await runInstallCli(home, ["--target=codex"]);
+    await runInstallCli(home, ["--target=codex", "--uninstall"]);
+    assert.equal(await readFile(userSkill, "utf8"), "user-owned\n");
+  });
+});
+
+test("a later non-claude install carries the recorded memory-bank skills forward, so uninstall still removes them", async () => {
+  await withHome(async (home) => {
+    await runInstallCli(home, ["--target=claude"]);
+    await runInstallCli(home, ["--target=codex"]);
+    const info = JSON.parse(await readFile(path.join(home, ".local-board", "install-info.json"), "utf8"));
+    assert.deepEqual(info.memoryBankSkills, MEMORY_BANK_SKILLS);
+    await runInstallCli(home, ["--uninstall"]);
+    for (const name of MEMORY_BANK_SKILLS) {
+      assert.equal(existsSync(path.join(home, ".claude", "skills", name)), false);
+    }
+  });
+});
+
+test("uninstall ignores recorded memory-bank skill names that are not a single path segment", async () => {
+  await withHome(async (home) => {
+    await runInstallCli(home, ["--target=claude"]);
+    const victim = path.join(home, ".claude", "victim");
+    mkdirSync(victim, { recursive: true });
+    const infoPath = path.join(home, ".local-board", "install-info.json");
+    const info = JSON.parse(await readFile(infoPath, "utf8"));
+    info.memoryBankSkills = ["../victim", "..", "", 7, ...MEMORY_BANK_SKILLS];
+    await writeFile(infoPath, JSON.stringify(info));
+    await runInstallCli(home, ["--target=claude", "--uninstall"]);
+    assert.equal(existsSync(victim), true);
+    assert.equal(existsSync(path.join(home, ".claude", "skills")), true);
+    for (const name of MEMORY_BANK_SKILLS) {
+      assert.equal(existsSync(path.join(home, ".claude", "skills", name)), false);
+    }
+  });
+});
+
+test("shipped memory-bank skills have frontmatter naming their directory and carry no user-specific paths", async () => {
+  for (const name of MEMORY_BANK_SKILLS) {
+    const skill = (await readFile(path.resolve("skills", "memory-bank", name, "SKILL.md"), "utf8")).replace(/\r\n/g, "\n");
+    assert.match(skill, new RegExp(`^---\\nname: ${name}\\ndescription: .+\\n---\\n`));
+    assert.doesNotMatch(skill, /[A-Za-z]:[\\/]Users[\\/]|\/home\/[a-z]/, `${name} must not hard-code a user home path`);
+  }
+});
+
 test("settings.json allow-rule patch is idempotent, uses the constant local-board rule, and preserves existing settings", async () => {
   await withHome(async (home) => {
     const settingsPath = path.join(home, ".claude", "settings.json");

@@ -154,6 +154,7 @@ for hooks + provenance; selected targets get `local-board`/`local-team` skill di
 `undefined`, and `LOCAL_BOARD_INSTALL_REQUIRE_HOME=1` refuses real-home
 install/uninstall runs without an override.
 Bundled Claude agents live in `agents/claude/` and are installed to `~/.claude/agents/`.
+Memory-bank skills (`memory-bank-init`, `update-memory-bank`, `condense-memory-bank`) live in `skills/memory-bank/` (canonical source) and copy unrendered, Claude target only, to `~/.claude/skills/<name>`; reinstall overwrites. Names are generic, so uninstall removes only names recorded in `install-info.json` `memoryBankSkills` (set by a Claude install, carried forward by other installs, filtered to single path segments).
 Codex skill templates live in `skills/codex/` and install to `~/.codex/skills/local-board` and `~/.codex/skills/local-team`. Codex executor prompts resolve from `local-board where --json` `agentsDir`.
 
 ## Delegation and Subagent Tools

@@ -111,9 +111,9 @@ other target renders from the repo-root `SKILL.md` / `SKILL_TEAM.md`, with
 | `~/.local-board/install-info.json` | generated (see below) |
 
 `install-info.json` records `name`, `installedAt`, `installDir`, `scriptPath`,
-`nodeVersion`, `version`, `skillName`, `teamSkillName`, `claudeAgents[]`, and
-(additive) `contentHash` and `targets` — see "Content hash and skew status"
-below.
+`nodeVersion`, `version`, `skillName`, `teamSkillName`, `claudeAgents[]`,
+`memoryBankSkills[]` (see "Memory-bank skills" below), and (additive)
+`contentHash` and `targets` — see "Content hash and skew status" below.
 
 This copy exists for hooks and provenance, not for day-to-day skill use.
 Codex executor prompts resolve from `local-board where --json`'s `agentsDir`
@@ -242,6 +242,25 @@ the older layout).
 ~/.claude/agents/local-board-tester.md
 ```
 
+### Memory-bank skills (`claude` target only)
+
+`skills/memory-bank/<name>/` is copied (no placeholder rendering; same-named
+files are overwritten) to `~/.claude/skills/<name>/`:
+
+```text
+~/.claude/skills/condense-memory-bank/SKILL.md
+~/.claude/skills/memory-bank-init/SKILL.md
+~/.claude/skills/update-memory-bank/SKILL.md
+```
+
+These are the canonical memory-bank maintenance procedures (`memory-bank-init`
+defines the shared `AGENTS.md` bootstrap). The repo copy is the source of
+truth: every install overwrites the installed copies, so edit
+`skills/memory-bank/` and reinstall rather than editing `~/.claude/skills/`.
+`install-info.json` records the installed names under `memoryBankSkills` (empty
+until a `claude`-target install; a later install of other targets carries the
+record forward). That record is uninstall's ownership list.
+
 ## settings.json side effects (consent-sensitive)
 
 The `claude` target is the only target that touches `~/.claude/settings.json`.
@@ -339,6 +358,10 @@ Removes:
   left in place — uninstall never guesses at a hand-edited grant.
 - The four managed hooks entries from `~/.claude/settings.json`, if present.
 - The seven `~/.claude/agents/local-board-*.md` files.
+- The memory-bank skill dirs (`~/.claude/skills/memory-bank-init`,
+  `update-memory-bank`, `condense-memory-bank`) — only the names
+  `install-info.json` recorded under `memoryBankSkills`, so a same-named skill
+  the installer never wrote survives. Other skills are untouched.
 
 Install and uninstall are symmetric for the allow rule: install adds it,
 uninstall removes it (exact-match only). If `permissions.allow` and
