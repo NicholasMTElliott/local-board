@@ -143,6 +143,7 @@ The test suite includes function-level ticket kernel coverage and CLI command-su
 - [docs/PerStepOrchestration.md](docs/PerStepOrchestration.md) — current-state parallel orchestration: a single top-level orchestrator dispatches each pipeline step to a model-specialized executor, enabling full per-step model/prompt/route variety. Operational contract in `SKILL_TEAM.md`.
 - [docs/TeamMode.md](docs/TeamMode.md) — superseded historical context for the original agent-teams "one teammate per ticket" parallel mode.
 - [docs/PluginPackaging.md](docs/PluginPackaging.md) — evaluation of Claude Code plugin packaging for skills/agents/hooks; decision is to defer, with a layout sketch, migration notes, and revisit triggers.
+- [docs/StoryReview.md](docs/StoryReview.md) — **proposal, not implemented**: a closing `story_review` step on epics/stories that reviews the final merged state against the story objective, to catch defects at the seams between individually-correct child tickets. Includes the motivating evidence, required checks, constraints, and open questions.
 - [docs/comment-markers.md](docs/comment-markers.md) — structured run-log comment markers (--marker), the reserved vocabulary, the CLI key=value <-> on-disk key:value mapping, and the not-evidence rule.
 
 ## Repository Layout
