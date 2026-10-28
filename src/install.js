@@ -352,6 +352,7 @@ function performInstall(args, targets, home, installDir, options = {}, homeOverr
     removeLegacyDirs(target, "legacyTeamSkillDirs", target.teamSkillDir, "team skill");
     if (target.id === "claude") {
       installClaudeAgents(home);
+      installMemoryBankSkills(home);
     }
     if (target.settingsPath !== null) {
       patchSettings(target.settingsPath, CLAUDE_ALLOW_RULE);
@@ -379,12 +380,18 @@ function performInstall(args, targets, home, installDir, options = {}, homeOverr
   for (const target of selected) {
     finalTargets[target.id] = { version, contentHash, installedAt: now };
   }
+  // Ownership record for uninstall: this run's names when it installed the
+  // Claude target, otherwise whatever an earlier Claude install recorded.
+  const memoryBankSkills = selected.some((target) => target.id === "claude")
+    ? memoryBankSkillNames()
+    : recordedMemoryBankSkills(existingInfo);
   writeInstallInfo(installDir, {
     existingInfo,
     nodeVersion,
     version,
     scriptPath,
     teamSkillInstalled: existsSync(join(SCRIPT_DIR, "SKILL_TEAM.md")),
+    memoryBankSkills,
     contentHash,
     targets: finalTargets,
     now,
@@ -547,7 +554,7 @@ export function reconcileTargets(existingInfo, home) {
 // this install's values; `contentHash` and `targets` are additive
 // (Decision 4). `targets` is the caller-computed per-target map (reconciled
 // base plus this run's freshly-installed target entries).
-function writeInstallInfo(installDir, { existingInfo, nodeVersion, version, scriptPath, teamSkillInstalled, contentHash, targets, now }) {
+function writeInstallInfo(installDir, { existingInfo, nodeVersion, version, scriptPath, teamSkillInstalled, memoryBankSkills, contentHash, targets, now }) {
   writeFileSync(
     join(installDir, "install-info.json"),
     `${JSON.stringify(
@@ -562,6 +569,7 @@ function writeInstallInfo(installDir, { existingInfo, nodeVersion, version, scri
         skillName: "local-board",
         teamSkillName: teamSkillInstalled ? "local-team" : null,
         claudeAgents: claudeAgentNames(),
+        memoryBankSkills,
         contentHash,
         targets,
       },
@@ -599,7 +607,61 @@ function claudeAgentNames() {
     .sort();
 }
 
+// The memory-bank maintenance skills (memory-bank-init, update-memory-bank,
+// condense-memory-bank) ship under skills/memory-bank/ — the canonical source —
+// and are copied (no placeholder rendering, overwriting same-named files) for
+// the Claude target only, as sibling dirs of the local-board skill. Their
+// names are generic enough to collide with a user's own skills, so uninstall
+// removes only the names install-info.json records as installed by a Claude
+// install (memoryBankSkills) — never by matching the current source's names.
+function memoryBankSkillsSource() {
+  return join(SCRIPT_DIR, "skills", "memory-bank");
+}
+
+function memoryBankSkillNames() {
+  const sourceDir = memoryBankSkillsSource();
+  if (!existsSync(sourceDir)) {
+    return [];
+  }
+  return readdirSync(sourceDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && existsSync(join(sourceDir, entry.name, "SKILL.md")))
+    .map((entry) => entry.name)
+    .sort();
+}
+
+function installMemoryBankSkills(home) {
+  for (const skillName of memoryBankSkillNames()) {
+    const targetDir = join(home, ".claude", "skills", skillName);
+    mkdirSync(targetDir, { recursive: true });
+    cpSync(join(memoryBankSkillsSource(), skillName), targetDir, { recursive: true, force: true });
+    console.log(`installed memory-bank skill: ${targetDir}`);
+  }
+}
+
+// Names a prior Claude install recorded. Entries that are not a single plain
+// path segment are dropped so a hand-edited install-info.json can never steer
+// rmSync outside ~/.claude/skills.
+function recordedMemoryBankSkills(installInfo) {
+  const recorded = installInfo?.memoryBankSkills;
+  if (!Array.isArray(recorded)) {
+    return [];
+  }
+  return recorded.filter((name) => typeof name === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(name));
+}
+
+function uninstallMemoryBankSkills(home, skillNames) {
+  for (const skillName of skillNames) {
+    const targetDir = join(home, ".claude", "skills", skillName);
+    if (existsSync(targetDir)) {
+      rmSync(targetDir, { recursive: true, force: true });
+      console.log(`removed ${targetDir}`);
+    }
+  }
+}
+
 function performUninstall(targets, home, installDir) {
+  // Read before installDir (which holds install-info.json) is deleted.
+  const installedMemoryBankSkills = recordedMemoryBankSkills(readExistingInstallInfo(installDir));
   if (existsSync(installDir)) {
     rmSync(installDir, { recursive: true, force: true });
     console.log(`removed ${installDir}`);
@@ -621,6 +683,7 @@ function performUninstall(targets, home, installDir) {
     }
   }
   uninstallClaudeAgents(home);
+  uninstallMemoryBankSkills(home, installedMemoryBankSkills);
 }
 
 // `local-board install --status [--json]`: recomputes the current source's
